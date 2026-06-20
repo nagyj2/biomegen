@@ -1,0 +1,51 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Build & distribution
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+wheels/
+
+# Package manager artifacts
+.venv/
+venv/
+env/
+ENV/
+uv.lock
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+
+# Ruff cache
+.ruff_cache/
+
+# IDEs & editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local config (keep only the .example in source control)
+config.toml
+
+# Claude Code local settings (machine-specific permissions)
+.claude/settings.local.json
+
+# Generated/exported content
+images/

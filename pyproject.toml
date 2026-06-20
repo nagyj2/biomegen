@@ -1,0 +1,67 @@
+[project]
+name = "biomegen"
+version = "0.1.0"
+description = "A seed-reproducible procedural island generator and curses explorer (CLI application)."
+requires-python = ">=3.14"
+
+# Runtime dependencies.
+#   numpy   - authoritative compute/data layer (all per-tile fields are ndarrays).
+#   scipy   - connected-components (ndimage.label), distance transforms, cKDTree neighbour queries.
+#   opensimplex - an optional, selectable noise backend (the default backend is our own numpy perlin).
+#   tcod    - optional accelerated A* / BSP backends (in-house versions remain the defaults).
+#   Pillow  - PNG export alongside SVG.
+#   windows-curses - provides the `curses` module on Windows (stdlib on Linux/macOS).
+dependencies = [
+    "numpy>=2.4.6",
+    "scipy>=1.17.1",
+    "opensimplex>=0.4.5.1",
+    "tcod>=21.2.1",
+    "Pillow>=12.2.0",
+    "windows-curses>=2.4.2; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+# `noise` is a C-extension Perlin/Simplex library. It is purely an extra noise backend; if it is not
+# installed (it needs a C compiler on Windows) the `noise_lib` backend is simply unavailable and the
+# default numpy `perlin` backend is used instead.
+fastnoise = ["noise>=1.2"]
+dev = [
+    "pytest>=9.1.0",
+    "ruff>=0.15.18",
+    "mypy>=2.1.0",
+]
+
+# The application is launched as `python main.py`. This console-script is an optional convenience only.
+[project.scripts]
+biomegen = "main:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+src = ["biomegen", "tests", "main.py"]
+
+[tool.ruff.lint]
+# Moderate strictness with low migration noise: core pycodestyle/pyflakes,
+# import sorting, bugbear, and complexity. Modernization/simplification
+# families (UP/SIM) can be enabled later once formatting is settled.
+select = ["E", "F", "W", "I", "B", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 18
+
+[tool.ruff.lint.per-file-ignores]
+# Tests intentionally use assert statements heavily.
+"tests/**/*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.14"
+files = ["biomegen/config", "biomegen/util", "biomegen/world"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+no_implicit_optional = true
+strict_equality = true
