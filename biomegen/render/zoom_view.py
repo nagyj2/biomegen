@@ -24,9 +24,12 @@ import numpy as np
 
 from ..config.model import Config
 from ..util import noise, rng
-from ..world.tile import WATER_BIOMES, Biome
+from ..world.interiors import INTERIOR_BUILDERS, ZOOM_VISIBLE, build_interior, footprint_origin, sample_rect
+from ..world.overlay import Overlay
+from ..world.tile import INTERIOR_COLOR_BASE, WATER_BIOMES, Biome, Cell
 from ..world.world import World
-from .state import ViewState
+from .glyphs import interior_glyph_table
+from .state import SCALE_ZOOM, ViewState
 
 # Per-biome clutter: (list of glyphs, base probability a given detail cell becomes clutter).
 _CLUTTER = {
@@ -208,6 +211,64 @@ def _water_blend(world: World, wfx: np.ndarray, wfy: np.ndarray, threshold: floa
     return cov >= threshold, water_biome
 
 
+def _stamp_interiors(
+    world: World,
+    config: Config,
+    vs: ViewState,
+    cells: List[List[Tuple[str, int]]],
+    rows: int,
+    cols: int,
+    cam_x: int,
+    cam_y: int,
+    tiles_w: int,
+    tiles_h: int,
+    cell_w: int,
+    cell_h: int,
+    overlay: Optional[Overlay],
+) -> None:
+    """Stamp each visible POI's interior onto ``cells`` across its footprint, in place.
+
+    The interior is a single canonical-resolution artifact (built lazily, LRU-cached); here it is
+    **nearest-neighbour sampled** into the footprint's detail-cell block, so the ``zoom`` and
+    ``local`` scales are coarse vs fine views of the same grid. At ``zoom`` the building shell is drawn
+    - walls *and* floor (see :data:`~biomegen.world.interiors.ZOOM_VISIBLE`) so it reads as filled-in -
+    but furniture is suppressed; at ``local`` every non-void cell is drawn (the full furnished
+    interior). ``VOID`` cells are skipped so the surrounding terrain shows through the gaps.
+    """
+    shell_only = vs.scale == SCALE_ZOOM
+    cell_glyph = interior_glyph_table(config)  # Cell int -> interior glyph (data-driven)
+    void = int(Cell.VOID)
+
+    for poi in world.pois:
+        if not INTERIOR_BUILDERS.has(poi.kind):
+            continue
+        fw, fh = poi.footprint
+        if fw <= 0 or fh <= 0:
+            continue
+        tx0, ty0 = footprint_origin(poi)
+        # Skip if the footprint lies entirely outside the visible tile window.
+        if tx0 + fw <= cam_x or tx0 >= cam_x + tiles_w or ty0 + fh <= cam_y or ty0 >= cam_y + tiles_h:
+            continue
+        top = poi.lowest_floor + poi.floor_count - 1
+        floor = max(poi.lowest_floor, min(int(vs.floor), top))
+        base = build_interior(poi, floor, config)
+        if base is None:
+            continue
+        grid = overlay.apply_interior(base, poi.interior_seed, floor) if overlay is not None else base
+
+        # Footprint spans fh*cell_h x fw*cell_w detail cells at this scale; sample the interior into it.
+        base_row = (ty0 - cam_y) * cell_h
+        base_col = (tx0 - cam_x) * cell_w
+        for r, c, cellv in sample_rect(grid, base_row, base_col, fh * cell_h, fw * cell_w, rows, cols):
+            if cellv == void:
+                continue  # VOID is transparent: terrain shows around the dungeon's organic outline
+            if shell_only and cellv not in ZOOM_VISIBLE:
+                # Furniture is suppressed at zoom, but it stands ON a floor - draw that floor, not the
+                # terrain underneath, so rooms read as solid floorplan (no biome clutter leaks).
+                cellv = int(Cell.FLOOR)
+            cells[r][c] = (cell_glyph.get(cellv, "?"), INTERIOR_COLOR_BASE + cellv)
+
+
 def build_detail_frame(
     world: World,
     config: Config,
@@ -216,12 +277,18 @@ def build_detail_frame(
     area_h: int,
     cell_w: int,
     cell_h: int,
+    overlay: Optional[Overlay] = None,
 ) -> ZoomFrame:
     """Build a magnified :class:`ZoomFrame` where each biome tile is a ``cell_h`` x ``cell_w`` block.
 
     The camera (``vs.cam_x/cam_y``) is the top-left biome tile, assumed already edge-panned for the
     tile-count viewport this cell size implies. The per-cell biome (used for colour, base glyph and
     clutter) comes from the blended world-space lookup, so boundaries are soft and scale-consistent.
+
+    POIs with a registered interior builder are stamped on top of the terrain across their footprint
+    (see :func:`_stamp_interiors`): the ``zoom`` scale shows only the structural outline, the
+    ``local`` scale the full furnished interior, for ``vs.floor``. ``overlay`` (if given) supplies
+    runtime interior edits, composited over the deterministic base.
     """
     tiles_w = max(1, area_w // cell_w)
     tiles_h = max(1, area_h // cell_h)
@@ -327,6 +394,10 @@ def build_detail_frame(
             if glyph is not None:
                 cj = tcol * cell_w + cell_w // 2
                 cells[ci][cj] = (glyph, cells[ci][cj][1])  # keep the cell's biome colour
+
+    # POI interiors overlay the terrain (and any marker) across their footprint. Done last so a
+    # structure's outline/interior wins over its single-cell marker at the detail scales.
+    _stamp_interiors(world, config, vs, cells, rows, cols, cam_x, cam_y, tiles_w, tiles_h, cell_w, cell_h, overlay)
 
     fcol = vs.cx - cam_x
     frow = vs.cy - cam_y

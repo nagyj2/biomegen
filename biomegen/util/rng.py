@@ -57,6 +57,12 @@ LABELS: frozenset[str] = frozenset(
         "biomeblend.y",  # detail-view biome-boundary blend warp (y component)
         "poi",  # POI placement sampling
         "poi_interior",  # per-POI interior seed minting (keyed on coordinates too)
+        "interior.footprint",  # poi_interiors metadata stage: per-POI footprint size jitter
+        "interior",  # interior floor layout (BSP rooms/corridors), keyed on interior_seed + floor
+        "interior.shaft",  # aligned stair-shaft positions (floor-independent, so floors stack)
+        "interior.shape",  # dungeon outer-boundary shape mask (per-dungeon, floor-independent)
+        "interior.door",  # exterior entrance door position (entry floor only)
+        "interior.furnish",  # role-based furnishing pass, keyed on interior_seed + floor
         "roads",  # road graph edge selection
         "roads.meander",  # per-edge road meander noise
         "naming",  # name/lore generation

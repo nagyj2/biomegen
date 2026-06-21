@@ -15,8 +15,9 @@ dict/set ordering and ``PYTHONHASHSEED``.
 
 from __future__ import annotations
 
+import math
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from ..config.model import Config
 from ..util import rng
@@ -37,6 +38,23 @@ KIND_PRIORITY: Tuple[str, ...] = (
     "camp",
     "boat",
 )
+
+
+def _max_footprint(config: Config, kind: str) -> Optional[Tuple[int, int]]:
+    """Largest footprint (w, h) a kind's structure can grow to, given ``interiors.size_jitter``.
+
+    The interiors stage scales each nominal footprint dimension by a factor in ``[1-jitter, 1+jitter)``
+    (see :mod:`poi_interiors`). For water-avoidance we need the *upper bound* so the check covers any
+    jitter outcome; ``ceil(nominal * (1 + jitter))`` is that bound (conservative by at most one tile).
+    Returns ``None`` when the kind has no configured footprint (nothing to keep off the water).
+    """
+    fp = config.get("interiors.footprints").get(kind)
+    if not fp:
+        return None
+    jitter = float(config.get("interiors.size_jitter"))
+    fw = max(1, math.ceil(int(fp[0]) * (1.0 + jitter)))
+    fh = max(1, math.ceil(int(fp[1]) * (1.0 + jitter)))
+    return fw, fh
 
 
 def _commit_poi(world: World, seed: int, kind: str, x: int, y: int, rule: KindRule, rgen: random.Random) -> int:
@@ -99,7 +117,10 @@ def run(world: World, config: Config, seed: int) -> None:
         else:
             remote_w = fresh_w * 0.0  # zero field matching expected ndarray shape/type
 
-        mask = poi_rules.eligibility_mask(rule, world)
+        # Pass the kind's max footprint so water-avoiding structures reject anchors whose footprint
+        # (not just the anchor tile) would clip water; other kinds ignore it.
+        footprint = _max_footprint(config, kind) if rule.avoid_water else None
+        mask = poi_rules.eligibility_mask(rule, world, footprint)
         jitter = poi_rules.build_jitter(world, seed, kind, jitter_strength)
         score = poi_rules.score_array(rule, mask, fresh_w, coast_w, remote_w, jitter)
 

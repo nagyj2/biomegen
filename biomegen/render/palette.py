@@ -18,7 +18,7 @@ from __future__ import annotations
 import curses
 
 from ..config.model import Config
-from ..world.tile import BIOME_NAME, Biome
+from ..world.tile import BIOME_NAME, INTERIOR_COLOR_BASE, Biome, Cell
 from ..world.world import World
 
 # RGB approximations of the 8 base ANSI colours, for nearest-colour snapping in 'basic' mode.
@@ -55,6 +55,7 @@ class Palette:
         self.mode = "mono"
         self._region_attr: dict[int, int] = {}
         self._biome_attr: dict[int, int] = {}
+        self._interior_attr: dict[int, int] = {}  # Cell int -> attr (POI interior colours)
         self._ocean_attr = 0
         self._marker_attr = curses.A_BOLD
         self._cursor_attr = curses.A_REVERSE | curses.A_BOLD
@@ -123,6 +124,22 @@ class Palette:
             self._region_attr[region.id] = curses.color_pair(self._alloc_pair_rgb(region.base_color))
         # Markers/cursor in bright white / reverse.
         self._marker_attr = curses.color_pair(self._alloc_pair_rgb((255, 255, 255))) | curses.A_BOLD
+        self._setup_interior_colors(self._alloc_pair_rgb)
+
+    def _setup_interior_colors(self, alloc) -> None:
+        """Allocate a colour pair per interior :class:`Cell` from ``render.interior_palette``.
+
+        ``alloc`` is the mode-appropriate pair allocator (RGB or nearest-ANSI). VOID is intentionally
+        skipped: it is never drawn, so the terrain shows through the gaps in a structure.
+        """
+        ipal = self.config.get("render.interior_palette")
+        for cell in Cell:
+            if cell == Cell.VOID:
+                continue
+            rgb = ipal.get(cell.name.lower())
+            if rgb is None:
+                continue
+            self._interior_attr[int(cell)] = curses.color_pair(alloc(tuple(rgb)))
 
     def _setup_basic(self, world: World) -> None:
         palette = self.config.get("render.palette")
@@ -133,6 +150,7 @@ class Palette:
         for region in world.regions:
             self._region_attr[region.id] = curses.color_pair(self._alloc_pair_basic(region.base_color))
         self._marker_attr = curses.A_BOLD
+        self._setup_interior_colors(self._alloc_pair_basic)
 
     # ------------------------------------------------------------------ queries
     def tile_attr(self, world: World, x: int, y: int) -> int:
@@ -151,6 +169,23 @@ class Palette:
         if self.mode == "mono":
             return curses.A_NORMAL
         return self._biome_attr.get(int(biome_int), curses.A_NORMAL)
+
+    def interior_attr(self, cell_int: int) -> int:
+        """Attribute for a POI interior :class:`Cell` colour (detail views)."""
+        if self.mode == "mono":
+            return curses.A_NORMAL
+        return self._interior_attr.get(int(cell_int), curses.A_NORMAL)
+
+    def zoom_attr(self, color_id: int) -> int:
+        """Resolve a detail-cell colour id to an attribute.
+
+        Ids below :data:`~biomegen.world.tile.INTERIOR_COLOR_BASE` are biome floor colours; ids at or
+        above it are interior :class:`Cell` colours encoded as ``INTERIOR_COLOR_BASE + cell_int`` (see
+        :mod:`biomegen.render.zoom_view`). One dispatcher keeps the renderer's per-cell lookup trivial.
+        """
+        if color_id >= INTERIOR_COLOR_BASE:
+            return self.interior_attr(color_id - INTERIOR_COLOR_BASE)
+        return self.biome_attr(color_id)
 
     @property
     def marker_attr(self) -> int:

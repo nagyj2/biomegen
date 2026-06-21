@@ -217,6 +217,10 @@ DEFAULTS: Dict[str, Any] = {
                 "biomes": ["mountain", "forest", "tundra", "desert", "swamp"],
                 "elevation_min": 0.45,
                 "remoteness": 0.7,
+                # Reject any anchor whose (max) footprint would clip ocean/lake/river, so no dungeon
+                # wall or floor is ever laid over water (the footprint is centred on the anchor and
+                # extends past it, so an anchor on dry land can still overlap a nearby coast/river).
+                "avoid_water": True,
                 "floors": [2, 5],
             },
             "ruins": {
@@ -248,10 +252,38 @@ DEFAULTS: Dict[str, Any] = {
     # -------------------------------------------------------------- POI interiors
     "interiors": {
         "partition": "bsp",  # "bsp" (in-house default) or "tcod_bsp"
+        # Each POI interior is generated once at a CANONICAL resolution of cells_per_tile detail cells
+        # per world tile across its footprint, then the detail renderer samples that single artifact
+        # into whatever cell block the current scale provides - so the zoom and local views are coarse
+        # vs fine samplings of the SAME interior (mirroring the biome-blend philosophy).
+        "cells_per_tile": 6,
         "room_min": 4,  # min room side in detail cells
         "room_max": 10,
         "clutter_density": 0.10,  # fraction of free interior cells that receive clutter/furniture
         "ruin_erosion": 0.45,  # fraction of a ruined structure carved away by erosion noise
+        # Per-POI footprint size variation (fraction). Each footprint dimension of a kind that HAS an
+        # interior builder is scaled by a deterministic factor in [1-jitter, 1+jitter], so structures
+        # of the same kind spawn a bit larger or smaller. 0 disables (every footprint stays nominal).
+        "size_jitter": 0.4,
+        # Dungeon outer-boundary SHAPE algorithm (see biomegen.world.interiors.shapes / SHAPES
+        # registry): "rectangle" (boxy), "blob", "cellular", "drunkard", "diamond", "cross", or
+        # "mixed" (default) to pick a different organic shape per dungeon so none is square. The shape
+        # is filled solid with rooms+rock; terrain shows around its organic outline.
+        "shape": "mixed",
+        # Per-kind interior footprint in WORLD TILES (w, h), centred on the POI anchor. Render-only
+        # metadata (the base ``poi_index`` array still marks just the anchor). Only kinds with a
+        # registered interior builder render an interior; the rest fall back to their map marker until
+        # their builders land in later phases. (Phase 5 slice implements ``dungeon``.)
+        "footprints": {
+            "dungeon": [6, 4],
+            "tower": [3, 3],
+            "city": [7, 5],
+            "town": [5, 4],
+            "village": [4, 3],
+            "ruins": [4, 3],
+            "camp": [3, 3],
+            "boat": [3, 2],
+        },
     },
     # -------------------------------------------------------------- roads
     "roads": {
@@ -394,6 +426,35 @@ DEFAULTS: Dict[str, Any] = {
             "bush": '"',
             "cargo": "$",
             "void": " ",
+        },
+        # Interior Cell -> RGB base colour, used when a detail cell belongs to a POI interior (the
+        # single colour authority for interiors, shared with SVG/PNG export later). ``void`` is never
+        # drawn (the surrounding terrain shows through), so it has no colour entry.
+        "interior_palette": {
+            "floor": [78, 66, 55],
+            "wall": [128, 118, 105],
+            "door": [186, 150, 84],
+            "stairs_up": [214, 214, 168],
+            "stairs_down": [150, 156, 214],
+            "water": [80, 140, 220],
+            "path": [120, 108, 84],
+            "bed": [150, 120, 150],
+            "table": [160, 120, 80],
+            "chair": [140, 104, 70],
+            "chest": [216, 176, 72],
+            "hearth": [226, 120, 60],
+            "barrel": [150, 116, 70],
+            "crate": [168, 132, 80],
+            "shelf": [150, 120, 84],
+            "rubble": [110, 104, 98],
+            "tent": [180, 170, 120],
+            "campfire": [230, 130, 60],
+            "wagon": [150, 110, 70],
+            "tree": [60, 130, 60],
+            "rock": [130, 124, 116],
+            "bush": [110, 150, 90],
+            "cargo": [200, 170, 90],
+            "reserved": [128, 128, 128],
         },
     },
     # -------------------------------------------------------------- export (in-game keypress)

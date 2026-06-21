@@ -59,9 +59,30 @@ color_jitter = 28
 [poi]
 sampler = "bluenoise"            # "bluenoise" | "random" | "grid"
 
+# Per-kind rules live under [poi.types.<kind>]; only overrides shown here (see defaults.py for all).
+[poi.types.dungeon]
+avoid_water = true              # reject anchors whose footprint would clip ocean/lake/river water
+
 [interiors]
-partition = "bsp"               # "bsp" | "tcod_bsp"
-clutter_density = 0.10
+partition = "bsp"               # room layout: "bsp" | "tcod_bsp"
+cells_per_tile = 6              # canonical interior resolution (detail cells per world tile)
+room_min = 4                    # min/max room side in interior cells
+room_max = 10
+clutter_density = 0.10          # fraction of free interior cells furnished (rubble/barrels/chests)
+size_jitter = 0.4               # per-POI footprint size variation (0 disables): structures spawn larger/smaller
+shape = "mixed"                 # dungeon outline: rectangle|blob|cellular|drunkard|diamond|cross|mixed
+                                # ("mixed" picks an organic shape per dungeon so none is square)
+# Per-kind interior footprint in WORLD TILES (w, h), centred on the anchor. Only kinds with a
+# registered builder render an interior (Phase 5 implements "dungeon"); the rest stay map markers.
+[interiors.footprints]
+dungeon = [6, 4]
+tower = [3, 3]
+city = [7, 5]
+town = [5, 4]
+village = [4, 3]
+ruins = [4, 3]
+camp = [3, 3]
+boat = [3, 2]
 
 [roads]
 pathfinder = "astar"            # "astar" | "tcod" | "dijkstra"
@@ -90,6 +111,8 @@ zoom = " "                # step OUT a zoom level (biome<->zoom, local->zoom)
 local = "z"               # step IN a zoom level (biome->zoom->local). Set to " " only if your
                           # terminal distinguishes Shift+Space (most do not)
 toggle_scale = "f"
+floor_up = "<"             # cycle up a floor when standing on a multi-floor structure (e.g. dungeon)
+floor_down = ">"           # cycle down a floor
 refresh = "r"              # regenerate the world with a fresh random seed
 export_view = "e"
 export_world = "E"

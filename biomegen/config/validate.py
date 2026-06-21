@@ -38,7 +38,7 @@ def _clamp(node: Dict[str, Any], key: str, lo: float, hi: float, errors: List[st
         return
     try:
         val = float(node[key])
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         errors.append(f"{where}.{key} must be a number, got {node[key]!r}")
         return
     clamped = max(lo, min(hi, val))
@@ -92,7 +92,7 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
         try:
             if int(world.get(dim, 1)) <= 0:
                 errors.append(f"world.{dim} must be a positive integer")
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             errors.append(f"world.{dim} must be an integer, got {world.get(dim)!r}")
     _clamp(world, "sea_level", 0.0, 1.0, errors, "world")
     _clamp(world, "min_land_fraction", 0.0, 1.0, errors, "world")

@@ -59,6 +59,12 @@ class FakePalette:
     def biome_attr(self, biome_int):
         return 0
 
+    def interior_attr(self, cell_int):
+        return 0
+
+    def zoom_attr(self, color_id):
+        return 0
+
 
 @pytest.fixture(scope="module")
 def cfg():
@@ -187,6 +193,20 @@ def test_legend_lists_only_given_biomes():
     entries = _legend_entries({int(Biome.OCEAN), int(Biome.FOREST)}, glyphs)
     names = [name for _g, name, _b in entries]
     assert names == ["ocean", "forest"]  # sorted by biome int (ocean=0 before forest)
+
+
+def test_interior_legend_skips_void_and_sorts():
+    # Verifies that VOID is excluded and remaining entries are sorted by cell int.
+    from biomegen.render.glyphs import Glyphs
+    from biomegen.render.status import _interior_legend_entries
+    from biomegen.world.tile import Cell
+
+    glyphs = Glyphs(load_config(None))
+    cell_ints = {int(Cell.VOID), int(Cell.FLOOR), int(Cell.WALL), int(Cell.CHEST)}
+    entries = _interior_legend_entries(cell_ints, glyphs)
+    names = [name for _g, name, _c in entries]
+    assert "void" not in names
+    assert names == sorted(names, key=lambda n: next(c for c in Cell if c.name.lower() == n))
 
 
 def test_zoom_enter_centers_cursor(world, cfg):

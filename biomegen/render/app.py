@@ -17,8 +17,10 @@ import numpy as np
 
 from ..config.model import Config
 from ..util import rng
+from ..world.entities import POI
+from ..world.interiors import INTERIOR_BUILDERS, footprint_origin
 from ..world.overlay import Overlay
-from ..world.tile import WaterType
+from ..world.tile import INTERIOR_COLOR_BASE, WaterType
 from ..world.world import World
 from . import map_view, status
 from .glyphs import Glyphs
@@ -78,6 +80,59 @@ def _interesting_cursor(world: World) -> tuple[int, int]:
     return int(xs[i]), int(ys[i])
 
 
+def _poi_under_cursor(world: World, vs: ViewState) -> Optional[POI]:
+    """Return the interior-bearing POI whose footprint covers the cursor, or None.
+
+    Footprint coverage is computed from the POI list (the base ``poi_index`` array still marks only the
+    anchor), so this is what drives floor cycling - the cursor is "inside" a structure when it sits
+    anywhere on that structure's footprint.
+    """
+    for poi in world.pois:
+        if not INTERIOR_BUILDERS.has(poi.kind):
+            continue
+        fw, fh = poi.footprint
+        if fw <= 0 or fh <= 0:
+            continue
+        tx0, ty0 = footprint_origin(poi)
+        if tx0 <= vs.cx < tx0 + fw and ty0 <= vs.cy < ty0 + fh:
+            return poi
+    return None
+
+
+def _sync_floor_to_cursor(world: World, vs: ViewState, prev_poi_id: object) -> object:
+    """Keep ``vs.floor`` valid for the structure under the cursor; return the new tracking id.
+
+    Entering a new structure starts at its ground/entry floor; moving within the same one preserves
+    (and clamps) the chosen floor; off any structure resets to 0.
+    """
+    poi = _poi_under_cursor(world, vs)
+    cur_id = id(poi) if poi is not None else None
+    if cur_id != prev_poi_id:
+        vs.floor = (poi.lowest_floor + poi.floor_count - 1) if poi is not None else 0
+    elif poi is not None:
+        vs.floor = clamp(vs.floor, poi.lowest_floor, poi.lowest_floor + poi.floor_count - 1)
+    return cur_id
+
+
+def _cycle_floor(world: World, vs: ViewState, delta: int) -> None:
+    """Move up/down a floor on the structure under the cursor (or explain why it can't)."""
+    poi = _poi_under_cursor(world, vs)
+    if poi is None:
+        vs.notify("no interior here - move onto a structure to cycle floors")
+        return
+    if poi.floor_count <= 1:
+        vs.notify(f"{poi.name or poi.kind}: single floor")
+        return
+    top = poi.lowest_floor + poi.floor_count - 1
+    new = clamp(vs.floor + delta, poi.lowest_floor, top)
+    if new == vs.floor:
+        vs.notify("no further floor that way")
+        return
+    vs.floor = new
+    rel = vs.floor - top  # 0 = ground/entry, negative = below
+    vs.notify(f"{poi.name or poi.kind}: floor {vs.floor} ({'ground' if rel == 0 else rel})")
+
+
 def _tile_glyph(world: World, glyphs: Glyphs, overlay: Overlay, x: int, y: int) -> str:
     """Glyph for a biome-map tile: overlay edit > POI marker > road marker > biome glyph."""
     edit = overlay.get_surface(x, y)
@@ -99,12 +154,19 @@ def _draw_biome(
     palette: Palette,
     overlay: Overlay,
 ) -> None:
-    """Paint a biome-map frame (fit or 1:1) and the cursor highlight."""
+    """Paint a biome-map frame (fit or 1:1), any stamped interior outlines, and the cursor highlight."""
+    overrides = frame.overrides
     for ry in range(frame.rows):
         row = frame.tiles[ry]
         for rx in range(frame.cols):
             coord = row[rx]
             if coord is None:
+                continue
+            stamp = overrides[ry][rx] if overrides is not None else None
+            if stamp is not None:
+                # A scaled interior cell wins over the terrain tile (this is the dungeon's outline).
+                glyph, color_id = stamp
+                safe_addstr(stdscr, ry, rx, glyph, palette.zoom_attr(color_id))
                 continue
             wx, wy = coord
             glyph = _tile_glyph(world, glyphs, overlay, wx, wy)
@@ -115,24 +177,30 @@ def _draw_biome(
             safe_addstr(stdscr, ry, rx, glyph, attr)
     if frame.cursor is not None:
         ccol, crow = frame.cursor
-        coord = frame.tiles[crow][ccol] if 0 <= crow < frame.rows and 0 <= ccol < frame.cols else None
-        glyph = _tile_glyph(world, glyphs, overlay, *coord) if coord else " "
+        in_bounds = 0 <= crow < frame.rows and 0 <= ccol < frame.cols
+        stamp = overrides[crow][ccol] if (overrides is not None and in_bounds) else None
+        coord = frame.tiles[crow][ccol] if in_bounds else None
+        glyph = stamp[0] if stamp is not None else (_tile_glyph(world, glyphs, overlay, *coord) if coord else " ")
         safe_addstr(stdscr, crow, ccol, glyph, palette.cursor_attr)
 
 
 def _draw_zoom(stdscr: curses.window, frame: ZoomFrame, palette: Palette) -> None:
-    """Paint a magnified zoom frame and outline the focused (cursor) tile."""
+    """Paint a magnified zoom frame and outline the focused (cursor) tile.
+
+    Each cell carries a *colour id* (biome int, or an interior :class:`Cell` colour encoded above
+    ``INTERIOR_COLOR_BASE``); ``palette.zoom_attr`` resolves either to a curses attribute.
+    """
     for ry in range(frame.rows):
         row = frame.cells[ry]
         for rx in range(frame.cols):
-            glyph, biome_int = row[rx]
-            safe_addstr(stdscr, ry, rx, glyph, palette.biome_attr(biome_int))
+            glyph, color_id = row[rx]
+            safe_addstr(stdscr, ry, rx, glyph, palette.zoom_attr(color_id))
     if frame.cursor_rect is not None:
         x0, y0, x1, y1 = frame.cursor_rect
         for yy in range(y0, y1):
             for xx in range(x0, x1):
-                glyph, biome_int = frame.cells[yy][xx]
-                safe_addstr(stdscr, yy, xx, glyph, palette.biome_attr(biome_int) | curses.A_REVERSE)
+                glyph, color_id = frame.cells[yy][xx]
+                safe_addstr(stdscr, yy, xx, glyph, palette.zoom_attr(color_id) | curses.A_REVERSE)
 
 
 def _visible_biomes_map(world: World, frame: Frame) -> set[int]:
@@ -144,6 +212,13 @@ def _visible_biomes_map(world: World, frame: Frame) -> set[int]:
                 wx, wy = coord
                 seen.add(int(world.biome[wy, wx]))
     return seen
+
+
+def _visible_cells_map(frame: Frame) -> set[int]:
+    """Collect the interior Cell ints stamped on a biome-map frame (for the interior legend)."""
+    if frame.overrides is None:
+        return set()
+    return {stamp[1] - INTERIOR_COLOR_BASE for row in frame.overrides for stamp in row if stamp is not None}
 
 
 def _draw(
@@ -180,9 +255,12 @@ def _draw(
         else:
             vs.cam_x = edge_pan(vs.cam_x, vs.cx, tiles_w, world.width)
             vs.cam_y = edge_pan(vs.cam_y, vs.cy, tiles_h, world.height)
-        detail_frame = build_detail_frame(world, config, vs, area_w, map_h, cell_w, cell_h)
+        detail_frame = build_detail_frame(world, config, vs, area_w, map_h, cell_w, cell_h, overlay)
         _draw_zoom(stdscr, detail_frame, palette)
-        visible = {b for row in detail_frame.cells for (_g, b) in row}
+        visible = {b for row in detail_frame.cells for (_g, b) in row if b < INTERIOR_COLOR_BASE}
+        visible_cells = {
+            b - INTERIOR_COLOR_BASE for row in detail_frame.cells for (_g, b) in row if b >= INTERIOR_COLOR_BASE
+        }
     else:
         if vs.mode == "onetoone":
             if vs.recenter:
@@ -192,11 +270,12 @@ def _draw(
                 vs.cam_x = edge_pan(vs.cam_x, vs.cx, area_w, world.width)
                 vs.cam_y = edge_pan(vs.cam_y, vs.cy, map_h, world.height)
         vs.recenter = False
-        biome_frame = build_biome_frame(world, vs, area_w, map_h)
+        biome_frame = build_biome_frame(world, vs, area_w, map_h, config, overlay)
         _draw_biome(stdscr, world, biome_frame, glyphs, palette, overlay)
         visible = _visible_biomes_map(world, biome_frame)
+        visible_cells = _visible_cells_map(biome_frame)
 
-    status.draw(stdscr, world, config, vs, glyphs, palette, map_h, status_h, area_w, visible)
+    status.draw(stdscr, world, config, vs, glyphs, palette, map_h, status_h, area_w, visible, visible_cells)
     stdscr.refresh()
 
 
@@ -222,8 +301,10 @@ def _main(stdscr: curses.window, world: World, config: Config, get_key: Optional
     vs = ViewState(mode=config.get("render.default_view", "fit"))
     vs.cx, vs.cy = _interesting_cursor(world)  # new world -> start on a notable feature
     vs.notify(f"colour mode: {palette.mode}")
+    prev_poi_id: object = None  # tracks the structure under the cursor, to reset the floor on entry
 
     while True:
+        prev_poi_id = _sync_floor_to_cursor(world, vs, prev_poi_id)
         _draw(stdscr, world, config, vs, glyphs, palette, overlay)
         action = resolve_action(get_key(), config)
         name = action[0]
@@ -277,7 +358,7 @@ def _main(stdscr: curses.window, world: World, config: Config, get_key: Optional
             vs.recenter = True
             vs.notify(f"new world: seed {new_seed}")
         elif name == "floor":
-            vs.notify("no floors here (POI interiors arrive in a later build)")
+            _cycle_floor(world, vs, action[1])
         elif name == "export":
             vs.notify("export arrives in a later build")
         # "resize" / "none": just redraw on the next loop iteration.

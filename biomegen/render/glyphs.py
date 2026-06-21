@@ -11,6 +11,12 @@ from ..config.model import Config
 from ..world.tile import BIOME_NAME, Biome, Cell
 
 
+def interior_glyph_table(config: Config) -> dict:
+    """Cell int -> interior glyph from ``render.interior_glyphs`` (used by every interior stamp)."""
+    icfg = config.get("render.interior_glyphs")
+    return {int(c): icfg.get(c.name.lower(), "?") for c in Cell}
+
+
 class Glyphs:
     """Resolved glyph tables for one config."""
 
@@ -20,8 +26,7 @@ class Glyphs:
         self.biome = {int(b): glyph_cfg.get(BIOME_NAME[int(b)], "?") for b in Biome}
         self.markers = dict(config.get("render.markers"))
         # Interior Cell name -> glyph (used by the zoom view).
-        icfg = config.get("render.interior_glyphs")
-        self.interior = {int(c): icfg.get(c.name.lower(), "?") for c in Cell}
+        self.interior = interior_glyph_table(config)
 
     def biome_glyph(self, biome_int: int) -> str:
         return self.biome.get(int(biome_int), "?")

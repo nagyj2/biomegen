@@ -13,7 +13,7 @@ from typing import Optional
 import numpy as np
 
 from ..config.model import Config
-from ..world.tile import BIOME_NAME
+from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
 from .glyphs import Glyphs
 from .palette import Palette
@@ -39,6 +39,11 @@ def _legend_entries(biome_ints: set[int], glyphs: Glyphs) -> list[tuple[str, str
     return [(glyphs.biome_glyph(b), BIOME_NAME[b], b) for b in sorted(biome_ints)]
 
 
+def _interior_legend_entries(cell_ints: set[int], glyphs: Glyphs) -> list[tuple[str, str, int]]:
+    """Return (glyph, name, cell_int) for interior Cell ints, skipping VOID, in stable order."""
+    return [(glyphs.interior_glyph(c), Cell(c).name.lower(), c) for c in sorted(cell_ints) if c != int(Cell.VOID)]
+
+
 def draw(
     stdscr: curses.window,
     world: World,
@@ -50,11 +55,14 @@ def draw(
     height: int,
     width: int,
     visible_biomes: Optional[set[int]] = None,
+    visible_cells: Optional[set[int]] = None,
 ) -> None:
     """Render the status panel into rows [top, top+height).
 
     ``visible_biomes`` is the set of biome ints currently on screen; the legend lists only those (so
     it reflects what you can actually see). If omitted, every biome present in the world is shown.
+    ``visible_cells`` is the set of interior :class:`~biomegen.world.tile.Cell` ints on screen; when
+    non-empty a second legend row is drawn beneath the biome row.
     """
     if height <= 0:
         return
@@ -117,6 +125,24 @@ def draw(
             safe_addstr(stdscr, y, x, glyph, palette.biome_attr(biome_int))
             safe_addstr(stdscr, y, x + 1, f" {name}  ")
             x += len(entry)
+
+        # Interior items row — only shown when interior cells are visible (zoom/local scale).
+        interior_entries = _interior_legend_entries(visible_cells or set(), glyphs)
+        if interior_entries:
+            y += 1
+            if y < legend_bottom:
+                safe_addstr(stdscr, y, 0, " items: ")
+                x = 9
+                for glyph, name, cell_int in interior_entries:
+                    entry = f"{glyph} {name}  "
+                    if x + len(entry) >= width:
+                        y += 1
+                        x = 9
+                        if y >= legend_bottom:
+                            break
+                    safe_addstr(stdscr, y, x, glyph, palette.interior_attr(cell_int))
+                    safe_addstr(stdscr, y, x + 1, f" {name}  ")
+                    x += len(entry)
 
     # Controls + most recent message on the bottom line.
     controls = "[arrows] move  [space] zoom  [z] local  [f] fit/1:1  [r] new  [e/E] export  [q] quit"

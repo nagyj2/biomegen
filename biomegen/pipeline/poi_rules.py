@@ -34,6 +34,7 @@ class KindRule:
     coastal: float  # weight on closeness-to-coast
     remoteness: float  # weight on distance-from-settlements
     on_water: bool  # boats: anchor must be a water tile
+    avoid_water: bool  # structures: the whole footprint (not just the anchor) must be water-free
     floors: Union[int, Tuple[int, int]]
 
 
@@ -56,12 +57,20 @@ def parse_rule(kind: str, raw: dict) -> KindRule:
         coastal=float(raw.get("coastal", 0.0)),
         remoteness=float(raw.get("remoteness", 0.0)),
         on_water=bool(raw.get("on_water", False)),
+        avoid_water=bool(raw.get("avoid_water", False)),
         floors=floors,
     )
 
 
-def eligibility_mask(rule: KindRule, world: World) -> np.ndarray:
-    """Boolean grid of tiles this kind may occupy: biome whitelist + elevation + water/land + free."""
+def eligibility_mask(rule: KindRule, world: World, footprint: Optional[Tuple[int, int]] = None) -> np.ndarray:
+    """Boolean grid of tiles this kind may occupy: biome whitelist + elevation + water/land + free.
+
+    When ``rule.avoid_water`` is set and a ``footprint`` (max width/height in tiles) is given, the
+    anchor must also sit where the *entire* centred footprint is water-free - not just the anchor tile.
+    This stops a structure whose anchor is on land from laying walls/floors over coastal/lake/river
+    water (footprints are sized in a later stage and centred on the anchor, so the anchor alone can be
+    dry while the footprint clips water).
+    """
     biome = world.biome
     allowed = (
         np.isin(biome, np.array(sorted(rule.biome_ints), dtype=biome.dtype))
@@ -79,7 +88,32 @@ def eligibility_mask(rule: KindRule, world: World) -> np.ndarray:
         mask &= world.elevation >= rule.elevation_min
     if rule.elevation_max is not None:
         mask &= world.elevation <= rule.elevation_max
+    if rule.avoid_water and footprint is not None:
+        mask &= water_free_footprint_mask(world, footprint[0], footprint[1])
     return mask
+
+
+def water_free_footprint_mask(world: World, fw: int, fh: int) -> np.ndarray:
+    """Bool grid: True where an ``fw x fh`` footprint *centred* on the tile contains no water.
+
+    Footprints are centred on the anchor (``tx0 = x - fw // 2``; see :mod:`poi_interiors`), so a tile
+    is acceptable only when every tile of that centred window is non-water. Off-map tiles (the
+    footprint is clipped at the border) count as land. Implemented with a summed-area table so the
+    per-tile window sum is a 4-point lookup, keeping the whole thing O(width * height) with no scipy.
+    """
+    water = (world.water_type != int(WaterType.NONE)).astype(np.int64)
+    h, w = water.shape
+    # Summed-area table padded with a zero first row/col so any window sum is sat[y1,x1] - sat[y0,x1]
+    # - sat[y1,x0] + sat[y0,x0] with half-open [y0,y1) x [x0,x1) bounds (no special-casing the edge).
+    sat = np.zeros((h + 1, w + 1), dtype=np.int64)
+    sat[1:, 1:] = water.cumsum(0).cumsum(1)
+    xs, ys = np.arange(w), np.arange(h)
+    x0 = np.clip(xs - fw // 2, 0, w)  # window cols [x0, x1) matching the centred footprint, clamped
+    x1 = np.clip(xs - fw // 2 + fw, 0, w)
+    y0 = np.clip(ys - fh // 2, 0, h)  # window rows [y0, y1), clamped to the map
+    y1 = np.clip(ys - fh // 2 + fh, 0, h)
+    count = sat[np.ix_(y1, x1)] - sat[np.ix_(y0, x1)] - sat[np.ix_(y1, x0)] + sat[np.ix_(y0, x0)]
+    return count == 0
 
 
 def score_array(

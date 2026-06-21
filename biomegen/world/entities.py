@@ -31,7 +31,8 @@ class POI:
     region_id: int = -1
     floor_count: int = 1  # >1 for towers (above ground) and dungeons (below ground)
     lowest_floor: int = 0  # 0 for ground-level; negative for dungeons going underground
-    footprint: Tuple[int, int] = (0, 0)  # interior grid size in detail cells (w, h)
+    footprint: Tuple[int, int] = (0, 0)  # interior footprint in world tiles (w, h), centred on anchor
+    bbox: Tuple[int, int, int, int] = (0, 0, 0, 0)  # footprint extent in world tiles (x0,y0,x1,y1), clamped
     entrance: Tuple[int, int] = (0, 0)  # door coordinate roads should connect to
     extra: dict = field(default_factory=dict)  # kind-specific data (e.g. boat cargo type)
 

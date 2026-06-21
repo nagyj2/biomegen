@@ -6,8 +6,10 @@ regions with generated lore, points of interest (villages, towns, cities, towers
 camps, boats) connected by meandering roads — and lets you explore it with a colored curses UI,
 zoom in to see structure detail, and export the view to SVG/PNG.
 
-> **Status:** Phases 0–4 are complete and playable. Phases 5–6 (zoom interiors, SVG/PNG export)
-> are planned. See the phase checklist below.
+> **Status:** Phases 0–4 are complete and playable. Phase 5 is in progress — **dungeon** interiors
+> render embedded in the terrain at the zoom (outline) and local (full, furnished) scales, with
+> multi-floor cycling; the remaining archetypes and SVG/PNG export (Phase 6) are planned. See the
+> phase checklist below.
 
 ---
 
@@ -84,7 +86,7 @@ There are **three view scales**: the **biome map** (whole island), **zoom** (mid
 | `z` | Step **in** one scale: biome→zoom→local |
 | `f` | Toggle fit-to-screen ↔ 1:1 panning (biome map only) |
 | `r` | Regenerate the world with a fresh random seed |
-| `<` / `>` | Cycle floors up / down (towers, dungeons — Phase 5) |
+| `<` / `>` | Cycle floors up / down when standing on a multi-floor structure (e.g. a dungeon) |
 | `e` / `E` | Export current view / whole island (Phase 6) |
 | `q` | Quit |
 
@@ -186,7 +188,10 @@ The authoritative defaults and inline documentation are in
 | Key | Default | Description |
 |-----|---------|-------------|
 | `partition` | `"bsp"` | Interior room generator: `"bsp"` · `"tcod_bsp"` |
-| `clutter_density` | `0.10` | Fraction of interior cells with furniture/clutter |
+| `cells_per_tile` | `6` | Canonical interior resolution — detail cells per world tile |
+| `room_min` / `room_max` | `4` / `10` | Min/max room side in interior cells |
+| `clutter_density` | `0.10` | Fraction of free interior cells furnished (rubble/barrels/chests) |
+| `footprints.*` | per-kind | Interior footprint in world tiles `[w, h]`, centred on the anchor |
 
 #### `[roads]`
 | Key | Default | Description |
@@ -262,5 +267,9 @@ The naming and lore grammar is documented in **[docs/GRAMMAR.md](docs/GRAMMAR.md
 - [x] Phase 2 — generation core (heightmap → regions) + headless stats
 - [x] Phase 3 — curses TUI — playable biome-map explorer
 - [x] Phase 4 — POIs, meandering A\* roads + bridges, mixed-culture names & region lore
-- [ ] Phase 5 — zoom interiors, clutter, multi-floor POIs, overlay
+- [~] Phase 5 — detail interiors, clutter, multi-floor POIs, overlay
+  - [x] Infrastructure: lazy/LRU-cached interior builders, registry, embedded detail rendering
+        (zoom outline / local full interior), signed multi-floor cycling, overlay compositing
+  - [x] **Dungeon** archetype (BSP rooms + corridors, aligned stairs, role-based furnishing)
+  - [ ] Remaining archetypes: tower, village, town, city, ruins, camp, boat
 - [ ] Phase 6 — SVG/PNG export

@@ -16,13 +16,19 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
-from ..world.tile import Biome
+from ..config.model import Config
+from ..world.interiors import INTERIOR_BUILDERS, STRUCTURAL, build_interior, footprint_origin, sample_rect
+from ..world.overlay import Overlay
+from ..world.tile import INTERIOR_COLOR_BASE, Biome
 from ..world.world import World
+from .glyphs import interior_glyph_table
 from .state import ViewState
 
 Coord = Tuple[int, int]
+# A stamped interior cell: (glyph, colour-id) where the colour-id is INTERIOR_COLOR_BASE + Cell int.
+Override = Tuple[str, int]
 
 # Feature priority for fit-to-screen reduction: a block shows its highest-priority tile. Landmarks
 # and water beat plain land so small but important features (a lone lake, a river thread) survive.
@@ -57,6 +63,10 @@ class Frame:
     cursor: Optional[Coord]  # (screen_col, screen_row) or None if off-screen
     block_w: int = 1  # fit-mode block dimensions (1 in 1:1 mode)
     block_h: int = 1
+    # Per-screen-cell interior stamp: a scaled image of a POI's interior outline drawn over the
+    # terrain across its footprint (None where no structure covers that cell). Built only when a
+    # ``config`` is supplied to :func:`build_biome_frame`; the app paints it instead of the biome tile.
+    overrides: Optional[List[List[Optional[Override]]]] = None
 
 
 def feature_priority(world: World, x: int, y: int) -> int:
@@ -92,8 +102,69 @@ def _representative_tile(world: World, x0: int, y0: int, x1: int, y1: int) -> Co
     return best
 
 
-def build_biome_frame(world: World, vs: ViewState, area_w: int, area_h: int) -> Frame:
-    """Build the biome-map :class:`Frame` for the current view mode and camera."""
+def _stamp_map_interiors(
+    world: World,
+    config: Config,
+    overlay: Optional[Overlay],
+    rows: int,
+    cols: int,
+    to_screen: Callable[[int, int], Coord],
+) -> Optional[List[List[Optional[Override]]]]:
+    """Build a per-screen-cell stamp of each POI interior's structural outline (or None if nothing fits).
+
+    The interior is the same canonical artifact the detail views sample - here it is nearest-neighbour
+    sampled down to however many *screen cells* the footprint occupies (often ~one cell per world tile
+    on the overview), so the biome map shows a recognisable scaled image of the dungeon's wall plan
+    rather than the terrain underneath. Only :data:`~biomegen.world.interiors.STRUCTURAL` cells (walls,
+    doors, stairs) are stamped; everything else is left as None so terrain still shows through the gaps.
+    The entry (top) floor is used - the overview is the surface-level view of the structure.
+    """
+    cell_glyph = interior_glyph_table(config)
+    overrides: List[List[Optional[Override]]] = [[None] * cols for _ in range(rows)]
+    stamped = False
+    for poi in world.pois:
+        if not INTERIOR_BUILDERS.has(poi.kind):
+            continue
+        fw, fh = poi.footprint
+        if fw <= 0 or fh <= 0:
+            continue
+        floor = poi.lowest_floor + poi.floor_count - 1  # entry/top floor = the surface view
+        base = build_interior(poi, floor, config)
+        if base is None:
+            continue
+        grid = overlay.apply_interior(base, poi.interior_seed, floor) if overlay is not None else base
+        tx0, ty0 = footprint_origin(poi)
+        # Screen-cell rectangle the footprint maps to (its two corners under the active scaling).
+        sc0, sr0 = to_screen(tx0, ty0)
+        sc1, sr1 = to_screen(tx0 + fw - 1, ty0 + fh - 1)
+        span_cols, span_rows = sc1 - sc0 + 1, sr1 - sr0 + 1
+        if span_cols <= 0 or span_rows <= 0:
+            continue
+        # The POI's map marker lives on its anchor's screen cell; never stamp the outline over it, so
+        # the marker (drawn from poi_index by the app) always wins over a wall/door of the outline.
+        acol, arow = to_screen(poi.x, poi.y)
+        for sr, sc, cellv in sample_rect(grid, sr0, sc0, span_rows, span_cols, rows, cols):
+            if (sc == acol and sr == arow) or cellv not in STRUCTURAL:
+                continue  # marker cell stays clear (POI wins); only structural cells stamp
+            overrides[sr][sc] = (cell_glyph.get(cellv, "?"), INTERIOR_COLOR_BASE + cellv)
+            stamped = True
+    return overrides if stamped else None
+
+
+def build_biome_frame(
+    world: World,
+    vs: ViewState,
+    area_w: int,
+    area_h: int,
+    config: Optional[Config] = None,
+    overlay: Optional[Overlay] = None,
+) -> Frame:
+    """Build the biome-map :class:`Frame` for the current view mode and camera.
+
+    When ``config`` is supplied, POIs with an interior builder are stamped onto the frame as a scaled
+    outline of their interior (see :func:`_stamp_map_interiors`); without it the frame is terrain-only
+    (used by the lightweight ASCII/test paths that don't render interiors).
+    """
     if vs.mode == "fit":
         bw, bh, cols, rows = fit_blocks(world.width, world.height, area_w, area_h)
         tiles: List[List[Optional[Coord]]] = []
@@ -107,7 +178,11 @@ def build_biome_frame(world: World, vs: ViewState, area_w: int, area_h: int) -> 
                 row.append(_representative_tile(world, x0, y0, x1, y1))
             tiles.append(row)
             cursor: Optional[Coord] = (vs.cx // bw, vs.cy // bh)
-        return Frame(cols, rows, tiles, cursor, block_w=bw, block_h=bh)
+        frame = Frame(cols, rows, tiles, cursor, block_w=bw, block_h=bh)
+        if config is not None:
+            to_screen_fit: Callable[[int, int], Coord] = lambda wx, wy: (wx // bw, wy // bh)  # noqa: E731
+            frame.overrides = _stamp_map_interiors(world, config, overlay, rows, cols, to_screen_fit)
+        return frame
 
     # 1:1 panning: one screen cell per world tile, windowed by the camera (already edge-panned).
     cam_x, cam_y = vs.cam_x, vs.cam_y
@@ -121,4 +196,8 @@ def build_biome_frame(world: World, vs: ViewState, area_w: int, area_h: int) -> 
         pan_tiles.append(pan_row)
     scx, scy = vs.cx - cam_x, vs.cy - cam_y
     pan_cursor: Optional[Coord] = (scx, scy) if 0 <= scx < area_w and 0 <= scy < area_h else None
-    return Frame(area_w, area_h, pan_tiles, pan_cursor)
+    frame = Frame(area_w, area_h, pan_tiles, pan_cursor)
+    if config is not None:
+        to_screen_pan: Callable[[int, int], Coord] = lambda wx, wy: (wx - cam_x, wy - cam_y)  # noqa: E731
+        frame.overrides = _stamp_map_interiors(world, config, overlay, area_h, area_w, to_screen_pan)
+    return frame

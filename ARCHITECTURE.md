@@ -39,6 +39,9 @@ biomegen/
     world.py            Immutable World (parallel numpy arrays) + fingerprint()
     overlay.py          Mutable Overlay (runtime edits, composited at read time)
     entities.py         POI / Region / River / Lake dataclasses
+    interiors/          Lazy, deterministic, LRU-cached POI interior builders
+      grid.py           Shared toolkit: BSP partition, carving, stair shafts, registry + build cache
+      dungeon.py        Dungeon archetype (BSP rooms/corridors, aligned stairs, furnishing)
   pipeline/             Ordered generation stages (see Pipeline section below)
     __init__.py         generate() orchestrator + stats()
     heightmap.py        Stage 1 — elevation
@@ -51,8 +54,9 @@ biomegen/
     poi_fields.py       Shared suitability distance fields for POI scoring
     poi_rules.py        Per-kind POI rules, eligibility masks, score arrays
     poi_sampler.py      Blue-noise / random / grid POI samplers
-    roads.py            Stage 8 — road network + bridge POIs
-    naming.py           Stage 9 — names and lore for all entities
+    poi_interiors.py    Stage 8 — POI interior metadata (footprint/bbox; no grids)
+    roads.py            Stage 9 — road network + bridge POIs
+    naming.py           Stage 10 — names and lore for all entities
   naming/
     cultures.py         Culture profiles + biome-biased culture assignment
     syllables.py        Syllable-assembly name generator
@@ -123,7 +127,7 @@ to `world.regen_attempts` times) before the expensive downstream stages run.
 
 ```
 heightmap → island_mask → climate → hydrology → biomes → regions
-         → poi_placement → roads → naming
+         → poi_placement → poi_interiors → roads → naming
 ```
 
 ### Stage 1 — Heightmap (`pipeline/heightmap.py`)
@@ -246,9 +250,18 @@ Places cities, towns, villages, towers, dungeons, ruins, camps, and boats:
 4. **Blue-noise sampling** (default): candidate tiles are drawn from the scored distribution and
    accepted only if they are ≥ `min_spacing` tiles from all previously placed POIs (Poisson-disk
    style). Alternatives: `random` (unconstrained sampling) and `grid` (evenly spaced).
-5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy Phase-5 interior builder.
+5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy interior builder (see Stage 8 and the Render layer).
 
-### Stage 8 — Roads (`pipeline/roads.py`)
+### Stage 8 — POI interiors (`pipeline/poi_interiors.py`)
+
+Cheap, **render-only metadata** for each POI's detail-view interior — no grids are generated here.
+For every POI with a configured `interiors.footprints.<kind>` it sets the **footprint** (in world
+tiles, centred on the anchor) and the clamped on-map **bbox**. It writes only `POI` dataclass fields,
+never the per-tile arrays, so `World.fingerprint()` is unchanged; `entrance` stays at the anchor so
+the roads stage (which routes to `poi.entrance`) is unaffected. The actual interior **grids** are
+built lazily and deterministically from `interior_seed` on first view (see Render layer → Interiors).
+
+### Stage 9 — Roads (`pipeline/roads.py`)
 
 Connects POIs with meandering least-cost roads:
 
@@ -274,7 +287,7 @@ Connects POIs with meandering least-cost roads:
    `_MAX_OCEAN_BRIDGE` tiles are skipped. Mixed ocean+river runs are split at the salt/fresh
    boundary. Bridges are emergent from road×water intersections — they are not independently sampled.
 
-### Stage 9 — Naming (`pipeline/naming.py`, `naming/`)
+### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 
 Assigns names and generates lore for all entities:
 
@@ -312,6 +325,7 @@ needed). All other families are changed via their config key.
 | POI sampler | `poi.sampler` | `--poi-sampler` | `bluenoise`\* · `random` · `grid` |
 | Pathfinder | `roads.pathfinder` | — | `astar`\* · `tcod` · `dijkstra` |
 | Interior partition | `interiors.partition` | — | `bsp`\* · `tcod_bsp` |
+| Interior builder | (by POI kind) | — | `dungeon`; tower/village/town/city/ruins/camp/boat planned |
 | Spatial compute | `compute.backend` | — | `scipy`\* · `numpy` · `pure` |
 
 \* default   † optional C-extension; unavailable if not installed (no C compiler needed for defaults)
@@ -330,12 +344,40 @@ Three view scales share one biome-tile cursor and one camera:
 - **Zoom** (`zoom_view.py`): each biome tile is rendered as a `zoom_scale × (zoom_scale × cell_aspect)`
   block of detail cells. The cursor tile is outlined.
 - **Local** (`zoom_view.py`, same renderer): the screen shows `local_rows` biome tiles vertically,
-  each magnified further. POI interiors will render only at this scale (Phase 5).
+  each magnified further. Full furnished POI interiors render at this scale.
 
 **Biome blending** at detail scales: each cell looks up its biome at a domain-warped world
 position (`blend_strength`, `blend_scale`). The warp is a pure function of world position + seed, so
 zoom and local are consistent samplings of the same blend — they look like zooms of each other.
 Setting `blend_strength = 0` gives a crisp grid.
+
+### Interiors (`world/interiors/`, rendered by `zoom_view.py`)
+
+POIs with a registered builder get **three forms**: the biome-map marker, a **zoom** structure
+outline, and a **local** full interior — all anchored in world space, so panning moves seamlessly
+between outside and inside (the interior is *embedded in the terrain*, not a separate screen).
+
+- **One artifact, two samplings.** Each interior is generated once at a *canonical* resolution
+  (`interiors.cells_per_tile` cells per world tile across the footprint) by the per-kind builder,
+  then `_stamp_interiors` **nearest-neighbour samples** it into the footprint's detail-cell block.
+  So zoom and local are coarse/fine views of the same grid, exactly like the biome blend. At **zoom**
+  only `STRUCTURAL` cells (walls/doors/stairs) are drawn — the outline; at **local** every non-`VOID`
+  cell is drawn — the full furnished interior. `VOID` is transparent, so terrain shows through gaps.
+- **Lazy + cached + deterministic.** `build_interior(poi, floor, config)` dispatches to the kind's
+  builder, memoised by `functools.lru_cache` on the cheap scalar inputs; the cached base array is
+  read-only. Everything is a pure function of `interior_seed` (+ floor), so a POI regenerates
+  identically every open. Runtime edits compose on top via `Overlay.apply_interior` (copy-on-write).
+- **Signed floors.** Dungeons descend: floors run `lowest_floor … 0` (entry/ground). Stairs sit on
+  two **aligned shafts** fixed across floors (seeded floor-independently) so floors stack vertically;
+  the entry floor shows a DOOR, the deepest only stairs up. `<` / `>` cycle floors when the cursor is
+  on the structure's footprint (`app._cycle_floor`); `_sync_floor_to_cursor` keeps `vs.floor` valid.
+- **Colour.** Detail cells carry a *colour id*: a biome int, or an interior `Cell` colour encoded as
+  `INTERIOR_COLOR_BASE + cell`. `Palette.zoom_attr` decodes either; interior colours come from
+  `render.interior_palette`.
+
+The **dungeon** archetype is implemented (BSP rooms + L-corridors, aligned stairs, role-based
+furnishing). Remaining archetypes plug in by dropping a `world/interiors/<kind>.py` with an
+`@register_interior("<kind>")` builder and adding a footprint entry — no render or pipeline changes.
 
 **Colour capability ladder** (`palette.py`): the palette detects terminal capability and uses the
 highest available mode — truecolor (`init_color` with per-region RGB), 256-color, 8-color, or

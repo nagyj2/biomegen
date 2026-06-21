@@ -28,13 +28,17 @@ def render_biome_ascii(
     """Return an ASCII rendering of the biome map (fit-to-screen by default)."""
     glyphs = Glyphs(config)
     vs = vs or ViewState(cx=world.width // 2, cy=world.height // 2, mode="fit")
-    frame = build_biome_frame(world, vs, area_w, area_h)
+    frame = build_biome_frame(world, vs, area_w, area_h, config)
+    overrides = frame.overrides
     lines = []
     for ry in range(frame.rows):
         chars = []
         for rx in range(frame.cols):
             coord = frame.tiles[ry][rx]
-            if coord is None:
+            stamp = overrides[ry][rx] if overrides is not None else None
+            if stamp is not None:
+                chars.append(stamp[0])  # stamped interior outline wins over the terrain glyph
+            elif coord is None:
                 chars.append(" ")
             else:
                 wx, wy = coord

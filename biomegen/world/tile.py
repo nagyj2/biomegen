@@ -86,6 +86,11 @@ class Cell(IntEnum):
     RESERVED = 24  # reserved marker slot for future use
 
 
+# Detail-view cells carry their colour as an integer "colour id". Biome floor colours use the biome
+# int directly (0.._MAX_BIOME); interior :class:`Cell` colours are encoded as ``INTERIOR_COLOR_BASE +
+# cell_int`` so a single id space can address both without a wider tuple. The palette decodes the id.
+INTERIOR_COLOR_BASE: int = 1000
+
 # Convenient lookup tables for config parsing and HUD display. Names are lower-case so they read
 # naturally both in TOML (e.g. ``biomes = ["grassland", "forest"]``) and in status text.
 BIOME_BY_NAME: dict[str, Biome] = {b.name.lower(): b for b in Biome}

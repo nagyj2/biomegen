@@ -22,7 +22,18 @@ from ..config.model import Config
 from ..util import rng
 from ..world.tile import BIOME_NAME, Biome, WaterType
 from ..world.world import World
-from . import biomes, climate, heightmap, hydrology, island_mask, naming, poi_placement, regions, roads
+from . import (
+    biomes,
+    climate,
+    heightmap,
+    hydrology,
+    island_mask,
+    naming,
+    poi_interiors,
+    poi_placement,
+    regions,
+    roads,
+)
 
 
 def generate(config: Config, seed: int) -> World:
@@ -58,6 +69,7 @@ def generate(config: Config, seed: int) -> World:
     biomes.run(world, config, gen_seed)
     regions.run(world, config, gen_seed)
     poi_placement.run(world, config, gen_seed)
+    poi_interiors.run(world, config, gen_seed)
     roads.run(world, config, gen_seed)
     naming.run(world, config, gen_seed)
     return world
