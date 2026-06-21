@@ -71,7 +71,7 @@ The root is dressed differently for each entity category:
 | Settlement (civilized POI) | `RootSuffix` — suffix drawn from the culture's settlement list |
 | Tower | `Root FortWord` or `FortWord of Root` |
 | Dungeon | `Root Depths` · `Root Catacombs` · `Tomb of Root` · `Root Deep` |
-| Ruins | `Ruins of Root` · `Root Ruins` · `Old Root` |
+| Ruin | `Ruins of Root` · `Root Ruins` · `Old Root` |
 | Camp | `Root Camp` · `Root Hollow` · `Root Rest` |
 | Boat | `The Root` or `Root` |
 | River | `RootNatureWord` or `Root River` |

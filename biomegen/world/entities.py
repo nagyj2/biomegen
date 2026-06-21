@@ -15,7 +15,7 @@ from typing import List, Optional, Tuple
 
 @dataclass
 class POI:
-    """A point of interest (village, town, city, tower, dungeon, ruins, camp, boat, ...).
+    """A point of interest (village, town, city, tower, dungeon, ruin, camp, boat, ...).
 
     Placement (Phase 4) fills the location/kind/region; the interiors stage (Phase 5) fills the cheap
     metadata (``floor_count``, ``footprint``, ``entrance``) while the actual interior grids are

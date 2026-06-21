@@ -160,7 +160,10 @@ def test_naming_does_not_change_fingerprint(cfg):
 
 # --------------------------------------------------------------------------- detail-view markers
 def test_detail_view_stamps_poi_marker(world, cfg):
-    poi = next(p for p in world.pois if p.kind in ("city", "town", "village"))
+    # A marker-only POI (a bridge has no interior builder) still shows its glyph at the detail scale.
+    # Interior-bearing POIs (settlements, dungeons, ...) intentionally replace their marker with the
+    # rendered interior at this scale - that is covered in test_interiors, not here.
+    poi = next(p for p in world.pois if p.kind == "bridge")
     aw, ah = 80, 24
     cw, ch = detail_cell_size("local", cfg, aw, ah)
     vs = ViewState(cx=poi.x, cy=poi.y, scale="local")

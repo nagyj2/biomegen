@@ -42,6 +42,16 @@ class Biome(IntEnum):
     MOUNTAIN = 13  # bare high-elevation rock
     SNOW = 14  # permanent snow cap
 
+class POIType(IntEnum):
+    """Available points of interest."""
+    CITY = 0
+    TOWN = 1
+    VILLAGE = 2
+    TOWER = 3
+    DUNGEON = 4
+    RUIN = 5
+    CAMP = 6
+    BRIDGE = 7
 
 class WaterType(IntEnum):
     """Salt-vs-fresh classification of a water tile (orthogonal to :class:`Biome`)."""
@@ -75,7 +85,7 @@ class Cell(IntEnum):
     BARREL = 13
     CRATE = 14
     SHELF = 15
-    RUBBLE = 16  # collapsed masonry (ruins)
+    RUBBLE = 16  # collapsed masonry (ruin)
     TENT = 17
     CAMPFIRE = 18
     WAGON = 19

@@ -60,9 +60,10 @@ LABELS: frozenset[str] = frozenset(
         "interior.footprint",  # poi_interiors metadata stage: per-POI footprint size jitter
         "interior",  # interior floor layout (BSP rooms/corridors), keyed on interior_seed + floor
         "interior.shaft",  # aligned stair-shaft positions (floor-independent, so floors stack)
-        "interior.shape",  # dungeon outer-boundary shape mask (per-dungeon, floor-independent)
+        "interior.shape",  # solid-building outer-boundary shape mask (per-structure, floor-independent)
         "interior.door",  # exterior entrance door position (entry floor only)
         "interior.furnish",  # role-based furnishing pass, keyed on interior_seed + floor
+        "interior.erode",  # ruin erosion: which walls collapse / floor cracks into rubble
         "roads",  # road graph edge selection
         "roads.meander",  # per-edge road meander noise
         "naming",  # name/lore generation

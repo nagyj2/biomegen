@@ -26,7 +26,7 @@ from ..config.model import Config
 from ..util import noise, rng
 from ..world.interiors import INTERIOR_BUILDERS, ZOOM_VISIBLE, build_interior, footprint_origin, sample_rect
 from ..world.overlay import Overlay
-from ..world.tile import INTERIOR_COLOR_BASE, WATER_BIOMES, Biome, Cell
+from ..world.tile import INTERIOR_COLOR_BASE, WATER_BIOMES, Biome, Cell, WaterType
 from ..world.world import World
 from .glyphs import interior_glyph_table
 from .state import SCALE_ZOOM, ViewState
@@ -234,10 +234,15 @@ def _stamp_interiors(
     - walls *and* floor (see :data:`~biomegen.world.interiors.ZOOM_VISIBLE`) so it reads as filled-in -
     but furniture is suppressed; at ``local`` every non-void cell is drawn (the full furnished
     interior). ``VOID`` cells are skipped so the surrounding terrain shows through the gaps.
+
+    As a hard backstop, no interior cell is ever drawn over a water tile (except for a ``boat``, which
+    floats on water by design): the terrain-aware builder already forms each structure around the coast,
+    but this guarantees that even a stray corridor clipping the shore renders as water, not masonry.
     """
     shell_only = vs.scale == SCALE_ZOOM
     cell_glyph = interior_glyph_table(config)  # Cell int -> interior glyph (data-driven)
     void = int(Cell.VOID)
+    dry = int(WaterType.NONE)
 
     for poi in world.pois:
         if not INTERIOR_BUILDERS.has(poi.kind):
@@ -251,10 +256,11 @@ def _stamp_interiors(
             continue
         top = poi.lowest_floor + poi.floor_count - 1
         floor = max(poi.lowest_floor, min(int(vs.floor), top))
-        base = build_interior(poi, floor, config)
+        base = build_interior(poi, floor, config, world)
         if base is None:
             continue
         grid = overlay.apply_interior(base, poi.interior_seed, floor) if overlay is not None else base
+        guard_water = poi.kind != "boat"  # boats render over water; every other structure forms around it
 
         # Footprint spans fh*cell_h x fw*cell_w detail cells at this scale; sample the interior into it.
         base_row = (ty0 - cam_y) * cell_h
@@ -262,6 +268,10 @@ def _stamp_interiors(
         for r, c, cellv in sample_rect(grid, base_row, base_col, fh * cell_h, fw * cell_w, rows, cols):
             if cellv == void:
                 continue  # VOID is transparent: terrain shows around the dungeon's organic outline
+            if guard_water:
+                tx, ty = cam_x + c // cell_w, cam_y + r // cell_h
+                if 0 <= ty < world.height and 0 <= tx < world.width and world.water_type[ty, tx] != dry:
+                    continue  # never lay structure over water: the real water/coast shows through
             if shell_only and cellv not in ZOOM_VISIBLE:
                 # Furniture is suppressed at zoom, but it stands ON a floor - draw that floor, not the
                 # terrain underneath, so rooms read as solid floorplan (no biome clutter leaks).

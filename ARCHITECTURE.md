@@ -40,8 +40,15 @@ biomegen/
     overlay.py          Mutable Overlay (runtime edits, composited at read time)
     entities.py         POI / Region / River / Lake dataclasses
     interiors/          Lazy, deterministic, LRU-cached POI interior builders
-      grid.py           Shared toolkit: BSP partition, carving, stair shafts, registry + build cache
-      dungeon.py        Dungeon archetype (BSP rooms/corridors, aligned stairs, furnishing)
+      grid.py           Shared toolkit: BSP partition, carving, stair shafts, walls/doors/streets,
+                        furnishing scatter, registry + build cache
+      shapes.py         Swappable organic outer-boundary masks (blob/cellular/drunkard/diamond/cross)
+      dungeon.py        Dungeon: stacked descending rooms, aligned stairs, depth-scaled furnishing
+      tower.py          Tower: stacked ascending rooms, lookout top floor, sparse quarters
+      settlement.py     City/town/village: multiple walled buildings + PATH streets + plaza
+      ruin.py           Ruin: a building eroded into rubble and breached walls (single floor)
+      camp.py           Camp: bespoke open-air clearing — campfire, tents, wagon (no walls)
+      boat.py           Boat: bespoke planked hull + deck + cargo, floating on water
   pipeline/             Ordered generation stages (see Pipeline section below)
     __init__.py         generate() orchestrator + stats()
     heightmap.py        Stage 1 — elevation
@@ -237,16 +244,20 @@ Groups tiles into named regions — contiguous zones of biologically similar cov
 
 ### Stage 7 — POI placement (`pipeline/poi_placement.py`, `poi_fields.py`, `poi_rules.py`, `poi_sampler.py`)
 
-Places cities, towns, villages, towers, dungeons, ruins, camps, and boats:
+Places cities, towns, villages, towers, dungeons, ruin, camps, and boats:
 
 1. **Shared suitability fields**: `freshwater_distance` and `coast_distance` are computed once.
    A `remoteness` field is updated after each civilized POI lands, so later uncivilized kinds
    naturally cluster away from settlements.
-2. **Priority order**: `city → town → village → tower → dungeon → ruins → camp → boat`. Higher-value
+2. **Priority order**: `city → town → village → tower → dungeon → ruin → camp → boat`. Higher-value
    settlements claim the best land first; the shared spacing set prevents stacking.
 3. **Scoring**: each kind defines eligibility (allowed biomes, elevation bounds) and weighting
    (freshwater affinity, coastal affinity, remoteness weight). Score = product of applicable
-   weights + per-tile jitter noise.
+   weights + per-tile jitter noise. Land kinds additionally require their (max) footprint to be at
+   least `poi.min_footprint_land` dry land (`poi_rules.footprint_land_fraction_mask`, a summed-area
+   table over the water mask), so a structure can sit on a coast but never mostly over water; the
+   interior builder then forms it *around* whatever water the footprint clips (see Stage 8 / Interiors).
+   Boats (`on_water`) are exempt — they anchor on water by design.
 4. **Blue-noise sampling** (default): candidate tiles are drawn from the scored distribution and
    accepted only if they are ≥ `min_spacing` tiles from all previously placed POIs (Poisson-disk
    style). Alternatives: `random` (unconstrained sampling) and `grid` (evenly spaced).
@@ -260,6 +271,14 @@ tiles, centred on the anchor) and the clamped on-map **bbox**. It writes only `P
 never the per-tile arrays, so `World.fingerprint()` is unchanged; `entrance` stays at the anchor so
 the roads stage (which routes to `poi.entrance`) is unaffected. The actual interior **grids** are
 built lazily and deterministically from `interior_seed` on first view (see Render layer → Interiors).
+
+**Coastal area restoration**: a footprint that clips water loses interior area to it (the builder forms
+the structure around the coast). To keep coastal structures full-sized, this stage grows the footprint —
+symmetrically, so the anchor stays centred — until its dry-land tile count is back to the nominal
+(size-jittered) area, capped at `interiors.expand_max_factor`. Water never blocks growth (the extra coast
+is carved again by the builder); other POIs do — each POI claims its footprint rectangle and every anchor
+is off-limits, so a grown structure never overlaps a neighbour. POIs grow in placement (priority) order,
+so higher-value settlements claim space first. Boats keep their nominal footprint (they sit on water).
 
 ### Stage 9 — Roads (`pipeline/roads.py`)
 
@@ -301,7 +320,7 @@ Assigns names and generates lore for all entities:
     per-culture seed corpus generates phonotactically consistent names. Selected by
     `naming.generators.<category> = "markov"`.
 - **Dressing**: roots are dressed per entity category — settlements append a culture suffix
-  (`-ton`, `-vik`, `-loth`, …), dungeons/ruins/towers get evocative patterns (`Ruins of X`,
+  (`-ton`, `-vik`, `-loth`, …), dungeons/ruin/towers get evocative patterns (`Ruins of X`,
   `X Catacombs`), regions append a geographic descriptor (`Wood`, `Peaks`, `Sands`).
 - **Lore**: 1–4 sentences per region drawn from a Tracery-style grammar in `grammar_rules.toml`.
   `#token#` expands to another symbol or to a pre-bound region fact (`region_name`, `biome`,
@@ -325,7 +344,8 @@ needed). All other families are changed via their config key.
 | POI sampler | `poi.sampler` | `--poi-sampler` | `bluenoise`\* · `random` · `grid` |
 | Pathfinder | `roads.pathfinder` | — | `astar`\* · `tcod` · `dijkstra` |
 | Interior partition | `interiors.partition` | — | `bsp`\* · `tcod_bsp` |
-| Interior builder | (by POI kind) | — | `dungeon`; tower/village/town/city/ruins/camp/boat planned |
+| Interior shape | `interiors.shape` | — | `mixed`\* · `rectangle` · `blob` · `cellular` · `drunkard` · `diamond` · `cross` |
+| Interior builder | (by POI kind) | — | `dungeon` · `tower` · `city` · `town` · `village` · `ruin` · `camp` · `boat` |
 | Spatial compute | `compute.backend` | — | `scipy`\* · `numpy` · `pure` |
 
 \* default   † optional C-extension; unavailable if not installed (no C compiler needed for defaults)
@@ -363,21 +383,43 @@ between outside and inside (the interior is *embedded in the terrain*, not a sep
   So zoom and local are coarse/fine views of the same grid, exactly like the biome blend. At **zoom**
   only `STRUCTURAL` cells (walls/doors/stairs) are drawn — the outline; at **local** every non-`VOID`
   cell is drawn — the full furnished interior. `VOID` is transparent, so terrain shows through gaps.
-- **Lazy + cached + deterministic.** `build_interior(poi, floor, config)` dispatches to the kind's
-  builder, memoised by `functools.lru_cache` on the cheap scalar inputs; the cached base array is
-  read-only. Everything is a pure function of `interior_seed` (+ floor), so a POI regenerates
+- **Lazy + cached + deterministic.** `build_interior(poi, floor, config, world=None)` dispatches to
+  the kind's builder, memoised by `functools.lru_cache` on the cheap scalar inputs; the cached base
+  array is read-only. Everything is a pure function of `interior_seed` (+ floor), so a POI regenerates
   identically every open. Runtime edits compose on top via `Overlay.apply_interior` (copy-on-write).
-- **Signed floors.** Dungeons descend: floors run `lowest_floor … 0` (entry/ground). Stairs sit on
-  two **aligned shafts** fixed across floors (seeded floor-independently) so floors stack vertically;
-  the entry floor shows a DOOR, the deepest only stairs up. `<` / `>` cycle floors when the cursor is
-  on the structure's footprint (`app._cycle_floor`); `_sync_floor_to_cursor` keeps `vs.floor` valid.
+- **Terrain-aware (forms around water).** When `world` is supplied (both render paths do), the builder
+  receives a *buildable* cell mask — the footprint's water tiles upsampled to canonical resolution and
+  pulled back by `interiors.coast_margin` cells — packed into the cache key (`InteriorCtx.land_mask_bytes`,
+  so it stays deterministic). Solid builders confine their outline to the largest dry blob
+  (`build_room_structure`); settlements drop only buildings that fit on land; the camp clips its
+  clearing. The eroded margin stays `VOID`, so a strip of bare biome floor reads as a little coast.
+  An inland POI's mask is empty (`b""`) → it builds exactly as before and shares that cache entry.
+  As a hard backstop, the detail renderer (`zoom_view._stamp_interiors`) never draws an interior cell
+  over a water tile — **except `boat`**, which floats on water by design. So no structure is ever
+  stamped over water even if a corridor clips the shore; bridges have no builder and are unaffected.
+- **Signed floors, both directions.** **Floor 0 is always the ground/entry level** (set by
+  `poi_rules.floors_for`): dungeons descend (`lowest_floor … 0`), towers rise (`0 … top`). Stairs sit
+  on **aligned shafts** fixed across floors (seeded floor-independently) so floors stack vertically;
+  floor 0 gets the exterior DOOR, the far end only the stairs back. `grid.floor_links` /
+  `grid.stamp_circulation` encode this once for every stacked builder. `<` / `>` cycle floors when the
+  cursor is on the footprint (`app._cycle_floor`); `_sync_floor_to_cursor` enters at floor 0.
 - **Colour.** Detail cells carry a *colour id*: a biome int, or an interior `Cell` colour encoded as
   `INTERIOR_COLOR_BASE + cell`. `Palette.zoom_attr` decodes either; interior colours come from
   `render.interior_palette`.
 
-The **dungeon** archetype is implemented (BSP rooms + L-corridors, aligned stairs, role-based
-furnishing). Remaining archetypes plug in by dropping a `world/interiors/<kind>.py` with an
-`@register_interior("<kind>")` builder and adding a footprint entry — no render or pipeline changes.
+**Every archetype except `bridge` has a builder**, all sharing the `grid.py` toolkit:
+
+| Builder | Pattern | Notes |
+|---------|---------|-------|
+| `dungeon` / `tower` | Stacked solid building | descend / ascend from floor 0; aligned stairs; depth-scaled loot vs. sparse quarters + lookout |
+| `city` / `town` / `village` | Multi-building settlement | one builder; BSP plots → walled buildings, PATH streets + plaza, terrain between |
+| `ruin` | Eroded single-floor building | `interiors.ruin_erosion` collapses walls to gaps and cracks floor to rubble |
+| `camp` | Bespoke open-air | cleared FLOOR patch + campfire + tents + wagon, no walls (the clearing is what reads at zoom) |
+| `boat` | Bespoke hull on water | planked WALL hull around a FLOOR deck + cabin + cargo; VOID around it shows the water |
+
+A new archetype plugs in the same way: drop `world/interiors/<kind>.py` with an
+`@register_interior("<kind>")` builder, add a footprint entry, import it in `interiors/__init__.py` —
+no render or pipeline changes (both iterate the registry generically).
 
 **Colour capability ladder** (`palette.py`): the palette detects terminal capability and uses the
 highest available mode — truecolor (`init_color` with per-region RGB), 256-color, 8-color, or

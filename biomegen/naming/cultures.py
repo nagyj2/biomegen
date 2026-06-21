@@ -25,7 +25,7 @@ class Culture:
     codas: List[str]  # trailing consonant clusters (often empty)
     settlement: List[str]  # suffixes for civilized POIs (city/town/village)
     nature: List[str]  # suffixes for rivers/lakes
-    fort: List[str]  # words for towers/keeps/ruins
+    fort: List[str]  # words for towers/keeps/ruin
     adjectives: List[str]  # flavour adjectives for lore
 
 

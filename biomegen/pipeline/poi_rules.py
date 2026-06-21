@@ -34,7 +34,6 @@ class KindRule:
     coastal: float  # weight on closeness-to-coast
     remoteness: float  # weight on distance-from-settlements
     on_water: bool  # boats: anchor must be a water tile
-    avoid_water: bool  # structures: the whole footprint (not just the anchor) must be water-free
     floors: Union[int, Tuple[int, int]]
 
 
@@ -57,19 +56,23 @@ def parse_rule(kind: str, raw: dict) -> KindRule:
         coastal=float(raw.get("coastal", 0.0)),
         remoteness=float(raw.get("remoteness", 0.0)),
         on_water=bool(raw.get("on_water", False)),
-        avoid_water=bool(raw.get("avoid_water", False)),
         floors=floors,
     )
 
 
-def eligibility_mask(rule: KindRule, world: World, footprint: Optional[Tuple[int, int]] = None) -> np.ndarray:
+def eligibility_mask(
+    rule: KindRule,
+    world: World,
+    footprint: Optional[Tuple[int, int]] = None,
+    min_land: Optional[float] = None,
+) -> np.ndarray:
     """Boolean grid of tiles this kind may occupy: biome whitelist + elevation + water/land + free.
 
-    When ``rule.avoid_water`` is set and a ``footprint`` (max width/height in tiles) is given, the
-    anchor must also sit where the *entire* centred footprint is water-free - not just the anchor tile.
-    This stops a structure whose anchor is on land from laying walls/floors over coastal/lake/river
-    water (footprints are sized in a later stage and centred on the anchor, so the anchor alone can be
-    dry while the footprint clips water).
+    For a land kind given a ``footprint`` (max width/height in tiles) and a ``min_land`` fraction, the
+    anchor must also sit where the centred footprint is at least ``min_land`` dry land. This keeps a
+    structure *substantial* (most of it on land) while still allowing coastal sites: the terrain-aware
+    interior builder forms the structure around whatever water the footprint does clip, so it no longer
+    needs the footprint to be entirely water-free - only land *enough* to build something worthwhile.
     """
     biome = world.biome
     allowed = (
@@ -88,18 +91,19 @@ def eligibility_mask(rule: KindRule, world: World, footprint: Optional[Tuple[int
         mask &= world.elevation >= rule.elevation_min
     if rule.elevation_max is not None:
         mask &= world.elevation <= rule.elevation_max
-    if rule.avoid_water and footprint is not None:
-        mask &= water_free_footprint_mask(world, footprint[0], footprint[1])
+    if not rule.on_water and footprint is not None and min_land is not None:
+        mask &= footprint_land_fraction_mask(world, footprint[0], footprint[1], min_land)
     return mask
 
 
-def water_free_footprint_mask(world: World, fw: int, fh: int) -> np.ndarray:
-    """Bool grid: True where an ``fw x fh`` footprint *centred* on the tile contains no water.
+def footprint_land_fraction_mask(world: World, fw: int, fh: int, min_fraction: float) -> np.ndarray:
+    """Bool grid: True where an ``fw x fh`` footprint *centred* on the tile is >= ``min_fraction`` land.
 
-    Footprints are centred on the anchor (``tx0 = x - fw // 2``; see :mod:`poi_interiors`), so a tile
-    is acceptable only when every tile of that centred window is non-water. Off-map tiles (the
-    footprint is clipped at the border) count as land. Implemented with a summed-area table so the
-    per-tile window sum is a 4-point lookup, keeping the whole thing O(width * height) with no scipy.
+    Footprints are centred on the anchor (``tx0 = x - fw // 2``; see :mod:`poi_interiors`). Off-map
+    tiles (the footprint is clipped at the border) count as land, so a coastal anchor is judged only on
+    its on-map water. Implemented with a summed-area table so the per-tile window water count is a
+    4-point lookup, keeping the whole thing O(width * height) with no scipy. ``min_fraction`` >= 1.0
+    degrades to the old "entirely water-free" rule.
     """
     water = (world.water_type != int(WaterType.NONE)).astype(np.int64)
     h, w = water.shape
@@ -112,8 +116,11 @@ def water_free_footprint_mask(world: World, fw: int, fh: int) -> np.ndarray:
     x1 = np.clip(xs - fw // 2 + fw, 0, w)
     y0 = np.clip(ys - fh // 2, 0, h)  # window rows [y0, y1), clamped to the map
     y1 = np.clip(ys - fh // 2 + fh, 0, h)
-    count = sat[np.ix_(y1, x1)] - sat[np.ix_(y0, x1)] - sat[np.ix_(y1, x0)] + sat[np.ix_(y0, x0)]
-    return count == 0
+    water_count = sat[np.ix_(y1, x1)] - sat[np.ix_(y0, x1)] - sat[np.ix_(y1, x0)] + sat[np.ix_(y0, x0)]
+    full_area = max(1, fw * fh)
+    # Off-map area (full_area minus on-map water) counts as land, so land = full_area - on-map water.
+    land_fraction = (full_area - water_count) / full_area
+    return land_fraction >= min_fraction
 
 
 def score_array(

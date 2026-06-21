@@ -23,7 +23,7 @@ from __future__ import annotations
 import functools
 from collections import deque
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Tuple
 
 import numpy as np
 from scipy import ndimage
@@ -32,7 +32,10 @@ from ...config.model import Config
 from ...registry import Registry
 from ...util import rng
 from ..entities import POI
-from ..tile import Cell
+from ..tile import Cell, WaterType
+
+if TYPE_CHECKING:  # avoid a runtime import cycle (world.py never imports the interiors layer)
+    from ..world import World
 
 # A rectangle ``(x, y, w, h)`` in interior-grid cells.
 Rect = Tuple[int, int, int, int]
@@ -84,6 +87,13 @@ class InteriorCtx:
     clutter_density: float
     partition: str
     shape: str
+    ruin_erosion: float = 0.45  # fraction of a ruined structure's walls/floor carved away (ruin only)
+    # Packed (grid_h, grid_w) bool mask of BUILDABLE cells (dry land, already eroded by the coast
+    # margin) for a coastal POI - water and the coast strip are False so the builder leaves them VOID
+    # and the real water/biome shows through. Empty ``b""`` means "unconstrained" (all land): an inland
+    # POI builds exactly as before and shares its cache entry with the no-terrain build. Bytes are
+    # hashable, so this stays part of the LRU cache key and the build is still a pure function of it.
+    land_mask_bytes: bytes = b""
 
     @property
     def top_floor(self) -> int:
@@ -105,6 +115,44 @@ def footprint_origin(poi: POI) -> Tuple[int, int]:
     """Return the top-left world tile of ``poi``'s footprint, centred on its anchor."""
     fw, fh = poi.footprint
     return poi.x - int(fw) // 2, poi.y - int(fh) // 2
+
+
+# --------------------------------------------------------------------------- terrain-aware buildable area
+def buildable_mask_bytes(
+    poi: POI, world: "World", grid_w: int, grid_h: int, cells_per_tile: int, coast_margin: int
+) -> bytes:
+    """Packed buildable-cell mask so a coastal structure forms *around* water instead of over it.
+
+    The footprint's water tiles are upsampled to the canonical cell grid and a ``coast_margin`` ring of
+    dry cells beside them is also excluded (so a strip of bare biome floor reads as a little coast, like
+    the biome blend). Off-map tiles count as land. Returns ``b""`` when the whole footprint is dry land -
+    i.e. *unconstrained* - so an inland POI keeps its exact previous layout and cache entry.
+    """
+    fw, fh = poi.footprint
+    tx0, ty0 = poi.x - int(fw) // 2, poi.y - int(fh) // 2
+    # Tile-level land mask over the footprint window; off-map (clipped at the border) stays land.
+    land_tiles = np.ones((int(fh), int(fw)), dtype=bool)
+    y0, y1 = max(0, ty0), min(world.height, ty0 + int(fh))
+    x0, x1 = max(0, tx0), min(world.width, tx0 + int(fw))
+    if y1 > y0 and x1 > x0:
+        wet = world.water_type[y0:y1, x0:x1] != int(WaterType.NONE)
+        land_tiles[y0 - ty0 : y1 - ty0, x0 - tx0 : x1 - tx0] = ~wet
+    if land_tiles.all():
+        return b""  # no water in range -> unconstrained (identical to the inland build)
+    # Upsample tiles -> canonical cells, then pull the buildable area back from the water by the margin.
+    land_cells = np.repeat(np.repeat(land_tiles, cells_per_tile, axis=0), cells_per_tile, axis=1)
+    land_cells = land_cells[:grid_h, :grid_w]
+    if coast_margin > 0:
+        # border_value=1: the footprint edge (off-map = land) must not erode the structure inward.
+        land_cells = ndimage.binary_erosion(land_cells, iterations=coast_margin, border_value=1)
+    return np.ascontiguousarray(land_cells).tobytes()
+
+
+def ctx_buildable(ctx: InteriorCtx) -> Optional[np.ndarray]:
+    """Reconstruct ``ctx``'s buildable-cell bool mask, or ``None`` when unconstrained (all land)."""
+    if not ctx.land_mask_bytes:
+        return None
+    return np.frombuffer(ctx.land_mask_bytes, dtype=bool).reshape(ctx.grid_h, ctx.grid_w)
 
 
 def sample_rect(grid: np.ndarray, r0: int, c0: int, span_rows: int, span_cols: int, max_rows: int, max_cols: int):
@@ -409,7 +457,7 @@ def punch_entrance(grid: np.ndarray, rooms: List[Rect], rgen) -> Optional[Tuple[
 
 # --------------------------------------------------------------------------- shaped room-structure
 # The generic "rooms inside an organic boundary" recipe every solid structure builder shares. A
-# concrete builder (dungeon, and later tower/ruins/...) calls resolve_shape -> build_room_structure,
+# concrete builder (dungeon, and later tower/ruin/...) calls resolve_shape -> build_room_structure,
 # then layers its own specifics (vertical circulation, furnishing) on top. Keeping it here means the
 # next builder reuses the (subtle, order-sensitive) fill/wall/seal sequence instead of copying it.
 
@@ -468,6 +516,14 @@ def build_room_structure(
     gw, gh = ctx.grid_w, ctx.grid_h
     grid = np.full((gh, gw), int(Cell.VOID), dtype=np.uint8)
 
+    # On the coast the structure forms around the water: confine the outline to the largest contiguous
+    # buildable (dry) blob so rooms and corridors stay on land and the water shows through as VOID.
+    buildable = ctx_buildable(ctx)
+    if buildable is not None:
+        confined = largest_component(mask & buildable)
+        if confined.any():
+            mask = confined
+
     rooms_all = PARTITIONS.get(ctx.partition)(rgen, gw, gh, ctx.room_min, ctx.room_max)
     rooms = [r for r in rooms_all if rect_in_mask(r, mask)]
     if len(rooms) < 2:  # rare: shape didn't admit two full rooms - keep by centre (lets them shape it)
@@ -492,18 +548,216 @@ def build_room_structure(
     return grid, rooms
 
 
+# --------------------------------------------------------------------------- vertical circulation
+# Shared by every stacked, multi-floor builder (dungeon descends, tower ascends). The two functions
+# bracket build_room_structure: floor_links() picks this floor's stair cells up front (so they can be
+# passed as access_points and force-carved reachable), and stamp_circulation() writes them in - plus
+# the exterior entrance - once the floor is sealed.
+
+
+def floor_links(ctx: InteriorCtx) -> Tuple[Optional[Tuple[int, int]], Optional[Tuple[int, int]]]:
+    """Return this floor's ``(up, down)`` stair cells (either may be None) for a stacked structure.
+
+    ``up`` links to the floor above (``floor + 1``), ``down`` to the one below (``floor - 1``), both
+    drawn from the per-pair :func:`stair_links` list so adjacent floors share a cell and the shafts
+    line up vertically. The topmost floor has no up-stair; the lowest has no down-stair.
+    """
+    links = stair_links(ctx.interior_seed, ctx.grid_w, ctx.grid_h, ctx.floor_count)
+    i = ctx.floor - ctx.lowest_floor  # 0 at the deepest/lowest floor
+    up = links[i] if ctx.floor < ctx.top_floor else None
+    down = links[i - 1] if ctx.floor > ctx.lowest_floor else None
+    return up, down
+
+
+def stamp_circulation(
+    ctx: InteriorCtx,
+    grid: np.ndarray,
+    rooms: List[Rect],
+    up: Optional[Tuple[int, int]],
+    down: Optional[Tuple[int, int]],
+) -> set:
+    """Stamp the stair cells and (ground/entry floor only) punch the exterior door; return reserved cells.
+
+    Called after :func:`build_room_structure` has carved and sealed the floor (the stair cells having
+    been force-carved reachable via its ``access_points``). The ground/entry level is **floor 0** by the
+    :func:`biomegen.pipeline.poi_rules.floors_for` convention - dungeons descend to negative floors and
+    towers rise to positive ones, so floor 0 is the level you walk in at either way - and that is where
+    the exterior entrance is punched (a door on the now-final outer wall, tunnelled to the nearest
+    room). The returned ``(x, y)`` set (stairs + door) is what the furnishing pass must keep clear.
+    """
+    reserved: set = set()
+    if up is not None:
+        grid[up[1], up[0]] = int(Cell.STAIRS_UP)
+        reserved.add(up)
+    if down is not None:
+        grid[down[1], down[0]] = int(Cell.STAIRS_DOWN)
+        reserved.add(down)
+    if ctx.floor == 0:  # ground/entry level (the top floor for dungeons, the bottom one for towers)
+        door = punch_entrance(grid, rooms, rng.derive(ctx.interior_seed, "interior.door"))
+        if door is not None:
+            reserved.add(door)
+    return reserved
+
+
+# --------------------------------------------------------------------------- furnishing primitives
+# The shared scatter machinery every builder's furnishing pass is built on: enumerate the free floor,
+# pick a (reproducible) sample of it, and dress each picked cell from a weighted table. Each builder
+# supplies only its own furniture weights and any cells to protect.
+
+
+def adjacent_mask(mask: np.ndarray) -> np.ndarray:
+    """Return the 4-neighbourhood of ``mask`` (cells orthogonally adjacent to a True cell).
+
+    Used to protect aprons: the floor cells next to a door or stairway that furnishing should leave
+    clear so the opening stays passable.
+    """
+    out = np.zeros_like(mask)
+    out[1:, :] |= mask[:-1, :]
+    out[:-1, :] |= mask[1:, :]
+    out[:, 1:] |= mask[:, :-1]
+    out[:, :-1] |= mask[:, 1:]
+    return out
+
+
+def free_floor_cells(grid: np.ndarray, reserved: Iterable[Tuple[int, int]] = ()) -> List[Tuple[int, int]]:
+    """Return the sorted ``(x, y)`` FLOOR cells of ``grid`` not in ``reserved`` (stable sample order)."""
+    keep = set(reserved)
+    ys, xs = np.nonzero(grid == int(Cell.FLOOR))
+    free = [(int(x), int(y)) for x, y in zip(xs, ys, strict=True) if (int(x), int(y)) not in keep]
+    free.sort()  # stable order so a seeded sample over these cells is reproducible
+    return free
+
+
+def weighted_choice(rgen, table: List[Tuple[Cell, float]]) -> Cell:
+    """Pick one :class:`Cell` from a list of ``(cell, weight)`` pairs (the weights need not sum to 1)."""
+    total = sum(w for _c, w in table)
+    r = rgen.random() * total
+    acc = 0.0
+    for cell, w in table:
+        acc += w
+        if r < acc:
+            return cell
+    return table[0][0]
+
+
+def scatter_furniture(
+    grid: np.ndarray,
+    rgen,
+    cells: List[Tuple[int, int]],
+    density: float,
+    chooser: Callable[[object, int, int], Optional[Cell]],
+) -> None:
+    """Furnish a seeded ``density`` fraction of ``cells`` via ``chooser(rgen, x, y) -> Optional[Cell]``.
+
+    The shared scatter loop for every builder: it fixes *how many* cells are dressed and in what
+    (reproducible) order, leaving each builder to supply only the per-cell choice. A chooser returning
+    None leaves that cell untouched (e.g. a corridor that should only sometimes collect rubble).
+    """
+    n = int(len(cells) * density)
+    if n <= 0:
+        return
+    for x, y in rgen.sample(cells, min(n, len(cells))):
+        cell = chooser(rgen, x, y)
+        if cell is not None:
+            grid[y, x] = int(cell)
+
+
+# --------------------------------------------------------------------------- open-plan settlement helpers
+# Settlements (city/town/village) are NOT one solid mass: several small buildings sit in the footprint
+# with open streets between them (terrain shows through the gaps). These helpers wall and door an
+# individual building and lay PATH streets without the blanket fill/wall the dungeon recipe applies.
+
+
+def wall_ring(grid: np.ndarray, rect: Rect) -> None:
+    """Set the 1-cell border around ``rect`` to WALL, but only where it is currently VOID.
+
+    Walls one building at a time (unlike :func:`add_walls`, which would also wall the open streets).
+    Overwriting only VOID leaves neighbouring buildings and any PATH streets intact.
+    """
+    rx, ry, rw, rh = rect
+    h, w = grid.shape
+    for x in range(rx - 1, rx + rw + 1):
+        for y in (ry - 1, ry + rh):
+            if 0 <= x < w and 0 <= y < h and grid[y, x] == int(Cell.VOID):
+                grid[y, x] = int(Cell.WALL)
+    for y in range(ry - 1, ry + rh + 1):
+        for x in (rx - 1, rx + rw):
+            if 0 <= x < w and 0 <= y < h and grid[y, x] == int(Cell.VOID):
+                grid[y, x] = int(Cell.WALL)
+
+
+def building_door(grid: np.ndarray, rect: Rect, toward: Tuple[int, int]) -> Optional[Tuple[int, int]]:
+    """Punch a DOOR in ``rect``'s wall on the side facing ``toward``; return the exterior front cell.
+
+    Scans the building's wall ring for the cell nearest ``toward`` that has the building's FLOOR on its
+    inner side and an open (VOID/PATH) cell on its outer side, turns it into a DOOR, and returns the
+    outer cell - the street stub the door opens onto - so the caller can wire it into the street
+    network. Returns None for a degenerate building with no such wall.
+    """
+    h, w = grid.shape
+    rx, ry, rw, rh = rect
+    tx, ty = toward
+    wall, floor, openable = int(Cell.WALL), int(Cell.FLOOR), (int(Cell.VOID), int(Cell.PATH))
+    best: Optional[Tuple[int, Tuple[int, int], Tuple[int, int]]] = None
+    for y in range(max(0, ry - 1), min(h, ry + rh + 1)):
+        for x in range(max(0, rx - 1), min(w, rx + rw + 1)):
+            if grid[y, x] != wall:
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                ix, iy, ox, oy = x - dx, y - dy, x + dx, y + dy  # inner / outer sides of the wall
+                if not (0 <= ix < w and 0 <= iy < h and 0 <= ox < w and 0 <= oy < h):
+                    continue
+                if grid[iy, ix] == floor and grid[oy, ox] in openable:
+                    cand = ((x - tx) ** 2 + (y - ty) ** 2, (x, y), (ox, oy))
+                    if best is None or cand < best:
+                        best = cand
+                    break
+    if best is None:
+        return None
+    _d, (dxc, dyc), front = best
+    grid[dyc, dxc] = int(Cell.DOOR)
+    return front
+
+
+def carve_path_guarded(grid: np.ndarray, a: Tuple[int, int], b: Tuple[int, int]) -> None:
+    """Carve an L-shaped PATH street from ``a`` to ``b``, but only over VOID (never through structure).
+
+    Streets thread the open ground between buildings; guarding on VOID means a street stops at a
+    building wall rather than tunnelling through it, so buildings stay intact (the street simply skips
+    the cells it cannot claim).
+    """
+    (ax, ay), (bx, by) = a, b
+    void, p = int(Cell.VOID), int(Cell.PATH)
+    for x in range(min(ax, bx), max(ax, bx) + 1):
+        if grid[ay, x] == void:
+            grid[ay, x] = p
+    for y in range(min(ay, by), max(ay, by) + 1):
+        if grid[y, bx] == void:
+            grid[y, bx] = p
+
+
 # --------------------------------------------------------------------------- public entry + cache
-def build_interior(poi: POI, floor: int, config: Config) -> Optional[np.ndarray]:
+def build_interior(poi: POI, floor: int, config: Config, world: Optional["World"] = None) -> Optional[np.ndarray]:
     """Return the (immutable, cached) base interior grid for ``poi`` at ``floor`` - or None.
 
     None means this POI kind has no interior builder yet (render falls back to its marker) or the
     footprint is degenerate. The returned array is read-only; layer runtime edits via the Overlay.
+
+    When ``world`` is supplied (the render paths always do) the structure is built **terrain-aware**:
+    any footprint cell over water - plus a coast margin beside it - is excluded so the structure forms
+    *around* the coast (``boat`` is exempt: it floats on water by design). Inland POIs are unaffected and
+    share their cache entry with the no-``world`` build; tests may omit ``world`` for a pure-land layout.
     """
     if not INTERIOR_BUILDERS.has(poi.kind):
         return None
     gw, gh = footprint_cells(poi, config)
     if gw < 3 or gh < 3:
         return None
+    land_mask_bytes = b""
+    if world is not None and poi.kind != "boat":
+        cpt = max(1, int(config.get("interiors.cells_per_tile")))
+        margin = max(0, int(config.get("interiors.coast_margin")))
+        land_mask_bytes = buildable_mask_bytes(poi, world, gw, gh, cpt, margin)
     ctx = InteriorCtx(
         kind=poi.kind,
         interior_seed=int(poi.interior_seed),
@@ -517,6 +771,8 @@ def build_interior(poi: POI, floor: int, config: Config) -> Optional[np.ndarray]
         clutter_density=float(config.get("interiors.clutter_density")),
         partition=str(config.get("interiors.partition")),
         shape=str(config.get("interiors.shape")),
+        ruin_erosion=float(config.get("interiors.ruin_erosion")),
+        land_mask_bytes=land_mask_bytes,
     )
     return _build_base(ctx)
 

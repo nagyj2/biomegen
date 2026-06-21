@@ -1,6 +1,6 @@
 """Stage 7: POI placement.
 
-Places points of interest (city, town, village, tower, dungeon, ruins, camp, boat) on the finished
+Places points of interest (city, town, village, tower, dungeon, ruin, camp, boat) on the finished
 terrain. Approach: build shared suitability fields once, then walk the kinds in a fixed priority order
 (high-value civilized settlements first) and, for each, score every eligible tile and pick anchors
 with a capacity-constrained blue-noise sampler that enforces per-kind spacing against a *shared* set
@@ -34,7 +34,7 @@ KIND_PRIORITY: Tuple[str, ...] = (
     "village",
     "tower",
     "dungeon",
-    "ruins",
+    "ruin",
     "camp",
     "boat",
 )
@@ -44,7 +44,7 @@ def _max_footprint(config: Config, kind: str) -> Optional[Tuple[int, int]]:
     """Largest footprint (w, h) a kind's structure can grow to, given ``interiors.size_jitter``.
 
     The interiors stage scales each nominal footprint dimension by a factor in ``[1-jitter, 1+jitter)``
-    (see :mod:`poi_interiors`). For water-avoidance we need the *upper bound* so the check covers any
+    (see :mod:`poi_interiors`). For the land-fraction check we need the *upper bound* so it covers any
     jitter outcome; ``ceil(nominal * (1 + jitter))`` is that bound (conservative by at most one tile).
     Returns ``None`` when the kind has no configured footprint (nothing to keep off the water).
     """
@@ -92,6 +92,7 @@ def run(world: World, config: Config, seed: int) -> None:
     coast_scale = float(poi_cfg.get("coastal_scale", 9.0))
     remote_scale = float(poi_cfg.get("remoteness_scale", 22.0))
     jitter_strength = float(poi_cfg.get("jitter", 0.15))
+    min_land = float(poi_cfg.get("min_footprint_land", 0.5))
 
     # Shared distance fields (freshwater/coast are static; remoteness grows as settlements land).
     fresh_dist = poi_fields.freshwater_distance(world, backend)
@@ -117,10 +118,11 @@ def run(world: World, config: Config, seed: int) -> None:
         else:
             remote_w = fresh_w * 0.0  # zero field matching expected ndarray shape/type
 
-        # Pass the kind's max footprint so water-avoiding structures reject anchors whose footprint
-        # (not just the anchor tile) would clip water; other kinds ignore it.
-        footprint = _max_footprint(config, kind) if rule.avoid_water else None
-        mask = poi_rules.eligibility_mask(rule, world, footprint)
+        # Land structures must anchor where most of their (max) footprint is dry land, so a coastal
+        # structure stays substantial while the terrain-aware builder forms it around the water. Boats
+        # (on_water) skip the land check; bridges have no footprint here. See poi_rules.eligibility_mask.
+        footprint = None if rule.on_water else _max_footprint(config, kind)
+        mask = poi_rules.eligibility_mask(rule, world, footprint, min_land)
         jitter = poi_rules.build_jitter(world, seed, kind, jitter_strength)
         score = poi_rules.score_array(rule, mask, fresh_w, coast_w, remote_w, jitter)
 

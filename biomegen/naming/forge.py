@@ -84,7 +84,7 @@ def name_entity(
         return r.choice([f"{root} {r.choice(profile.fort)}", f"{profile.fort[0]} of {root}"])
     if kind == "dungeon":
         return r.choice([f"{root} Depths", f"{root} Catacombs", f"Tomb of {root}", f"{root} Deep"])
-    if kind == "ruins":
+    if kind == "ruin":
         return r.choice([f"Ruins of {root}", f"{root} Ruins", f"Old {root}"])
     if kind == "camp":
         return r.choice([f"{root} Camp", f"{root} Hollow", f"{root} Rest"])

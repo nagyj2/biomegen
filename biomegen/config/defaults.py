@@ -30,7 +30,7 @@ DEFAULTS: Dict[str, Any] = {
         # Default sized so the whole map fits a typical terminal at 1:1 with room for the status
         # panel below it (the reference terminal is ~209x58; 44 + status_height(12) <= 58, 192 <= 209).
         "width": 192,
-        "height": 44,
+        "height": 75,
         # Sea level on the normalised [0, 1] elevation scale: tiles below this are ocean/water.
         "sea_level": 0.40,
         # "fixed" keeps the dimensions above (reproducible across terminals). "auto" fits the world to
@@ -168,6 +168,11 @@ DEFAULTS: Dict[str, Any] = {
         "coastal_scale": 9.0,
         "remoteness_scale": 22.0,
         "jitter": 0.15,
+        # Minimum fraction of a land structure's (max) footprint that must be dry land for an anchor to
+        # be eligible. Keeps a coastal structure substantial (most of it on land) while still allowing
+        # shoreline sites - the terrain-aware interior builder forms the structure around whatever water
+        # the footprint clips. 1.0 forbids any footprint water (the old behaviour); 0 disables the check.
+        "min_footprint_land": 0.5,
         # Per-kind rules. ``count`` is a target; ``min_spacing`` enforces blue-noise separation;
         # ``biomes`` whitelists land cover; ``civilized`` affects road connection probability.
         "types": {
@@ -217,13 +222,9 @@ DEFAULTS: Dict[str, Any] = {
                 "biomes": ["mountain", "forest", "tundra", "desert", "swamp"],
                 "elevation_min": 0.45,
                 "remoteness": 0.7,
-                # Reject any anchor whose (max) footprint would clip ocean/lake/river, so no dungeon
-                # wall or floor is ever laid over water (the footprint is centred on the anchor and
-                # extends past it, so an anchor on dry land can still overlap a nearby coast/river).
-                "avoid_water": True,
                 "floors": [2, 5],
             },
-            "ruins": {
+            "ruin": {
                 "count": 5,
                 "min_spacing": 14,
                 "civilized": False,
@@ -259,28 +260,39 @@ DEFAULTS: Dict[str, Any] = {
         "cells_per_tile": 6,
         "room_min": 4,  # min room side in detail cells
         "room_max": 10,
+        # Coast strip (in canonical detail cells) kept clear between a structure and any water its
+        # footprint clips: the buildable area is pulled back this many cells from the water, so a band of
+        # bare biome floor (beach/grass via the blend) reads as a little shoreline around the structure -
+        # like the biome blend. 0 builds right up to the water's edge. Only affects coastal POIs.
+        "coast_margin": 2,
+        # When a coastal footprint loses land to the water it clips, grow the footprint (keeping the
+        # anchor centred) until its dry-land area is back to nominal, capped at this multiple of the
+        # nominal footprint area. Growth never overlaps another POI; water is simply carved again. 1.0
+        # (or less) disables the restoration, so carved coastal structures stay smaller.
+        "expand_max_factor": 2.0,
         "clutter_density": 0.10,  # fraction of free interior cells that receive clutter/furniture
         "ruin_erosion": 0.45,  # fraction of a ruined structure carved away by erosion noise
         # Per-POI footprint size variation (fraction). Each footprint dimension of a kind that HAS an
         # interior builder is scaled by a deterministic factor in [1-jitter, 1+jitter], so structures
         # of the same kind spawn a bit larger or smaller. 0 disables (every footprint stays nominal).
         "size_jitter": 0.4,
-        # Dungeon outer-boundary SHAPE algorithm (see biomegen.world.interiors.shapes / SHAPES
-        # registry): "rectangle" (boxy), "blob", "cellular", "drunkard", "diamond", "cross", or
-        # "mixed" (default) to pick a different organic shape per dungeon so none is square. The shape
-        # is filled solid with rooms+rock; terrain shows around its organic outline.
+        # Outer-boundary SHAPE algorithm for the solid-building archetypes (dungeon/tower/ruin; see
+        # biomegen.world.interiors.shapes / SHAPES registry): "rectangle" (boxy), "blob", "cellular",
+        # "drunkard", "diamond", "cross", or "mixed" (default) to pick a different organic shape per
+        # structure so none is square. The shape is filled solid with rooms+rock; terrain shows around
+        # its organic outline. (Settlements, camps and boats use their own layout, not this shape.)
         "shape": "mixed",
         # Per-kind interior footprint in WORLD TILES (w, h), centred on the POI anchor. Render-only
-        # metadata (the base ``poi_index`` array still marks just the anchor). Only kinds with a
-        # registered interior builder render an interior; the rest fall back to their map marker until
-        # their builders land in later phases. (Phase 5 slice implements ``dungeon``.)
+        # metadata (the base ``poi_index`` array still marks just the anchor). Every kind below has an
+        # interior builder (Phase 5 complete); only ``bridge`` (placed by the roads stage, absent here)
+        # stays a plain map marker.
         "footprints": {
             "dungeon": [6, 4],
             "tower": [3, 3],
             "city": [7, 5],
             "town": [5, 4],
             "village": [4, 3],
-            "ruins": [4, 3],
+            "ruin": [4, 3],
             "camp": [3, 3],
             "boat": [3, 2],
         },
@@ -394,7 +406,7 @@ DEFAULTS: Dict[str, Any] = {
             "village": "v",
             "tower": "I",
             "dungeon": "D",
-            "ruins": "r",
+            "ruin": "r",
             "camp": "a",
             "boat": "b",
             "bridge": "=",

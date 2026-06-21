@@ -108,7 +108,9 @@ def _sync_floor_to_cursor(world: World, vs: ViewState, prev_poi_id: object) -> o
     poi = _poi_under_cursor(world, vs)
     cur_id = id(poi) if poi is not None else None
     if cur_id != prev_poi_id:
-        vs.floor = (poi.lowest_floor + poi.floor_count - 1) if poi is not None else 0
+        # Enter at the ground/entry level (floor 0 by the floors_for convention) - the floor you walk
+        # in at, whether the structure descends (dungeon) or rises (tower) from it.
+        vs.floor = 0
     elif poi is not None:
         vs.floor = clamp(vs.floor, poi.lowest_floor, poi.lowest_floor + poi.floor_count - 1)
     return cur_id
@@ -129,8 +131,8 @@ def _cycle_floor(world: World, vs: ViewState, delta: int) -> None:
         vs.notify("no further floor that way")
         return
     vs.floor = new
-    rel = vs.floor - top  # 0 = ground/entry, negative = below
-    vs.notify(f"{poi.name or poi.kind}: floor {vs.floor} ({'ground' if rel == 0 else rel})")
+    # Floor 0 is the ground/entry level either way (dungeons go negative below it, towers positive above).
+    vs.notify(f"{poi.name or poi.kind}: floor {vs.floor} ({'ground' if vs.floor == 0 else vs.floor})")
 
 
 def _tile_glyph(world: World, glyphs: Glyphs, overlay: Overlay, x: int, y: int) -> str:

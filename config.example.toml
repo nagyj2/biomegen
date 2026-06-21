@@ -58,29 +58,35 @@ color_jitter = 28
 
 [poi]
 sampler = "bluenoise"            # "bluenoise" | "random" | "grid"
+min_footprint_land = 0.5        # min dry-land fraction of a land structure's footprint for an eligible
+                                # anchor (1.0 = no footprint water; structures form around any they clip)
 
 # Per-kind rules live under [poi.types.<kind>]; only overrides shown here (see defaults.py for all).
-[poi.types.dungeon]
-avoid_water = true              # reject anchors whose footprint would clip ocean/lake/river water
 
 [interiors]
 partition = "bsp"               # room layout: "bsp" | "tcod_bsp"
 cells_per_tile = 6              # canonical interior resolution (detail cells per world tile)
 room_min = 4                    # min/max room side in interior cells
 room_max = 10
+coast_margin = 2                # detail-cell coast strip kept clear between a structure and clipped water
+                                # (a band of bare biome floor reads as shoreline; 0 builds to the water)
+expand_max_factor = 2.0         # grow a carved coastal footprint back to nominal land area, up to this
+                                # multiple of its area (never grows over another POI); <=1.0 disables
 clutter_density = 0.10          # fraction of free interior cells furnished (rubble/barrels/chests)
 size_jitter = 0.4               # per-POI footprint size variation (0 disables): structures spawn larger/smaller
-shape = "mixed"                 # dungeon outline: rectangle|blob|cellular|drunkard|diamond|cross|mixed
-                                # ("mixed" picks an organic shape per dungeon so none is square)
-# Per-kind interior footprint in WORLD TILES (w, h), centred on the anchor. Only kinds with a
-# registered builder render an interior (Phase 5 implements "dungeon"); the rest stay map markers.
+ruin_erosion = 0.45             # fraction of a ruin's walls that collapse to gaps / floor that cracks to rubble
+shape = "mixed"                 # solid-building outline (dungeon/tower/ruin): rectangle|blob|cellular|
+                                # drunkard|diamond|cross|mixed ("mixed" picks an organic shape per structure
+                                # so none is square; settlements/camps/boats use their own layout)
+# Per-kind interior footprint in WORLD TILES (w, h), centred on the anchor. Every kind below has an
+# interior builder; only bridges (placed by the roads stage) remain plain map markers.
 [interiors.footprints]
 dungeon = [6, 4]
 tower = [3, 3]
 city = [7, 5]
 town = [5, 4]
 village = [4, 3]
-ruins = [4, 3]
+ruin = [4, 3]
 camp = [3, 3]
 boat = [3, 2]
 

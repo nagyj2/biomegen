@@ -3,7 +3,7 @@
 Three distance-derived fields are reused across POI kinds:
   * **freshwater closeness** - prefer tiles near lakes/rivers (settlements need water).
   * **coastal closeness** - prefer tiles near the ocean (ports/trade).
-  * **remoteness** - distance from already-placed settlements (dungeons/ruins hide far from towns).
+  * **remoteness** - distance from already-placed settlements (dungeons/ruin hide far from towns).
 
 Distances come from :func:`biomegen.util.geometry.distance_to` (scipy EDT by default); the closeness
 weights map them into [0, 1] with an exponential falloff so the bonus decays smoothly with distance.

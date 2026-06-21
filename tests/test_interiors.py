@@ -49,6 +49,8 @@ def test_build_interior_is_deterministic(dungeon, cfg):
     # Verifies the same (POI, floor) regenerates a byte-identical grid (lazy but reproducible).
     a = build_interior(dungeon, 0, cfg)
     b = build_interior(dungeon, 0, cfg)
+    assert a is not None
+    assert b is not None
     assert np.array_equal(a, b)
 
 
@@ -59,13 +61,18 @@ def test_build_interior_is_cached_to_same_object(dungeon, cfg):
 
 def test_cached_base_is_read_only(dungeon, cfg):
     # Verifies the cached base grid is immutable, so callers can only mutate via the Overlay.
-    assert build_interior(dungeon, 0, cfg).flags.writeable is False
+    grid = build_interior(dungeon, 0, cfg)
+    assert grid is not None
+    assert grid.flags.writeable is False
 
 
-def test_no_builder_returns_none(cfg, world):
-    # Verifies a POI kind without a registered builder has no interior (renders as its marker).
-    boat = next(p for p in world.pois if p.kind == "boat")
-    assert build_interior(boat, 0, cfg) is None
+def test_no_builder_returns_none(cfg):
+    # Verifies a POI kind without a registered builder has no interior (renders as its marker). Bridges
+    # are the only marker-only kind left now that every other archetype has an interior builder.
+    from biomegen.world.entities import POI
+
+    bridge = POI(kind="bridge", x=10, y=10, interior_seed=123, footprint=(2, 1))
+    assert build_interior(bridge, 0, cfg) is None
 
 
 # --------------------------------------------------------------------------- floor / stair model
@@ -73,15 +80,17 @@ def test_top_floor_has_entrance_door_not_stairs_up(dungeon, cfg):
     # Verifies the ground/entry floor shows a surface DOOR and never STAIRS_UP.
     top = dungeon.lowest_floor + dungeon.floor_count - 1
     grid = build_interior(dungeon, top, cfg)
-    assert int(Cell.DOOR) in grid
-    assert int(Cell.STAIRS_UP) not in grid
+    assert grid is not None
+    assert np.any(grid == int(Cell.DOOR))
+    assert not np.any(grid == int(Cell.STAIRS_UP))
 
 
 def test_deepest_floor_has_stairs_up_not_down(dungeon, cfg):
     # Verifies the deepest floor can only go up (no STAIRS_DOWN below it).
     grid = build_interior(dungeon, dungeon.lowest_floor, cfg)
-    assert int(Cell.STAIRS_UP) in grid
-    assert int(Cell.STAIRS_DOWN) not in grid
+    assert grid is not None
+    assert np.any(grid == int(Cell.STAIRS_UP))
+    assert not np.any(grid == int(Cell.STAIRS_DOWN))
 
 
 def _stairs(grid, cell):
@@ -106,29 +115,65 @@ def test_stair_pairs_are_not_all_the_same_cell(dungeon, cfg):
 
 
 # --------------------------------------------------------------------------- placement metadata
-def test_stage_sets_footprint_and_bbox(world, cfg):
-    # Verifies the poi_interiors stage gives dungeons a (size-jittered) footprint and a clamped bbox.
-    d = next(p for p in world.pois if p.kind == "dungeon")
-    bw, bh = cfg.get("interiors.footprints")["dungeon"]
+def _nominal_footprint(poi, cfg):
+    """The size-jittered footprint a kind gets BEFORE coastal area-restoration grows it."""
+    from biomegen.util import rng
+
+    bw, bh = cfg.get("interiors.footprints")[poi.kind]
     jit = float(cfg.get("interiors.size_jitter"))
+    sr = rng.derive(poi.interior_seed, "interior.footprint")
+    ew = max(3, round(bw * sr.uniform(1 - jit, 1 + jit)))
+    eh = max(3, round(bh * sr.uniform(1 - jit, 1 + jit)))
+    return ew, eh
+
+
+def test_stage_sets_footprint_and_bbox(world, cfg):
+    # Verifies the poi_interiors stage gives dungeons a footprint (>= size-jittered nominal, since coastal
+    # restoration only grows it, and within the expand cap) and a clamped on-map bbox.
+    d = next(p for p in world.pois if p.kind == "dungeon")
+    ew, eh = _nominal_footprint(d, cfg)
+    factor = float(cfg.get("interiors.expand_max_factor"))
     fw, fh = d.footprint
-    assert max(3, round(bw * (1 - jit))) <= fw <= round(bw * (1 + jit))
-    assert max(3, round(bh * (1 - jit))) <= fh <= round(bh * (1 + jit))
+    assert fw >= ew and fh >= eh  # growth never shrinks a footprint
+    assert fw * fh <= ew * eh * factor + 1  # never grows past the area cap (+1 for ceil slack)
     x0, y0, x1, y1 = d.bbox
     assert 0 <= x0 <= x1 < world.width and 0 <= y0 <= y1 < world.height
 
 
-def test_footprint_size_jitter_is_deterministic(world, cfg):
-    # Verifies the per-POI footprint jitter is a reproducible function of the POI's interior_seed.
-    from biomegen.util import rng
+def test_footprint_is_deterministic_with_restoration(cfg):
+    # Verifies the final footprint (size jitter + coastal area-restoration) is a reproducible function of
+    # the world, and that it never shrinks below the deterministic size-jittered nominal.
+    a, b = pipeline.generate(cfg, 1), pipeline.generate(cfg, 1)
+    assert [p.footprint for p in a.pois] == [p.footprint for p in b.pois]  # fully deterministic
+    for d in (p for p in a.pois if p.kind == "dungeon"):
+        ew, eh = _nominal_footprint(d, cfg)
+        assert d.footprint[0] >= ew and d.footprint[1] >= eh  # restoration only grows from nominal
 
-    bw, bh = cfg.get("interiors.footprints")["dungeon"]
-    jit = float(cfg.get("interiors.size_jitter"))
-    for d in (p for p in world.pois if p.kind == "dungeon"):
-        sr = rng.derive(d.interior_seed, "interior.footprint")
-        ew = max(3, round(bw * sr.uniform(1 - jit, 1 + jit)))
-        eh = max(3, round(bh * sr.uniform(1 - jit, 1 + jit)))
-        assert d.footprint == (ew, eh)
+
+def test_coastal_footprints_grow_to_restore_area(cfg):
+    # Verifies the fix: a footprint whose NOMINAL extent clips water is grown (never shrunk) to recover
+    # the lost land area, while inland footprints stay nominal. At least one coastal POI must actually grow.
+    from biomegen.world.tile import WaterType
+
+    footprints = cfg.get("interiors.footprints")
+    grew = checked = 0
+    for seed in (1, 2, 3, 7, 42, 100):
+        w = pipeline.generate(cfg, seed)
+        water = w.water_type != int(WaterType.NONE)
+        for poi in w.pois:
+            if poi.kind == "boat" or poi.kind not in footprints:
+                continue  # boats stay on water; bridges (and any markerless kind) have no footprint
+            ew, eh = _nominal_footprint(poi, cfg)
+            tx0, ty0 = poi.x - ew // 2, poi.y - eh // 2
+            x0, x1 = max(0, tx0), min(w.width, tx0 + ew)
+            y0, y1 = max(0, ty0), min(w.height, ty0 + eh)
+            if x1 <= x0 or y1 <= y0 or not water[y0:y1, x0:x1].any():
+                continue  # inland nominal footprint -> left untouched
+            checked += 1
+            assert poi.footprint[0] * poi.footprint[1] >= ew * eh  # never shrinks below nominal area
+            if poi.footprint[0] * poi.footprint[1] > ew * eh:
+                grew += 1
+    assert checked and grew, f"checked {checked} coastal POIs, {grew} grew"
 
 
 def test_dungeons_have_two_to_five_floors(world):
@@ -138,42 +183,76 @@ def test_dungeons_have_two_to_five_floors(world):
 
 
 # --------------------------------------------------------------------------- water avoidance
-def _footprint_tiles(poi, world):
-    """The on-map tiles a POI's footprint covers (centred on the anchor, clamped to the map)."""
-    fw, fh = poi.footprint
-    tx0, ty0 = poi.x - fw // 2, poi.y - fh // 2
-    return [
-        (tx, ty)
-        for ty in range(max(0, ty0), min(world.height, ty0 + fh))
-        for tx in range(max(0, tx0), min(world.width, tx0 + fw))
-    ]
+def _interior_cells_over_water(world, cfg, poi):
+    """Return the water tiles under any interior cell rendered for ``poi`` at its detail (local) view."""
+    from biomegen.world.tile import WaterType
+
+    aw, ah = 120, 40
+    cw, ch = detail_cell_size("local", cfg, aw, ah)
+    vs = ViewState(cx=poi.x, cy=poi.y, scale="local", floor=poi.lowest_floor + poi.floor_count - 1)
+    vs.cam_x = edge_pan(0, vs.cx, max(1, aw // cw), world.width)
+    vs.cam_y = edge_pan(0, vs.cy, max(1, ah // ch), world.height)
+    frame = build_detail_frame(world, cfg, vs, aw, ah, cw, ch)
+    wet = []
+    for r in range(frame.rows):
+        ty = vs.cam_y + r // ch
+        for c in range(frame.cols):
+            if frame.cells[r][c][1] < INTERIOR_COLOR_BASE:
+                continue  # terrain cell, not a structure cell
+            tx = vs.cam_x + c // cw
+            if 0 <= ty < world.height and 0 <= tx < world.width and world.water_type[ty, tx] != int(WaterType.NONE):
+                wet.append((tx, ty))
+    return wet
 
 
 @pytest.mark.parametrize("seed", [1, 2, 3, 7, 42, 100])
-def test_no_dungeon_footprint_overlaps_water(seed, cfg):
-    # Verifies that across seeds, no tile of any dungeon's footprint sits on ocean/lake/river water.
-    from biomegen.world.tile import WaterType
-
+def test_no_land_structure_renders_over_water(seed, cfg):
+    # Verifies the core fix: across seeds, no land structure (every interior kind except the boat) ever
+    # draws an interior cell over an ocean/lake/river tile - it forms around the coast instead.
     w = pipeline.generate(cfg, seed)
-    dungeons = [p for p in w.pois if p.kind == "dungeon"]
-    for d in dungeons:
-        wet = [(tx, ty) for tx, ty in _footprint_tiles(d, w) if w.water_type[ty, tx] != int(WaterType.NONE)]
-        assert not wet, f"dungeon at {(d.x, d.y)} (seed {seed}) covers water tiles {wet}"
+    from biomegen.world.interiors import INTERIOR_BUILDERS
+
+    for poi in w.pois:
+        if poi.kind == "boat" or not INTERIOR_BUILDERS.has(poi.kind):
+            continue
+        wet = _interior_cells_over_water(w, cfg, poi)
+        assert not wet, f"{poi.kind} at {(poi.x, poi.y)} (seed {seed}) renders over water tiles {wet[:8]}"
 
 
-def test_water_free_footprint_mask_excludes_window_around_water():
-    # Verifies the SAT-based mask is False exactly for tiles whose centred 3x3 window covers a water tile.
+def test_boat_still_renders_over_water(richworld, cfg):
+    # Verifies boats remain exempt: a boat's hull DOES sit on water (the fix must not strand it on land).
+    boat = _first(richworld, "boat")
+    assert _interior_cells_over_water(richworld, cfg, boat), "boat hull should render over water"
+
+
+def test_footprint_land_fraction_mask_excludes_window_around_water():
+    # Verifies the SAT-based mask is False exactly for tiles whose centred 3x3 window dips below the
+    # required land fraction (here 0.95 - any window touching the lone water tile is 8/9 land, so fails).
     from types import SimpleNamespace
 
-    from biomegen.pipeline.poi_rules import water_free_footprint_mask
+    from biomegen.pipeline.poi_rules import footprint_land_fraction_mask
     from biomegen.world.tile import WaterType
 
     water_type = np.full((5, 5), int(WaterType.NONE), dtype=np.int16)
     water_type[2, 2] = int(WaterType.SALT)  # single water tile at (x=2, y=2)
-    mask = water_free_footprint_mask(SimpleNamespace(water_type=water_type), 3, 3)
+    mask = footprint_land_fraction_mask(SimpleNamespace(water_type=water_type), 3, 3, 0.95)
     expected = np.ones((5, 5), dtype=bool)
-    expected[1:4, 1:4] = False  # every tile whose 3x3 centred window reaches (2,2) is rejected
+    expected[1:4, 1:4] = False  # every tile whose 3x3 centred window reaches (2,2) drops below 0.95 land
     assert np.array_equal(mask, expected)
+
+
+def test_footprint_land_fraction_mask_allows_partial_water():
+    # Verifies a coastal anchor (a minority of its footprint is water) stays eligible at a 0.5 threshold,
+    # so structures CAN sit on the shore (the builder forms them around the water).
+    from types import SimpleNamespace
+
+    from biomegen.pipeline.poi_rules import footprint_land_fraction_mask
+    from biomegen.world.tile import WaterType
+
+    water_type = np.full((5, 5), int(WaterType.NONE), dtype=np.int16)
+    water_type[0, :] = int(WaterType.SALT)  # top row is water: a 3x3 window centred on row 1 is 2/3 land
+    mask = footprint_land_fraction_mask(SimpleNamespace(water_type=water_type), 3, 3, 0.5)
+    assert mask[1, 2]  # 6/9 land >= 0.5 -> a shoreline anchor is allowed
 
 
 def test_entrance_stays_at_anchor(world):
@@ -227,7 +306,9 @@ def test_zoom_dungeon_shows_no_terrain_inside_the_shape(world, cfg, dungeon):
     vs.cam_y = edge_pan(0, vs.cy, max(1, ah // ch), world.height)
     frame = build_detail_frame(world, cfg, vs, aw, ah, cw, ch)
 
-    grid = build_interior(dungeon, floor, cfg)
+    from biomegen.world.tile import WaterType
+
+    grid = build_interior(dungeon, floor, cfg, world)  # terrain-aware grid (matches what was rendered)
     gh, gw = grid.shape
     fw, fh = dungeon.footprint
     tx0, ty0 = footprint_origin(dungeon)
@@ -238,16 +319,20 @@ def test_zoom_dungeon_shows_no_terrain_inside_the_shape(world, cfg, dungeon):
         if not (0 <= r < frame.rows):
             continue
         sy = min(dr * gh // (fh * ch), gh - 1)
+        ty = vs.cam_y + r // ch
         for dc in range(fw * cw):
             c = base_col + dc
             if not (0 <= c < frame.cols):
                 continue
             sx = min(dc * gw // (fw * cw), gw - 1)
+            tx = vs.cam_x + c // cw
             if int(grid[sy, sx]) == int(Cell.VOID):
                 continue  # VOID is allowed to show terrain (it's outside the structure)
+            if 0 <= ty < world.height and 0 <= tx < world.width and world.water_type[ty, tx] != int(WaterType.NONE):
+                continue  # a cell over water legitimately shows the water (the backstop forms around it)
             if frame.cells[r][c][1] < INTERIOR_COLOR_BASE:
                 leaks.append((sy, sx))
-    assert not leaks  # no non-void interior cell fell back to a terrain (biome) colour
+    assert not leaks  # no non-void interior cell (on land) fell back to a terrain (biome) colour
 
 
 def test_biome_map_marker_is_not_overwritten_by_outline(world, cfg, dungeon):
@@ -476,3 +561,91 @@ def test_dungeon_shape_is_floor_independent(cfg):
         ctx = InteriorCtx("dungeon", 999, f, -2, 3, 42, 36, 4, 10, 0.1, "bsp", "mixed")
         masks.add(resolve_shape(ctx, 42, 36).tobytes())
     assert len(masks) == 1  # identical boundary shape on every floor
+
+
+# --------------------------------------------------------------------------- the other archetypes
+@pytest.fixture(scope="module")
+def richworld(cfg):
+    # Seed 9999 places at least one of every interior-bearing kind (tower/city/town/village/ruin/camp/boat).
+    return pipeline.generate(cfg, 9999)
+
+
+def _first(world, kind):
+    return next(p for p in world.pois if p.kind == kind)
+
+
+@pytest.mark.parametrize("kind", ["tower", "city", "town", "village", "ruin", "camp", "boat"])
+def test_every_archetype_builds_deterministically(richworld, cfg, kind):
+    # Verifies each archetype builds a non-empty, read-only, byte-reproducible base grid (like dungeons).
+    poi = _first(richworld, kind)
+    a = build_interior(poi, 0, cfg)
+    b = build_interior(poi, 0, cfg)
+    assert a is not None and a.size > 0
+    assert np.array_equal(a, b)
+    assert a.flags.writeable is False
+
+
+def test_tower_ascends_from_the_ground(richworld, cfg):
+    # Verifies a tower rises: it anchors at floor 0, whose entry has the DOOR + STAIRS_UP and no down-stair.
+    t = next(p for p in richworld.pois if p.kind == "tower" and p.floor_count >= 2)
+    assert t.lowest_floor == 0  # towers sit on the ground and rise (dungeons descend to negatives)
+    ground = build_interior(t, 0, cfg)
+    assert int(Cell.DOOR) in ground and int(Cell.STAIRS_UP) in ground
+    assert int(Cell.STAIRS_DOWN) not in ground
+
+
+def test_tower_top_floor_is_a_lookout(richworld, cfg):
+    # Verifies the topmost tower floor can only descend (STAIRS_DOWN, no STAIRS_UP) - it is the lookout.
+    t = next(p for p in richworld.pois if p.kind == "tower" and p.floor_count >= 2)
+    top = build_interior(t, t.floor_count - 1, cfg)
+    assert int(Cell.STAIRS_DOWN) in top and int(Cell.STAIRS_UP) not in top
+
+
+def test_tower_stairs_align_across_floors(richworld, cfg):
+    # Verifies a tower's up-stairs on floor f land on floor f+1's down-stairs (shafts stack vertically).
+    t = next(p for p in richworld.pois if p.kind == "tower" and p.floor_count >= 2)
+    for f in range(t.floor_count - 1):
+        up = _stairs(build_interior(t, f, cfg), Cell.STAIRS_UP)
+        down = _stairs(build_interior(t, f + 1, cfg), Cell.STAIRS_DOWN)
+        assert up == down
+
+
+@pytest.mark.parametrize("kind", ["city", "town", "village"])
+def test_settlement_is_buildings_with_streets(richworld, cfg, kind):
+    # Verifies a settlement reads as several walled buildings (>=2 doors) joined by PATH streets, with
+    # open ground (VOID) showing between them - not one solid mass.
+    grid = build_interior(_first(richworld, kind), 0, cfg)
+    assert int(Cell.PATH) in grid  # streets
+    assert int(np.count_nonzero(grid == int(Cell.DOOR))) >= 2  # multiple buildings, one door each
+    assert (grid == int(Cell.VOID)).any()  # terrain shows between buildings
+
+
+def test_camp_is_open_air(richworld, cfg):
+    # Verifies a camp has NO walls (open-air): a cleared FLOOR patch with a campfire and tents.
+    grid = build_interior(_first(richworld, "camp"), 0, cfg)
+    assert int(Cell.WALL) not in grid
+    assert int(Cell.CAMPFIRE) in grid and int(Cell.TENT) in grid
+    assert int(Cell.FLOOR) in grid  # the cleared patch (this is what reads at the zoom scale)
+
+
+def test_boat_is_a_hull_on_water(richworld, cfg):
+    # Verifies a boat is a planked hull (WALL) around a FLOOR deck carrying CARGO, ringed by open water
+    # (plenty of VOID, through which the surrounding water tile shows).
+    grid = build_interior(_first(richworld, "boat"), 0, cfg)
+    assert {int(Cell.WALL), int(Cell.FLOOR), int(Cell.CARGO)} <= set(np.unique(grid).tolist())
+    assert (grid == int(Cell.VOID)).mean() > 0.2  # not a filled rectangle: water around the hull
+
+
+def test_ruin_is_eroded(richworld, cfg):
+    # Verifies a ruin is a rubble-strewn building with collapsed (VOID) breaches in its walls.
+    grid = build_interior(_first(richworld, "ruin"), 0, cfg)
+    assert int(Cell.RUBBLE) in grid and int(Cell.WALL) in grid
+    assert (grid == int(Cell.VOID)).mean() > 0.1  # erosion + organic outline leave open gaps
+
+
+def test_one_builder_serves_all_three_settlement_kinds(cfg):
+    # Verifies city/town/village share a single registered builder (the multi-building settlement plan).
+    from biomegen.world.interiors import INTERIOR_BUILDERS
+
+    builders = {INTERIOR_BUILDERS.get(k) for k in ("city", "town", "village")}
+    assert len(builders) == 1

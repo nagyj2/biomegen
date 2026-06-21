@@ -1,6 +1,6 @@
 """Region fact extraction + geographic vocabulary for naming/lore.
 
-Pulls grounded facts from a region (dominant biome, size bucket, the settlements/ruins it contains via
+Pulls grounded facts from a region (dominant biome, size bucket, the settlements/ruin it contains via
 ``region.poi_indices``, and adjacent water) into the flat ``facts`` dict the grammar fills. Also
 provides the per-biome geographic words used as region-name descriptors ("Wood", "Peaks", ...).
 """
@@ -11,7 +11,7 @@ import random
 from typing import Dict, List
 
 from ..world.entities import Region
-from ..world.tile import Biome, WaterType
+from ..world.tile import Biome, POIType, WaterType
 from ..world.world import World
 from .cultures import Culture
 
@@ -52,10 +52,14 @@ GEO_WORDS: Dict[int, List[str]] = {
     int(Biome.RIVER): ["Marches", "Waters"],
 }
 
-_CIVIL = ("city", "town", "village")
-_WILD = ("tower", "dungeon", "ruins", "camp")
+_CIVIL = (POIType.CITY, POIType.TOWN, POIType.VILLAGE)
+_WILD = (POIType.TOWER, POIType.DUNGEON, POIType.RUIN, POIType.CAMP, POIType.BRIDGE)
 _NUMBER = {1: "a", 2: "two", 3: "three"}
-_PLURAL = {"city": "cities", "ruins": "ruins"}
+
+_SINGULAR = { POIType.CITY: "city", POIType.TOWN: "town", POIType.VILLAGE: "village", POIType.TOWER: "tower",
+              POIType.DUNGEON: "dungeon", POIType.RUIN: "ruin", POIType.CAMP: "camp", POIType.BRIDGE: "bridge" }
+_PLURAL = {  POIType.CITY: "cities", POIType.TOWN: "towns", POIType.VILLAGE: "villages", POIType.TOWER: "towers",
+              POIType.DUNGEON: "dungeons", POIType.RUIN: "ruin", POIType.CAMP: "camps", POIType.BRIDGE: "bridges" }
 
 
 def geo_word(rng: random.Random, biome_class: int) -> str:
@@ -74,10 +78,9 @@ def size_bucket(size: int) -> str:
     return "vast"
 
 
-def _noun(kind: str, count: int) -> str:
+def _noun(kind: POIType, count: int) -> str:
     """Return a number-word + (pluralised) noun, e.g. (village,3) -> 'three villages'."""
-    singular = "ruin" if kind == "ruins" else kind
-    word = (_PLURAL.get(kind, singular + "s")) if count != 1 else singular
+    word = (_PLURAL.get(kind)) if count != 1 else _SINGULAR.get(kind)
     qty = _NUMBER.get(count, "several")
     return f"{qty} {word}"
 
@@ -101,9 +104,9 @@ def settlement_phrase(world: World, region: Region) -> str:
     wild = [_noun(k, counts[k]) for k in _WILD if counts[k]]
     if civ and wild:
         return _phrase(civ) + ", and " + _phrase(wild)
-    if civ:
+    elif civ:
         return _phrase(civ)
-    if wild:
+    elif wild:
         return _phrase(wild)
     return "no permanent settlements"
 

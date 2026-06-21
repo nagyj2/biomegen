@@ -31,12 +31,15 @@ from ..tile import Cell
 from .grid import (
     InteriorCtx,
     Rect,
+    adjacent_mask,
     build_room_structure,
     clear_blocking_furniture,
-    punch_entrance,
+    floor_links,
+    free_floor_cells,
     register_interior,
     resolve_shape,
-    stair_links,
+    stamp_circulation,
+    weighted_choice,
 )
 
 # --- furnishing tuning (kept here, in code, as these are the knobs we iterate on by hand) ---------
@@ -69,30 +72,15 @@ def build_dungeon(ctx: InteriorCtx) -> np.ndarray:
     # floor's stair cells from the per-pair link list (up = link to the floor above, down = to below;
     # adjacent floors share a cell so stairs line up, different pairs use different cells).
     mask = resolve_shape(ctx, gw, gh)
-    links = stair_links(ctx.interior_seed, gw, gh, ctx.floor_count)
-    i = ctx.floor - ctx.lowest_floor  # 0 at the deepest floor
-    up = links[i] if ctx.floor < ctx.top_floor else None  # this floor's UP-stairs cell (link to f+1)
-    down = links[i - 1] if ctx.floor > ctx.lowest_floor else None  # DOWN-stairs cell (link to f-1)
+    up, down = floor_links(ctx)
 
     # Shared recipe: rooms + corridors inside the shape, stair cells force-carved reachable, then
     # sealed into a solid building (rock inside the outline, terrain outside).
     access = tuple(c for c in (up, down) if c is not None)
     grid, rooms = build_room_structure(ctx, mask, layout, access, _EXTRA_CORRIDOR_RATIO)
 
-    # Stamp the stairs and (entry floor only) punch the entrance LAST: a door on the now-final outer
-    # wall, tunnelled in to the nearest room (after the wall passes, so the door keeps its exterior
-    # side open while the tunnel reaches a room).
-    reserved = set()
-    if up is not None:
-        grid[up[1], up[0]] = int(Cell.STAIRS_UP)
-        reserved.add(up)
-    if down is not None:
-        grid[down[1], down[0]] = int(Cell.STAIRS_DOWN)
-        reserved.add(down)
-    if ctx.floor == ctx.top_floor:
-        door = punch_entrance(grid, rooms, rng.derive(ctx.interior_seed, "interior.door"))
-        if door is not None:
-            reserved.add(door)
+    # Stamp the stairs and (entry floor only) punch the entrance LAST, once the outer wall is final.
+    reserved = stamp_circulation(ctx, grid, rooms, up, down)
 
     _furnish(ctx, grid, rooms, reserved)
     # Guarantee the stairs and entrance stay mutually reachable - furniture must never trap them.
@@ -100,27 +88,10 @@ def build_dungeon(ctx: InteriorCtx) -> np.ndarray:
     return grid
 
 
-def _adjacent_mask(mask: np.ndarray) -> np.ndarray:
-    """Return the 4-neighbourhood of ``mask`` (cells orthogonally adjacent to a True cell)."""
-    out = np.zeros_like(mask)
-    out[1:, :] |= mask[:-1, :]
-    out[:-1, :] |= mask[1:, :]
-    out[:, 1:] |= mask[:, :-1]
-    out[:, :-1] |= mask[:, 1:]
-    return out
-
-
 def _pick_room_furniture(fr, depth: float) -> Cell:
     """Pick one furniture cell from the weighted room table; chest weight grows with ``depth`` (0..1)."""
     weights = [*_ROOM_FURNITURE, (Cell.CHEST, _CHEST_BASE + _CHEST_DEPTH_GAIN * depth)]
-    total = sum(w for _c, w in weights)
-    r = fr.random() * total
-    acc = 0.0
-    for cell, w in weights:
-        acc += w
-        if r < acc:
-            return cell
-    return Cell.RUBBLE
+    return weighted_choice(fr, weights)
 
 
 def _furnish(ctx: InteriorCtx, grid: np.ndarray, rooms: List[Rect], reserved: set) -> None:
@@ -140,16 +111,14 @@ def _furnish(ctx: InteriorCtx, grid: np.ndarray, rooms: List[Rect], reserved: se
         room_mask[ry : ry + rh, rx : rx + rw] = True
     floor = grid == int(Cell.FLOOR)
     special = (grid == int(Cell.DOOR)) | (grid == int(Cell.STAIRS_UP)) | (grid == int(Cell.STAIRS_DOWN))
-    protected = floor & (~room_mask | _adjacent_mask(special))
+    protected = floor & (~room_mask | adjacent_mask(special))
 
     # Deeper floors are both denser and far more chest-heavy (loot at the bottom). depth: 0 at the
     # entry floor, 1 at the deepest.
     depth = 0.0 if ctx.floor_count <= 1 else (ctx.top_floor - ctx.floor) / (ctx.floor_count - 1)
     density = ctx.clutter_density * (1.0 + _DEPTH_DENSITY_GAIN * depth)
 
-    ys, xs = np.nonzero(floor)
-    free = [(int(x), int(y)) for x, y in zip(xs, ys, strict=True) if (int(x), int(y)) not in reserved]
-    free.sort()  # stable order so the seeded sample is reproducible
+    free = free_floor_cells(grid, reserved)
     n = int(len(free) * density)
     if n <= 0:
         return

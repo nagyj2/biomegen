@@ -129,7 +129,7 @@ def _stamp_map_interiors(
         if fw <= 0 or fh <= 0:
             continue
         floor = poi.lowest_floor + poi.floor_count - 1  # entry/top floor = the surface view
-        base = build_interior(poi, floor, config)
+        base = build_interior(poi, floor, config, world)  # terrain-aware: outline forms around the coast
         if base is None:
             continue
         grid = overlay.apply_interior(base, poi.interior_seed, floor) if overlay is not None else base

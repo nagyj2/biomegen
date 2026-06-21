@@ -2,14 +2,14 @@
 
 A seed-reproducible **procedural island generator and explorer** that runs in your terminal. It
 builds a realistic island — terrain, climate, rivers and lakes, natural biomes grouped into named
-regions with generated lore, points of interest (villages, towns, cities, towers, dungeons, ruins,
+regions with generated lore, points of interest (villages, towns, cities, towers, dungeons, ruin,
 camps, boats) connected by meandering roads — and lets you explore it with a colored curses UI,
 zoom in to see structure detail, and export the view to SVG/PNG.
 
-> **Status:** Phases 0–4 are complete and playable. Phase 5 is in progress — **dungeon** interiors
-> render embedded in the terrain at the zoom (outline) and local (full, furnished) scales, with
-> multi-floor cycling; the remaining archetypes and SVG/PNG export (Phase 6) are planned. See the
-> phase checklist below.
+> **Status:** Phases 0–5 are complete and playable. Every POI archetype (dungeon, tower, city, town,
+> village, ruin, camp, boat) renders an interior embedded in the terrain at the zoom (outline) and
+> local (full, furnished) scales, with multi-floor cycling for dungeons and towers; only SVG/PNG
+> export (Phase 6) remains planned. See the phase checklist below.
 
 ---
 
@@ -191,6 +191,9 @@ The authoritative defaults and inline documentation are in
 | `cells_per_tile` | `6` | Canonical interior resolution — detail cells per world tile |
 | `room_min` / `room_max` | `4` / `10` | Min/max room side in interior cells |
 | `clutter_density` | `0.10` | Fraction of free interior cells furnished (rubble/barrels/chests) |
+| `size_jitter` | `0.4` | Per-POI footprint size variation (structures of a kind spawn larger/smaller) |
+| `ruin_erosion` | `0.45` | Fraction of a ruin's walls that collapse to gaps / floor that cracks to rubble |
+| `shape` | `"mixed"` | Outer-boundary shape for solid buildings (dungeon/tower/ruin): `rectangle`/`blob`/`cellular`/`drunkard`/`diamond`/`cross`/`mixed` |
 | `footprints.*` | per-kind | Interior footprint in world tiles `[w, h]`, centred on the anchor |
 
 #### `[roads]`
@@ -267,9 +270,11 @@ The naming and lore grammar is documented in **[docs/GRAMMAR.md](docs/GRAMMAR.md
 - [x] Phase 2 — generation core (heightmap → regions) + headless stats
 - [x] Phase 3 — curses TUI — playable biome-map explorer
 - [x] Phase 4 — POIs, meandering A\* roads + bridges, mixed-culture names & region lore
-- [~] Phase 5 — detail interiors, clutter, multi-floor POIs, overlay
+- [x] Phase 5 — detail interiors, clutter, multi-floor POIs, overlay
   - [x] Infrastructure: lazy/LRU-cached interior builders, registry, embedded detail rendering
         (zoom outline / local full interior), signed multi-floor cycling, overlay compositing
-  - [x] **Dungeon** archetype (BSP rooms + corridors, aligned stairs, role-based furnishing)
-  - [ ] Remaining archetypes: tower, village, town, city, ruins, camp, boat
+  - [x] **Dungeon** & **tower** — stacked solid buildings (descend / ascend), aligned stairs, furnishing
+  - [x] **City / town / village** — multi-building settlements with streets and a plaza
+  - [x] **Ruin** — eroded single-floor building (collapsed walls, rubble)
+  - [x] **Camp** & **boat** — bespoke open-air tents and a planked hull on water
 - [ ] Phase 6 — SVG/PNG export
