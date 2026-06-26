@@ -281,6 +281,40 @@ def _draw(
     stdscr.refresh()
 
 
+def _export(
+    stdscr: curses.window,
+    world: World,
+    config: Config,
+    vs: ViewState,
+    overlay: Overlay,
+    target: str,
+) -> None:
+    """Write the current view (``target == "view"``) or the whole island (``"world"``) to disk.
+
+    The screen dimensions are recomputed exactly as :func:`_draw` does so a "view" export captures
+    the same frame the user is looking at (same scale, camera and footprints). Failures are reported
+    on the HUD rather than crashing the session.
+    """
+    from .. import export
+
+    try:
+        if target == "world":
+            paths = export.export_world(world, config, overlay)
+        else:
+            max_y, max_x = stdscr.getmaxyx()
+            status_h = clamp(int(config.get("render.status_height")), 3, max(3, max_y - 2))
+            paths = export.export_view(world, config, vs, overlay, area_w=max_x, area_h=max_y - status_h)
+    except Exception as exc:  # never let an export error kill the explorer
+        vs.notify(f"export failed: {exc}")
+        return
+
+    names = ", ".join(os.path.basename(p) for p in paths)
+    if any(p.endswith(".png") for p in paths):
+        vs.notify(f"exported {names}")
+    else:
+        vs.notify(f"exported {names} (install Pillow for PNG)")
+
+
 def _main(stdscr: curses.window, world: World, config: Config, get_key: Optional[Callable[[], int]] = None) -> None:
     """curses.wrapper target: set up, then run the input/redraw loop until the user quits.
 
@@ -362,5 +396,5 @@ def _main(stdscr: curses.window, world: World, config: Config, get_key: Optional
         elif name == "floor":
             _cycle_floor(world, vs, action[1])
         elif name == "export":
-            vs.notify("export arrives in a later build")
+            _export(stdscr, world, config, vs, overlay, action[1])
         # "resize" / "none": just redraw on the next loop iteration.

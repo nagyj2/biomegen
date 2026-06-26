@@ -86,6 +86,15 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print a no-colour ASCII rendering of the close 'local' detail view.",
     )
+    parser.add_argument(
+        "--export",
+        choices=("world", "view"),
+        default=None,
+        help=(
+            "Export an image to export.dir without launching the UI: 'world' = the whole island at "
+            "full resolution, 'view' = the biome map. Writes SVG always, PNG if Pillow is installed."
+        ),
+    )
     return parser
 
 
@@ -139,6 +148,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(preview.render_zoom_ascii(world, config))
         if args.preview_local:
             print(preview.render_local_ascii(world, config))
+        return 0
+
+    if args.export is not None:
+        from biomegen import export
+        from biomegen.render.state import ViewState
+
+        if args.export == "world":
+            paths = export.export_world(world, config)
+        else:
+            vs = ViewState(cx=world.width // 2, cy=world.height // 2, mode="fit")
+            paths = export.export_view(world, config, vs)
+        for path in paths:
+            print(f"wrote {path}")
+        if not any(p.endswith(".png") for p in paths):
+            print("(install Pillow to also export PNG)")
         return 0
 
     from biomegen.render import app

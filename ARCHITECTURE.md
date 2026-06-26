@@ -15,7 +15,8 @@ composited on read. The `render` layer draws the composited world with curses. E
 algorithm is looked up from a `Registry` by a string key read from config, so swapping algorithms is
 normally a config change, not a code change. A subset of algorithm families is also exposed as
 direct CLI flags (`--noise-backend`, `--poi-sampler`) for single-run overrides without touching any
-file.
+file. The `export` layer turns the same pure render frames into colour SVG/PNG images, from the UI
+(`e` / `E`) or headlessly (`--export`).
 
 ---
 
@@ -82,7 +83,12 @@ biomegen/
     preview.py          ASCII preview (no curses — usable headlessly)
     input.py            Key-binding resolution
     app.py              Curses bootstrap + main event loop
-tests/                  pytest suite: golden-world hash, RNG determinism, config, overlay, UI, …
+  export/               Curses-free SVG/PNG export of the island and the current view
+    colors.py           RGB colour authority mirroring Palette (no curses) for the exporters
+    svg.py              Frame-grid → deterministic standalone SVG document (no deps)
+    png.py              Frame-grid → PNG via Pillow (optional; degrades gracefully if absent)
+    __init__.py         export_world() / export_view() facades: frame → grid → file(s)
+tests/                  pytest suite: golden-world hash, RNG determinism, config, overlay, UI, export …
 docs/GRAMMAR.md         Naming/lore grammar reference
 config.example.toml     Sparse-overlay example (every key with its default value)
 ```
@@ -424,6 +430,33 @@ no render or pipeline changes (both iterate the registry generically).
 **Colour capability ladder** (`palette.py`): the palette detects terminal capability and uses the
 highest available mode — truecolor (`init_color` with per-region RGB), 256-color, 8-color, or
 monochrome — falling back gracefully.
+
+---
+
+## Export layer (`export/`)
+
+Writes the island to image files. Two facades mirror the two in-game keys (and the `--export` CLI
+flag): `export_world` renders the whole island at full 1:1 resolution (one `export.cell_px` square per
+world tile); `export_view` renders exactly the frame currently on screen (biome / zoom / local at the
+current camera), so a POI interior can be captured as you see it.
+
+- **Reuses the render frame builders.** Export does **not** re-implement layout: it calls the same
+  pure `build_biome_frame` / `build_detail_frame` the curses renderer uses, then flattens the frame
+  into a renderer-agnostic *grid* of `(fill_rgb, glyph, glyph_rgb, bold)` cells. The SVG and PNG
+  back-ends both consume that one grid, so the two formats are pixel-faithful to each other and to the
+  TUI's layout (terrain < POI/road marker < interior outline; the transient cursor is omitted).
+- **Curses-free colour.** `colors.ExportPalette` mirrors `render.palette.Palette` method-for-method
+  but returns raw `(r, g, b)` triples instead of curses attributes, reading the **same** source
+  numbers (`render.palette`, per-region `base_color`, `render.interior_palette`). So images match the
+  terminal without importing curses (the headless `--export` path needs no TTY). Glyph colour is a
+  luma-based black/white contrast so every glyph stays legible over its tile.
+- **SVG always, PNG optional.** `svg.grid_to_svg` builds a standalone SVG with **zero dependencies**
+  (filled `<rect>` runs + centred `<text>` glyphs, XML-escaped). `png.grid_to_png` rasterises the same
+  grid via Pillow, imported **lazily**; if Pillow is absent it returns `False` and the caller falls
+  back to SVG-only with a friendly notice — the package still imports cleanly.
+- **Deterministic.** Cells are emitted in fixed row-major order with fixed numeric formatting, so a
+  fixed seed yields byte-identical SVG — the export analogue of the golden-world fingerprint (pinned
+  by `tests/test_export.py`).
 
 ---
 
