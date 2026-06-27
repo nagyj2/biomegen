@@ -260,7 +260,7 @@ The world is built by an ordered, fully seed-reproducible pipeline:
 
 ```
 heightmap → island_mask → climate → hydrology → biomes → regions
-         → poi_placement → roads → naming
+         → poi_placement → roads → poi_interiors → naming
 ```
 
 All algorithms are industry-standard and most are swappable via config (see `ARCHITECTURE.md`).

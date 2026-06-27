@@ -20,7 +20,7 @@ from ..util import rng
 from ..world.entities import POI
 from ..world.interiors import INTERIOR_BUILDERS, footprint_origin
 from ..world.overlay import Overlay
-from ..world.tile import INTERIOR_COLOR_BASE, WaterType
+from ..world.tile import INTERIOR_COLOR_BASE, OVERLAY_COLOR_BASE, WaterType
 from ..world.world import World
 from . import map_view, status
 from .glyphs import Glyphs
@@ -261,7 +261,10 @@ def _draw(
         _draw_zoom(stdscr, detail_frame, palette)
         visible = {b for row in detail_frame.cells for (_g, b) in row if b < INTERIOR_COLOR_BASE}
         visible_cells = {
-            b - INTERIOR_COLOR_BASE for row in detail_frame.cells for (_g, b) in row if b >= INTERIOR_COLOR_BASE
+            b - INTERIOR_COLOR_BASE
+            for row in detail_frame.cells
+            for (_g, b) in row
+            if INTERIOR_COLOR_BASE <= b < OVERLAY_COLOR_BASE  # interior cells only (exclude road/bridge overlays)
         }
     else:
         if vs.mode == "onetoone":

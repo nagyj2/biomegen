@@ -1,9 +1,14 @@
 """Stage 8: POI interior metadata (no grids).
 
-Runs after placement and before roads. Fills the cheap, render-only metadata each POI needs for its
+Runs after placement **and roads**. Fills the cheap, render-only metadata each POI needs for its
 detail-view interior - the **footprint** in world tiles (centred on the anchor) and its clamped
 bounding box - WITHOUT generating any interior grids. The grids are built lazily from each POI's
 ``interior_seed`` (see :mod:`biomegen.world.interiors`) only when a detail view samples them.
+
+Because roads are already laid by now, this stage also turns each POI's recorded road approach
+(``extra['road_entry']``) into a concrete **entrance** on the footprint perimeter and clears the road
+tiles inside the footprint, so the road meets the structure at a single road-facing door (the interior
+builder biases its door to the same side) rather than running through the building.
 
 A coastal footprint loses interior area to the water it clips (the builder forms the structure *around*
 the coast). To stop those structures from reading as runts, this stage **grows the footprint** until its
@@ -13,10 +18,10 @@ Growth is symmetric (the anchor stays centred, as the renderer and roads assume)
 rectangle and every anchor is off-limits, so a grown structure never overlaps a neighbour. POIs grow in
 placement (priority) order, so higher-value settlements claim space first.
 
-This stage writes only :class:`~biomegen.world.entities.POI` dataclass fields, never the per-tile
-numpy arrays, so the world fingerprint is unchanged. ``entrance`` is left at the anchor, so the roads
-stage (which routes to ``poi.entrance``) is unaffected; per-archetype door refinement is deferred to
-the phases that add those archetypes' builders.
+This stage writes POI dataclass fields plus a localised, deterministic clear of the ``road``/
+``road_tier`` arrays inside each footprint (the road bed already laid through what is now a building).
+The base biome/elevation/etc. arrays are untouched; the road clear is a pure function of the placed
+POIs, so generation stays fully reproducible.
 """
 
 from __future__ import annotations
@@ -67,8 +72,54 @@ def run(world: World, config: Config, seed: int) -> None:
             min(world.width - 1, tx0 + fw - 1),
             min(world.height - 1, ty0 + fh - 1),
         )
-        if poi.kind != "boat":  # claim the rectangle so later (lower-priority) POIs can't grow into it
+        if poi.kind != "boat":
+            # Site the entrance the road network reaches (recorded by the roads stage) on the footprint
+            # perimeter facing that side, and clear road tiles inside the footprint so the road bed stops
+            # at the structure (the interior is stamped over it) instead of running through the building.
+            _place_entrance(poi, fw, fh, tx0, ty0, world.width, world.height)
+            _clear_interior_roads(world, fw, fh, tx0, ty0)
+            # Claim the rectangle so later (lower-priority) POIs can't grow into it.
             occupied[max(0, ty0) : ty0 + fh, max(0, tx0) : tx0 + fw] = True
+
+
+def _place_entrance(poi, fw: int, fh: int, tx0: int, ty0: int, world_w: int, world_h: int) -> None:
+    """Set ``poi.entrance`` on the footprint perimeter facing the road, or leave it at the anchor.
+
+    ``extra['road_entry']`` is the dominant compass direction the road network arrives from (recorded by
+    the roads stage). The entrance is placed at the midpoint of the footprint edge on that side, so the
+    interior door (biased to the same side) lines up with the approaching road. With no recorded road the
+    entrance stays at the anchor - the prior behaviour - so road-less POIs are unaffected.
+    """
+    entry = poi.extra.get("road_entry")
+    if not entry:
+        poi.entrance = (poi.x, poi.y)
+        return
+    dx, dy = int(entry[0]), int(entry[1])
+    ex = poi.x + dx * (fw // 2)
+    ey = poi.y + dy * (fh // 2)
+    # Clamp onto the footprint rectangle (the perimeter) and then onto the map.
+    ex = min(max(ex, tx0), tx0 + fw - 1)
+    ey = min(max(ey, ty0), ty0 + fh - 1)
+    poi.entrance = (min(max(ex, 0), world_w - 1), min(max(ey, 0), world_h - 1))
+
+
+def _clear_interior_roads(world: World, fw: int, fh: int, tx0: int, ty0: int) -> None:
+    """Clear road tiles strictly inside the footprint, keeping the 1-tile perimeter ring intact.
+
+    The perimeter ring is preserved so the road that approached the anchor still meets the structure's
+    edge (the entrance) instead of leaving a gap; everything further in is hidden by the interior stamp,
+    so flagging it road would only let the road-bed render bleed under the building. A footprint too thin
+    to have a strict interior is left untouched.
+    """
+    x0, y0 = max(0, tx0), max(0, ty0)
+    x1, y1 = min(world.width, tx0 + fw), min(world.height, ty0 + fh)
+    if x1 - x0 > 2 and y1 - y0 > 2:
+        inner = (slice(y0 + 1, y1 - 1), slice(x0 + 1, x1 - 1))
+        # Clear only the land road bed under the building; water tiles (a bridge crossing that happens to
+        # pass under the footprint) keep their road flag so the bridge still reads as a crossing.
+        land = world.water_type[inner] == int(WaterType.NONE)
+        world.road[inner] = np.where(land, 0, world.road[inner])
+        world.road_tier[inner] = np.where(land, 0, world.road_tier[inner])
 
 
 def _expand_to_restore_area(

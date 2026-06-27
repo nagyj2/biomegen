@@ -62,8 +62,8 @@ biomegen/
     poi_fields.py       Shared suitability distance fields for POI scoring
     poi_rules.py        Per-kind POI rules, eligibility masks, score arrays
     poi_sampler.py      Blue-noise / random / grid POI samplers
-    poi_interiors.py    Stage 8 — POI interior metadata (footprint/bbox; no grids)
-    roads.py            Stage 9 — road network + bridge POIs
+    roads.py            Stage 8 — road network + bridge POIs + per-POI road-entrance recording
+    poi_interiors.py    Stage 9 — POI interior metadata (footprint/bbox/entrance; no grids)
     naming.py           Stage 10 — names and lore for all entities
   naming/
     cultures.py         Culture profiles + biome-biased culture assignment
@@ -140,8 +140,12 @@ to `world.regen_attempts` times) before the expensive downstream stages run.
 
 ```
 heightmap → island_mask → climate → hydrology → biomes → regions
-         → poi_placement → poi_interiors → roads → naming
+         → poi_placement → roads → poi_interiors → naming
 ```
+
+Roads run **before** POI interiors: the road network is laid to each POI anchor first, records the
+direction it arrives from on every POI, and the interiors stage then sites that POI's footprint
+entrance (and biases the interior door) to the road-facing side.
 
 ### Stage 1 — Heightmap (`pipeline/heightmap.py`)
 
@@ -269,26 +273,10 @@ Places cities, towns, villages, towers, dungeons, ruin, camps, and boats:
    style). Alternatives: `random` (unconstrained sampling) and `grid` (evenly spaced).
 5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy interior builder (see Stage 8 and the Render layer).
 
-### Stage 8 — POI interiors (`pipeline/poi_interiors.py`)
+### Stage 8 — Roads (`pipeline/roads.py`)
 
-Cheap, **render-only metadata** for each POI's detail-view interior — no grids are generated here.
-For every POI with a configured `interiors.footprints.<kind>` it sets the **footprint** (in world
-tiles, centred on the anchor) and the clamped on-map **bbox**. It writes only `POI` dataclass fields,
-never the per-tile arrays, so `World.fingerprint()` is unchanged; `entrance` stays at the anchor so
-the roads stage (which routes to `poi.entrance`) is unaffected. The actual interior **grids** are
-built lazily and deterministically from `interior_seed` on first view (see Render layer → Interiors).
-
-**Coastal area restoration**: a footprint that clips water loses interior area to it (the builder forms
-the structure around the coast). To keep coastal structures full-sized, this stage grows the footprint —
-symmetrically, so the anchor stays centred — until its dry-land tile count is back to the nominal
-(size-jittered) area, capped at `interiors.expand_max_factor`. Water never blocks growth (the extra coast
-is carved again by the builder); other POIs do — each POI claims its footprint rectangle and every anchor
-is off-limits, so a grown structure never overlaps a neighbour. POIs grow in placement (priority) order,
-so higher-value settlements claim space first. Boats keep their nominal footprint (they sit on water).
-
-### Stage 9 — Roads (`pipeline/roads.py`)
-
-Connects POIs with meandering least-cost roads:
+Connects POIs with meandering least-cost roads, **before** interiors so the network can shape each
+POI's entrance:
 
 1. **Landmass grouping**: `water_type != SALT` (land + rivers + lakes, but not ocean) is labelled
    with 8-connected components. Roads are only routed within one component — they cannot cross open
@@ -297,7 +285,7 @@ Connects POIs with meandering least-cost roads:
    (the settlement backbone; falls back to all POIs if none exist) → probabilistic attachment of
    remaining POIs (civilized at `civilized_connect_prob`, uncivilized at `uncivilized_connect_prob`)
    → extra loop edges at `extra_edge_prob`. All random draws consume a per-component RNG in a fixed
-   sorted edge order.
+   sorted edge order. Roads route to each POI's anchor (interiors set the perimeter entrance later).
 3. **Routing**: A* over a per-tile cost surface. Cost factors: `base_cost` (flat ground) +
    `slope_cost × |Δelevation|` + `uphill_surcharge` (uphill only) + `water_cost` (cross water) +
    `mountain_cost` (high terrain). Existing road tiles are discounted by `road_discount`.
@@ -307,10 +295,40 @@ Connects POIs with meandering least-cost roads:
    - **Trunk phase**: MST + loop edges are routed first.
    - **Spur phase**: isolated POIs connect to the nearest existing road tile (not to a distant POI),
      preventing parallel-road artefacts.
-4. **Bridges**: every contiguous run of water tiles a routed road crosses becomes one `bridge` POI
-   at the run's midpoint. Freshwater runs of any length are bridged; ocean runs exceeding
-   `_MAX_OCEAN_BRIDGE` tiles are skipped. Mixed ocean+river runs are split at the salt/fresh
-   boundary. Bridges are emergent from road×water intersections — they are not independently sampled.
+4. **Bridges**: each contiguous run of water tiles a routed road crosses becomes one `bridge` POI,
+   minted the moment the crossing is found. The bridge joins the two land road pieces flanking the run
+   (`p0`/`p1`, stored on the POI `extra`) and its marker sits on the run tile nearest the **centre of
+   that straight span**. Freshwater runs of any length are bridged; ocean runs exceeding
+   `_MAX_OCEAN_BRIDGE` tiles are skipped. Mixed ocean+river runs are split at the salt/fresh boundary.
+   Bridges are emergent from road×water intersections — they are not independently sampled. A
+   per-run **overlap guard** (a shared set of already-spanned water tiles) prevents two roads fording
+   the same spot from stacking duplicate decks — the first (trunk-phase, usually longest) bridge wins,
+   so a wide ford reads as one bridge (connected straight segments), not piled-up overlapping ones.
+5. **Entrance recording**: after routing, each non-bridge POI records the dominant compass direction
+   the network arrives from (`extra['road_entry']`); roads from the same side collapse to one entry.
+   Stage 9 turns that into the perimeter entrance and the road-facing interior door.
+
+### Stage 9 — POI interiors (`pipeline/poi_interiors.py`)
+
+Cheap, **render-only metadata** for each POI's detail-view interior — no grids are generated here.
+For every POI with a configured `interiors.footprints.<kind>` it sets the **footprint** (in world
+tiles, centred on the anchor) and the clamped on-map **bbox**. The actual interior **grids** are
+built lazily and deterministically from `interior_seed` on first view (see Render layer → Interiors).
+
+**Entrance + road cleanup**: because roads are already laid, this stage places `poi.entrance` on the
+footprint perimeter facing `extra['road_entry']` (the interior builder biases its door to the same
+side), and clears the **land** road tiles strictly inside the footprint (the 1-tile perimeter ring is
+kept so the road still meets the structure; water tiles keep their flag so a bridge under a footprint
+survives). The biome arrays are untouched, and the road clear is a pure function of the placed POIs,
+so generation stays reproducible. POIs with no road keep `entrance` at the anchor.
+
+**Coastal area restoration**: a footprint that clips water loses interior area to it (the builder forms
+the structure around the coast). To keep coastal structures full-sized, this stage grows the footprint —
+symmetrically, so the anchor stays centred — until its dry-land tile count is back to the nominal
+(size-jittered) area, capped at `interiors.expand_max_factor`. Water never blocks growth (the extra coast
+is carved again by the builder); other POIs do — each POI claims its footprint rectangle and every anchor
+is off-limits, so a grown structure never overlaps a neighbour. POIs grow in placement (priority) order,
+so higher-value settlements claim space first. Boats keep their nominal footprint (they sit on water).
 
 ### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 
@@ -377,6 +395,24 @@ position (`blend_strength`, `blend_scale`). The warp is a pure function of world
 zoom and local are consistent samplings of the same blend — they look like zooms of each other.
 Setting `blend_strength = 0` gives a crisp grid.
 
+**Roads & bridges** at detail scales (`zoom_view._draw_roads` / `_draw_bridges`, drawn over terrain
+but under POI markers and interiors): the biome-map overview keeps its single-cell road marker, but at
+zoom/local roads are not markers — they render like the rivers do.
+
+- *Roads* are a thin meandering **bed**: a detail cell is road when its (road-warped) world position
+  lies within `road_half_width` tiles of the straight line joining two 8-adjacent land-road tile
+  centres. That distance test is a pure function of world position, so zoom and local are the same
+  shape at different scales. The bed is `road_glyph` (`:`) in the `road` colour with small clutter
+  scattered along it (`road_clutter`, plus `road_clutter_local` fine detail at the close scale). A
+  small `road_warp` gives it an organic wobble; water cells are never drawn over (bridges carry those).
+- *Bridges* are a straight **deck flanked by walls**, drawn from each bridge POI's stored span
+  endpoints (`extra['p0']`/`['p1']`) at whatever real angle the crossing has — cells within
+  `road_half_width` of the span (perpendicular, clamped to its length, then extended `bridge_overhang`
+  tiles past each end so the deck overlaps the road bed with no gap) are the brown `bridge` deck, a
+  band just beyond on either long side is the `bridge_wall` railing. Unlike roads this draws over the
+  water it spans. Colours come from `render.palette` (`road`/`bridge`/`bridge_wall`); the renderer
+  encodes them as overlay colour ids above `OVERLAY_COLOR_BASE`, which `Palette`/`ExportPalette` decode.
+
 ### Interiors (`world/interiors/`, rendered by `zoom_view.py`)
 
 POIs with a registered builder get **three forms**: the biome-map marker, a **zoom** structure
@@ -418,7 +454,7 @@ between outside and inside (the interior is *embedded in the terrain*, not a sep
 | Builder | Pattern | Notes |
 |---------|---------|-------|
 | `dungeon` / `tower` | Stacked solid building | descend / ascend from floor 0; aligned stairs; depth-scaled loot vs. sparse quarters + lookout |
-| `city` / `town` / `village` | Multi-building settlement | one builder; BSP plots → walled buildings, PATH streets + plaza, terrain between |
+| `city` / `town` / `village` | Multi-building settlement | one builder; BSP plots → walled buildings, PATH streets + plaza, terrain between; a road-connected settlement opens a road-facing door in its edge-most building + a street to the plaza |
 | `ruin` | Eroded single-floor building | `interiors.ruin_erosion` collapses walls to gaps and cracks floor to rubble |
 | `camp` | Bespoke open-air | cleared FLOOR patch + campfire + tents + wagon, no walls (the clearing is what reads at zoom) |
 | `boat` | Bespoke hull on water | planked WALL hull around a FLOOR deck + cabin + cargo; VOID around it shows the water |

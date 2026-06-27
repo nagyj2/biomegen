@@ -11,7 +11,7 @@ from biomegen.render.state import ViewState, edge_pan
 from biomegen.render.zoom_view import build_detail_frame, detail_cell_size
 from biomegen.world.interiors import STRUCTURAL, ZOOM_VISIBLE, build_interior, footprint_cells, footprint_origin
 from biomegen.world.overlay import Overlay
-from biomegen.world.tile import INTERIOR_COLOR_BASE, Cell
+from biomegen.world.tile import INTERIOR_COLOR_BASE, OVERLAY_COLOR_BASE, Cell
 
 
 @pytest.fixture(scope="module")
@@ -31,8 +31,17 @@ def dungeon(world):
 
 
 def _interior_color_ids(frame):
-    """Collect the interior Cell ints that appear in a rendered detail frame."""
-    return [cid - INTERIOR_COLOR_BASE for row in frame.cells for (_g, cid) in row if cid >= INTERIOR_COLOR_BASE]
+    """Collect the interior Cell ints that appear in a rendered detail frame.
+
+    Only the interior colour-id range counts; road/bridge overlay ids (>= OVERLAY_COLOR_BASE) are
+    surface features, not interior cells, and are excluded so they don't decode as bogus Cell values.
+    """
+    return [
+        cid - INTERIOR_COLOR_BASE
+        for row in frame.cells
+        for (_g, cid) in row
+        if INTERIOR_COLOR_BASE <= cid < OVERLAY_COLOR_BASE
+    ]
 
 
 def _detail_frame(world, cfg, poi, scale, floor, overlay=None, aw=120, ah=40):
@@ -197,8 +206,8 @@ def _interior_cells_over_water(world, cfg, poi):
     for r in range(frame.rows):
         ty = vs.cam_y + r // ch
         for c in range(frame.cols):
-            if frame.cells[r][c][1] < INTERIOR_COLOR_BASE:
-                continue  # terrain cell, not a structure cell
+            if not (INTERIOR_COLOR_BASE <= frame.cells[r][c][1] < OVERLAY_COLOR_BASE):
+                continue  # terrain or road/bridge-overlay cell, not an interior structure cell
             tx = vs.cam_x + c // cw
             if 0 <= ty < world.height and 0 <= tx < world.width and world.water_type[ty, tx] != int(WaterType.NONE):
                 wet.append((tx, ty))
@@ -255,13 +264,62 @@ def test_footprint_land_fraction_mask_allows_partial_water():
     assert mask[1, 2]  # 6/9 land >= 0.5 -> a shoreline anchor is allowed
 
 
-def test_entrance_stays_at_anchor(world):
-    # Verifies entrance is left at the anchor so the roads stage (which routes to it) is unaffected.
-    assert all(p.entrance == (p.x, p.y) for p in world.pois)
+def test_entrance_faces_recorded_road(world):
+    # Roads run before interiors: a POI the road reaches gets its entrance on the footprint perimeter,
+    # on the side the road arrives from; a POI with no road keeps its entrance at the anchor.
+    checked_with_road = 0
+    for p in world.pois:
+        if p.kind in ("bridge", "boat"):
+            continue
+        entry = p.extra.get("road_entry")
+        if not entry:
+            assert p.entrance == (p.x, p.y)
+            continue
+        checked_with_road += 1
+        dx, dy = entry
+        ex, ey = p.entrance
+        x0, y0, x1, y1 = p.bbox
+        assert x0 <= ex <= x1 and y0 <= ey <= y1  # entrance sits on the (clamped) footprint
+        if dx > 0:
+            assert ex == x1
+        if dx < 0:
+            assert ex == x0
+        if dy > 0:
+            assert ey == y1
+        if dy < 0:
+            assert ey == y0
+    assert checked_with_road > 0  # seed-1 has road-connected POIs (keeps the assertion meaningful)
 
 
-def test_stage_does_not_change_fingerprint(cfg):
-    # Verifies metadata-only stage writes no per-tile arrays (re-running it leaves the world identical).
+def test_interior_door_faces_road(world, cfg):
+    # A road-connected POI gets a door on the side the road arrives from: solid structures punch their
+    # single exterior door there, and settlements open a road-facing gate in their edge-most building.
+    found = 0
+    for p in world.pois:
+        if p.kind not in ("dungeon", "tower", "ruin", "city", "town", "village"):
+            continue
+        entry = p.extra.get("road_entry")
+        if not entry:
+            continue
+        grid = build_interior(p, 0, cfg, world)
+        if grid is None:
+            continue
+        ys, xs = np.where(grid == int(Cell.DOOR))
+        if len(xs) == 0:
+            continue
+        found += 1
+        gh, gw = grid.shape
+        cx, cy = (gw - 1) / 2.0, (gh - 1) / 2.0
+        dx, dy = entry
+        # The door most aligned with the road direction must sit on that side of the structure's centre.
+        best = max((xs[i] - cx) * dx + (ys[i] - cy) * dy for i in range(len(xs)))
+        assert best >= 0, f"{p.kind} door not on road-facing side (entry {entry})"
+    assert found > 0  # seed-1 has road-connected solid structures
+
+
+def test_stage_is_idempotent_on_fingerprint(cfg):
+    # The interiors stage clears road tiles inside footprints + sets entrances, but is idempotent:
+    # re-running it on an already-generated world leaves every per-tile array (and the fingerprint) intact.
     w = pipeline.generate(cfg, 321)
     fp = w.fingerprint()
     poi_interiors.run(w, cfg, w.seed)

@@ -4,7 +4,11 @@
 stages so there is no backtracking:
 
     heightmap -> island_mask -> climate -> hydrology -> biomes -> regions
-    (-> poi_placement -> poi_interiors -> roads -> naming, added in later phases)
+    (-> poi_placement -> roads -> poi_interiors -> naming, added in later phases)
+
+Roads run **before** POI interiors so the road network knows where every POI anchor is: each road
+that reaches a POI records its approach direction on the POI, and the interiors stage then sites that
+POI's footprint entrance (and the interior door) on the side the road arrives from.
 
 A **land-exists sanity gate** wraps the two cheap leading stages: if a seed yields too little land,
 the seed is deterministically perturbed and those stages re-run, preventing empty-world cascades from
@@ -69,8 +73,8 @@ def generate(config: Config, seed: int) -> World:
     biomes.run(world, config, gen_seed)
     regions.run(world, config, gen_seed)
     poi_placement.run(world, config, gen_seed)
-    poi_interiors.run(world, config, gen_seed)
     roads.run(world, config, gen_seed)
+    poi_interiors.run(world, config, gen_seed)
     naming.run(world, config, gen_seed)
     return world
 

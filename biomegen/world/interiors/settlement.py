@@ -34,6 +34,7 @@ from .grid import (
     free_floor_cells,
     rect_in_mask,
     register_interior,
+    room_center,
     scatter_furniture,
     wall_ring,
     weighted_choice,
@@ -87,10 +88,36 @@ def build_settlement(ctx: InteriorCtx) -> np.ndarray:
     for front in fronts:
         carve_path_guarded(grid, front, center)
 
+    _road_entrance(ctx, grid, buildings, center)
+
     _furnish_settlement(ctx, grid)
     if buildable is not None:
         grid[~buildable] = int(Cell.VOID)  # clear any street/plaza/wall that strayed onto water
     return grid
+
+
+def _road_entrance(ctx: InteriorCtx, grid: np.ndarray, buildings: List[Rect], center: Tuple[int, int]) -> None:
+    """Open a road-facing gate into the settlement: a DOOR on the edge-most building + a main street.
+
+    When a road reaches this settlement (``ctx.entrance_side`` is set), the building nearest the
+    road-facing edge gets a door punched on that side and a PATH street carved from it out to the
+    footprint edge (where the road arrives) and in to the central plaza - so the road snaps to the
+    settlement and leads, via a door, into the interior. With no road the settlement is unchanged.
+    """
+    sx, sy = ctx.entrance_side
+    if (sx, sy) == (0, 0) or not buildings:
+        return
+    gw, gh = ctx.grid_w, ctx.grid_h
+    # Midpoint of the footprint edge the road arrives from.
+    ex = 0 if sx < 0 else (gw - 1 if sx > 0 else gw // 2)
+    ey = 0 if sy < 0 else (gh - 1 if sy > 0 else gh // 2)
+    edge = (ex, ey)
+    nearest = min(buildings, key=lambda b: (room_center(b)[0] - ex) ** 2 + (room_center(b)[1] - ey) ** 2)
+    front = building_door(grid, nearest, edge)  # door on the wall facing the road
+    if front is None:
+        return
+    carve_path_guarded(grid, front, edge)  # street out to where the road meets the settlement
+    carve_path_guarded(grid, front, center)  # and in to the plaza (the interior)
 
 
 def _cap(rect: Rect) -> Rect:

@@ -54,13 +54,16 @@ def _validate_biome_names(cfg: Dict[str, Any], errors: List[str]) -> None:
     names here (rather than failing deep inside a generation stage) catches typos and makes it
     obvious which biomes exist when adding new ones.
     """
-    from ..world.tile import BIOME_BY_NAME  # local import: avoids any import-order coupling
+    from ..world.tile import BIOME_BY_NAME, OVERLAY_COLOR_NAMES  # local import: avoids import-order coupling
 
     valid = set(BIOME_BY_NAME)
+    # render.palette also carries the surface-overlay colours (road / bridge / bridge_wall), which are
+    # not biomes; allow those names there (but not in render.glyphs, which is biome-only).
+    palette_valid = valid | set(OVERLAY_COLOR_NAMES.values())
 
-    def check(name: object, where: str) -> None:
-        if not isinstance(name, str) or name.lower() not in valid:
-            errors.append(f"{where}: unknown biome {name!r} (valid: {', '.join(sorted(valid))})")
+    def check(name: object, where: str, allowed: set = valid) -> None:
+        if not isinstance(name, str) or name.lower() not in allowed:
+            errors.append(f"{where}: unknown biome {name!r} (valid: {', '.join(sorted(allowed))})")
 
     biomes = cfg.get("biomes", {})
     for ri, row in enumerate(biomes.get("matrix", []) or []):
@@ -69,7 +72,7 @@ def _validate_biome_names(cfg: Dict[str, Any], errors: List[str]) -> None:
 
     render = cfg.get("render", {})
     for name in render.get("palette", {}) or {}:
-        check(name, "render.palette")
+        check(name, "render.palette", palette_valid)
     for name in render.get("glyphs", {}) or {}:
         check(name, "render.glyphs")
 

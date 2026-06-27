@@ -94,6 +94,10 @@ class InteriorCtx:
     # POI builds exactly as before and shares its cache entry with the no-terrain build. Bytes are
     # hashable, so this stays part of the LRU cache key and the build is still a pure function of it.
     land_mask_bytes: bytes = b""
+    # Compass direction (sx, sy ∈ {-1,0,1}) the connecting road arrives from, or (0, 0) for none. When
+    # set, the entry-floor door is punched on the wall facing this side (instead of a random wall) so the
+    # interior entrance lines up with the road. Part of the cache key, so the build stays a pure function.
+    entrance_side: Tuple[int, int] = (0, 0)
 
     @property
     def top_floor(self) -> int:
@@ -422,7 +426,9 @@ def clear_blocking_furniture(grid: np.ndarray, specials: List[Tuple[int, int]]) 
             node = parent[node]
 
 
-def punch_entrance(grid: np.ndarray, rooms: List[Rect], rgen) -> Optional[Tuple[int, int]]:
+def punch_entrance(
+    grid: np.ndarray, rooms: List[Rect], rgen, entrance_side: Tuple[int, int] = (0, 0)
+) -> Optional[Tuple[int, int]]:
     """Punch an entrance DOOR through the outer wall and tunnel inward to the nearest room.
 
     With a solid-filled organic dungeon the outer wall is backed by rock (not floor), so a plain
@@ -430,6 +436,10 @@ def punch_entrance(grid: np.ndarray, rooms: List[Rect], rgen) -> Optional[Tuple[
     adjacent to border-connected VOID, or the grid edge), carve an L-corridor from it to the nearest
     room centre - an entrance passage through the rock - and set the boundary cell to DOOR. Run on the
     entry (top) floor only. Returns the door's ``(x, y)``, or None if there is no boundary wall/room.
+
+    When ``entrance_side`` is a non-zero compass direction, the door is chosen from the boundary walls on
+    that side of the structure (the side the connecting road arrives from) rather than uniformly at
+    random, so the entrance faces the road; a seeded choice still breaks ties among that side's walls.
     """
     h, w = grid.shape
     wall = int(Cell.WALL)
@@ -448,6 +458,14 @@ def punch_entrance(grid: np.ndarray, rooms: List[Rect], rgen) -> Optional[Tuple[
     if not candidates or not rooms:
         return None
     candidates.sort()  # stable order so the seeded choice is reproducible
+    sx, sy = entrance_side
+    if (sx, sy) != (0, 0):
+        # Bias toward the road-facing side: keep the candidates furthest in that direction (within a
+        # one-cell band of the extreme) and pick among them, so the door faces the road but still varies.
+        cx, cy = (w - 1) / 2.0, (h - 1) / 2.0
+        proj = {(x, y): (x - cx) * sx + (y - cy) * sy for (x, y) in candidates}
+        best = max(proj.values())
+        candidates = [c for c in candidates if proj[c] >= best - 1.0]
     x, y = rgen.choice(candidates)
     nearest = min(rooms, key=lambda r: (room_center(r)[0] - x) ** 2 + (room_center(r)[1] - y) ** 2)
     carve_corridor(grid, (x, y), room_center(nearest))  # tunnel through the rock to a room
@@ -593,7 +611,7 @@ def stamp_circulation(
         grid[down[1], down[0]] = int(Cell.STAIRS_DOWN)
         reserved.add(down)
     if ctx.floor == 0:  # ground/entry level (the top floor for dungeons, the bottom one for towers)
-        door = punch_entrance(grid, rooms, rng.derive(ctx.interior_seed, "interior.door"))
+        door = punch_entrance(grid, rooms, rng.derive(ctx.interior_seed, "interior.door"), ctx.entrance_side)
         if door is not None:
             reserved.add(door)
     return reserved
@@ -758,6 +776,13 @@ def build_interior(poi: POI, floor: int, config: Config, world: Optional["World"
         cpt = max(1, int(config.get("interiors.cells_per_tile")))
         margin = max(0, int(config.get("interiors.coast_margin")))
         land_mask_bytes = buildable_mask_bytes(poi, world, gw, gh, cpt, margin)
+    # Door faces the connecting road: derive the side from where the entrance sits relative to the anchor
+    # (the roads + interiors stages place it on the road-facing perimeter). Unset/at-anchor -> no bias.
+    ex, ey = poi.entrance
+    if (ex, ey) in ((0, 0), (poi.x, poi.y)):
+        entrance_side = (0, 0)
+    else:
+        entrance_side = ((ex > poi.x) - (ex < poi.x), (ey > poi.y) - (ey < poi.y))
     ctx = InteriorCtx(
         kind=poi.kind,
         interior_seed=int(poi.interior_seed),
@@ -773,6 +798,7 @@ def build_interior(poi: POI, floor: int, config: Config, world: Optional["World"
         shape=str(config.get("interiors.shape")),
         ruin_erosion=float(config.get("interiors.ruin_erosion")),
         land_mask_bytes=land_mask_bytes,
+        entrance_side=entrance_side,
     )
     return _build_base(ctx)
 

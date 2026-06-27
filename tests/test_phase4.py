@@ -172,3 +172,68 @@ def test_detail_view_stamps_poi_marker(world, cfg):
     frame = build_detail_frame(world, cfg, vs, aw, ah, cw, ch)
     glyphs_drawn = {g for row in frame.cells for (g, _b) in row}
     assert cfg.get("render.markers")[poi.kind] in glyphs_drawn
+
+
+# --------------------------------------------------------------------------- road / bridge rendering
+def _detail_frame_at(world, cfg, x, y, scale="local", aw=120, ah=48):
+    cw, ch = detail_cell_size(scale, cfg, aw, ah)
+    vs = ViewState(cx=x, cy=y, scale=scale, mode="onetoone")
+    vs.cam_x = edge_pan(0, x, max(1, aw // cw), world.width)
+    vs.cam_y = edge_pan(0, y, max(1, ah // ch), world.height)
+    return build_detail_frame(world, cfg, vs, aw, ah, cw, ch), cw, ch, vs
+
+
+def test_bridges_have_span_geometry(world):
+    # Every bridge stores the two road pieces it joins (p0/p1) so the renderer can draw a straight deck.
+    bridges = [p for p in world.pois if p.kind == "bridge"]
+    for b in bridges:
+        assert "p0" in b.extra and "p1" in b.extra
+        assert len(b.extra["p0"]) == 2 and len(b.extra["p1"]) == 2
+
+
+def test_bridges_do_not_overlap():
+    # Two roads fording the same water must not stack overlapping bridge decks: every bridge's spanned
+    # water tiles (run + straight deck line) are disjoint from every other bridge's.
+    from biomegen.pipeline.roads import _bresenham
+
+    cfg = load_config(None)
+    w = pipeline.generate(cfg, 12636298121517995018)  # the seed that exhibited stacked bridges
+    seen: set = set()
+    for b in (p for p in w.pois if p.kind == "bridge"):
+        p0, p1 = tuple(b.extra["p0"]), tuple(b.extra["p1"])
+        water = {
+            (x, y) for (x, y) in _bresenham(p0, p1) if w.in_bounds(x, y) and w.water_type[y, x] != int(WaterType.NONE)
+        }
+        assert not (water & seen), f"bridge at {(b.x, b.y)} overlaps an existing bridge deck"
+        seen |= water
+
+
+def test_road_bed_is_thin_not_full_tile():
+    # A road renders as a thin bed (a fraction of a tile), not a marker filling the whole tile block.
+    from biomegen.world.tile import COLOR_ROAD, Biome
+    from biomegen.world.world import World
+
+    cfg = load_config(None)
+    w = World(12, 9, 7)
+    w.biome[:] = int(Biome.GRASSLAND)
+    w.road[4, 1:11] = 1  # a straight horizontal road on tile-row 4
+    frame, cw, ch, vs = _detail_frame_at(w, cfg, 5, 4, scale="zoom", aw=12 * 8, ah=9 * 8)
+    # Inspect the detail-cell block of road tile (5, 4): it must contain road cells but not be filled.
+    r0, c0 = (4 - vs.cam_y) * ch, (5 - vs.cam_x) * cw
+    block = [frame.cells[r][c][1] == COLOR_ROAD for r in range(r0, r0 + ch) for c in range(c0, c0 + cw)]
+    assert any(block), "road tile should render some road bed"
+    assert not all(block), "road bed must not occupy the entire tile"
+
+
+def test_road_and_bridge_overlay_colours_render():
+    # A view over a bridge shows the road bed, the brown deck and its flanking walls (distinct colours).
+    from biomegen.world.tile import COLOR_BRIDGE_DECK, COLOR_BRIDGE_WALL, COLOR_ROAD
+
+    cfg = load_config(None)
+    w = pipeline.generate(cfg, 1)  # seed 1 reliably has road-connected bridges
+    bridge = next(p for p in w.pois if p.kind == "bridge")
+    frame, _cw, _ch, _vs = _detail_frame_at(w, cfg, bridge.x, bridge.y, scale="local")
+    ids = {cid for row in frame.cells for (_g, cid) in row}
+    assert COLOR_ROAD in ids  # road bed leading to the bridge
+    assert COLOR_BRIDGE_DECK in ids  # brown deck
+    assert COLOR_BRIDGE_WALL in ids  # flanking walls

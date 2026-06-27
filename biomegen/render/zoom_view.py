@@ -2,7 +2,13 @@
 
 A biome tile is magnified into a block of detail cells. The detail is the biome "floor" plus
 deterministic, biome-appropriate **clutter** (trees in forest, scree on mountains, ripples on water,
-...). POI interiors and roads layer on top in later phases.
+...). Roads, bridges, POI markers and POI interiors layer on top.
+
+**Roads & bridges.** Roads are not single-tile markers at this scale: a road is a thin meandering
+**bed** drawn from the distance of each detail cell to the line joining adjacent road-tile centres
+(``_draw_roads``), so it reads like the rivers do - the same shape at zoom and local, a fraction of a
+tile wide. Bridges (``_draw_bridges``) are straight decks flanked by walls, drawn from each bridge
+POI's stored span endpoints at whatever real angle the crossing has, and over the water they span.
 
 **Biome blending.** To stop the square biome grid from being obvious at the detail scales, each detail
 cell does not simply inherit its tile's biome; instead it looks up the biome at its **world position
@@ -26,10 +32,19 @@ from ..config.model import Config
 from ..util import noise, rng
 from ..world.interiors import INTERIOR_BUILDERS, ZOOM_VISIBLE, build_interior, footprint_origin, sample_rect
 from ..world.overlay import Overlay
-from ..world.tile import INTERIOR_COLOR_BASE, WATER_BIOMES, Biome, Cell, WaterType
+from ..world.tile import (
+    COLOR_BRIDGE_DECK,
+    COLOR_BRIDGE_WALL,
+    COLOR_ROAD,
+    INTERIOR_COLOR_BASE,
+    WATER_BIOMES,
+    Biome,
+    Cell,
+    WaterType,
+)
 from ..world.world import World
 from .glyphs import interior_glyph_table
-from .state import SCALE_ZOOM, ViewState
+from .state import SCALE_LOCAL, SCALE_ZOOM, ViewState
 
 # Per-biome clutter: (list of glyphs, base probability a given detail cell becomes clutter).
 _CLUTTER = {
@@ -211,6 +226,200 @@ def _water_blend(world: World, wfx: np.ndarray, wfy: np.ndarray, threshold: floa
     return cov >= threshold, water_biome
 
 
+def _road_warp_field(world: World, config: Config, fx: np.ndarray, fy: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return road-warped ``(wfx, wfy)`` for the detail grid (or ``fx, fy`` if road warp is off).
+
+    Reuses the biome-blend warp samplers at the ``render.road_warp`` magnitude, so the road bed wobbles
+    organically and - being a pure function of world position + seed - identically across the zoom and
+    local scales (the same consistency rivers have).
+    """
+    warp = float(config.get("render.road_warp"))
+    if warp <= 0:
+        return fx, fy
+    scale = max(1e-6, float(config.get("render.blend_scale")))
+    backend = config.get("terrain.noise_backend")
+    nx = noise.get_sampler(backend, rng.derive_int(world.seed, "biomeblend.x"))(fx / scale, fy / scale)
+    ny = noise.get_sampler(backend, rng.derive_int(world.seed, "biomeblend.y"))(fx / scale, fy / scale)
+    return fx + warp * nx, fy + warp * ny
+
+
+def _draw_roads(
+    world: World,
+    config: Config,
+    vs: ViewState,
+    cells: List[List[Tuple[str, int]]],
+    water: np.ndarray,
+    inworld: np.ndarray,
+    cl: np.ndarray,
+    gl: np.ndarray,
+    rows: int,
+    cols: int,
+    cam_x: int,
+    cam_y: int,
+    tiles_w: int,
+    tiles_h: int,
+    cell_w: int,
+    cell_h: int,
+    wfx: np.ndarray,
+    wfy: np.ndarray,
+) -> None:
+    """Draw the road network as a thin meandering bed onto ``cells`` in place.
+
+    A detail cell is road when its (road-warped) world position lies within ``road_half_width`` tiles of
+    the straight line joining two 8-adjacent land-road tile centres. That distance test is a pure function
+    of world position, so zoom and local are the same shape at different scales (exactly like rivers). The
+    bed is the ``road_glyph`` in the road colour, with small clutter scattered along it (extra fine detail
+    at the local scale). Water cells are never drawn over - bridges (drawn separately) carry the crossing.
+    """
+    half = float(config.get("render.road_half_width"))
+    if half <= 0:
+        return
+    none = int(WaterType.NONE)
+    land_road = (world.road > 0) & (world.water_type == none)
+    h, w = world.height, world.width
+    py0, py1 = max(0, cam_y - 1), min(h, cam_y + tiles_h + 1)
+    px0, px1 = max(0, cam_x - 1), min(w, cam_x + tiles_w + 1)
+    if py1 <= py0 or px1 <= px0:
+        return
+    ys, xs = np.nonzero(land_road[py0:py1, px0:px1])
+    if len(xs) == 0:
+        return
+
+    is_road = np.zeros((rows, cols), dtype=bool)
+
+    def _draw_seg(ax: float, ay: float, bx: float, by: float) -> None:
+        c0 = int(np.floor((min(ax, bx) - half - cam_x) * cell_w - 0.5))
+        c1 = int(np.ceil((max(ax, bx) + half - cam_x) * cell_w - 0.5))
+        r0 = int(np.floor((min(ay, by) - half - cam_y) * cell_h - 0.5))
+        r1 = int(np.ceil((max(ay, by) + half - cam_y) * cell_h - 0.5))
+        c0, c1 = max(0, c0), min(cols - 1, c1)
+        r0, r1 = max(0, r0), min(rows - 1, r1)
+        if c1 < c0 or r1 < r0:
+            return
+        x = wfx[r0 : r1 + 1, c0 : c1 + 1]
+        y = wfy[r0 : r1 + 1, c0 : c1 + 1]
+        dx, dy = bx - ax, by - ay
+        seg_len2 = dx * dx + dy * dy
+        if seg_len2 <= 1e-9:
+            dist = np.hypot(x - ax, y - ay)
+        else:
+            t = np.clip(((x - ax) * dx + (y - ay) * dy) / seg_len2, 0.0, 1.0)
+            dist = np.hypot(x - (ax + t * dx), y - (ay + t * dy))
+        is_road[r0 : r1 + 1, c0 : c1 + 1] |= dist <= half
+
+    neighbours = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1))
+    for yy, xx in zip(ys.tolist(), xs.tolist(), strict=True):
+        tx, ty = px0 + xx, py0 + yy
+        ax, ay = tx + 0.5, ty + 0.5
+        _draw_seg(ax, ay, ax, ay)  # self-disc covers endpoints / isolated tiles
+        for ddx, ddy in neighbours:
+            nx, ny = tx + ddx, ty + ddy
+            if 0 <= nx < w and 0 <= ny < h and land_road[ny, nx]:
+                _draw_seg(ax, ay, nx + 0.5, ny + 0.5)
+
+    # Paint the bed onto the cells, with clutter scattered along it (uniform per-cell hash already in cl/gl).
+    road_glyph = str(config.get("render.road_glyph"))
+    clutter = config.get("render.road_clutter") or {}
+    cl_glyphs = list(clutter.get("glyphs") or [])
+    cl_density = float(clutter.get("density", 0.0))
+    local = vs.scale == SCALE_LOCAL
+    loc = config.get("render.road_clutter_local") or {}
+    loc_glyphs = list(loc.get("glyphs") or [])
+    loc_density = float(loc.get("density", 0.0))
+
+    ir_l = is_road.tolist()
+    water_l = water.tolist()
+    iw_l = inworld.tolist()
+    cl_l = cl.tolist()
+    gl_l = gl.tolist()
+    for r in range(rows):
+        ir = ir_l[r]
+        wr, iw, clr, glr = water_l[r], iw_l[r], cl_l[r], gl_l[r]
+        for c in range(cols):
+            if not ir[c] or wr[c] or not iw[c]:
+                continue
+            glyph = road_glyph
+            if cl_glyphs and clr[c] < cl_density:
+                glyph = cl_glyphs[min(int(glr[c] * len(cl_glyphs)), len(cl_glyphs) - 1)]
+            elif local and loc_glyphs and clr[c] < cl_density + loc_density:
+                glyph = loc_glyphs[min(int(glr[c] * len(loc_glyphs)), len(loc_glyphs) - 1)]
+            cells[r][c] = (glyph, COLOR_ROAD)
+
+
+def _draw_bridges(
+    world: World,
+    config: Config,
+    cells: List[List[Tuple[str, int]]],
+    inworld: np.ndarray,
+    rows: int,
+    cols: int,
+    cam_x: int,
+    cam_y: int,
+    cell_w: int,
+    cell_h: int,
+    fx: np.ndarray,
+    fy: np.ndarray,
+) -> None:
+    """Draw each ``bridge`` POI as a straight deck flanked by walls onto ``cells`` in place.
+
+    The deck is the straight span between the two road pieces the bridge joins (``extra['p0']`` ->
+    ``extra['p1']``), at whatever real angle that line has. Cells within ``road_half_width`` of the span
+    (measured perpendicular, clamped to the span's length so the ends stay flat) are the brown deck; a
+    band just beyond it on either long side is the wall/railing. Unlike roads this is drawn over water -
+    a bridge crosses it - and uses the un-warped grid so the span reads dead straight.
+    """
+    bg = config.get("render.bridge_glyphs") or {}
+    deck_glyph = str(bg.get("deck", ":"))
+    wall_glyph = str(bg.get("wall", "#"))
+    deck_half = max(float(config.get("render.road_half_width")), 0.18)
+    wall_half = deck_half  # railing band width, beyond the deck on each side
+    overhang = float(config.get("render.bridge_overhang"))  # extend the deck past each end onto the road
+
+    for poi in world.pois:
+        if poi.kind != "bridge":
+            continue
+        p0 = poi.extra.get("p0") or [poi.x, poi.y]
+        p1 = poi.extra.get("p1") or [poi.x, poi.y]
+        ax, ay = p0[0] + 0.5, p0[1] + 0.5
+        bx, by = p1[0] + 0.5, p1[1] + 0.5
+        reach = deck_half + wall_half + overhang
+        c0 = int(np.floor((min(ax, bx) - reach - cam_x) * cell_w - 0.5))
+        c1 = int(np.ceil((max(ax, bx) + reach - cam_x) * cell_w - 0.5))
+        r0 = int(np.floor((min(ay, by) - reach - cam_y) * cell_h - 0.5))
+        r1 = int(np.ceil((max(ay, by) + reach - cam_y) * cell_h - 0.5))
+        c0, c1 = max(0, c0), min(cols - 1, c1)
+        r0, r1 = max(0, r0), min(rows - 1, r1)
+        if c1 < c0 or r1 < r0:
+            continue
+        x = fx[r0 : r1 + 1, c0 : c1 + 1]
+        y = fy[r0 : r1 + 1, c0 : c1 + 1]
+        dx, dy = bx - ax, by - ay
+        span = float(np.hypot(dx, dy))
+        if span <= 1e-6:
+            perp = np.hypot(x - ax, y - ay)
+            within = np.ones_like(x, dtype=bool)
+        else:
+            ux, uy = dx / span, dy / span
+            rx, ry = x - ax, y - ay
+            along = rx * ux + ry * uy
+            perp = np.abs(rx * (-uy) + ry * ux)
+            # Extend the span a little past both road pieces so the deck overlaps the road bed (no gap).
+            within = (along >= -overhang) & (along <= span + overhang)
+        deck_mask = within & (perp <= deck_half)
+        wall_mask = within & (perp > deck_half) & (perp <= deck_half + wall_half)
+        iw = inworld[r0 : r1 + 1, c0 : c1 + 1]
+        wall_m = (wall_mask & iw).tolist()
+        deck_m = (deck_mask & iw).tolist()
+        for dr in range(r1 - r0 + 1):
+            wm, dm = wall_m[dr], deck_m[dr]
+            for dc in range(c1 - c0 + 1):
+                if wm[dc]:
+                    cells[r0 + dr][c0 + dc] = (wall_glyph, COLOR_BRIDGE_WALL)
+            for dc in range(c1 - c0 + 1):
+                if dm[dc]:
+                    cells[r0 + dr][c0 + dc] = (deck_glyph, COLOR_BRIDGE_DECK)
+
+
 def _stamp_interiors(
     world: World,
     config: Config,
@@ -383,7 +592,32 @@ def build_detail_frame(
                 out.append((_BASE_GLYPH.get(b, "?"), b))
         cells.append(out)
 
-    # Overlay roads and POI markers on each tile's block centre (markers > roads; POI > biome floor).
+    # Roads render as a thin meandering bed (road-warped); bridges as straight decks over the water they
+    # cross (un-warped). Both sit on top of terrain but below POI markers and interiors.
+    rwfx, rwfy = _road_warp_field(world, config, FX, FY)
+    _draw_roads(
+        world,
+        config,
+        vs,
+        cells,
+        water,
+        inworld,
+        cl,
+        gl,
+        rows,
+        cols,
+        cam_x,
+        cam_y,
+        tiles_w,
+        tiles_h,
+        cell_w,
+        cell_h,
+        rwfx,
+        rwfy,
+    )
+    _draw_bridges(world, config, cells, inworld, rows, cols, cam_x, cam_y, cell_w, cell_h, FX, FY)
+
+    # Overlay POI markers on each tile's block centre (marker > road/bridge bed > biome floor).
     # Keyed on the UNWARPED tile so a marker sits exactly on its POI, not on a blended neighbour.
     markers = config.get("render.markers")
     for trow in range(tiles_h):
@@ -395,13 +629,9 @@ def build_detail_frame(
             tx = cam_x + tcol
             if not (0 <= tx < world.width):
                 continue
-            glyph = None
             pidx = int(world.poi_index[ty, tx])
             if 0 <= pidx < len(world.pois):
                 glyph = markers.get(world.pois[pidx].kind, "?")
-            elif world.road[ty, tx]:
-                glyph = markers.get("road", "+")
-            if glyph is not None:
                 cj = tcol * cell_w + cell_w // 2
                 cells[ci][cj] = (glyph, cells[ci][cj][1])  # keep the cell's biome colour
 

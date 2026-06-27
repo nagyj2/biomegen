@@ -42,8 +42,10 @@ class Biome(IntEnum):
     MOUNTAIN = 13  # bare high-elevation rock
     SNOW = 14  # permanent snow cap
 
+
 class POIType(IntEnum):
     """Available points of interest."""
+
     CITY = 0
     TOWN = 1
     VILLAGE = 2
@@ -52,6 +54,7 @@ class POIType(IntEnum):
     RUIN = 5
     CAMP = 6
     BRIDGE = 7
+
 
 class WaterType(IntEnum):
     """Salt-vs-fresh classification of a water tile (orthogonal to :class:`Biome`)."""
@@ -100,6 +103,19 @@ class Cell(IntEnum):
 # int directly (0.._MAX_BIOME); interior :class:`Cell` colours are encoded as ``INTERIOR_COLOR_BASE +
 # cell_int`` so a single id space can address both without a wider tuple. The palette decodes the id.
 INTERIOR_COLOR_BASE: int = 1000
+
+# Overlay colour ids for surface features drawn over terrain at the detail scales (the road bed and the
+# bridge deck/wall). They live above the interior range so the one id space stays unambiguous. RGB comes
+# from ``render.palette`` (road / bridge / bridge_wall); the palette decodes ids >= this base.
+OVERLAY_COLOR_BASE: int = 2000
+COLOR_ROAD: int = OVERLAY_COLOR_BASE + 0  # road bed
+COLOR_BRIDGE_DECK: int = OVERLAY_COLOR_BASE + 1  # bridge walkway (brown)
+COLOR_BRIDGE_WALL: int = OVERLAY_COLOR_BASE + 2  # bridge railing/wall
+OVERLAY_COLOR_NAMES: dict[int, str] = {
+    COLOR_ROAD: "road",
+    COLOR_BRIDGE_DECK: "bridge",
+    COLOR_BRIDGE_WALL: "bridge_wall",
+}
 
 # Convenient lookup tables for config parsing and HUD display. Names are lower-case so they read
 # naturally both in TOML (e.g. ``biomes = ["grassland", "forest"]``) and in status text.

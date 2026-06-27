@@ -22,11 +22,19 @@ from __future__ import annotations
 import curses
 
 from ..config.model import Config
-from ..world.tile import BIOME_NAME, INTERIOR_COLOR_BASE, Biome, Cell
+from ..world.tile import (
+    BIOME_NAME,
+    INTERIOR_COLOR_BASE,
+    OVERLAY_COLOR_BASE,
+    OVERLAY_COLOR_NAMES,
+    Biome,
+    Cell,
+)
 from ..world.world import World
 
-# RGB approximations of the 8 base ANSI colours, for nearest-colour snapping in 'basic' mode.
-_ANSI8 = {
+# RGB approximations of all 16 ANSI colours (8 base + 8 bright), for nearest-colour snapping in 'basic' mode.
+_ANSI16 = {
+    # Base 8 colours
     curses.COLOR_BLACK: (0, 0, 0),
     curses.COLOR_RED: (205, 0, 0),
     curses.COLOR_GREEN: (0, 205, 0),
@@ -35,6 +43,15 @@ _ANSI8 = {
     curses.COLOR_MAGENTA: (205, 0, 205),
     curses.COLOR_CYAN: (0, 205, 205),
     curses.COLOR_WHITE: (229, 229, 229),
+    # Bright variants (8-15)
+    8: (127, 127, 127),  # Bright Black / Gray
+    9: (255, 0, 0),  # Bright Red
+    10: (0, 255, 0),  # Bright Green
+    11: (255, 255, 0),  # Bright Yellow
+    12: (85, 170, 255),  # Bright Blue
+    13: (255, 0, 255),  # Bright Magenta
+    14: (0, 255, 255),  # Bright Cyan
+    15: (255, 255, 255),  # Bright White
 }
 
 # The six intensity levels used by the xterm 6×6×6 colour cube (indices 16-231).
@@ -63,11 +80,11 @@ def _xterm256_index(r: int, g: int, b: int) -> int:
 
 
 def _nearest_ansi(rgb: tuple[int, int, int]) -> int:
-    """Return the ANSI colour constant closest to ``rgb`` (squared-distance nearest neighbour)."""
+    """Return the ANSI colour constant closest to ``rgb`` (squared-distance nearest neighbour, from all 16)."""
     r, g, b = rgb
     best = curses.COLOR_WHITE
     best_d = None
-    for color, (cr, cg, cb) in _ANSI8.items():
+    for color, (cr, cg, cb) in _ANSI16.items():
         d = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2
         if best_d is None or d < best_d:
             best_d = d
@@ -84,6 +101,7 @@ class Palette:
         self._region_attr: dict[int, int] = {}
         self._biome_attr: dict[int, int] = {}
         self._interior_attr: dict[int, int] = {}  # Cell int -> attr (POI interior colours)
+        self._overlay_attr: dict[int, int] = {}  # overlay colour id -> attr (road / bridge)
         self._ocean_attr = 0
         self._marker_attr = curses.A_BOLD
         self._cursor_attr = curses.A_REVERSE | curses.A_BOLD
@@ -172,6 +190,7 @@ class Palette:
         # Markers/cursor in bright white / reverse.
         self._marker_attr = curses.color_pair(self._alloc_pair_rgb((255, 255, 255))) | curses.A_BOLD
         self._setup_interior_colors(self._alloc_pair_rgb)
+        self._setup_overlay_colors(self._alloc_pair_rgb)
 
     def _setup_256(self, world: World) -> None:
         palette = self.config.get("render.palette")
@@ -183,6 +202,20 @@ class Palette:
             self._region_attr[region.id] = curses.color_pair(self._alloc_pair_256(region.base_color))
         self._marker_attr = curses.color_pair(self._alloc_pair_256((255, 255, 255))) | curses.A_BOLD
         self._setup_interior_colors(self._alloc_pair_256)
+        self._setup_overlay_colors(self._alloc_pair_256)
+
+    def _setup_overlay_colors(self, alloc) -> None:
+        """Allocate a colour pair per overlay colour id (road / bridge deck / bridge wall).
+
+        ``alloc`` is the mode-appropriate pair allocator; the RGB comes from ``render.palette`` under the
+        same names the biome colours use (road, bridge, bridge_wall).
+        """
+        palette = self.config.get("render.palette")
+        for color_id, name in OVERLAY_COLOR_NAMES.items():
+            rgb = palette.get(name)
+            if rgb is None:
+                continue
+            self._overlay_attr[color_id] = curses.color_pair(alloc(tuple(rgb)))
 
     def _setup_interior_colors(self, alloc) -> None:
         """Allocate a colour pair per interior :class:`Cell` from ``render.interior_palette``.
@@ -209,6 +242,7 @@ class Palette:
             self._region_attr[region.id] = curses.color_pair(self._alloc_pair_basic(region.base_color))
         self._marker_attr = curses.A_BOLD
         self._setup_interior_colors(self._alloc_pair_basic)
+        self._setup_overlay_colors(self._alloc_pair_basic)
 
     # ------------------------------------------------------------------ queries
     def tile_attr(self, world: World, x: int, y: int) -> int:
@@ -234,13 +268,22 @@ class Palette:
             return curses.A_NORMAL
         return self._interior_attr.get(int(cell_int), curses.A_NORMAL)
 
+    def overlay_attr(self, color_id: int) -> int:
+        """Attribute for an overlay colour id (road / bridge); falls back to normal if unmapped."""
+        if self.mode == "mono":
+            return curses.A_NORMAL
+        return self._overlay_attr.get(int(color_id), curses.A_NORMAL)
+
     def zoom_attr(self, color_id: int) -> int:
         """Resolve a detail-cell colour id to an attribute.
 
-        Ids below :data:`~biomegen.world.tile.INTERIOR_COLOR_BASE` are biome floor colours; ids at or
-        above it are interior :class:`Cell` colours encoded as ``INTERIOR_COLOR_BASE + cell_int`` (see
+        Ids below :data:`~biomegen.world.tile.INTERIOR_COLOR_BASE` are biome floor colours; ids in the
+        interior range are :class:`Cell` colours (``INTERIOR_COLOR_BASE + cell_int``); ids at or above
+        :data:`~biomegen.world.tile.OVERLAY_COLOR_BASE` are road/bridge overlay colours (see
         :mod:`biomegen.render.zoom_view`). One dispatcher keeps the renderer's per-cell lookup trivial.
         """
+        if color_id >= OVERLAY_COLOR_BASE:
+            return self.overlay_attr(color_id)
         if color_id >= INTERIOR_COLOR_BASE:
             return self.interior_attr(color_id - INTERIOR_COLOR_BASE)
         return self.biome_attr(color_id)

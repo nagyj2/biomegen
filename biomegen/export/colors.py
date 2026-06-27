@@ -18,7 +18,14 @@ from __future__ import annotations
 from typing import Optional, Tuple
 
 from ..config.model import Config
-from ..world.tile import BIOME_NAME, INTERIOR_COLOR_BASE, Biome, Cell
+from ..world.tile import (
+    BIOME_NAME,
+    INTERIOR_COLOR_BASE,
+    OVERLAY_COLOR_BASE,
+    OVERLAY_COLOR_NAMES,
+    Biome,
+    Cell,
+)
 from ..world.world import World
 
 RGB = Tuple[int, int, int]
@@ -64,6 +71,12 @@ class ExportPalette:
             rgb = ipal.get(cell.name.lower())
             if rgb is not None:
                 self._interior[int(cell)] = _as_rgb(rgb)
+        # Overlay colours (road / bridge), keyed by colour id; RGB from render.palette by name.
+        self._overlay: dict[int, RGB] = {}
+        for color_id, name in OVERLAY_COLOR_NAMES.items():
+            rgb = palette.get(name)
+            if rgb is not None:
+                self._overlay[color_id] = _as_rgb(rgb)
 
     # ------------------------------------------------------------------ queries
     def tile_rgb(self, world: World, x: int, y: int) -> RGB:
@@ -85,13 +98,20 @@ class ExportPalette:
         """Interior :class:`Cell` colour, or ``None`` for an undrawn cell (e.g. VOID)."""
         return self._interior.get(int(cell_int))
 
+    def overlay_rgb(self, color_id: int) -> Optional[RGB]:
+        """Overlay (road / bridge) colour for an overlay colour id, or ``None`` if unmapped."""
+        return self._overlay.get(int(color_id))
+
     def zoom_rgb(self, color_id: int) -> Optional[RGB]:
         """Resolve a detail-cell colour id (mirrors ``Palette.zoom_attr``).
 
-        Ids below :data:`~biomegen.world.tile.INTERIOR_COLOR_BASE` are biome floor colours; ids at or
-        above it are interior cells encoded as ``INTERIOR_COLOR_BASE + cell_int``. Returns ``None``
-        only for an interior cell with no palette entry (the caller leaves it transparent).
+        Ids below :data:`~biomegen.world.tile.INTERIOR_COLOR_BASE` are biome floor colours; ids in the
+        interior range are cells encoded as ``INTERIOR_COLOR_BASE + cell_int``; ids at or above
+        :data:`~biomegen.world.tile.OVERLAY_COLOR_BASE` are road/bridge overlay colours. Returns ``None``
+        for a colour with no palette entry (the caller leaves it transparent).
         """
+        if color_id >= OVERLAY_COLOR_BASE:
+            return self.overlay_rgb(color_id)
         if color_id >= INTERIOR_COLOR_BASE:
             return self.interior_rgb(color_id - INTERIOR_COLOR_BASE)
         return self.biome_rgb(color_id)
