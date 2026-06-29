@@ -27,11 +27,13 @@ from .grid import (
     InteriorCtx,
     Rect,
     adjacent_mask,
+    bridge_disconnected_regions,
     building_door,
     carve_path_guarded,
     carve_room,
     ctx_buildable,
     free_floor_cells,
+    place_settlement_bridges,
     rect_in_mask,
     register_interior,
     room_center,
@@ -90,9 +92,17 @@ def build_settlement(ctx: InteriorCtx) -> np.ndarray:
 
     _road_entrance(ctx, grid, buildings, center)
 
+    if buildable is not None and ctx.settlement_bridges:
+        # Force crossings between any disconnected land areas before detecting which road
+        # segments cross water: carve_path_guarded may not have spanned the full gap.
+        bridge_disconnected_regions(grid, buildable, center, ctx.bridge_max_span)
+
     _furnish_settlement(ctx, grid)
     if buildable is not None:
-        grid[~buildable] = int(Cell.VOID)  # clear any street/plaza/wall that strayed onto water
+        if ctx.settlement_bridges:
+            place_settlement_bridges(grid, buildable, ctx.bridge_max_span)
+        keep = (grid == int(Cell.BRIDGE)) | (grid == int(Cell.BRIDGE_WALL))
+        grid[~buildable & ~keep] = int(Cell.VOID)  # clear strayed cells; preserve bridge spans
     return grid
 
 

@@ -64,7 +64,7 @@ STRUCTURAL: frozenset = frozenset({int(Cell.WALL), int(Cell.DOOR), int(Cell.STAI
 # paths - but NOT furniture/clutter (which stays a LOCAL-only detail). Drawing the floor (not just the
 # walls) makes the dungeon read as a solid, filled-in structure rather than an outline with terrain
 # showing through. The LOCAL scale still draws every non-void cell (the full furnished interior).
-ZOOM_VISIBLE: frozenset = STRUCTURAL | frozenset({int(Cell.FLOOR), int(Cell.WATER), int(Cell.PATH)})
+ZOOM_VISIBLE: frozenset = STRUCTURAL | frozenset({int(Cell.FLOOR), int(Cell.WATER), int(Cell.PATH), int(Cell.BRIDGE), int(Cell.BRIDGE_WALL)})
 
 
 @dataclass(frozen=True)
@@ -98,6 +98,9 @@ class InteriorCtx:
     # set, the entry-floor door is punched on the wall facing this side (instead of a random wall) so the
     # interior entrance lines up with the road. Part of the cache key, so the build stays a pure function.
     entrance_side: Tuple[int, int] = (0, 0)
+    # Settlement bridge options (passed through to build_settlement).
+    settlement_bridges: bool = True
+    bridge_max_span: int = 6
 
     @property
     def top_floor(self) -> int:
@@ -754,6 +757,193 @@ def carve_path_guarded(grid: np.ndarray, a: Tuple[int, int], b: Tuple[int, int])
             grid[y, bx] = p
 
 
+# --------------------------------------------------------------------------- settlement bridge helpers
+def place_settlement_bridges(
+    grid: np.ndarray,
+    buildable: np.ndarray,
+    max_span: int,
+) -> None:
+    """Mark PATH segments crossing non-buildable (water) cells as bridge deck and railing.
+
+    Scans every row and column for non-buildable spans flanked by buildable land on both sides.
+    Within each such span any PATH cells become Cell.BRIDGE (deck); adjacent non-buildable VOID
+    cells become Cell.BRIDGE_WALL (railings).
+
+    Each distinct water body (connected component of non-buildable cells) is bridged at most
+    once per axis so the many parallel road-to-center connections don't produce a row of bridges
+    across the same river.  Bridges forced by ``bridge_disconnected_regions`` (placed before this
+    call) are detected first because they appear as PATH in the non-buildable zone; subsequent
+    crossings of the same water body are skipped.
+    """
+    gh, gw = grid.shape
+    path_int = int(Cell.PATH)
+    bridge_int = int(Cell.BRIDGE)
+    bwall_int = int(Cell.BRIDGE_WALL)
+    void_int = int(Cell.VOID)
+
+    # Label every connected component of non-buildable cells; used to deduplicate bridges.
+    water_labeled, _ = ndimage.label(~buildable)
+
+    # Pre-populate from bridges already stamped by bridge_disconnected_regions so organic crossings
+    # of the same water body are skipped (prevents double-bridging at a different row/column).
+    bridge_int = int(Cell.BRIDGE)
+    existing = np.argwhere(grid == bridge_int)
+    if len(existing):
+        already = {int(water_labeled[r, c]) for r, c in existing if water_labeled[r, c] > 0}
+    else:
+        already = set()
+    bridged_h: set = already.copy()  # water component labels already bridged horizontally
+    bridged_v: set = already.copy()  # water component labels already bridged vertically
+
+    def _mark(cells: list, wall_offsets: list) -> None:
+        for r, c in cells:
+            if grid[r, c] == path_int:
+                grid[r, c] = bridge_int
+            for dr, dc in wall_offsets:
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < gh and 0 <= nc < gw and not buildable[nr, nc] and grid[nr, nc] == void_int:
+                    grid[nr, nc] = bwall_int
+
+    # Horizontal crossings (scanning left→right per row).
+    for row in range(gh):
+        col = 0
+        while col < gw:
+            if buildable[row, col]:
+                col += 1
+                continue
+            span_start = col
+            while col < gw and not buildable[row, col]:
+                col += 1
+            span_end = col - 1
+            if span_end - span_start + 1 > max_span:
+                continue
+            if not (span_start > 0 and buildable[row, span_start - 1]):
+                continue
+            if not (span_end < gw - 1 and buildable[row, span_end + 1]):
+                continue
+            # Skip if any water component in this span was already bridged horizontally.
+            span_labels = {int(water_labeled[row, c]) for c in range(span_start, span_end + 1) if water_labeled[row, c] > 0}
+            if span_labels & bridged_h:
+                continue
+            cells = [(row, c) for c in range(span_start, span_end + 1) if grid[row, c] == path_int]
+            if cells:
+                _mark(cells, [(-1, 0), (1, 0)])
+                bridged_h |= span_labels
+
+    # Vertical crossings (scanning top→bottom per column).
+    for col in range(gw):
+        row = 0
+        while row < gh:
+            if buildable[row, col]:
+                row += 1
+                continue
+            span_start = row
+            while row < gh and not buildable[row, col]:
+                row += 1
+            span_end = row - 1
+            if span_end - span_start + 1 > max_span:
+                continue
+            if not (span_start > 0 and buildable[span_start - 1, col]):
+                continue
+            if not (span_end < gh - 1 and buildable[span_end + 1, col]):
+                continue
+            span_labels = {int(water_labeled[r, col]) for r in range(span_start, span_end + 1) if water_labeled[r, col] > 0}
+            if span_labels & bridged_v:
+                continue
+            cells = [(r, col) for r in range(span_start, span_end + 1) if grid[r, col] == path_int]
+            if cells:
+                _mark(cells, [(0, -1), (0, 1)])
+                bridged_v |= span_labels
+
+
+def bridge_disconnected_regions(
+    grid: np.ndarray,
+    buildable: np.ndarray,
+    center: Tuple[int, int],
+    max_span: int,
+) -> None:
+    """Stamp BRIDGE deck and walls at the narrowest gap between each isolated buildable region and the main one.
+
+    When water splits the buildable footprint, ``carve_path_guarded`` may not reach across the full
+    gap (it terminates at the center column/row which can itself be in the water).  This function
+    labels every disconnected land area, finds the shortest straight-line crossing from each secondary
+    area to the main one (the region containing the plaza center), and stamps BRIDGE / BRIDGE_WALL
+    cells directly so the bridge is guaranteed to span land-to-land regardless of which organic roads
+    ``carve_path_guarded`` happened to route through the same water body.  Roads connecting both
+    landings to their respective cluster interiors are carved as well.
+    """
+    labeled, n = ndimage.label(buildable)
+    if n <= 1:
+        return
+
+    cx, cy = center
+    gh, gw = buildable.shape
+
+    if 0 <= cy < gh and 0 <= cx < gw and buildable[cy, cx]:
+        main_label = int(labeled[cy, cx])
+    else:
+        main_label = max(range(1, n + 1), key=lambda i: int(np.sum(labeled == i)))
+
+    void_int = int(Cell.VOID)
+    bridge_int = int(Cell.BRIDGE)
+    bwall_int = int(Cell.BRIDGE_WALL)
+
+    for sec_label in range(1, n + 1):
+        if sec_label == main_label:
+            continue
+
+        best: Optional[Tuple[Tuple[int, int], Tuple[int, int], int]] = None
+
+        for row, col in np.argwhere(labeled == sec_label):
+            row, col = int(row), int(col)
+            for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                # Only scan from cells on the region boundary (adjacent to non-buildable).
+                nr0, nc0 = row + dr, col + dc
+                if not (0 <= nr0 < gh and 0 <= nc0 < gw and not buildable[nr0, nc0]):
+                    continue
+                # Walk through non-buildable cells until we hit the main region.
+                r, c = nr0, nc0
+                gap = 0
+                while 0 <= r < gh and 0 <= c < gw and not buildable[r, c]:
+                    r += dr; c += dc; gap += 1
+                if 0 <= r < gh and 0 <= c < gw and labeled[r, c] == main_label:
+                    if gap <= max_span and (best is None or gap < best[2]):
+                        best = ((row, col), (int(r), int(c)), gap)
+
+        if best is None:
+            continue
+
+        src_rc, dst_rc, _ = best
+        dr = int(np.sign(dst_rc[0] - src_rc[0]))
+        dc = int(np.sign(dst_rc[1] - src_rc[1]))
+
+        # Perpendicular directions for bridge railings (rotate the crossing direction 90°).
+        wdr1, wdc1 = -dc, dr
+        wdr2, wdc2 = dc, -dr
+
+        # Stamp BRIDGE deck across the non-buildable gap; add BRIDGE_WALL railings on both sides.
+        r, c = src_rc[0] + dr, src_rc[1] + dc
+        while (r, c) != dst_rc:
+            if not buildable[r, c]:
+                if grid[r, c] in (void_int, int(Cell.PATH)):
+                    grid[r, c] = bridge_int
+                for wdr, wdc in [(wdr1, wdc1), (wdr2, wdc2)]:
+                    wr, wc = r + wdr, c + wdc
+                    if 0 <= wr < gh and 0 <= wc < gw and not buildable[wr, wc] and grid[wr, wc] == void_int:
+                        grid[wr, wc] = bwall_int
+            r += dr; c += dc
+
+        # Connect the main-side landing to the plaza.
+        carve_path_guarded(grid, (dst_rc[1], dst_rc[0]), center)
+
+        # Connect the secondary-side landing to the local cluster interior so the bridge is
+        # reachable from that cluster's road network.
+        secondary_cells = np.argwhere(labeled == sec_label)
+        sec_cx = int(np.mean(secondary_cells[:, 1]))  # col
+        sec_cy = int(np.mean(secondary_cells[:, 0]))  # row
+        carve_path_guarded(grid, (src_rc[1], src_rc[0]), (sec_cx, sec_cy))
+
+
 # --------------------------------------------------------------------------- public entry + cache
 def build_interior(poi: POI, floor: int, config: Config, world: Optional["World"] = None) -> Optional[np.ndarray]:
     """Return the (immutable, cached) base interior grid for ``poi`` at ``floor`` - or None.
@@ -799,6 +989,8 @@ def build_interior(poi: POI, floor: int, config: Config, world: Optional["World"
         ruin_erosion=float(config.get("interiors.ruin_erosion")),
         land_mask_bytes=land_mask_bytes,
         entrance_side=entrance_side,
+        settlement_bridges=bool(config.get("interiors.settlement_bridges")),
+        bridge_max_span=int(config.get("interiors.bridge_max_span")),
     )
     return _build_base(ctx)
 

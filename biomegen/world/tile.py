@@ -97,6 +97,8 @@ class Cell(IntEnum):
     BUSH = 22
     CARGO = 23  # boat shipments (goods/fish/weapons distinguished in POI metadata)
     RESERVED = 24  # reserved marker slot for future use
+    BRIDGE = 25  # interior bridge deck (settlement bridge over water)
+    BRIDGE_WALL = 26  # interior bridge railing / wall
 
 
 # Detail-view cells carry their colour as an integer "colour id". Biome floor colours use the biome

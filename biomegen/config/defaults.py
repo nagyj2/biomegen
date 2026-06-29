@@ -265,6 +265,12 @@ DEFAULTS: Dict[str, Any] = {
         # bare biome floor (beach/grass via the blend) reads as a little shoreline around the structure -
         # like the biome blend. 0 builds right up to the water's edge. Only affects coastal POIs.
         "coast_margin": 2,
+        # Bridges within settlements: when a stream or lake cuts through a village/town/city footprint,
+        # PATH streets that cross non-buildable (water) ground are turned into small pedestrian bridges.
+        # ``bridge_max_span`` (in interior grid cells) is the maximum crossing width that qualifies;
+        # wider gaps are treated as ocean edges rather than bridgeable streams.
+        "settlement_bridges": True,
+        "bridge_max_span": 30,
         # When a coastal footprint loses land to the water it clips, grow the footprint (keeping the
         # anchor centred) until its dry-land area is back to nominal, capped at this multiple of the
         # nominal footprint area. Growth never overlaps another POI; water is simply carved again. 1.0
@@ -357,6 +363,23 @@ DEFAULTS: Dict[str, Any] = {
         # diagonally-adjacent (corner-touching) water tiles, so rivers/lakes read as connected instead
         # of a checkerboard. Lower = more water bleed.
         "water_blend_threshold": 0.42,
+        # Roads & bridges at the detail (zoom/local) scales. Roads render as a thin meandering BED, not
+        # a full tile: a detail cell is road when it lies within ``road_half_width`` world tiles of the
+        # straight line joining two adjacent road-tile centres. Because that test is a pure function of
+        # world position, zoom and local are the same shape at different scales (exactly like rivers). A
+        # small coherent ``road_warp`` (in tiles) wobbles the bed so it meanders organically rather than
+        # reading as straight segments. ``road_clutter`` scatters small glyphs along the bed at both
+        # detail scales; ``road_clutter_local`` adds extra fine detail only at the close (local) scale.
+        "road_half_width": 0.30,
+        "road_warp": 0.18,
+        "road_glyph": ":",
+        "road_clutter": {"glyphs": [".", ",", "'"], "density": 0.18},
+        "road_clutter_local": {"glyphs": ['"', ".", ";"], "density": 0.10},
+        # Bridges render as a straight deck between the two road pieces they join (at any real angle): a
+        # brown ``deck`` walkway one cell wide flanked by ``wall`` railings on either side. The deck is
+        # extended ``bridge_overhang`` tiles past each end so it overlaps the road bed and leaves no gap.
+        "bridge_glyphs": {"deck": ":", "wall": "#"},
+        "bridge_overhang": 0.6,
         "default_view": "fit",  # "fit" (whole map downsampled) or "onetoone" (1:1 panning)
         "status_height": 12,  # rows reserved below the map for the status/legend panel
         "show_legend": True,
@@ -378,6 +401,10 @@ DEFAULTS: Dict[str, Any] = {
             "swamp": [82, 110, 84],
             "mountain": [134, 128, 122],
             "snow": [244, 246, 250],
+            # Surface overlays drawn at the detail scales (see road/bridge keys below).
+            "road": [122, 102, 70],  # packed-earth road bed
+            "bridge": [150, 96, 50],  # bridge deck (brown walkway)
+            "bridge_wall": [104, 66, 34],  # bridge railing / wall (darker brown)
         },
         # Biome -> single display glyph. ASCII by default for maximum windows-curses compatibility;
         # override with unicode in your own config if your terminal handles it.
@@ -438,6 +465,8 @@ DEFAULTS: Dict[str, Any] = {
             "bush": '"',
             "cargo": "$",
             "void": " ",
+            "bridge": ":",
+            "bridge_wall": "#",
         },
         # Interior Cell -> RGB base colour, used when a detail cell belongs to a POI interior (the
         # single colour authority for interiors, shared with SVG/PNG export later). ``void`` is never

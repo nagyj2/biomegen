@@ -477,7 +477,8 @@ def _stamp_interiors(
         for r, c, cellv in sample_rect(grid, base_row, base_col, fh * cell_h, fw * cell_w, rows, cols):
             if cellv == void:
                 continue  # VOID is transparent: terrain shows around the dungeon's organic outline
-            if guard_water:
+            is_bridge_cell = cellv in (int(Cell.BRIDGE), int(Cell.BRIDGE_WALL))
+            if guard_water and not is_bridge_cell:
                 tx, ty = cam_x + c // cell_w, cam_y + r // cell_h
                 if 0 <= ty < world.height and 0 <= tx < world.width and world.water_type[ty, tx] != dry:
                     continue  # never lay structure over water: the real water/coast shows through
@@ -485,7 +486,13 @@ def _stamp_interiors(
                 # Furniture is suppressed at zoom, but it stands ON a floor - draw that floor, not the
                 # terrain underneath, so rooms read as solid floorplan (no biome clutter leaks).
                 cellv = int(Cell.FLOOR)
-            cells[r][c] = (cell_glyph.get(cellv, "?"), INTERIOR_COLOR_BASE + cellv)
+            if cellv == int(Cell.BRIDGE):
+                color = COLOR_BRIDGE_DECK
+            elif cellv == int(Cell.BRIDGE_WALL):
+                color = COLOR_BRIDGE_WALL
+            else:
+                color = INTERIOR_COLOR_BASE + cellv
+            cells[r][c] = (cell_glyph.get(cellv, "?"), color)
 
 
 def build_detail_frame(
