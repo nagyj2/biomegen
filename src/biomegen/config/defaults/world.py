@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any, Dict
 
 VALUES: Dict[str, Any] = {
-    # Default sized so the whole map fits a typical terminal at 1:1 with room for the status
-    # panel below it (the reference terminal is ~209x58; 44 + status_height(12) <= 58, 192 <= 209).
+    # Width fits a ~209-column terminal at 1:1. Height is taller than a 58-line terminal leaves
+    # room for (58 - status_height), so the "fit" view downsamples vertically.
     "width": 192,
     "height": 75,
     # Sea level on the normalised [0, 1] elevation scale: tiles below this are ocean/water.

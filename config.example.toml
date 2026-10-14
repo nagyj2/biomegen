@@ -9,7 +9,7 @@ seed = 0              # 0 = pick a random seed and print it (so the run is still
 
 [world]
 width = 192           # tiles; default fits a ~209-wide terminal at 1:1
-height = 44           # tiles; default leaves room for the status panel on a 58-line terminal
+height = 75           # tiles; taller than a 58-line terminal, so "fit" view downsamples
 sea_level = 0.40      # normalised elevation below which tiles are ocean/water
 size_mode = "fixed"   # "fixed" (reproducible) or "auto" (fit to current terminal)
 scale_x = 1.0         # global per-axis generation scale (>1 stretches features along X)
@@ -53,7 +53,7 @@ mountain_min = 0.76
 snow_min = 0.88
 
 [regions]
-min_region_size = 12
+min_region_size = 22
 color_jitter = 28
 
 [poi]
@@ -99,7 +99,7 @@ bridges = true                  # place a bridge POI where a road must cross a r
 
 [render]
 zoom_scale = 5                  # ZOOM (mid) scale: detail-cell height per biome tile (aspect-corrected)
-local_rows = 5                  # LOCAL (close) scale: ~this many biome tiles fill the screen height
+local_rows = 4                  # LOCAL (close) scale: ~this many biome tiles fill the screen height
 cell_aspect = 2.0               # widen detail cells so a world tile reads ~square (both detail scales)
 blend_strength = 0.85           # soften biome boundaries at detail scales (0 = crisp grid)
 blend_scale = 2.5               # feature size (tiles) of the boundary-blend warp

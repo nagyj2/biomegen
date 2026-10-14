@@ -11,7 +11,7 @@ VALUES: Dict[str, Any] = {
     "zoom_scale": 5,  # ZOOM scale: detail-cell height per biome tile (width = x cell_aspect)
     # LOCAL scale: the screen shows roughly this many biome tiles vertically, each magnified.
     "local_rows": 4,
-    "cell_aspect": 1.0,
+    "cell_aspect": 2.0,  # detail-cell width / height; terminal cells are ~2:1 tall
     # Biome blending at the detail scales: each detail cell looks up the biome at its world
     # position perturbed by a coherent noise warp, so tile boundaries become irregular/interleaved
     # and the square biome grid is hard to see. The warp is a function of world position only, so

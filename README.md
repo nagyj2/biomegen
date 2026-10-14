@@ -117,7 +117,7 @@ The authoritative defaults and inline documentation are in
 | Key | Default | Description |
 |-----|---------|-------------|
 | `width` | `192` | Map width in tiles |
-| `height` | `44` | Map height in tiles |
+| `height` | `75` | Map height in tiles |
 | `sea_level` | `0.40` | Normalised elevation below which tiles are ocean/water |
 | `size_mode` | `"fixed"` | `"fixed"` (reproducible) or `"auto"` (fit to current terminal) |
 | `scale_x` | `1.0` | Stretch all terrain features along X (> 1 = wider landforms) |
@@ -206,8 +206,8 @@ The authoritative defaults and inline documentation are in
 | Key | Default | Description |
 |-----|---------|-------------|
 | `zoom_scale` | `5` | Zoom detail: cell height (in terminal rows) per biome tile |
-| `local_rows` | `5` | Local detail: biome tiles shown vertically on screen |
-| `cell_aspect` | `1.0` | Widen detail cells so world tiles read ~square |
+| `local_rows` | `4` | Local detail: biome tiles shown vertically on screen |
+| `cell_aspect` | `2.0` | Widen detail cells so world tiles read ~square |
 | `blend_strength` | `0.85` | Biome boundary bleed at detail scales (0 = crisp grid) |
 | `blend_scale` | `2.5` | Feature size (tiles) of the boundary-blend warp |
 | `default_view` | `"fit"` | Starting biome-map view: `"fit"` · `"onetoone"` |
