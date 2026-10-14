@@ -7,9 +7,11 @@ hash salt.
 
 from __future__ import annotations
 
+import ast
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 from biomegen.util import rng
 
@@ -68,3 +70,34 @@ def test_seed_derivation_independent_of_pythonhashseed():
         assert result.returncode == 0, result.stderr
         outputs.append(result.stdout.strip())
     assert len(set(outputs)) == 1, f"seed derivation varied with PYTHONHASHSEED: {outputs}"
+
+
+def _stage_labels_used_in_source() -> set[str]:
+    """Collect the first label of every ``derive*`` call in the package that passes a string literal."""
+    package = Path(rng.__file__).resolve().parents[1]
+    labels: set[str] = set()
+    for path in sorted(package.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("derive", "derive_int", "derive_numpy")
+                and len(node.args) >= 2
+                and isinstance(node.args[1], ast.Constant)
+                and isinstance(node.args[1].value, str)
+            ):
+                labels.add(node.args[1].value)
+    return labels
+
+
+def test_every_stage_label_in_source_is_registered():
+    # A derive call whose first label is not in LABELS could collide with another stage's stream.
+    used = _stage_labels_used_in_source()
+    assert used, "the scan found no derive calls; the collector is broken"
+    rng.assert_known_labels(used)
+
+
+def test_redesigned_stage_labels_are_registered():
+    # Each stage of the redesigned pipeline (plan 4.1) has its label reserved, incl. history.
+    stages = {"terrain", "climate", "biomes", "geography", "settlements", "realms", "diplomacy", "history", "pois"}
+    assert stages <= rng.LABELS
