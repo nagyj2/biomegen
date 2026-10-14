@@ -1,0 +1,225 @@
+"""Tests for the explorer: frame composition and the whole loop, run with a scripted key source."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from types import TracebackType
+from typing import Optional
+
+import numpy as np
+
+from biomegen.config import load_config
+from biomegen.config.model import Config
+from biomegen.explorer.app import compose_frame, run
+from biomegen.explorer.state import ViewState
+from biomegen.render.detail import SCALE_ZOOM
+from biomegen.world.entities import POI
+from biomegen.world.overlay import Overlay
+from biomegen.world.tile import Biome
+from tests.explorer.replay import RecordingOut
+from tests.render.conftest import make_world
+
+SIZE = (100, 40)
+
+
+class ScriptedKeys:
+    """A key source that plays back a fixed list of tokens, then presses q for ever."""
+
+    def __init__(self, *tokens: str) -> None:
+        self._tokens = list(tokens)
+
+    def __enter__(self) -> "ScriptedKeys":
+        return self
+
+    def __exit__(
+        self, kind: Optional[type[BaseException]], value: Optional[BaseException], trace: Optional[TracebackType]
+    ) -> None:
+        return None
+
+    def read_key(self) -> str:
+        return self._tokens.pop(0) if self._tokens else "q"
+
+
+def _world(tower: bool = False):
+    world = make_world(40, 20, Biome.GRASS)
+    world.island_name = "Testland"
+    if tower:
+        world.pois.append(POI(kind="tower", x=20, y=10, interior_seed=3, footprint=(3, 3), floor_count=2))
+        world.poi_index[10, 20] = 0
+    return world
+
+
+def _run(world, config: Config, *tokens: str, color: str = "none", get_size=None) -> RecordingOut:
+    """Run the loop on a scripted keyboard; the result holds every frame as screen text (``.frames``)."""
+    out = RecordingOut(SIZE[1], SIZE[0])
+    run(world, config, color, reader=ScriptedKeys(*tokens), out=out, get_size=get_size or (lambda: SIZE))
+    return out
+
+
+def _screen(out: RecordingOut) -> str:
+    """The last frame drawn, as text."""
+    return "\n".join(out.frames[-1])
+
+
+def _shown(out: RecordingOut, text: str) -> bool:
+    """Whether any frame drawn had ``text`` on screen."""
+    return any(text in "\n".join(frame) for frame in out.frames)
+
+
+def _frame(world, config: Config, state: ViewState | None = None, **kwargs):
+    return compose_frame(world, config, state or ViewState(cx=20, cy=10), Overlay(), kwargs.pop("size", SIZE), **kwargs)
+
+
+def test_frame_is_the_size_of_the_terminal(config: Config) -> None:
+    screen = _frame(_world(), config).screen
+    assert (screen.cols, screen.rows) == SIZE
+
+
+def test_the_panel_sits_under_the_map(config: Config) -> None:
+    # The island line is the second row of the 12-row panel at the bottom of a 40-row screen.
+    screen = _frame(_world(), config).screen
+    assert "Testland" in "".join(screen.glyph[40 - 12 + 1])
+
+
+def test_cursor_cell_is_drawn_in_reverse_video(config: Config) -> None:
+    frame = _frame(_world(), config)
+    assert (frame.screen.bg[10, 20] == frame.map_grid.fg[10, 20]).all() and (
+        frame.screen.fg[10, 20] == frame.map_grid.bg[10, 20]
+    ).all()
+
+
+def test_the_exported_map_has_no_cursor(config: Config) -> None:
+    # map_grid is what `e` writes: the cursor highlight must not be in it.
+    frame = _frame(_world(), config)
+    assert not (frame.map_grid.bg[10, 20] == frame.map_grid.fg[10, 20]).all()
+
+
+def test_zoom_highlights_the_whole_tile_block(config: Config) -> None:
+    # A 10 x 5 zoom block is reversed: 50 cells differ from the map as drawn.
+    state = ViewState(cx=20, cy=10, scale=SCALE_ZOOM, recenter=True)
+    frame = _frame(_world(), config, state)
+    rows = frame.map_grid.rows
+    differs = (frame.screen.bg[:rows, : frame.map_grid.cols] != frame.map_grid.bg).any(axis=-1)
+    assert int(differs.sum()) == 50
+
+
+def test_zoom_centres_the_camera_on_the_cursor(config: Config) -> None:
+    state = ViewState(cx=20, cy=10, scale=SCALE_ZOOM, recenter=True)
+    _frame(_world(), config, state)
+    assert (state.cam_x, state.recenter) == (15, False)
+
+
+def test_one_to_one_map_pans_with_the_cursor(config: Config) -> None:
+    state = ViewState(cx=39, cy=10, mode="onetoone", recenter=False)
+    _frame(_world(), config, state, size=(30, 20))
+    assert state.cam_x > 0
+
+
+def test_tiny_terminal_shows_a_notice(config: Config) -> None:
+    assert "too small" in "".join(_frame(_world(), config, size=(60, 3)).screen.glyph[0])
+
+
+def test_loop_enters_and_leaves_the_alternate_screen(config: Config) -> None:
+    out = _run(_world(), config).getvalue()
+    assert out.startswith("\x1b[?1049h") and out.rstrip().endswith("\x1b[?1049l")
+
+
+def test_first_frame_shows_the_island_and_seed(config: Config) -> None:
+    screen = _screen(_run(_world(), config))
+    assert "Testland" in screen and "seed 1" in screen
+
+
+def test_zoom_key_changes_the_panel(config: Config) -> None:
+    assert "view ZOOM" in _screen(_run(_world(), config, " "))
+
+
+def test_local_key_goes_in_a_scale(config: Config) -> None:
+    assert "view LOCAL" in _screen(_run(_world(), config, "z", "z"))
+
+
+def test_view_key_cycles_to_the_next_view(config: Config) -> None:
+    assert "view: elevation" in _screen(_run(_world(), config, "v"))
+
+
+def test_fit_key_toggles_to_one_to_one(config: Config) -> None:
+    assert "view 1:1" in _screen(_run(_world(), config, "f"))
+
+
+def test_arrow_keys_move_the_cursor(config: Config) -> None:
+    # The cursor starts wherever initial_cursor puts it; one step right adds one to its column.
+    out = _run(_world(), config, "right")
+    columns = [
+        int(re.search(r"cursor \((\d+),", "\n".join(frame)).group(1)) for frame in (out.frames[1], out.frames[-1])
+    ]
+    assert columns[1] == columns[0] + 1
+
+
+def test_help_opens_and_any_key_closes_it(config: Config) -> None:
+    out = _run(_world(), config, "?", "x")
+    assert (_shown(out, "step out"), "step out" in _screen(out)) == (True, False)
+
+
+def test_help_key_does_not_act_while_the_help_is_open(config: Config) -> None:
+    # The key that closes the help is swallowed: space must not also zoom.
+    assert "view ZOOM" not in _screen(_run(_world(), config, "?", " "))
+
+
+def test_floor_keys_change_floor_on_a_structure(config: Config) -> None:
+    assert "floor 1" in _screen(_run(_world(tower=True), config, "<"))
+
+
+def test_end_of_input_quits(config: Config) -> None:
+    out = _run(_world(), config, "eof").getvalue()
+    assert out.rstrip().endswith("\x1b[?1049l")
+
+
+def test_resize_repaints_at_the_new_size(config: Config) -> None:
+    sizes = iter([(100, 40), (80, 24), (80, 24)])
+    out = _run(_world(), config, "resize", get_size=lambda: next(sizes)).getvalue()
+    assert out.count("\x1b[2J") >= 2
+
+
+def test_view_export_writes_the_screen_map(config: Config, tmp_path: Path) -> None:
+    config.data["export"].update({"dir": str(tmp_path / "out"), "png": False})
+    _run(_world(), config, "e")
+    assert [p.suffix for p in (tmp_path / "out").iterdir()] == [".svg"]
+
+
+def test_world_export_names_the_world(config: Config, tmp_path: Path) -> None:
+    config.data["export"].update({"dir": str(tmp_path / "out"), "png": False})
+    _run(_world(), config, "E")
+    assert [p.name for p in (tmp_path / "out").iterdir()] == ["Testland_1_world.svg"]
+
+
+def test_export_failure_is_reported_not_raised(config: Config, tmp_path: Path) -> None:
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    config.data["export"].update({"dir": str(blocker / "sub"), "png": False})
+    assert "export failed" in _screen(_run(_world(), config, "e"))
+
+
+def test_loop_restores_the_terminal_after_an_error(config: Config) -> None:
+    class Exploding(ScriptedKeys):
+        def read_key(self) -> str:
+            raise RuntimeError("boom")
+
+    out = RecordingOut(SIZE[1], SIZE[0])
+    try:
+        run(_world(), config, "none", reader=Exploding(), out=out, get_size=lambda: SIZE)
+    except RuntimeError:
+        pass
+    assert out.getvalue().rstrip().endswith("\x1b[?1049l")
+
+
+def test_composed_frames_are_repeatable(config: Config) -> None:
+    first = _frame(_world(), config).screen
+    second = _frame(_world(), config).screen
+    assert (first.glyph == second.glyph).all() and np.array_equal(first.bg, second.bg)
+
+
+def test_default_config_is_untouched_by_the_loop() -> None:
+    config = load_config(None)
+    before = repr(config.data)
+    _run(_world(), config, " ", "v", "f")
+    assert repr(config.data) == before

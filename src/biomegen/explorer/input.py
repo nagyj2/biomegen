@@ -91,7 +91,7 @@ def resolve_action(token: str, config: Config) -> Action:
     if token.startswith("shift-") and token[6:] in _STEPS:
         dx, dy = _STEPS[token[6:]]
         return ("move", dx * step, dy * step)
-    if token == "esc" or token == keys.get("quit", "q"):
+    if token in ("esc", "eof") or token == keys.get("quit", "q"):
         return ("quit",)
     lower = token.lower()
     if len(token) == 1 and lower in _LETTER_STEPS and token not in _bound_keys(keys):

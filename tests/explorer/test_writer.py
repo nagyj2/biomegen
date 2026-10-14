@@ -10,8 +10,7 @@ import pytest
 
 from biomegen.explorer.writer import DiffWriter
 from biomegen.render.grid import CellGrid
-
-_ESCAPE = re.compile(r"\x1b\[([0-9;?]*)([A-Za-z])")
+from tests.explorer.replay import replay as _replay
 
 
 def _grid(rows: int = 3, cols: int = 6) -> CellGrid:
@@ -26,39 +25,6 @@ def _draw(writer: DiffWriter, out: io.StringIO, grid: CellGrid) -> str:
     out.truncate()
     writer.draw(grid)
     return out.getvalue()
-
-
-def _replay(output: str, rows: int, cols: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Interpret cursor moves, truecolor styles and text; return the glyph, fg and bg of each cell."""
-    glyph = np.full((rows, cols), " ", dtype="U1")
-    fg = np.zeros((rows, cols, 3), dtype=np.uint8)
-    bg = np.zeros((rows, cols, 3), dtype=np.uint8)
-    row = col = 0
-    cur_fg = cur_bg = (0, 0, 0)
-    position = 0
-    for match in _ESCAPE.finditer(output):
-        for char in output[position : match.start()]:
-            glyph[row, col], fg[row, col], bg[row, col] = char, cur_fg, cur_bg
-            col += 1
-        position = match.end()
-        params, final = match.group(1), match.group(2)
-        if final == "H":
-            row, col = (int(v) - 1 for v in params.split(";"))
-        elif final == "m":
-            numbers = [int(v) for v in params.split(";") if v]
-            if not numbers or numbers == [0]:
-                cur_fg = cur_bg = (0, 0, 0)
-            index = 0
-            while index < len(numbers):
-                if numbers[index] in (38, 48) and numbers[index + 1] == 2:
-                    color = tuple(numbers[index + 2 : index + 5])
-                    cur_fg, cur_bg = (color, cur_bg) if numbers[index] == 38 else (cur_fg, color)
-                    index += 5
-                else:
-                    if numbers[index] == 0:
-                        cur_fg = cur_bg = (0, 0, 0)
-                    index += 1
-    return glyph, fg, bg
 
 
 def test_first_draw_writes_every_cell() -> None:

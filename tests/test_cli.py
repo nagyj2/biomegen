@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from biomegen import pipeline
 from biomegen.config import load_config
 
@@ -170,3 +172,85 @@ def test_malformed_tile_is_an_error(capsys):
     with pytest.raises(SystemExit):
         cli.main(["--scale", "zoom", "--at", "five"])
     assert "column,row" in capsys.readouterr().err
+
+
+def test_explorer_needs_a_terminal(capsys):
+    # With output captured (not a TTY) the explorer refuses and points at the scripted options.
+    import pytest
+
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--seed", "3", "--width", "64", "--height", "32"])
+    assert "needs a terminal" in capsys.readouterr().err
+
+
+def test_removed_preview_flags_are_rejected(capsys):
+    import pytest
+
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--preview-zoom"])
+    assert "unrecognized arguments" in capsys.readouterr().err
+
+
+def test_removed_export_flag_is_rejected(capsys):
+    import pytest
+
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--export", "world"])
+    assert "unrecognized arguments" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX pseudo-terminal")
+def test_explorer_runs_in_a_pseudo_terminal(tmp_path):
+    # The real thing end to end: start the app on a pty, wait for its first frame, press q, expect a clean exit.
+    import fcntl
+    import os
+    import pty
+    import select
+    import struct
+    import termios
+    import time
+
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 100, 0, 0))
+    env = {**os.environ, "COLORTERM": "truecolor", "TERM": "xterm-256color"}
+    env.pop("NO_COLOR", None)
+    process = subprocess.Popen(
+        [sys.executable, "-m", "biomegen", "--seed", "3", "--width", "64", "--height", "32"],
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        env=env,
+        cwd=tmp_path,
+    )
+    os.close(slave)
+    seen = b""
+    sent_quit = False
+    deadline = time.monotonic() + 60
+    try:
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.5)
+            if ready:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                seen += chunk
+            if not sent_quit and b"seed 3" in seen and b"\x1b[?1049h" in seen:
+                os.write(master, b"q")
+                sent_quit = True
+            if process.poll() is not None and not ready:
+                break
+        code = process.wait(timeout=10)
+    finally:
+        if process.poll() is None:
+            process.kill()
+        os.close(master)
+    assert (code, sent_quit, b"\x1b[?1049l" in seen) == (0, True, True)

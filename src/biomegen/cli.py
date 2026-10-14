@@ -11,10 +11,9 @@ Run the CLI application with::
 This launcher wires together the three top-level concerns and nothing else:
     1. parse CLI arguments,
     2. load + override configuration and resolve the effective seed,
-    3. hand off to either the curses UI (interactive) or a headless stats dump.
+    3. hand off to the interactive explorer, a static map, or a headless stats dump.
 
-The heavy lifting lives in the importable :mod:`biomegen` package. (Phase 0 scaffolding: the
-generation pipeline and curses UI are stubbed and filled in by later phases.)
+The heavy lifting lives in the importable :mod:`biomegen` package.
 """
 
 from __future__ import annotations
@@ -77,23 +76,6 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Generate the world and print summary statistics without launching the UI.",
     )
-    parser.add_argument(
-        "--preview-zoom", action="store_true", help="Print a no-colour ASCII rendering of the mid 'zoom' detail view."
-    )
-    parser.add_argument(
-        "--preview-local",
-        action="store_true",
-        help="Print a no-colour ASCII rendering of the close 'local' detail view.",
-    )
-    parser.add_argument(
-        "--export",
-        choices=("world", "view"),
-        default=None,
-        help=(
-            "Export an image to export.dir without launching the UI: 'world' = the whole island at "
-            "full resolution, 'view' = the biome map. Writes SVG always, PNG if Pillow is installed."
-        ),
-    )
     parser.add_argument("--style", default=None, help="Landmass style (a tables.styles row, or 'seed' to draw one).")
     parser.add_argument(
         "--size-km", type=_parse_size_km, default=None, metavar="WxH", help="Map extent in km, east-west x north-south."
@@ -129,7 +111,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default="auto",
         help="Colour mode of static output (auto detects the terminal).",
     )
-    parser.add_argument("--ascii", action="store_true", help="Use only 7-bit ASCII glyphs in static output.")
+    parser.add_argument("--ascii", action="store_true", help="Use only 7-bit ASCII glyphs.")
     parser.add_argument("--no-legend", action="store_true", help="Print only the map, without the legend.")
     parser.add_argument(
         "--save",
@@ -324,33 +306,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _run_static(world, config, args)
         return 0
 
-    if args.preview_zoom or args.preview_local:
-        from biomegen.render import preview
+    if not sys.stdout.isatty() or not sys.stdin.isatty():
+        parser.error("the explorer needs a terminal; use --view, --scale, --save or --headless for scripted output")
 
-        if args.preview_zoom:
-            print(preview.render_zoom_ascii(world, config))
-        if args.preview_local:
-            print(preview.render_local_ascii(world, config))
-        return 0
+    from biomegen.explorer import app
 
-    if args.export is not None:
-        from biomegen import export
-        from biomegen.render.state import ViewState
-
-        if args.export == "world":
-            paths = export.export_world(world, config)
-        else:
-            vs = ViewState(cx=world.width // 2, cy=world.height // 2, mode="fit")
-            paths = export.export_view(world, config, vs)
-        for path in paths:
-            print(f"wrote {path}")
-        if not any(p.endswith(".png") for p in paths):
-            print("(install Pillow to also export PNG)")
-        return 0
-
-    from biomegen.render import app
-
-    app.run(world, config)
+    mode = _detect_color() if args.color == "auto" else args.color
+    app.run(world, config, mode, args.ascii)
     return 0
 
 

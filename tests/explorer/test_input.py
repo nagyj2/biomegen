@@ -57,6 +57,7 @@ def test_tokenize_splits_keys_and_names_escape_sequences(text: str, tokens: list
         ("E", ("export", "world")),
         ("q", ("quit",)),
         ("esc", ("quit",)),
+        ("eof", ("quit",)),
         ("resize", ("resize",)),
         ("x", ("none",)),
         ("r", ("none",)),

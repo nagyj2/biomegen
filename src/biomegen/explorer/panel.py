@@ -20,7 +20,7 @@ from .state import MODE_ONE_TO_ONE, ViewState
 _LEGEND_INDENT = 9
 
 
-def _color(config: Config, key: str) -> RGB:
+def panel_color(config: Config, key: str) -> RGB:
     red, green, blue = config.get(f"render.panel.{key}")
     return int(red), int(green), int(blue)
 
@@ -119,8 +119,8 @@ def build_panel(
     ascii_only: bool = False,
 ) -> CellGrid:
     """Return the info panel as a ``height x width`` grid for the current cursor, view and what is on screen."""
-    canvas = _Canvas(height, width, _color(config, "fg"), _color(config, "bg"))
-    dim, head = _color(config, "dim"), _color(config, "head")
+    canvas = _Canvas(height, width, panel_color(config, "fg"), panel_color(config, "bg"))
+    dim, head = panel_color(config, "dim"), panel_color(config, "head")
     canvas.text(0, 0, "-" * width, dim)
     island = world.island_name or "(unnamed isle)"
     canvas.text(
@@ -181,7 +181,7 @@ def draw_help(screen: CellGrid, config: Config) -> None:
     box_w = min(screen.cols, max(len(line) for line in lines) + 4)
     box_h = min(screen.rows, len(lines) + 2)
     top, left = (screen.rows - box_h) // 2, (screen.cols - box_w) // 2
-    fg, bg = _color(config, "help_fg"), _color(config, "help_bg")
+    fg, bg = panel_color(config, "help_fg"), panel_color(config, "help_bg")
     screen.fg[top : top + box_h, left : left + box_w] = fg
     screen.bg[top : top + box_h, left : left + box_w] = bg
     screen.glyph[top : top + box_h, left : left + box_w] = " "
@@ -191,4 +191,4 @@ def draw_help(screen: CellGrid, config: Config) -> None:
         span = slice(left + 2, left + 2 + len(text))
         screen.glyph[top + 1 + offset, span] = list(text)
     screen.bold[top + 1, left + 2 : left + 2 + len("Keys")] = True
-    screen.fg[top + 1, left + 2 : left + 6] = _color(config, "head")
+    screen.fg[top + 1, left + 2 : left + 6] = panel_color(config, "head")
