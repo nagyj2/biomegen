@@ -61,10 +61,9 @@ def test_tile_rng_keyed_on_coordinates():
 def test_seed_derivation_independent_of_pythonhashseed():
     """A string seed must derive the same int regardless of PYTHONHASHSEED (proves no hash() use)."""
     code = "from biomegen.util import rng; print(rng.normalize_seed('my island'))"
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     outputs = []
     for hashseed in ("0", "1", "12345"):
-        env = dict(os.environ, PYTHONHASHSEED=hashseed, PYTHONPATH=repo_root)
+        env = dict(os.environ, PYTHONHASHSEED=hashseed)
         result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
         assert result.returncode == 0, result.stderr
         outputs.append(result.stdout.strip())

@@ -38,10 +38,9 @@ def test_generation_independent_of_pythonhashseed() -> None:
         "from biomegen import pipeline;"
         "print(pipeline.generate(load_config(None), 12345).fingerprint())"
     )
-    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     fingerprints = []
     for hashseed in ("0", "1", "98765"):
-        env = dict(os.environ, PYTHONHASHSEED=hashseed, PYTHONPATH=repo_root)
+        env = dict(os.environ, PYTHONHASHSEED=hashseed)
         result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
         assert result.returncode == 0, result.stderr
         fingerprints.append(result.stdout.strip())
