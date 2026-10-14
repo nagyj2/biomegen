@@ -349,7 +349,7 @@ DEFAULTS: Dict[str, Any] = {
         # widened by cell_aspect so a biome tile reads ~square (terminal cells are taller than wide).
         "zoom_scale": 5,  # ZOOM scale: detail-cell height per biome tile (width = x cell_aspect)
         # LOCAL scale: the screen shows roughly this many biome tiles vertically, each magnified.
-        "local_rows": 5,
+        "local_rows": 4,
         "cell_aspect": 1.0,
         # Biome blending at the detail scales: each detail cell looks up the biome at its world
         # position perturbed by a coherent noise warp, so tile boundaries become irregular/interleaved
