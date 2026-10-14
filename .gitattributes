@@ -6,6 +6,9 @@
 *.pyx text eol=lf
 *.pyi text eol=lf
 
+# Shell scripts
+*.sh text eol=lf
+
 # Config and data files
 *.toml text eol=lf
 *.yaml text eol=lf
