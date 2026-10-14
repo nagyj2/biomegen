@@ -28,11 +28,43 @@ def _root(
     order: int,
     min_len: int,
     max_len: int,
+    syllable_range: Optional[Tuple[int, int]] = None,
 ) -> str:
     gen = (generators_cfg or {}).get(category, "syllable")
     if gen == "markov":
         return markov.model_for(culture_name, order).generate(rng_, min_len, max_len)
-    return syllables.assemble(rng_, CULTURES[culture_name], _SYLL.get(category, (2, 3)), min_len, max_len)
+    counts = syllable_range or _SYLL.get(category, (2, 3))
+    return syllables.assemble(rng_, CULTURES[culture_name], counts, min_len, max_len)
+
+
+def _lengths(naming_cfg: Optional[Config]) -> Tuple[int, int, int]:
+    """Return ``(markov_order, min_len, max_len)`` from the naming config (with the documented defaults)."""
+    order = int(naming_cfg.get("markov_order", 2)) if naming_cfg else 2
+    min_len = int(naming_cfg.get("min_name_len", 4)) if naming_cfg else 4
+    max_len = int(naming_cfg.get("max_name_len", 12)) if naming_cfg else 12
+    return order, min(min_len, max_len), max_len
+
+
+def name_feature(
+    seed: int,
+    kind: str,
+    key: Tuple,
+    culture_name: str,
+    row: Dict,
+    generators_cfg: Optional[Dict[str, str]],
+    naming_cfg: Optional[Config],
+) -> str:
+    """Return a name for a geographic feature from its ``tables.geo_names`` row (forms + syllables).
+
+    ``key`` stably identifies the feature (its anchor cell), so the name does not depend on the order
+    features were found in.
+    """
+    r = rng.derive(seed, "naming", "feature", kind, *key)
+    profile = CULTURES.get(culture_name, CULTURES["common"])
+    order, min_len, max_len = _lengths(naming_cfg)
+    low, high = (int(v) for v in row["syllables"])
+    root = _root(r, profile.name, kind, generators_cfg, order, min_len, max_len, (low, high))
+    return str(r.choice(list(row["forms"]))).format(n=root)
 
 
 def name_entity(
@@ -56,11 +88,7 @@ def name_entity(
     """
     r = rng.derive(seed, "naming", category, *key)
     profile = CULTURES.get(culture_name, CULTURES["common"])
-    order = int(naming_cfg.get("markov_order", 2)) if naming_cfg else 2
-    min_len = int(naming_cfg.get("min_name_len", 4)) if naming_cfg else 4
-    max_len = int(naming_cfg.get("max_name_len", 12)) if naming_cfg else 12
-    if min_len > max_len:
-        min_len = max_len
+    order, min_len, max_len = _lengths(naming_cfg)
     root = _root(r, profile.name, category, generators_cfg, order, min_len, max_len)
 
     if category == "island":

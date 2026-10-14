@@ -1,0 +1,27 @@
+# Geographic feature name table, keyed by feature kind. Loaded into the config tree as
+# `tables.geo_names`; override with e.g. `[tables.geo_names.sea]` + `forms = ["Sea of {n}"]`.
+#
+# The naming stage names each landmass, range, peak and sea: it builds a root word in the culture of
+# the region at the feature's anchor cell, then picks one of `forms` and puts the root in place of {n}.
+# Lakes and rivers keep the names the naming stage already gives the Lake / River entities.
+# Forms follow the reference generator (docs/reference/worldgen.py `_regions`).
+#
+# Keys:
+#   forms      name patterns, each containing {n} exactly once
+#   syllables  [min, max] syllables in the root word
+
+[geo_names.landmass]
+forms = ["{n}"]
+syllables = [2, 3]
+
+[geo_names.range]
+forms = ["The {n} Mountains", "The {n} Peaks", "Spine of {n}", "The {n} Teeth", "{n} Heights"]
+syllables = [1, 2]
+
+[geo_names.peak]
+forms = ["Mount {n}"]
+syllables = [1, 2]
+
+[geo_names.sea]
+forms = ["Sea of {n}", "The {n} Ocean", "The {n} Deep", "{n} Sea", "Gulf of {n}"]
+syllables = [1, 2]

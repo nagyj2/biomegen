@@ -30,7 +30,7 @@ def _new_biome_row() -> dict:
 
 def test_shipped_tables_load_and_validate() -> None:
     # The packaged data files give their tables and pass their own schema.
-    assert sorted(load_config(None).get("tables")) == ["biomes", "relief", "styles", "tiers"]
+    assert sorted(load_config(None).get("tables")) == ["biomes", "geo_names", "relief", "styles", "tiers"]
 
 
 def test_relief_table_covers_every_relief_member() -> None:
@@ -139,8 +139,8 @@ def test_duplicate_tier_rank_is_rejected() -> None:
 
 
 def test_loader_combines_the_shipped_files() -> None:
-    # biomes.toml supplies biomes and relief; tiers.toml tiers; terrain.toml styles.
-    assert sorted(_load(DATA_DIR, DATA_FILES)) == ["biomes", "relief", "styles", "tiers"]
+    # biomes.toml supplies biomes and relief; tiers.toml tiers; terrain.toml styles; geography.toml geo_names.
+    assert sorted(_load(DATA_DIR, DATA_FILES)) == ["biomes", "geo_names", "relief", "styles", "tiers"]
 
 
 def test_loader_rejects_a_table_defined_twice(tmp_path: Path) -> None:

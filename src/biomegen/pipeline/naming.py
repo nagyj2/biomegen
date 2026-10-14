@@ -1,10 +1,11 @@
 """Stage 10: naming + region lore.
 
-Runs last, once regions, POIs, rivers and lakes all exist. It assigns each region a culture
-(biome-biased, seeded on the region id), then names the island, every region, POI, river and lake
-using that culture, and writes balanced lore for each region from its real contents. Names are keyed
-on stable entity identity, so the result is invariant to processing order. Names live on the entity
-objects (not the numpy arrays), so this stage does not change ``World.fingerprint()``.
+Runs last, once regions, POIs, rivers, lakes and geographic features all exist. It assigns each region
+a culture (biome-biased, seeded on the region id), then names the island, every region, POI, river,
+lake and geographic feature using that culture, and writes balanced lore for each region from its real
+contents. Names are keyed on stable entity identity, so the result is invariant to processing order.
+Names live on the entity objects (not the numpy arrays), so this stage does not change
+``World.fingerprint()``.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ def run(world: World, config: Config, seed: int) -> None:
     """Name everything and write region lore, mutating the entities in place."""
     if not world.regions:
         world.island_name = ""
+        _name_features(world, config, seed, {})
         return
 
     naming_cfg = config.section("naming")
@@ -86,3 +88,22 @@ def run(world: World, config: Config, seed: int) -> None:
             generators,
             naming_cfg,
         )
+    _name_features(world, config, seed, region_culture)
+
+
+def _name_features(world: World, config: Config, seed: int, region_culture: dict[int, str]) -> None:
+    """Name geographic features: lakes and rivers take their entity's name, the rest a geo_names form."""
+    generators = config.get("naming.generators")
+    naming_cfg = config.section("naming")
+    rows = config.get("tables.geo_names")
+    for feature in world.features:
+        if feature.kind == "lake":
+            feature.name = world.lakes[feature.ref].name
+        elif feature.kind == "river":
+            feature.name = world.rivers[feature.ref].name
+        else:
+            x, y = feature.anchor
+            culture = _culture_at(region_culture, world, x, y)
+            feature.name = forge.name_feature(
+                seed, feature.kind, (x, y), culture, rows[feature.kind], generators, naming_cfg
+            )
