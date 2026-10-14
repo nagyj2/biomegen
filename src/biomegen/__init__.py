@@ -3,11 +3,12 @@
 This package holds all reusable components of the application. The application is launched with
 ``uv run biomegen`` (or ``uv run python -m biomegen``); the entry point is :mod:`biomegen.cli`.
 
-High-level package map (see ARCHITECTURE.md for the full code-map):
+High-level package map (see docs/ARCHITECTURE.md for the full code-map):
 
     config/    - TOML + in-code defaults, deep-merged into a frozen Config object.
     util/      - cross-cutting utilities: rng (determinism anchor), noise, geometry.
     world/     - the data model: immutable World (numpy fields) + mutable Overlay + entities.
+    interiors/ - lazy, deterministic POI interior builders (built on demand from a POI).
     pipeline/  - the ordered procedural generation stages (heightmap -> ... -> naming).
     naming/    - procedural name + lore generation (Markov + Tracery-style grammar).
     render/    - curses rendering: palette, glyphs, map/zoom views, HUD, input, app loop.

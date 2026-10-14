@@ -257,11 +257,11 @@ heightmap → island_mask → climate → hydrology → biomes → regions
          → poi_placement → roads → poi_interiors → naming
 ```
 
-All algorithms are industry-standard and most are swappable via config (see `ARCHITECTURE.md`).
+All algorithms are industry-standard and most are swappable via config (see `docs/ARCHITECTURE.md`).
 Reproducibility is guaranteed by `blake2b`-derived named RNG sub-streams — every stage gets its
 own independent stream, so changing one stage cannot shift another's output.
 
-For full details on algorithms and design decisions, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+For full details on algorithms and design decisions, see **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 The naming and lore grammar is documented in **[docs/GRAMMAR.md](docs/GRAMMAR.md)**.
 
 ---

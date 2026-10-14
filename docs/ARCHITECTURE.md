@@ -8,7 +8,7 @@ reproducible. Each module also carries a docstring describing its own role in mo
 
 ## Mental model
 
-`main.py` parses CLI args, loads config, resolves a seed, and calls `biomegen.pipeline.generate`,
+`biomegen.cli` (`uv run biomegen`) parses CLI args, loads config, resolves a seed, and calls `biomegen.pipeline.generate`,
 which runs a fixed sequence of stages that fill an immutable `World` (parallel numpy arrays per
 tile). Runtime/gameplay changes never touch that base — they go into a separate `Overlay` that is
 composited on read. The `render` layer draws the composited world with curses. Every interchangeable
@@ -23,11 +23,12 @@ file. The `export` layer turns the same pure render frames into colour SVG/PNG i
 ## Directory map
 
 ```
-main.py                 CLI entry (argparse → config → generate → curses app | headless | preview)
-biomegen/
+src/biomegen/
+  __main__.py           `python -m biomegen` entry
+  cli.py                CLI entry (argparse → config → generate → curses app | headless | preview)
   registry.py           Generic name→implementation registry (the swappability mechanism)
   config/
-    defaults.py         Authoritative defaults — every tunable key lives here
+    defaults/           Authoritative defaults, one module per section — every tunable key lives here
     loader.py           TOML deep-merge onto defaults
     model.py            Frozen Config, dotted-path get(), section() sub-view
     validate.py         Coerce/clamp values on load
@@ -40,30 +41,33 @@ biomegen/
     world.py            Immutable World (parallel numpy arrays) + fingerprint()
     overlay.py          Mutable Overlay (runtime edits, composited at read time)
     entities.py         POI / Region / River / Lake dataclasses
-    interiors/          Lazy, deterministic, LRU-cached POI interior builders
-      grid.py           Shared toolkit: BSP partition, carving, stair shafts, walls/doors/streets,
+  interiors/            Lazy, deterministic, LRU-cached POI interior builders
+    grid.py             Shared toolkit: BSP partition, carving, stair shafts, walls/doors/streets,
                         furnishing scatter, registry + build cache
-      shapes.py         Swappable organic outer-boundary masks (blob/cellular/drunkard/diamond/cross)
-      dungeon.py        Dungeon: stacked descending rooms, aligned stairs, depth-scaled furnishing
-      tower.py          Tower: stacked ascending rooms, lookout top floor, sparse quarters
-      settlement.py     City/town/village: multiple walled buildings + PATH streets + plaza
-      ruin.py           Ruin: a building eroded into rubble and breached walls (single floor)
-      camp.py           Camp: bespoke open-air clearing — campfire, tents, wagon (no walls)
-      boat.py           Boat: bespoke planked hull + deck + cargo, floating on water
+    shapes.py           Swappable organic outer-boundary masks (blob/cellular/drunkard/diamond/cross)
+    dungeon.py          Dungeon: stacked descending rooms, aligned stairs, depth-scaled furnishing
+    tower.py            Tower: stacked ascending rooms, lookout top floor, sparse quarters
+    settlement.py       City/town/village: multiple walled buildings + PATH streets + plaza
+    ruin.py             Ruin: a building eroded into rubble and breached walls (single floor)
+    camp.py             Camp: bespoke open-air clearing — campfire, tents, wagon (no walls)
+    boat.py             Boat: bespoke planked hull + deck + cargo, floating on water
   pipeline/             Ordered generation stages (see Pipeline section below)
     __init__.py         generate() orchestrator + stats()
     heightmap.py        Stage 1 — elevation
     island_mask.py      Stage 2 — ocean/land classification + dist_to_ocean
     climate.py          Stage 3 — temperature + moisture fields
-    hydrology.py        Stage 4 — rivers, lakes, flow accumulation
+    physical/
+      hydrology.py      Stage 4 — rivers, lakes, flow accumulation
     biomes.py           Stage 5 — Whittaker biome classification
     regions.py          Stage 6 — region segmentation + colour
     poi_placement.py    Stage 7 — POI anchor placement
     poi_fields.py       Shared suitability distance fields for POI scoring
     poi_rules.py        Per-kind POI rules, eligibility masks, score arrays
     poi_sampler.py      Blue-noise / random / grid POI samplers
-    roads.py            Stage 8 — road network + bridge POIs + per-POI road-entrance recording
-    poi_interiors.py    Stage 9 — POI interior metadata (footprint/bbox/entrance; no grids)
+    civilization/
+      roads.py          Stage 8 — road network + bridge POIs + per-POI road-entrance recording
+    story/
+      poi_interiors.py  Stage 9 — POI interior metadata (footprint/bbox/entrance; no grids)
     naming.py           Stage 10 — names and lore for all entities
   naming/
     cultures.py         Culture profiles + biome-biased culture assignment
@@ -88,7 +92,7 @@ biomegen/
     svg.py              Frame-grid → deterministic standalone SVG document (no deps)
     png.py              Frame-grid → PNG via Pillow (optional; degrades gracefully if absent)
     __init__.py         export_world() / export_view() facades: frame → grid → file(s)
-tests/                  pytest suite: golden-world hash, RNG determinism, config, overlay, UI, export …
+tests/                  pytest suite mirroring src/: golden-world hash, RNG determinism, config, overlay, UI, export …
 docs/GRAMMAR.md         Naming/lore grammar reference
 config.example.toml     Sparse-overlay example (every key with its default value)
 ```
@@ -194,7 +198,7 @@ Produces `world.temperature` and base `world.moisture`.
   exponentially with `dist_to_ocean`. A `moisture_redistribution` exponent biases the map drier
   (> 1) for more biome variety.
 
-### Stage 4 — Hydrology (`pipeline/hydrology.py`)
+### Stage 4 — Hydrology (`pipeline/physical/hydrology.py`)
 
 Standard GIS surface-hydrology pipeline (RichDEM / GRASS GIS family):
 
@@ -273,7 +277,7 @@ Places cities, towns, villages, towers, dungeons, ruin, camps, and boats:
    style). Alternatives: `random` (unconstrained sampling) and `grid` (evenly spaced).
 5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy interior builder (see Stage 8 and the Render layer).
 
-### Stage 8 — Roads (`pipeline/roads.py`)
+### Stage 8 — Roads (`pipeline/civilization/roads.py`)
 
 Connects POIs with meandering least-cost roads, **before** interiors so the network can shape each
 POI's entrance:
@@ -308,7 +312,7 @@ POI's entrance:
    the network arrives from (`extra['road_entry']`); roads from the same side collapse to one entry.
    Stage 9 turns that into the perimeter entrance and the road-facing interior door.
 
-### Stage 9 — POI interiors (`pipeline/poi_interiors.py`)
+### Stage 9 — POI interiors (`pipeline/story/poi_interiors.py`)
 
 Cheap, **render-only metadata** for each POI's detail-view interior — no grids are generated here.
 For every POI with a configured `interiors.footprints.<kind>` it sets the **footprint** (in world
@@ -357,7 +361,7 @@ Assigns names and generates lore for all entities:
 Each algorithm family has a `Registry` instance. To add a new algorithm: implement it, decorate
 with `@REGISTRY.register("name")`, and reference `"name"` in the config. No call-site edits needed.
 
-The **CLI flag** column lists flags accepted by `main.py` for single-run overrides (no config file
+The **CLI flag** column lists flags accepted by `biomegen.cli` for single-run overrides (no config file
 needed). All other families are changed via their config key.
 
 | Family | Config key | CLI flag | Built-in choices |
@@ -413,7 +417,7 @@ zoom/local roads are not markers — they render like the rivers do.
   water it spans. Colours come from `render.palette` (`road`/`bridge`/`bridge_wall`); the renderer
   encodes them as overlay colour ids above `OVERLAY_COLOR_BASE`, which `Palette`/`ExportPalette` decode.
 
-### Interiors (`world/interiors/`, rendered by `zoom_view.py`)
+### Interiors (`interiors/`, rendered by `zoom_view.py`)
 
 POIs with a registered builder get **three forms**: the biome-map marker, a **zoom** structure
 outline, and a **local** full interior — all anchored in world space, so panning moves seamlessly
@@ -459,7 +463,7 @@ between outside and inside (the interior is *embedded in the terrain*, not a sep
 | `camp` | Bespoke open-air | cleared FLOOR patch + campfire + tents + wagon, no walls (the clearing is what reads at zoom) |
 | `boat` | Bespoke hull on water | planked WALL hull around a FLOOR deck + cabin + cargo; VOID around it shows the water |
 
-A new archetype plugs in the same way: drop `world/interiors/<kind>.py` with an
+A new archetype plugs in the same way: drop `interiors/<kind>.py` with an
 `@register_interior("<kind>")` builder, add a footprint entry, import it in `interiors/__init__.py` —
 no render or pipeline changes (both iterate the registry generically).
 
@@ -492,7 +496,7 @@ current camera), so a POI interior can be captured as you see it.
   back to SVG-only with a friendly notice — the package still imports cleanly.
 - **Deterministic.** Cells are emitted in fixed row-major order with fixed numeric formatting, so a
   fixed seed yields byte-identical SVG — the export analogue of the golden-world fingerprint (pinned
-  by `tests/test_export.py`).
+  by `tests/export/test_export.py`).
 
 ---
 
