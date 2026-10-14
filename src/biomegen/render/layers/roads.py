@@ -78,7 +78,7 @@ def _bridges(ctx: LayerContext, grid: CellGrid, found: RoadBed, dry: np.ndarray)
     cfg = ctx.config
     glyphs = cfg.get("render.bridge_glyphs") or {}
     colors = cfg.get("render.detail_colors")
-    open_water = ctx.sampler.inside & ~dry & ~ctx.site_mask
+    open_water = ctx.sampler.inside & ~dry
     for mask, part in ((found.rail & open_water & ~found.bed, "wall"), (found.bed & open_water, "deck")):
         if mask.any():
             grid.put(
@@ -102,7 +102,7 @@ def _detail_roads(ctx: LayerContext, grid: CellGrid, sampler: DetailSampler) -> 
     kind = found.kind
     dry = ctx.land & ~ctx.river
     _bridges(ctx, grid, found, dry)
-    bed = found.bed & dry & ~ctx.site_mask
+    bed = found.bed & dry
     if not bed.any():
         return
     key = "ascii" if ctx.ascii_only else "glyphs"

@@ -18,8 +18,8 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   outside view (roofs, stone walls, streets) at the zoom and local scales (the map shows only the POI's marker tile), the inside (thin walls joined into
   line glyphs) at the site scale. The site scale is a
   `DetailSampler` over a site window (optionally just a region of it); the layer reads extents through the sampler's
-  `col0` / `row0`, so a region draws exactly like the whole window. A layer that draws roads must skip
-  `ctx.site_mask`, where the plan draws its own streets.
+  `col0` / `row0`, so a region draws exactly like the whole window. The roads layer draws the road
+  everywhere, under the plans: a plan leaves the road's own cells void and adds only its lanes, buildings and walls.
 - **Numpy-only hot paths.** No per-cell Python loops. Loops over POIs or road links are fine; inside them,
   paint a numpy window (`DetailSampler.cell_window`).
 - **No literals.** Glyphs and colours come from `tables.biomes`, `tables.relief`, `tables.detail`,

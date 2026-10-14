@@ -168,7 +168,7 @@ def test_a_structure_stays_off_the_water(config: Config) -> None:
 def test_the_entrance_door_faces_the_road(config: Config) -> None:
     # A road arriving from the west puts the dungeon's door on its western half.
     world = flat_world()
-    world.road[5, 3:7] = 1
+    world.road[5, 3:8] = 1
     _poi, _world, plan = _plan(config, "dungeon", world=world, floor_count=1)
     assert plan is not None
     xs = np.nonzero(plan.cells == DOOR)[1]
@@ -177,31 +177,36 @@ def test_the_entrance_door_faces_the_road(config: Config) -> None:
 
 def test_the_entrance_door_faces_a_road_from_the_east(config: Config) -> None:
     world = flat_world()
-    world.road[5, 8:12] = 1
+    world.road[5, 7:12] = 1
     _poi, _world, plan = _plan(config, "dungeon", world=world, floor_count=1)
     assert plan is not None
     xs = np.nonzero(plan.cells == DOOR)[1]
     assert len(xs) == 1 and int(xs[0]) > plan.cells.shape[1] // 2
 
 
-def test_a_road_gate_is_joined_to_the_door_by_a_street(config: Config) -> None:
+def test_the_door_opens_onto_the_road_or_a_street_to_it(config: Config) -> None:
+    # Outside the door lies a street cell or the road's own cells (void in the plan: the road layer draws them).
     world = flat_world()
-    world.road[5, 3:7] = 1
-    _poi, _world, plan = _plan(config, "dungeon", world=world, floor_count=1)
-    assert plan is not None and PATH in plan.cells
+    world.road[5, 3:8] = 1
+    poi, _world, plan = _plan(config, "dungeon", world=world, floor_count=1)
+    assert plan is not None
+    patch = read_patch(poi, site_geometry(poi, config), world, config)  # type: ignore[arg-type]
+    ((y, x),) = np.argwhere(plan.cells == DOOR).tolist()
+    around = [(y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)]
+    assert any(plan.cells[cy, cx] == PATH or patch.road[cy, cx] for cy, cx in around)
 
 
-def test_a_village_between_two_rivers_is_bridged_to_the_roads(config: Config) -> None:
-    # Rivers run either side of the village and roads arrive beyond them, so each gate must bridge the water.
-    wide = copy.deepcopy(config)
-    wide.data["sites"]["bridge_max_rows"] = 12
+def test_a_road_over_a_river_is_deck_the_road_layer_draws(config: Config) -> None:
+    # Roads cross rivers either side of the village: the bed is road over water, and the plan leaves it to the roads.
     world = flat_world()
     world.water_type[:, 6] = int(WaterType.FRESH)
     world.water_type[:, 8] = int(WaterType.FRESH)
-    world.road[5, 4:7] = 1
-    world.road[5, 8:11] = 1
-    _poi, _world, plan = _plan(wide, "village", world=world, pop=500)
-    assert plan is not None and int(Cell.BRIDGE) in plan.cells
+    world.road[5, 4:11] = 1
+    poi, _world, plan = _plan(config, "village", world=world, pop=500)
+    assert plan is not None
+    patch = read_patch(poi, site_geometry(poi, config), world, config)  # type: ignore[arg-type]
+    wet_road = patch.road & ~patch.dry
+    assert wet_road.any() and not (plan.cells[wet_road] != VOID).any()
 
 
 def test_a_village_on_an_island_in_the_sea_still_has_a_plan(config: Config) -> None:

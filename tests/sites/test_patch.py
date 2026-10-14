@@ -77,7 +77,7 @@ def test_water_and_dry_never_overlap(cfg: Config) -> None:
 
 def test_a_road_from_the_north_makes_a_gate_on_the_top_edge(cfg: Config) -> None:
     world = make_world(9, 7, Biome.GRASS)
-    world.road[0:3, 4] = 1
+    world.road[0:4, 4] = 1  # the anchor's tile is road too: roads end at a POI
     poi, geometry = _village(world, cfg)
     gates = read_patch(poi, geometry, world, cfg).gates
     assert [(g.dx, g.dy, g.row) for g in gates] == [(0, -1, 0)]
@@ -85,7 +85,7 @@ def test_a_road_from_the_north_makes_a_gate_on_the_top_edge(cfg: Config) -> None
 
 def test_a_road_from_the_east_makes_a_gate_on_the_right_edge(cfg: Config) -> None:
     world = make_world(9, 7, Biome.GRASS)
-    world.road[3, 5:9] = 1
+    world.road[3, 4:9] = 1
     poi, geometry = _village(world, cfg)
     gates = read_patch(poi, geometry, world, cfg).gates
     assert [(g.dx, g.dy, g.col) for g in gates] == [(1, 0, geometry.box_cols - 1)]
@@ -108,8 +108,8 @@ def test_no_more_gates_than_max_gates(cfg: Config) -> None:
 
 def test_gate_cells_lie_on_the_box_perimeter(cfg: Config) -> None:
     world = make_world(9, 7, Biome.GRASS)
-    world.road[0:3, 4] = 1
-    world.road[3, 5:9] = 1
+    world.road[0:4, 4] = 1
+    world.road[3, 4:9] = 1
     poi, geometry = _village(world, cfg)
     for gate in read_patch(poi, geometry, world, cfg).gates:
         assert gate.col in (0, geometry.box_cols - 1) or gate.row in (0, geometry.box_rows - 1)

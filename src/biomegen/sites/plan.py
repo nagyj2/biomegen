@@ -23,6 +23,7 @@ from .cells import VOID
 from .geometry import SiteGeometry, site_geometry
 from .layout import LAYOUTS, SiteContext
 from .patch import read_patch
+from .streets import clear_roads
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     plan = None
     if built is not None:
         cells, outside = built if isinstance(built, tuple) else (built, built)
+        cells, outside = clear_roads(cells, context.patch), clear_roads(outside, context.patch)
         cells.setflags(write=False)
         outside.setflags(write=False)
         plan = SitePlan(geometry, floor, cells, outside)

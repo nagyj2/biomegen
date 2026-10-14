@@ -433,8 +433,10 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   hold the extent plus `sites.margin_tiles`: a detail grid whose cells are plan cells.
 - **Terrain patch** (`patch.py`). The terrain under the extent is read through the same `DetailSampler` the renderer
   uses (`sampling/terrain.py` defines land and river once), so a plan agrees exactly with the water drawn around it.
-  Roads are not stored: each road tile just outside the extent makes a **gate** on its edge, at most `sites.max_gates`,
-  one per direction. A structure's door and a settlement's streets face the gates.
+  Roads are not stored: the road bed over the extent (`sampling/roads.py`, the raster the renderer draws) is read
+  into the patch, and each run of road cells meeting the extent's edge makes a **gate** (at most `sites.max_gates`).
+  A layout lays the road into its grid (`streets.lay_roads`) to build round it and join doors to it, then hands it back
+  (`streets.clear_roads`): the plan leaves the road's own cells void, so the one road is drawn the same inside and outside.
 - **Plan faces.** `SitePlan.cells` is the **inside** (one cell per terminal cell, drawn at the site scale);
   `SitePlan.outside` is the **sky view** (map, zoom, local): roofs (`ROOF`), solid walls (`STONE`), streets, trees.
   Outside views ignore floor and overlay. Walls in the inside are one cell thick (`WALL`) and joined into box-drawing
@@ -449,7 +451,7 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   rubble, trees and partial roofs); the entrance faces a gate. `camp.py` and `boat.py` are open-air (tents, hull).
 - **Scales.** One plan per face, scaled into the cells its extent covers by `blit.sample_rect`. Where a view is coarser
   than the plan, the cell of highest `OUTSIDE_PRIORITY` wins, so a one-cell wall survives. Void is transparent. The
-  world's road bed is hidden under a site (`LayerContext.site_mask`), since the plan draws its own streets.
+  world's road is drawn everywhere (roads layer, under the plans); a plan leaves its cells void and adds only lanes.
 - **The site view** (explorer). Zooming in on a POI opens its site: the window drawn one plan cell per terminal cell,
   only the visible cells (a `DetailSampler` with `origin` and `shape`). The cursor is one cell `(px, py)`; the tile
   cursor follows the tile under it. Moving past the window leaves for local. Zoom steps out.

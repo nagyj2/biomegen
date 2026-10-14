@@ -8,7 +8,7 @@ the :class:`~biomegen.world.world.World`.
 from __future__ import annotations
 
 from .cells import NO_WALL, OUTSIDE_PRIORITY, PASSABLE, SHELL, STRUCTURAL, wall_index
-from .coverage import extent_mask, site_at, site_pois
+from .coverage import site_at, site_pois
 from .geometry import SiteGeometry, site_geometry
 from .patch import Gate, SitePatch, read_patch, window_sampler
 from .plan import SitePlan, clear_cache, site_plan
@@ -24,7 +24,6 @@ __all__ = [
     "SitePatch",
     "SitePlan",
     "clear_cache",
-    "extent_mask",
     "read_patch",
     "site_at",
     "site_geometry",

@@ -12,7 +12,7 @@ from ..world.tile import Cell
 from .carve import nearest_true
 from .furnish import free_floor, scatter, weighted_choice
 from .layout import SiteContext, layout
-from .streets import lay_street
+from .streets import lay_roads
 
 _VOID = int(Cell.VOID)
 _FLOOR = int(Cell.FLOOR)
@@ -46,7 +46,8 @@ def build_camp(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
         tx = round(cx + distance * radius_x * math.cos(angle))
         ty = round(cy + distance * radius_y * math.sin(angle))
         x0, y0 = tx - tent_w // 2, ty - tent_h // 2
-        grid[max(0, y0) : max(0, y0 + tent_h), max(0, x0) : max(0, x0 + tent_w)] = int(Cell.TENT)
+        pitch = (slice(max(0, y0), max(0, y0 + tent_h)), slice(max(0, x0), max(0, x0 + tent_w)))
+        grid[pitch][~ctx.patch.road[pitch]] = int(Cell.TENT)  # the road keeps its way through
     angle = stream.uniform(0.0, 2.0 * math.pi)
     wx, wy = round(cx + 0.85 * radius_x * math.cos(angle)), round(cy + 0.85 * radius_y * math.sin(angle))
     if 0 <= wx < cols and 0 <= wy < rows:
@@ -58,9 +59,5 @@ def build_camp(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     scatter(grid, furnish, free_floor(grid), density, lambda r, _x, _y: weighted_choice(r, table))
     grid[~dry] = _VOID  # a tent or wagon that landed on water is gone
     grid[cy, cx] = int(Cell.CAMPFIRE)
-    if ctx.patch.gates:
-        gate = ctx.patch.gates[0]
-        edge = nearest_true(clearing, (gate.col, gate.row), aspect)
-        if edge is not None:
-            lay_street(grid, dry, (gate.col, gate.row), edge, ctx.street_rules)
+    lay_roads(grid, ctx.patch, (_VOID, _FLOOR))  # the road runs through the clearing to the fire
     return grid, grid.copy()

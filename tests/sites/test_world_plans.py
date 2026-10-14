@@ -73,20 +73,29 @@ def test_doors_and_stairs_are_mutually_reachable(world: World, cfg: Config) -> N
         assert len(marks - {0}) <= 1, f"{poi.kind} at {poi.x},{poi.y} floor {plan.floor}"
 
 
+def _side(cells: np.ndarray, road: np.ndarray, y: int, x: int) -> int:
+    """The cell at ``(y, x)``, where the road's own cells (void in the plan) count as path and off the plan as void."""
+    if not (0 <= y < cells.shape[0] and 0 <= x < cells.shape[1]):
+        return VOID
+    return int(Cell.PATH) if road[y, x] else int(cells[y, x])
+
+
 def test_no_building_door_opens_onto_bare_ground(world: World, cfg: Config) -> None:
-    # In a settlement a door joins two rooms, or a room and a street: never a room and the empty terrain. (A gate in a
-    # city wall has street on both ends, so it is skipped; a structure with no road may open onto bare ground.)
+    # In a settlement a door joins two rooms, or a room and a street or road: never a room and the empty terrain.
+    # (A gate, a door cut where the road crosses a city wall, lies on the road and is skipped.) The road's own cells
+    # are void in the plan.
     street = {int(Cell.PATH), int(Cell.BRIDGE)}
-    for poi, _geometry, plan in _plans(world, cfg):
+    for poi, geometry, plan in _plans(world, cfg):
         if poi.kind not in {"capital", "city", "town", "village"}:
             continue
         cells = plan.cells
-        rows, cols = cells.shape
+        road = read_patch(poi, geometry, world, cfg).road
+
         for y, x in np.argwhere(cells == int(Cell.DOOR)).tolist():
-            above = int(cells[y - 1, x]) if y else VOID
-            below = int(cells[y + 1, x]) if y + 1 < rows else VOID
-            left = int(cells[y, x - 1]) if x else VOID
-            right = int(cells[y, x + 1]) if x + 1 < cols else VOID
+            if road[y, x]:
+                continue
+            above, below = _side(cells, road, y - 1, x), _side(cells, road, y + 1, x)
+            left, right = _side(cells, road, y, x - 1), _side(cells, road, y, x + 1)
             if (above in street and below in street) or (left in street and right in street):
                 continue
             assert VOID not in (above, below, left, right), f"{poi.kind} at {poi.x},{poi.y} floor {plan.floor}"

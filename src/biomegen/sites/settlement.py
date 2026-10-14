@@ -23,7 +23,7 @@ from ..world.tile import Cell
 from .building import Spec, build_building
 from .carve import Point, nearest_true
 from .layout import SiteContext, layout
-from .streets import lay_street
+from .streets import lay_roads, lay_street
 
 _VOID = int(Cell.VOID)
 _WALL = int(Cell.WALL)
@@ -234,6 +234,7 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
         return None
     grid = np.full((rows, cols), _VOID, dtype=np.uint8)
     stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
+    lay_roads(grid, ctx.patch)
     grid[_plaza(ctx, centre) & dry] = _PATH
     if ctx.walled:
         inset_x, inset_y = (int(v) for v in ctx.config.get("sites.settlement.wall_inset"))

@@ -13,8 +13,10 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
 - The terrain comes from the renderer's own sampler (`patch.read_patch`; `sampling/terrain.py` defines land and river
   once), so a layout never disagrees with the water drawn beside it. A layout builds only on `patch.dry`; the only
   cells it puts over water are bridge decks and railings, and a boat's hull.
-- Roads are read from the world arrays as **gates** on the extent's edge. Nothing in the pipeline records anything for a
-  site, so a site can change without moving the world fingerprint.
+- The road is the world's: `patch.road` is the bed from `sampling/roads.py` (what the renderer draws) and a **gate** is
+  a run of it meeting the extent's edge. A layout calls `streets.lay_roads` to build round and onto it; `site_plan`
+  clears those cells again (`clear_roads`), so a plan never draws the road itself, only lanes, buildings and walls.
+  Nothing in the pipeline records anything for a site, so a site can change without moving the world fingerprint.
 - Floor 0 is the ground and entry level: dungeons descend, towers rise. Everything random comes from the site seed
   (`rng.derive*` with the `site.*` labels); no wall-clock or global state.
 

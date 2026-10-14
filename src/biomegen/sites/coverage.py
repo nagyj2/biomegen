@@ -5,10 +5,7 @@ from __future__ import annotations
 import weakref
 from typing import Optional
 
-import numpy as np
-
 from ..config.model import Config
-from ..sampling.sampler import Sampler
 from ..world.entities import POI
 from ..world.world import World
 from .geometry import SiteGeometry, site_geometry
@@ -30,15 +27,6 @@ def site_pois(world: World, config: Config) -> list[tuple[POI, SiteGeometry]]:
             found.append((poi, geometry))
     per_config[id(config)] = (config, len(world.pois), found)
     return found
-
-
-def extent_mask(world: World, config: Config, sampler: Sampler) -> np.ndarray:
-    """Return the cells of ``sampler``'s grid that lie under any site's extent."""
-    mask = np.zeros(sampler.fx.shape, dtype=bool)
-    for _poi, geometry in site_pois(world, config):
-        left, top, right, bottom = geometry.extent
-        mask |= (sampler.fx >= left) & (sampler.fx < right) & (sampler.fy >= top) & (sampler.fy < bottom)
-    return mask
 
 
 def site_at(world: World, config: Config, tile_x: int, tile_y: int) -> Optional[POI]:

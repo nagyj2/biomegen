@@ -211,8 +211,8 @@ def test_a_horizontal_wall_run_draws_as_a_line() -> None:
     assert int(index[2, 4]) == 10 and int(index[2, 2]) == 2 and int(index[0, 0]) == 255
 
 
-def test_a_site_replaces_the_road_bed_under_it() -> None:
-    # The world's road runs through the dungeon's tile; the plan draws there instead of the road bed.
+def test_the_road_runs_on_through_the_site() -> None:
+    # The world's road crosses the dungeon's tile: the plan leaves the road's cells void, so the bed shows inside it.
     road_view = View("t", ("terrain", "roads", "sites"))
     world = _world()
     world.road[5, 3:8] = 1
@@ -220,4 +220,4 @@ def test_a_site_replaces_the_road_bed_under_it() -> None:
     grid, sampler, _ = _draw(world, road_view, config=config)
     rows, cols = _extent(sampler, world, config)
     road_bg = np.asarray(config.get("render.detail_colors.road_bg"), dtype=np.uint8)
-    assert not (grid.bg[rows, cols] == road_bg).all(axis=-1).any()
+    assert (grid.bg[rows, cols] == road_bg).all(axis=-1).any()

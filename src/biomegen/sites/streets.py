@@ -1,4 +1,10 @@
-"""Streets: least-cost paths over open ground, bridging water where a street has to cross it."""
+"""Streets: least-cost paths over open ground, bridging water where a street has to cross it, and the road itself.
+
+The road that reaches a site is the world's own (:mod:`biomegen.sampling.roads`). A layout lays it into its grid with
+:func:`lay_roads` so streets, lots and doors are built round and onto it, and the finished plan hands it back with
+:func:`clear_roads`: the renderer already draws the road everywhere, so the plan leaves those cells to it and the
+road is the same, in the same place, inside the site as outside it.
+"""
 
 from __future__ import annotations
 
@@ -10,6 +16,7 @@ import numpy as np
 from ..util import geometry as geo
 from ..world.tile import Cell
 from .carve import Point
+from .patch import SitePatch
 
 _VOID = int(Cell.VOID)
 _PATH = int(Cell.PATH)
@@ -95,3 +102,24 @@ def lay_street(grid: np.ndarray, dry: np.ndarray, a: Point, b: Point, rules: Str
             if 0 <= rx < cols and 0 <= ry < rows and not dry[ry, rx] and grid[ry, rx] == _VOID:
                 grid[ry, rx] = _RAIL
     return path
+
+
+def lay_roads(grid: np.ndarray, patch: SitePatch, replace: tuple[int, ...] = (_VOID,)) -> None:
+    """Lay the road into ``grid``: path on dry bed cells, deck over water, railings in the band beside it.
+
+    Only cells whose value is in ``replace`` change, so a layout lays the road before its buildings (to build round
+    it) or after them (so the road stops at a wall).
+    """
+    free = np.isin(grid, replace)
+    grid[patch.road & patch.dry & free] = _PATH
+    grid[patch.road & ~patch.dry & free] = _BRIDGE
+    grid[patch.rail & ~patch.road & ~patch.dry & free] = _RAIL
+
+
+def clear_roads(cells: np.ndarray, patch: SitePatch) -> np.ndarray:
+    """Return ``cells`` with the road's own cells made void, so the world's road shows there; a lane stays."""
+    cleared = cells.copy()
+    road = patch.road & np.isin(cells, (_PATH, _BRIDGE, _RAIL))
+    railing = patch.rail & ~patch.dry & np.isin(cells, (_BRIDGE, _RAIL))  # the roads layer draws bridge railings
+    cleared[road | railing] = _VOID
+    return cleared

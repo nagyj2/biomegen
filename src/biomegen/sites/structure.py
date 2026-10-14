@@ -41,7 +41,7 @@ from .furnish import Weights, adjacent, keep_reachable, scatter, weighted_choice
 from .layout import SiteContext, layout
 from .partition import bsp_rooms
 from .shapes import SHAPES
-from .streets import lay_street
+from .streets import lay_roads, lay_street
 
 _VOID = int(Cell.VOID)
 _FLOOR = int(Cell.FLOOR)
@@ -109,14 +109,22 @@ def _stamp(grid: np.ndarray, building: Building, rect: Rect) -> None:
 
 
 def _approach(ctx: SiteContext, grid: np.ndarray, building: Building, rect: Rect) -> None:
-    """Join a building's street door to the road: a street from the gate to the cell outside the door."""
-    if building.front is None or not ctx.patch.gates:
+    """Lay the road round the building and join its street door to it with a short street."""
+    lay_roads(grid, ctx.patch)
+    if building.front is None:
         return
-    gate = ctx.patch.gates[0]
     front = (rect[0] + building.front[0], rect[1] + building.front[1])
-    if 0 <= front[0] < ctx.cols and 0 <= front[1] < ctx.rows and grid[front[1], front[0]] == _VOID:
-        grid[front[1], front[0]] = _PATH
-        lay_street(grid, ctx.patch.dry, (gate.col, gate.row), front, ctx.street_rules)
+    if not (0 <= front[0] < ctx.cols and 0 <= front[1] < ctx.rows) or grid[front[1], front[0]] != _VOID:
+        return
+    road = np.argwhere(ctx.patch.road & ctx.patch.dry & (grid == _PATH))
+    if len(road) == 0:
+        return
+    nearest = min(
+        ((int(x), int(y)) for y, x in road.tolist()),
+        key=lambda p: (((p[0] - front[0]) / ctx.aspect) ** 2 + (p[1] - front[1]) ** 2, p[1], p[0]),
+    )
+    grid[front[1], front[0]] = _PATH
+    lay_street(grid, ctx.patch.dry, nearest, front, ctx.street_rules)
 
 
 def _stair_links(ctx: SiteContext, area: np.ndarray, pinned: Optional[Point] = None) -> list[Point]:
@@ -366,8 +374,7 @@ def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     ]
     for cx, cy in stream.sample(plants, min(len(plants), len(plants) // 8)):
         grid[cy, cx] = int(Cell.TREE) if stream.random() < 0.5 else int(Cell.BUSH)
-    if ctx.patch.gates:
-        _approach(ctx, grid, building, rect)
+    _approach(ctx, grid, building, rect)
     outside = grid.copy()
     outside[outside == _WALL] = _STONE
     for rx, ry, rw, rh in standing:

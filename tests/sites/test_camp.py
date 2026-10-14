@@ -9,9 +9,7 @@ from biomegen.sites import read_patch, site_geometry, site_plan
 from biomegen.world.tile import Biome, Cell, WaterType
 from tests.sites.conftest import add_poi, flat_world
 
-VOID, FLOOR, PATH, TENT, WAGON, FIRE = (
-    int(c) for c in (Cell.VOID, Cell.FLOOR, Cell.PATH, Cell.TENT, Cell.WAGON, Cell.CAMPFIRE)
-)
+VOID, TENT, FIRE = (int(c) for c in (Cell.VOID, Cell.TENT, Cell.CAMPFIRE))
 
 
 def _camp(config: Config, world=None):
@@ -65,13 +63,15 @@ def test_a_camp_keeps_off_water(config: Config) -> None:
     assert not ((plan.cells != VOID) & patch.water).any()
 
 
-def test_a_track_joins_the_camp_to_a_road_gate(config: Config) -> None:
+def test_a_road_runs_through_the_camp_clear_of_the_tents(config: Config) -> None:
+    # The road arrives from the east and runs on to the fire: the plan leaves its cells void and pitches no tent on it.
     world = flat_world(14, 10)
-    world.road[5, 8:14] = 1  # a road arrives from the east
-    _poi, _world, plan = _camp(config, world)
-    assert PATH in plan.cells
+    world.road[5, 7:14] = 1
+    poi, _world, plan = _camp(config, world)
+    patch = read_patch(poi, site_geometry(poi, config), world, config)
+    assert patch.gates and not (patch.road & (plan.cells == TENT)).any()
 
 
-def test_a_camp_without_a_road_has_no_track(config: Config) -> None:
-    _poi, _world, plan = _camp(config)
-    assert PATH not in plan.cells
+def test_a_camp_without_a_road_has_no_gate(config: Config) -> None:
+    poi, world, _plan = _camp(config)
+    assert read_patch(poi, site_geometry(poi, config), world, config).gates == ()
