@@ -2,9 +2,9 @@
 
 Run the CLI application with::
 
-    python main.py [--seed N] [--config path.toml] [--width W] [--height H]
-                   [--noise-backend {perlin,value,opensimplex}] [--poi-sampler {bluenoise,random,grid}]
-                   [--headless]
+    uv run biomegen [--seed N] [--config path.toml] [--width W] [--height H]
+                    [--noise-backend {perlin,value,opensimplex}] [--poi-sampler {bluenoise,random,grid}]
+                    [--headless]
 
 This launcher wires together the three top-level concerns and nothing else:
     1. parse CLI arguments,
@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from typing import Any, Optional, Sequence
 
 from biomegen.config import Config, load_config
@@ -185,7 +184,3 @@ def _print_stats(stats: dict[str, Any]) -> None:
     for name, count in stats["biomes"].items():
         print(f"  {name:>10}: {count}")
     print(f"fingerprint: {stats['fingerprint']}")
-
-
-if __name__ == "__main__":
-    sys.exit(main())

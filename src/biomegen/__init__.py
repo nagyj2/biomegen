@@ -1,8 +1,7 @@
 """biomegen - a seed-reproducible procedural island generator and curses explorer.
 
-This package holds all reusable components of the application. The application itself is launched
-from the repository-root ``main.py`` (``python main.py``); this package is importable for reuse but
-is intentionally *not* meant to be run with ``python -m biomegen``.
+This package holds all reusable components of the application. The application is launched with
+``uv run biomegen`` (or ``uv run python -m biomegen``); the entry point is :mod:`biomegen.cli`.
 
 High-level package map (see ARCHITECTURE.md for the full code-map):
 

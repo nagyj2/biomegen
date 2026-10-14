@@ -19,18 +19,12 @@ zoom in to see structure detail, and export the view to SVG/PNG.
 Requires Python 3.14 or newer.
 
 ```bash
-# Recommended: uv
-uv pip install numpy scipy opensimplex tcod Pillow pytest
-
-# Or pip
-pip install numpy scipy opensimplex tcod Pillow pytest
-
-# Windows only — provides the curses module (stdlib on Linux/macOS):
-pip install windows-curses
-
-# Dev tooling (lint/format/type-check)
-pip install -e .[dev]
+uv venv ~/.venvs/biome --python 3.14
+export UV_PROJECT_ENVIRONMENT=~/.venvs/biome   # selects the environment for every uv command
+uv sync --extra dev                            # runtime + dev tooling; installs biomegen editable
 ```
+
+`windows-curses` is installed automatically on Windows (the `curses` module is stdlib on Linux/macOS).
 
 `noise` is an **optional** extra noise backend (`noise_lib`) that needs a C compiler. biomegen runs
 correctly without it using the default pure-numpy `perlin` backend.
@@ -38,9 +32,9 @@ correctly without it using the default pure-numpy `perlin` backend.
 ## Development checks
 
 ```bash
-ruff check .
-ruff format .
-mypy biomegen/config biomegen/util biomegen/world
+uv run ruff check .
+uv run ruff format .
+uv run mypy src/biomegen/config src/biomegen/util src/biomegen/world
 ```
 
 ---
@@ -48,27 +42,27 @@ mypy biomegen/config biomegen/util biomegen/world
 ## Run
 
 ```bash
-python main.py                                        # random island, interactive UI
-python main.py --seed 12345                           # reproducible island from an integer seed
-python main.py --seed 0xCAFE                          # hex seeds are accepted
-python main.py --seed "my island"                     # any string is a valid seed
-python main.py --config my.toml                       # override any defaults (see config.example.toml)
-python main.py --width 240 --height 60                # override world dimensions
-python main.py --noise-backend opensimplex            # use OpenSimplex noise instead of default Perlin
-python main.py --noise-backend value                  # use value noise (cheaper, blockier look)
-python main.py --poi-sampler random                   # random POI placement instead of default blue-noise
-python main.py --poi-sampler grid                     # evenly-spaced POI placement
-python main.py --seed 1 --headless                    # generate + print stats, no terminal needed
-python main.py --seed 1 --preview                     # ASCII biome map, no curses
-python main.py --seed 1 --preview-zoom                # ASCII mid-detail (zoom) view
-python main.py --seed 1 --preview-local               # ASCII close-detail (local) view
-python main.py --seed 1 --export world                # write a full-island image to ./images, no UI
-python main.py --seed 1 --export view                 # write the biome map to ./images, no UI
+uv run biomegen                                        # random island, interactive UI
+uv run biomegen --seed 12345                           # reproducible island from an integer seed
+uv run biomegen --seed 0xCAFE                          # hex seeds are accepted
+uv run biomegen --seed "my island"                     # any string is a valid seed
+uv run biomegen --config my.toml                       # override any defaults (see config.example.toml)
+uv run biomegen --width 240 --height 60                # override world dimensions
+uv run biomegen --noise-backend opensimplex            # use OpenSimplex noise instead of default Perlin
+uv run biomegen --noise-backend value                  # use value noise (cheaper, blockier look)
+uv run biomegen --poi-sampler random                   # random POI placement instead of default blue-noise
+uv run biomegen --poi-sampler grid                     # evenly-spaced POI placement
+uv run biomegen --seed 1 --headless                    # generate + print stats, no terminal needed
+uv run biomegen --seed 1 --preview                     # ASCII biome map, no curses
+uv run biomegen --seed 1 --preview-zoom                # ASCII mid-detail (zoom) view
+uv run biomegen --seed 1 --preview-local               # ASCII close-detail (local) view
+uv run biomegen --seed 1 --export world                # write a full-island image to ./images, no UI
+uv run biomegen --seed 1 --export view                 # write the biome map to ./images, no UI
 ```
 
 Algorithm flags override the TOML config value for that run only — they do not modify any file.
 The `--noise-backend` and `--poi-sampler` flags accept the same strings as their corresponding
-config keys (`terrain.noise_backend` and `poi.sampler`). Run `python main.py --help` for the full
+config keys (`terrain.noise_backend` and `poi.sampler`). Run `uv run biomegen --help` for the full
 list of registered choices (the optional `noise_lib` backend only appears if the C-extension is
 installed).
 
@@ -106,7 +100,7 @@ Copy `config.example.toml`, uncomment and change only the keys you care about, a
 `--config`. Every key has a built-in default — you never need a complete file.
 
 ```bash
-python main.py --config my.toml
+uv run biomegen --config my.toml
 ```
 
 The authoritative defaults and inline documentation are in
