@@ -18,6 +18,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.util.units import KM_PER_DEGREE
 from biomegen.world.tile import Biome, WaterType
 from biomegen.world.world import World
 
@@ -152,3 +153,19 @@ def test_invalid_biome_name_in_config_raises() -> None:
     with pytest.raises(ConfigError) as exc:
         validate(bad)
     assert "unknown biome" in str(exc.value) and "frest" in str(exc.value)
+
+
+def test_generate_sizes_cells_from_size_km() -> None:
+    # world.size_km spread over the grid sets the World's cell size.
+    small = load_config(None)
+    small.data["world"].update({"width": 48, "height": 30, "size_km": [960.0, 900.0]})
+    world = pipeline.generate(small, 5)
+    assert (world.km_per_col, world.km_per_row) == (20.0, 30.0)
+
+
+def test_generate_places_map_at_center_lat() -> None:
+    # The top edge sits half the map's latitude span above world.center_lat.
+    small = load_config(None)
+    small.data["world"].update({"width": 48, "height": 30, "size_km": [960.0, 900.0], "center_lat": -20.0})
+    world = pipeline.generate(small, 5)
+    assert world.lat_top == pytest.approx(-20.0 + 450.0 / KM_PER_DEGREE)
