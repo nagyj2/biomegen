@@ -14,6 +14,9 @@ sea_level = 0.40      # normalised elevation below which tiles are ocean/water
 size_mode = "fixed"   # "fixed" (reproducible) or "auto" (fit to current terminal)
 scale_x = 1.0         # global per-axis generation scale (>1 stretches features along X)
 scale_y = 1.0
+size_km = [6000.0, 3000.0]   # physical map extent [east-west, north-south] in km
+center_lat = 35.0     # map-centre latitude in degrees (north positive; clamped to keep edges within +-89)
+center_lon = 0.0      # map-centre longitude in degrees (east positive)
 
 [compute]
 backend = "scipy"     # "scipy" | "numpy" | "pure"

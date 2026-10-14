@@ -19,6 +19,13 @@ VALUES: Dict[str, Any] = {
     # that axis (zooms out), <1 compresses them. Distinct from per-feature ``terrain.scale``.
     "scale_x": 1.0,
     "scale_y": 1.0,
+    # Physical extent of the whole map, [east-west, north-south] in km. Cells are
+    # size_km / (width, height) km, so they are anisotropic whenever the ratios differ.
+    "size_km": [6000.0, 3000.0],
+    # Map centre in degrees (north and east positive). The latitude is clamped so both map edges stay
+    # within +-89 degrees; it places the map on the globe for climate and the graticule.
+    "center_lat": 35.0,
+    "center_lon": 0.0,
     # The island-mask sanity gate regenerates with a perturbed seed up to this many times if a
     # seed produces less than ``min_land_fraction`` land (prevents empty-world cascades).
     "regen_attempts": 8,

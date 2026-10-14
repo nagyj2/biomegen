@@ -101,6 +101,14 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     _clamp(world, "min_land_fraction", 0.0, 1.0, errors, "world")
     if world.get("size_mode") not in (None, "fixed", "auto"):
         errors.append("world.size_mode must be 'fixed' or 'auto'")
+    size_km = world.get("size_km")
+    if size_km is not None and not (
+        isinstance(size_km, list)
+        and len(size_km) == 2
+        and all(isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 for v in size_km)
+    ):
+        errors.append(f"world.size_km must be two positive numbers [east-west, north-south], got {size_km!r}")
+    _clamp(world, "center_lat", -90.0, 90.0, errors, "world")
 
     # --- probabilities in [0, 1] ---
     roads = cfg.get("roads", {})

@@ -4,4 +4,5 @@
                  master seed via blake2b (never Python's per-process-salted ``hash()``).
 - ``noise``    : selectable noise backends + fractal Brownian motion + domain warping.
 - ``geometry`` : shared spatial primitives (neighbours, connected components, distance transforms, A*).
+- ``units``    : the km-true scale model (cell size in km, aspect, km/cell conversions, lat/lon).
 """
