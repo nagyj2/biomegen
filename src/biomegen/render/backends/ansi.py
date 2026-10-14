@@ -28,7 +28,7 @@ def _color_code(prefix: int, color: RGB, mode: str) -> str:
     return f"{prefix};5;{rgb_to_256(color)}"
 
 
-def _style_codes(fg: Optional[RGB], bg: Optional[RGB], bold: bool, mode: str) -> str:
+def style_codes(fg: Optional[RGB], bg: Optional[RGB], bold: bool, mode: str) -> str:
     codes = ["0"]
     if bold:
         codes.append("1")
@@ -54,7 +54,7 @@ def to_ansi(document: Document, mode: str = "truecolor") -> str:
         for span in row:
             style = (span.fg, span.bg, span.bold)
             if style != last:
-                parts.append(_style_codes(span.fg, span.bg, span.bold, mode))
+                parts.append(style_codes(span.fg, span.bg, span.bold, mode))
                 last = style
             parts.append(span.text)
         parts.append(_RESET)
