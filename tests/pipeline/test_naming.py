@@ -59,3 +59,55 @@ def test_naming_does_not_change_fingerprint(cfg):
     fp = w.fingerprint()
     naming.run(w, cfg, w.seed)
     assert w.fingerprint() == fp
+
+
+# --------------------------------------------------------------------------- geographic features
+def test_every_feature_is_named(world):
+    assert world.features and all(f.name for f in world.features)
+
+
+def test_lake_and_river_features_reuse_entity_names(world):
+    # One river, one name: the feature carries the River / Lake entity's name.
+    for f in world.features:
+        if f.kind == "lake":
+            assert f.name == world.lakes[f.ref].name
+        elif f.kind == "river":
+            assert f.name == world.rivers[f.ref].name
+
+
+@pytest.mark.parametrize("kind", ["range", "peak", "sea"])
+def test_feature_names_follow_a_configured_form(world, cfg, kind):
+    # Each name is one of the kind's forms with a root word in place of {n}.
+    forms = cfg.get(f"tables.geo_names.{kind}.forms")
+    prefix_suffix = [tuple(form.split("{n}")) for form in forms]
+    for f in (f for f in world.features if f.kind == kind):
+        assert any(f.name.startswith(a) and f.name.endswith(b) and len(f.name) > len(a + b) for a, b in prefix_suffix)
+
+
+def test_overridden_forms_are_used():
+    cfg = load_config(None)
+    cfg.data["tables"]["geo_names"]["sea"]["forms"] = ["Sea of {n}"]
+    world = pipeline.generate(cfg, 9999)
+    seas = [f.name for f in world.features if f.kind == "sea"]
+    assert seas and all(name.startswith("Sea of ") for name in seas)
+
+
+def test_feature_name_is_keyed_on_its_anchor(cfg):
+    from biomegen.naming import forge
+
+    row = cfg.get("tables.geo_names.range")
+    generators, naming_cfg = cfg.get("naming.generators"), cfg.section("naming")
+    first = forge.name_feature(7, "range", (10, 4), "norse", row, generators, naming_cfg)
+    again = forge.name_feature(7, "range", (10, 4), "norse", row, generators, naming_cfg)
+    others = {forge.name_feature(7, "range", (x, 4), "norse", row, generators, naming_cfg) for x in range(11, 21)}
+    assert first == again and len(others) > 1
+
+
+def test_form_without_placeholder_is_rejected():
+    from biomegen.config.defaults import get_defaults
+    from biomegen.config.validate import ConfigError, validate
+
+    bad = get_defaults()
+    bad["tables"]["geo_names"]["peak"]["forms"] = ["Mount Doom"]
+    with pytest.raises(ConfigError, match="geo_names.peak.forms"):
+        validate(bad)
