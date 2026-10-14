@@ -13,12 +13,32 @@ import numpy as np
 from ..world.world import World
 
 
+def bilinear_at(field: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Return ``field`` interpolated at tile positions ``(x, y)`` (tile centres on the integers, edge-clamped)."""
+    height, width = field.shape
+    x = np.clip(x, 0.0, width - 1.0)
+    y = np.clip(y, 0.0, height - 1.0)
+    x0 = np.minimum(np.floor(x).astype(np.int64), max(width - 2, 0))
+    y0 = np.minimum(np.floor(y).astype(np.int64), max(height - 2, 0))
+    x1 = np.minimum(x0 + 1, width - 1)
+    y1 = np.minimum(y0 + 1, height - 1)
+    tx = x - x0
+    ty = y - y0
+    top = field[y0, x0] * (1.0 - tx) + field[y0, x1] * tx
+    bottom = field[y1, x0] * (1.0 - tx) + field[y1, x1] * tx
+    return top * (1.0 - ty) + bottom * ty
+
+
 class Sampler:
     """Maps every cell of a ``rows x cols`` grid to a continuous world position ``(fx, fy)``.
 
     World coordinates are in tile units with tile centres on the integers, so ``fx = 3.0`` is the centre of
     column 3. Positions outside the world are flagged in :attr:`inside`; reads there are clamped to the edge
     tile and layers leave those cells blank.
+
+    Attributes:
+        sub_x: Index of the cell inside its tile's block of cells (zeros when a cell is a whole tile), so
+            decoration can differ cell to cell within one tile. ``sub_y`` is the row equivalent.
     """
 
     def __init__(self, world: World, fx: np.ndarray, fy: np.ndarray) -> None:
@@ -33,6 +53,8 @@ class Sampler:
         self.inside = (raw_x >= 0) & (raw_x < world.width) & (raw_y >= 0) & (raw_y < world.height)
         self.tile_x = np.clip(raw_x, 0, world.width - 1)
         self.tile_y = np.clip(raw_y, 0, world.height - 1)
+        self.sub_x = np.zeros(fx.shape, dtype=np.int64)
+        self.sub_y = np.zeros(fx.shape, dtype=np.int64)
 
     @classmethod
     def viewport(
@@ -74,19 +96,16 @@ class Sampler:
 
     def bilinear(self, field: np.ndarray, dx: float = 0.0, dy: float = 0.0) -> np.ndarray:
         """Return ``field`` interpolated at each cell's position offset by ``(dx, dy)`` tiles (edge-clamped)."""
-        height, width = field.shape
-        x = np.clip(self.fx + dx, 0.0, width - 1.0)
-        y = np.clip(self.fy + dy, 0.0, height - 1.0)
-        x0 = np.minimum(np.floor(x).astype(np.int64), max(width - 2, 0))
-        y0 = np.minimum(np.floor(y).astype(np.int64), max(height - 2, 0))
-        x1 = np.minimum(x0 + 1, width - 1)
-        y1 = np.minimum(y0 + 1, height - 1)
-        tx = x - x0
-        ty = y - y0
-        top = field[y0, x0] * (1.0 - tx) + field[y0, x1] * tx
-        bottom = field[y1, x0] * (1.0 - tx) + field[y1, x1] * tx
-        return top * (1.0 - ty) + bottom * ty
+        return bilinear_at(field, self.fx + dx, self.fy + dy)
+
+    def blended(self, field: np.ndarray) -> np.ndarray:
+        """Return ``field`` read where the biome is read: the nearest tile here, the warped one at detail scales."""
+        return self.nearest(field)
+
+    def coverage_mask(self, mask: np.ndarray) -> np.ndarray:
+        """Return where the boolean tile ``mask`` holds under each cell (the detail scales smooth its edge)."""
+        return self.nearest(mask)
 
     def biome(self) -> np.ndarray:
         """Return the biome under each cell (the detail scales override this with a blended lookup)."""
-        return self.nearest(self.world.biome)
+        return self.blended(self.world.biome)
