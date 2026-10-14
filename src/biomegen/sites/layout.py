@@ -13,6 +13,7 @@ from typing import Any, Callable, Optional
 import numpy as np
 
 from ..config.model import Config
+from ..world.tile import Cell
 from .patch import SitePatch
 from .streets import StreetRules
 
@@ -41,8 +42,9 @@ class SiteContext:
         lowest_floor: The lowest floor of the site.
         floor_count: How many floors the site has.
         patch: The terrain under the extent, and the road gates.
-        furniture: ``(cell name, weight)`` pairs of the site's furniture set.
+        furniture: Per room role, the site's furniture as ``(cell, weight)`` pairs.
         plaza_rows: A settlement's plaza radius in rows (0 for none).
+        walled: Whether a settlement has a wall.
         config: The merged configuration, for the tunables of the ``sites`` section.
     """
 
@@ -52,9 +54,14 @@ class SiteContext:
     lowest_floor: int
     floor_count: int
     patch: SitePatch
-    furniture: tuple[tuple[str, float], ...]
+    furniture: dict[str, list[tuple[Cell, float]]]
     plaza_rows: int
+    walled: bool
     config: Config
+
+    def weights(self, role: str) -> list[tuple[Cell, float]]:
+        """The furniture weights of a room role (empty: the role is left bare)."""
+        return self.furniture.get(role, [])
 
     @property
     def rows(self) -> int:

@@ -34,7 +34,7 @@ def test_seen_lists_the_interior_cells_drawn_at_detail_scale(config) -> None:
     world.pois.append(POI(kind="tower", x=5, y=5, interior_seed=11, floor_count=2))
     seen = Seen()
     build_grid(world, config, INTERIORS, DetailSampler(world, config, 18, 9, 0, 0, 10, 10, "local"), seen=seen)
-    assert int(Cell.WALL) in seen.cells and int(Cell.VOID) not in seen.cells
+    assert int(Cell.ROOF) in seen.cells and int(Cell.VOID) not in seen.cells
 
 
 def test_seen_is_empty_of_cells_without_structures(config) -> None:

@@ -14,8 +14,8 @@ VALUES: Dict[str, Any] = {
     "margin_tiles": 0.5,  # terrain kept around the extent in the site window (drawn in the POI view)
     "max_gates": 3,  # road gates cut into a site's edge, one per distinct side the roads arrive from
     "room_rows": [3, 6],  # room height range in rows; the width is this times render.cell_aspect
-    "building_rows": [3, 5],  # settlement building height range in rows (width widened like rooms)
-    "street_gap": [2, 1],  # clear ground [columns, rows] kept round each settlement building, beyond its wall
+    "building_rows": [5, 8],  # settlement building outer height range in rows, walls included
+    "street_gap": [2, 1],  # clear ground [columns, rows] between a settlement building and the street it faces
     "clutter_density": 0.10,  # fraction of free floor cells that get furniture
     "shape": "mixed",  # outline of solid structures: "rectangle", "blob", "cellular", "drunkard", "diamond", "cross"
     # or "mixed" to pick one per structure
@@ -23,13 +23,21 @@ VALUES: Dict[str, Any] = {
     "coast_margin_rows": 1,  # bare ground kept between a solid structure and any water, in rows
     "street_water_cost": 6.0,  # cost of a street cell over water relative to dry ground (it becomes a bridge)
     "bridge_max_rows": 6,  # the widest water, in rows, a settlement street will bridge
+    "settlement": {
+        "fill": 0.35,  # share of the buildable ground that lots try to cover with buildings
+        "trees": 0.03,  # share of free ground planted with trees and bushes
+        "drop": 0.25,  # a parallel street is left out this often, so the grid is loose
+        "jitter": 2,  # a parallel street is moved up to this many cells off the regular pitch
+        "wall_inset": [3, 2],  # [columns, rows] between a settlement wall and the edge of its extent
+        "lot_tries": 6,  # sizes tried at each spot along a street before moving on
+    },
     "extra_corridors": {"dungeon": 0.34, "tower": 0.15, "ruin": 0.2},  # extra room-to-room links per room, by layout
     "furnish": {
         "depth_density_gain": 0.6,  # dungeon furniture density grows by this share per unit of depth (0 top, 1 bottom)
         "chest_depth_gain": 36.0,  # extra chest weight at the bottom floor of a dungeon
         "corridor_rubble_chance": 0.45,  # a corridor cell picked for furnishing takes rubble this often
         "lookout_density": 0.5,  # a tower's top floor is dressed at this share of the usual density
-        "ruin_density": 1.5,  # ruins are strewn with debris: this multiple of clutter_density
+        "ruin_density": 0.8,  # ruins are strewn with debris: this multiple of clutter_density
         "ruin_crack": 0.5,  # floor cracks into rubble at this share of the wall-collapse rate
         "home_density": 1.6,  # homes are cosier than dungeons: this multiple of clutter_density
         "boat_density": 1.4,  # a deck is laden with cargo: this multiple of clutter_density

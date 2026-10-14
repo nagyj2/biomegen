@@ -62,10 +62,10 @@ def _extent(sampler, world, config):
     return slice(row0, row1), slice(col0, col1)
 
 
-def test_walls_are_drawn_in_the_extent() -> None:
+def test_a_building_is_a_roof_seen_from_outside() -> None:
     world = _world()
     grid, sampler, config = _draw(world)
-    assert config.get("render.interior_glyphs.wall") in grid.glyph[_extent(sampler, world, config)]
+    assert config.get("render.interior_glyphs.roof") in grid.glyph[_extent(sampler, world, config)]
 
 
 def test_cells_outside_the_extent_are_untouched() -> None:
@@ -89,13 +89,16 @@ def test_void_cells_let_the_terrain_show_through() -> None:
     assert kept.any()
 
 
-def test_zoom_hides_furniture_that_local_shows() -> None:
-    # A tower has furniture; zoom draws bare floor in its place, local draws it.
+def test_furniture_is_seen_only_at_the_site_scale() -> None:
+    # A tower has furniture inside; zoom and local show its roof, only the site view shows what is in it.
     world = _world("tower")
-    zoom, _, config = _draw(world, scale=SCALE_ZOOM)
+    config = _crisp_config()
+    furniture = {config.get(f"render.interior_glyphs.{name}") for name in ("table", "chest", "shelf", "bed", "chair")}
+    zoom, _, _ = _draw(world, scale=SCALE_ZOOM)
     local, _, _ = _draw(world)
-    furniture = {config.get(f"render.interior_glyphs.{name}") for name in ("table", "chest", "shelf", "bed")}
-    assert (furniture & set(np.unique(zoom.glyph)), bool(furniture & set(np.unique(local.glyph)))) == (set(), True)
+    site, _, _ = _draw_inside(world)
+    seen = [bool(furniture & set(np.unique(grid.glyph))) for grid in (zoom, local, site)]
+    assert seen == [False, False, True]
 
 
 def test_floor_selects_which_level_of_a_dungeon_is_drawn() -> None:
@@ -134,7 +137,7 @@ def test_a_boat_floats_on_water() -> None:
     world = _world("boat", Biome.SHALLOW)
     world.water_type[:] = int(WaterType.SALT)
     grid, sampler, config = _draw(world)
-    assert config.get("render.interior_glyphs.wall") in grid.glyph[_extent(sampler, world, config)]
+    assert config.get("render.interior_glyphs.hull") in grid.glyph[_extent(sampler, world, config)]
 
 
 def test_an_overlay_edit_shows_in_the_drawing() -> None:
@@ -168,16 +171,16 @@ def test_the_overlay_does_not_change_the_cached_plan() -> None:
 def test_the_fill_is_the_palette_colour() -> None:
     world = _world()
     grid, sampler, config = _draw(world)
-    wall = config.get("render.interior_palette.wall")
-    assert (grid.bg[_extent(sampler, world, config)] == np.asarray(wall, dtype=np.uint8)).all(axis=-1).any()
+    roof = config.get("render.interior_palette.roof")
+    assert (grid.bg[_extent(sampler, world, config)] == np.asarray(roof, dtype=np.uint8)).all(axis=-1).any()
 
 
-def test_map_scale_draws_the_structural_outline() -> None:
-    # On the overview a dungeon shows its walls but none of its furniture.
+def test_map_scale_draws_the_roofs() -> None:
+    # On the overview a dungeon's gatehouse shows as a roof, and none of its furniture.
     world = _world()
     config = _crisp_config()
     glyphs = set(np.unique(build_grid(world, config, WITH, Sampler.viewport(world, WORLD, WORLD)).glyph))
-    assert config.get("render.interior_glyphs.wall") in glyphs
+    assert config.get("render.interior_glyphs.roof") in glyphs
     assert config.get("render.interior_glyphs.table") not in glyphs
 
 

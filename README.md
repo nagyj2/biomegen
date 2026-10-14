@@ -185,7 +185,7 @@ Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[ta
 | `size_jitter` | `0.25` | Seeded per-POI variation of a site's extent |
 | `margin_tiles` | `0.5` | Terrain kept round a site's extent in the site view |
 | `max_gates` | `3` | Road gates cut into a site's edge |
-| `room_rows` / `building_rows` | `[3, 6]` / `[3, 5]` | Room and building height range in rows (widths follow `render.cell_aspect`) |
+| `room_rows` / `building_rows` | `[3, 6]` / `[5, 8]` | Room (interior) and building (outer) height range in rows (widths follow `render.cell_aspect`) |
 | `street_gap` | `[2, 1]` | Clear ground `[columns, rows]` round each settlement building |
 | `clutter_density` | `0.10` | Fraction of free floor cells furnished |
 | `shape` | `"mixed"` | Outline for solid buildings: `rectangle`/`blob`/`cellular`/`drunkard`/`diamond`/`cross`/`mixed` |

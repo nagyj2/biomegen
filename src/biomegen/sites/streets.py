@@ -67,20 +67,26 @@ def _longest_water_run(path: list[Point], dry: np.ndarray) -> int:
     return longest
 
 
-def lay_street(grid: np.ndarray, dry: np.ndarray, a: Point, b: Point, rules: StreetRules) -> bool:
-    """Route a street from ``a`` to ``b`` and write it; return False if there is no route or the water is too wide.
+def lay_street(grid: np.ndarray, dry: np.ndarray, a: Point, b: Point, rules: StreetRules) -> Optional[list[Point]]:
+    """Route a street from ``a`` to ``b`` and write it; return its path, or None if there is none or water is too wide.
 
-    Dry cells become path. Water cells become bridge deck, railed on both sides where there is water to rail.
+    Dry cells become path, and a vertical run is widened to the cell aspect in columns so it looks as thick as a
+    horizontal one. Water cells become bridge deck, railed on both sides where there is water to rail.
     """
     path = _route(grid, dry, a, b, rules)
     if path is None or _longest_water_run(path, dry) > rules.bridge_max:
-        return False
+        return None
     rows, cols = grid.shape
+    width = max(1, round(rules.aspect))
     for index, (x, y) in enumerate(path):
         if grid[y, x] != _VOID:
             continue
         if dry[y, x]:
             grid[y, x] = _PATH
+            vertical = (index > 0 and path[index - 1][0] == x) or (index + 1 < len(path) and path[index + 1][0] == x)
+            for extra in range(1, width):
+                if vertical and x + extra < cols and dry[y, x + extra] and grid[y, x + extra] == _VOID:
+                    grid[y, x + extra] = _PATH
             continue
         grid[y, x] = _BRIDGE
         prev = path[index - 1] if index else path[index + 1] if len(path) > 1 else (x, y)
@@ -88,4 +94,4 @@ def lay_street(grid: np.ndarray, dry: np.ndarray, a: Point, b: Point, rules: Str
         for rx, ry in across:
             if 0 <= rx < cols and 0 <= ry < rows and not dry[ry, rx] and grid[ry, rx] == _VOID:
                 grid[ry, rx] = _RAIL
-    return True
+    return path

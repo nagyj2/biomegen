@@ -1,56 +1,108 @@
-# Furniture sets, keyed by set name. Loaded into the config tree as `tables.furniture`; a site layout names the set it
-# dresses its floors from (`furniture` in sites.toml). Each key is a furniture cell (a lower-case `Cell` name in
-# world/tile.py) and each value its relative weight: weights need not sum to anything. A user override can reweight one
-# item, e.g. `[tables.furniture.dungeon]` + `chest = 10.0`.
+# Furniture, keyed by family and then by room role. Loaded into the config tree as `tables.furniture`; a site row names
+# a family (`furniture` in sites.toml) and its layout asks for a role per room. Each key under a role is a furniture
+# cell (a lower-case `Cell` name in world/tile.py) and each value its relative weight: weights need not sum to anything.
+# A user override can reweight one item, e.g. `[tables.furniture.dungeon.vault]` + `chest = 20.0`.
 #
-# Dungeons add depth-scaled chest weight on top of `chest` (sites.furnish.chest_depth_gain).
+# Roles a layout uses: homes `hall` (the largest room), `kitchen`, `bedroom`, `storage`; dungeons `hall`, `cell`, `vault`,
+# `passage` (corridors: rubble only); towers `study`, `bedroom`, `storage`, `lookout`; ruins `hall`, `debris`; boats
+# `deck`, `cabin`; camps `supplies`. A role that is missing leaves its rooms bare.
+# Dungeons add depth-scaled chest weight to every role that has `chest` (sites.furnish.chest_depth_gain).
 
-[furniture.home]
-bed = 16.0
-table = 15.0
+[furniture.home.hall]
+table = 14.0
 chair = 14.0
-hearth = 12.0
-shelf = 11.0
-chest = 9.0
-barrel = 8.0
-crate = 7.0
+hearth = 10.0
+shelf = 8.0
+chest = 3.0
 
-[furniture.dungeon]
-rubble = 20.0
-barrel = 14.0
+[furniture.home.kitchen]
+hearth = 14.0
+table = 10.0
+barrel = 10.0
+crate = 8.0
+shelf = 8.0
+
+[furniture.home.bedroom]
+bed = 18.0
+chest = 8.0
+shelf = 6.0
+chair = 4.0
+
+[furniture.home.storage]
+barrel = 12.0
 crate = 12.0
-table = 12.0
-chair = 11.0
-shelf = 9.0
-bed = 7.0
-hearth = 5.0
-chest = 4.0
+chest = 6.0
+shelf = 6.0
 
-[furniture.tower]
+[furniture.dungeon.hall]
+rubble = 20.0
+table = 10.0
+chair = 10.0
+barrel = 10.0
+crate = 8.0
+hearth = 4.0
+chest = 3.0
+
+[furniture.dungeon.cell]
+bed = 10.0
+rubble = 14.0
+crate = 6.0
+barrel = 4.0
+
+[furniture.dungeon.vault]
+chest = 16.0
+crate = 10.0
+barrel = 8.0
+shelf = 6.0
+
+[furniture.dungeon.passage]
+rubble = 10.0
+
+[furniture.tower.study]
 shelf = 16.0
 table = 14.0
 chair = 13.0
-bed = 12.0
-hearth = 8.0
-chest = 7.0
-barrel = 6.0
-crate = 6.0
+chest = 5.0
 
-[furniture.ruin]
-rubble = 40.0
+[furniture.tower.bedroom]
+bed = 16.0
 chest = 8.0
-barrel = 7.0
-crate = 6.0
+shelf = 6.0
+hearth = 6.0
+
+[furniture.tower.storage]
+barrel = 10.0
+crate = 10.0
+chest = 6.0
+
+[furniture.tower.lookout]
+barrel = 4.0
+crate = 4.0
+
+[furniture.ruin.hall]
+rubble = 40.0
+chest = 6.0
 table = 5.0
 shelf = 4.0
+barrel = 5.0
+
+[furniture.ruin.debris]
+rubble = 40.0
+crate = 6.0
+barrel = 6.0
 bed = 3.0
 
-[furniture.boat]
+[furniture.boat.deck]
 cargo = 10.0
 barrel = 6.0
 crate = 5.0
 
-[furniture.supplies]
+[furniture.boat.cabin]
+bed = 8.0
+chest = 6.0
+table = 4.0
+
+[furniture.camp.supplies]
 barrel = 5.0
 crate = 4.0
 rock = 2.0

@@ -1,9 +1,17 @@
-"""Solid structures: a dungeon that descends, a tower that rises and a ruin eroded to rubble.
+"""Solid structures: a dungeon that descends, a tower that rises and a ruin that has fallen in.
 
-All three share one recipe. Pick an outline (a seeded, floor-independent organic shape kept off water), partition it
-into rooms, link them with corridors, plant stair shafts that line up from floor to floor, seal everything in rock and
-wall, then dress the floor. The ground floor (floor 0) gets an entrance door, on the wall nearest the road's gate, and a
-street from the gate to it. Everything outside the outline is void, so the terrain shows round the structure.
+**Dungeon.** The ground floor (floor 0) is a gatehouse on the surface: one hall with a street door facing the road and
+the stairs down. Every floor below is underground: the whole extent is solid rock with passages carved out of it, thin
+walls round the rooms (or bare cave floor), and stairs that line up from floor to floor. Shallow floors are rooms
+joined by corridors; the deepest of a tall dungeon is a cave. Loot grows with depth.
+
+**Tower.** A keep that tapers as it rises: each floor is one room, a little smaller than the one below, with the stairs
+standing in the same column all the way up. Floor 0 has the street door; the top floor is an open lookout.
+
+**Ruin.** A building (rooms, doors, a street door) that has fallen in: stretches of wall are breached, some rooms have
+lost their roof, floors are rubble and trees have grown in. Seen from outside only the standing rooms have a roof.
+
+Everything outside a structure is void, so the terrain shows round it; underground floors have no terrain, only rock.
 """
 
 from __future__ import annotations
@@ -17,37 +25,34 @@ from scipy import ndimage
 
 from ..util import rng
 from ..world.tile import Cell
+from .building import Building, Spec, build_building
 from .carve import (
     Point,
     Rect,
-    add_walls,
     carve_corridor,
     carve_room,
     connect_floor_components,
-    fill_enclosed,
+    fit_rect,
     largest_component,
-    rect_in_mask,
     room_center,
 )
-from .circulation import floor_links, force_floor_access, punch_entrance, stair_links, stamp_stairs
-from .furnish import Weights, adjacent, free_floor, keep_reachable, scatter, weighted_choice
+from .circulation import floor_links, force_floor_access, stamp_stairs
+from .furnish import Weights, adjacent, keep_reachable, scatter, weighted_choice
 from .layout import SiteContext, layout
 from .partition import bsp_rooms
-from .shapes import SHAPES, outline
+from .shapes import SHAPES
 from .streets import lay_street
 
 _VOID = int(Cell.VOID)
 _FLOOR = int(Cell.FLOOR)
 _WALL = int(Cell.WALL)
-
-
-def _table(ctx: SiteContext, chest_bonus: float = 0.0) -> Weights:
-    """Return the site's furniture set as ``(Cell, weight)`` pairs, with extra weight on chests."""
-    table: Weights = []
-    for name, weight in ctx.furniture:
-        cell = Cell[name.upper()]
-        table.append((cell, weight + (chest_bonus if cell == Cell.CHEST else 0.0)))
-    return table
+_DOOR = int(Cell.DOOR)
+_PATH = int(Cell.PATH)
+_SOLID = int(Cell.SOLID)
+_ROOF = int(Cell.ROOF)
+_STONE = int(Cell.STONE)
+_RUBBLE = int(Cell.RUBBLE)
+_MIN_STAIR_GAP = 4  # cells between two staircases, so they never touch
 
 
 def _buildable(ctx: SiteContext) -> np.ndarray:
@@ -59,179 +64,312 @@ def _buildable(ctx: SiteContext) -> np.ndarray:
     return ndimage.binary_erosion(ctx.patch.dry, structure=structure, border_value=1)
 
 
-def _min_area(ctx: SiteContext) -> int:
-    room_rows = ctx.setting("room_rows")
-    low = int(room_rows[0])
-    return 2 * (math.ceil(low * ctx.aspect) + 2) * (low + 2)
+def _spec(ctx: SiteContext, roles: tuple[str, ...], density: float, **kwargs: object) -> Spec:
+    return Spec(
+        int(ctx.setting("room_rows")[0]),
+        ctx.aspect,
+        roles,
+        {role: ctx.weights(role) for role in roles},
+        density,
+        **kwargs,  # type: ignore[arg-type]
+    )
 
 
-def _outline(ctx: SiteContext, buildable: np.ndarray) -> Optional[np.ndarray]:
-    """Return the structure's outline: the seeded shape on buildable ground, or None if there is no room for rooms."""
-    stream = rng.derive(ctx.seed, "site.shape")
-    area = _min_area(ctx)
-    mask = largest_component(outline(str(ctx.setting("shape")), stream, ctx.cols, ctx.rows, area) & buildable)
-    if int(mask.sum()) < area:
-        mask = largest_component(SHAPES["rectangle"](stream, ctx.cols, ctx.rows) & buildable)
-    return mask if int(mask.sum()) >= area else None
+def _gate_target(ctx: SiteContext, rect: Rect) -> Point:
+    """The point a structure's street door faces, in the rectangle's own coordinates.
+
+    The first road gate when a road arrives; otherwise a seeded side, so a structure always has a way in.
+    """
+    if ctx.patch.gates:
+        gate = ctx.patch.gates[0]
+        return gate.col - rect[0], gate.row - rect[1]
+    x, y, w, h = rect
+    side = rng.derive(ctx.seed, "site.layout", "door").randint(0, 3)
+    return ((w // 2, h + 4), (w // 2, -4), (-4, h // 2), (w + 4, h // 2))[side]
 
 
-def _trim_to_land(grid: np.ndarray, dry: np.ndarray) -> None:
-    """Cut away any structure that strayed over water, and keep walls off the water too."""
-    grid[~dry & (grid != _VOID)] = _VOID
-    add_walls(grid)
-    grid[~dry & (grid == _WALL)] = _VOID
+def _fit(ctx: SiteContext, rows: int, cols: int) -> Optional[Rect]:
+    """Fit a ``rows x cols`` rectangle on buildable ground near the middle, shrinking it a little at a time."""
+    mask = _buildable(ctx)
+    middle = (ctx.cols // 2, ctx.rows // 2)
+    min_rows = int(ctx.setting("room_rows")[0]) + 2
+    min_cols = math.ceil((min_rows - 2) * ctx.aspect) + 2
+    while rows >= min_rows and cols >= min_cols:
+        rect = fit_rect(mask, rows, cols, middle, ctx.aspect)
+        if rect is not None:
+            return rect
+        rows, cols = rows - 1, cols - max(1, round(ctx.aspect))
+    return None
 
 
-def _room_structure(
-    ctx: SiteContext, mask: np.ndarray, stream: random.Random, access: list[Point], ratio: float
-) -> tuple[np.ndarray, list[Rect]]:
-    """Carve rooms and corridors inside ``mask`` and seal them into a solid building; return ``(grid, rooms)``."""
-    grid = np.full((ctx.rows, ctx.cols), _VOID, dtype=np.uint8)
+def _stamp(grid: np.ndarray, building: Building, rect: Rect) -> None:
+    x, y, w, h = rect
+    inside = building.cells != _VOID
+    grid[y : y + h, x : x + w][inside] = building.cells[inside]
+
+
+def _approach(ctx: SiteContext, grid: np.ndarray, building: Building, rect: Rect) -> None:
+    """Join a building's street door to the road: a street from the gate to the cell outside the door."""
+    if building.front is None or not ctx.patch.gates:
+        return
+    gate = ctx.patch.gates[0]
+    front = (rect[0] + building.front[0], rect[1] + building.front[1])
+    if 0 <= front[0] < ctx.cols and 0 <= front[1] < ctx.rows and grid[front[1], front[0]] == _VOID:
+        grid[front[1], front[0]] = _PATH
+        lay_street(grid, ctx.patch.dry, (gate.col, gate.row), front, ctx.street_rules)
+
+
+def _stair_links(ctx: SiteContext, area: np.ndarray, pinned: Optional[Point] = None) -> list[Point]:
+    """One cell per adjacent floor pair, drawn from ``area``; the last is ``pinned`` when given (the surface stairs).
+
+    The list depends only on the seed and the floor-independent ``area``, so every floor rebuilds the same links and the
+    shafts line up.
+    """
+    count = ctx.floor_count - 1
+    if count <= 0:
+        return []
+    stream = rng.derive(ctx.seed, "site.shaft")
+    candidates = [(int(x), int(y)) for y, x in np.argwhere(ndimage.binary_erosion(area, iterations=2)).tolist()]
+    candidates = candidates or [(int(x), int(y)) for y, x in np.argwhere(area).tolist()]
+    links: list[Point] = [pinned] if pinned is not None else []
+    free = count - len(links)
+    chosen: list[Point] = []
+    for _ in range(free):
+        far = [
+            c
+            for c in candidates
+            if all(max(abs(c[0] - q[0]), abs(c[1] - q[1])) >= _MIN_STAIR_GAP for q in chosen + links)
+        ]
+        chosen.append(stream.choice(far or candidates))
+    return chosen + links
+
+
+def _furnish_room_set(
+    grid: np.ndarray, cells: list[Point], stream: random.Random, table: Weights, density: float
+) -> None:
+    if table and cells:
+        scatter(grid, stream, cells, density, lambda r, _x, _y: weighted_choice(r, table))
+
+
+# --------------------------------------------------------------------------------------------------------- dungeon
+def _gatehouse(ctx: SiteContext) -> Optional[Rect]:
+    rows = max(7, round(ctx.rows * 0.42))
+    cols = max(round(rows * ctx.aspect * 1.2), round(ctx.cols * 0.3))
+    return _fit(ctx, min(rows, ctx.rows - 2), min(cols, ctx.cols - 2))
+
+
+def _gatehouse_stairs(rect: Rect) -> Point:
+    """The cell of the gatehouse hall where the stairs down stand: inside, off the walls."""
+    x, y, w, h = rect
+    return x + w // 2 + w // 5, y + h // 2
+
+
+def _underground(ctx: SiteContext, links: list[Point], cave: bool, stream: random.Random) -> np.ndarray:
+    """One underground floor: rock with rooms and corridors (or a cave) carved out and the stairs reachable."""
+    rows, cols = ctx.rows, ctx.cols
+    grid = np.full((rows, cols), _SOLID, dtype=np.uint8)
     width = ctx.vertical_width
-    room_rows = tuple(int(v) for v in ctx.setting("room_rows"))
-    candidates = bsp_rooms(stream, ctx.cols, ctx.rows, (room_rows[0], room_rows[1]), ctx.aspect)
-    rooms = [r for r in candidates if rect_in_mask(r, mask)]
-    if len(rooms) < 2:
-        rooms = [r for r in candidates if mask[room_center(r)[1], room_center(r)[0]]] or candidates
-    for room in rooms:
-        carve_room(grid, room)
-    centres = [room_center(r) for r in rooms]
-    for a, b in zip(centres, centres[1:], strict=False):
-        carve_corridor(grid, a, b, width)
-    if len(centres) >= 3:
-        for _ in range(int(len(centres) * ratio)):
+    up, down = floor_links(links, ctx.floor, ctx.lowest_floor, ctx.floor_count)
+    access = [c for c in (up, down) if c is not None]
+    carved = np.zeros((rows, cols), dtype=bool)
+    if cave:
+        shape = SHAPES["cellular"](rng.derive(ctx.seed, "site.shape", ctx.floor), cols, rows)
+        carved = largest_component(shape)
+        grid[carved] = _FLOOR
+        rooms: list[Rect] = []
+    else:
+        room_rows = ctx.setting("room_rows")
+        rooms = bsp_rooms(stream, cols, rows, (int(room_rows[0]), int(room_rows[1])), ctx.aspect, 2)
+        for room in rooms:
+            carve_room(grid, room)
+        centres = [room_center(r) for r in rooms]
+        for a, b in zip(centres, centres[1:], strict=False):
+            carve_corridor(grid, a, b, width)
+        for _ in range(int(len(centres) * float(ctx.setting("extra_corridors")["dungeon"]))):
             i, j = stream.randint(0, len(centres) - 1), stream.randint(0, len(centres) - 1)
             if i != j:
                 carve_corridor(grid, centres[i], centres[j], width)
     for cell in access:
-        force_floor_access(grid, cell, rooms, width)
+        force_floor_access(grid, cell, rooms or [(cell[0], cell[1], 1, 1)], width)
     connect_floor_components(grid, width)
-    grid[(mask | (grid != _VOID)) & (grid == _VOID)] = _WALL
-    add_walls(grid)
-    fill_enclosed(grid)
-    _trim_to_land(grid, ctx.patch.dry)
-    return grid, rooms
-
-
-def _front(grid: np.ndarray, door: Point) -> Optional[Point]:
-    """Return the open cell outside ``door``, where a street reaches it."""
-    rows, cols = grid.shape
-    x, y = door
-    for step_x, step_y in ((0, -1), (0, 1), (-1, 0), (1, 0)):
-        nx, ny = x + step_x, y + step_y
-        if 0 <= nx < cols and 0 <= ny < rows and int(grid[ny, nx]) == _VOID:
-            return nx, ny
-    return None
-
-
-def _enter(ctx: SiteContext, grid: np.ndarray, rooms: list[Rect]) -> Optional[Point]:
-    """Punch the ground-floor entrance toward the nearest road gate and lay a street to it; return the door."""
-    gates = ctx.patch.gates
-    target = (gates[0].col, gates[0].row) if gates else None
-    door = punch_entrance(grid, rooms, rng.derive(ctx.seed, "site.layout", "door"), target, ctx.vertical_width)
-    if door is not None and gates:
-        front = _front(grid, door)
-        if front is not None:
-            lay_street(grid, ctx.patch.dry, (gates[0].col, gates[0].row), front, ctx.street_rules)
-    return door
-
-
-def _build(ctx: SiteContext) -> Optional[tuple[np.ndarray, list[Rect], set[Point]]]:
-    """Build one floor's walls, corridors, stairs and entrance; return ``(grid, rooms, reserved cells)``."""
-    mask = _outline(ctx, _buildable(ctx))
-    if mask is None:
-        return None
-    links = stair_links(ctx.seed, mask, ctx.floor_count)
-    up, down = floor_links(links, ctx.floor, ctx.lowest_floor, ctx.floor_count)
-    ratio = float(ctx.setting("extra_corridors")[ctx.kind])
-    access = [cell for cell in (up, down) if cell is not None]
-    grid, rooms = _room_structure(ctx, mask, rng.derive(ctx.seed, "site.layout", ctx.floor), access, ratio)
-    reserved: set[Point] = set()
-    if ctx.floor == 0:
-        door = _enter(ctx, grid, rooms)
-        if door is not None:
-            reserved.add(door)
-    reserved |= stamp_stairs(grid, up, down)
-    return grid, rooms, reserved
-
-
-def _furnish_stream(ctx: SiteContext) -> random.Random:
-    return rng.derive(ctx.seed, "site.furnish", ctx.floor)
-
-
-def _clutter(ctx: SiteContext) -> float:
-    return float(ctx.setting("clutter_density"))
-
-
-def _furnish_setting(ctx: SiteContext, key: str) -> float:
-    return float(ctx.config.get(f"sites.furnish.{key}"))
-
-
-@layout("dungeon")
-def build_dungeon(ctx: SiteContext) -> Optional[np.ndarray]:
-    """A dungeon floor: rooms and warrens, with loot growing the deeper you go."""
-    built = _build(ctx)
-    if built is None:
-        return None
-    grid, rooms, reserved = built
+    floor = grid == _FLOOR
+    if not cave:
+        walls = ndimage.binary_dilation(floor, structure=np.ones((3, 3), bool)) & ~floor
+        grid[walls] = _WALL
+    reserved = stamp_stairs(grid, up, down)
+    depth = 0.0 if ctx.floor_count <= 1 else (ctx.top_floor - ctx.floor) / (ctx.floor_count - 1)
+    density = float(ctx.setting("clutter_density")) * (
+        1.0 + float(ctx.config.get("sites.furnish.depth_density_gain")) * depth
+    )
+    gain = float(ctx.config.get("sites.furnish.chest_depth_gain")) * depth
     room_mask = np.zeros(grid.shape, dtype=bool)
     for rx, ry, rw, rh in rooms:
         room_mask[ry : ry + rh, rx : rx + rw] = True
-    special = (grid == int(Cell.DOOR)) | (grid == int(Cell.STAIRS_UP)) | (grid == int(Cell.STAIRS_DOWN))
-    protected = (grid == _FLOOR) & (~room_mask | adjacent(special))
-    depth = 0.0 if ctx.floor_count <= 1 else (ctx.top_floor - ctx.floor) / (ctx.floor_count - 1)
-    density = _clutter(ctx) * (1.0 + _furnish_setting(ctx, "depth_density_gain") * depth)
-    table = _table(ctx, _furnish_setting(ctx, "chest_depth_gain") * depth)
-    chance = _furnish_setting(ctx, "corridor_rubble_chance")
+    special = (grid == int(Cell.STAIRS_UP)) | (grid == int(Cell.STAIRS_DOWN))
+    near = adjacent(special)
+    free = [(int(x), int(y)) for y, x in np.argwhere(grid == _FLOOR).tolist() if (int(x), int(y)) not in reserved]
+    vault_limit = 3 * int(ctx.setting("room_rows")[0]) * round(ctx.aspect)
+    passages = [c for c in free if not room_mask[c[1], c[0]] or near[c[1], c[0]]]
+    inside = [c for c in free if room_mask[c[1], c[0]] and not near[c[1], c[0]]]
+    small = {(rx, ry) for rx, ry, rw, rh in rooms if rw * rh <= vault_limit}
 
-    def choose(stream: random.Random, x: int, y: int) -> Optional[Cell]:
-        if protected[y, x]:
-            return Cell.RUBBLE if stream.random() < chance else None
-        return weighted_choice(stream, table)
+    def room_role(cell: Point) -> str:
+        for rx, ry, rw, rh in rooms:
+            if rx <= cell[0] < rx + rw and ry <= cell[1] < ry + rh:
+                return "vault" if (rx, ry) in small else ("cell" if rw * rh < 2 * vault_limit else "hall")
+        return "hall"
 
-    scatter(grid, _furnish_stream(ctx), free_floor(grid, reserved), density, choose)
+    stream_furnish = rng.derive(ctx.seed, "site.furnish", ctx.floor)
+    by_role: dict[str, list[Point]] = {}
+    for cell in inside:
+        by_role.setdefault(room_role(cell) if rooms else "hall", []).append(cell)
+    for role in sorted(by_role):
+        table = [(c, w + (gain if c == Cell.CHEST else 0.0)) for c, w in ctx.weights(role)]
+        _furnish_room_set(grid, by_role[role], stream_furnish, table, density)
+    _furnish_room_set(grid, passages, stream_furnish, ctx.weights("passage"), density)
     keep_reachable(grid, sorted(reserved))
     return grid
 
 
-@layout("tower")
-def build_tower(ctx: SiteContext) -> Optional[np.ndarray]:
-    """A tower floor: quarters with a study, beds and storage; the top floor is a bare lookout."""
-    built = _build(ctx)
-    if built is None:
+@layout("dungeon")
+def build_dungeon(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """A dungeon floor: the surface gatehouse at floor 0, rock with passages below."""
+    stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
+    house = _gatehouse(ctx)
+    if house is None:
         return None
-    grid, _rooms, reserved = built
-    density = _clutter(ctx) * (_furnish_setting(ctx, "lookout_density") if ctx.floor == ctx.top_floor else 1.0)
-    table = _table(ctx)
-    scatter(
-        grid,
-        _furnish_stream(ctx),
-        free_floor(grid, reserved),
-        density,
-        lambda stream, _x, _y: weighted_choice(stream, table),
+    area = np.zeros((ctx.rows, ctx.cols), dtype=bool)
+    area[2:-2, 4:-4] = True
+    links = _stair_links(ctx, area, _gatehouse_stairs(house))
+    if ctx.floor < 0:
+        cave = ctx.floor_count >= 4 and ctx.floor == ctx.lowest_floor
+        grid = _underground(ctx, links, cave, stream)
+        return grid, np.zeros_like(grid)
+    x, y, w, h = house
+    spec = _spec(ctx, ("hall",), float(ctx.setting("clutter_density")), shapes=("rect",), subdivide=False)
+    building = build_building(h, w, stream, spec, _gate_target(ctx, house))
+    if building is None:
+        return None
+    grid = np.full((ctx.rows, ctx.cols), _VOID, dtype=np.uint8)
+    _stamp(grid, building, house)
+    up, down = floor_links(links, ctx.floor, ctx.lowest_floor, ctx.floor_count)
+    reserved = stamp_stairs(grid, up, down)
+    keep_reachable(grid, sorted(reserved | set((x + dx, y + dy) for dx, dy in building.doors)))
+    _approach(ctx, grid, building, house)
+    outside = grid.copy()
+    outside[y : y + h, x : x + w][building.footprint] = _ROOF
+    return grid, outside
+
+
+# ----------------------------------------------------------------------------------------------------------- tower
+@layout("tower")
+def build_tower(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """A tower floor: one room, each floor a little smaller than the one below, the stairs in a single column."""
+    stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
+    base_rows = max(7, round(ctx.rows * 0.72))
+    base_cols = round(base_rows * ctx.aspect)
+    ground = _fit(ctx, min(base_rows, ctx.rows - 2), min(base_cols, ctx.cols - 2))
+    if ground is None:
+        return None
+    gx, gy, gw, gh = ground
+    taper_rows, taper_cols = 1, max(1, round(ctx.aspect))
+    min_rows = int(ctx.setting("room_rows")[0]) + 2
+    rects: list[Rect] = []
+    for level in range(ctx.floor_count):
+        shrink = min(level, max(0, (gh - min_rows) // (2 * taper_rows)))
+        rects.append(
+            (
+                gx + shrink * taper_cols,
+                gy + shrink * taper_rows,
+                gw - 2 * shrink * taper_cols,
+                gh - 2 * shrink * taper_rows,
+            )
+        )
+    top = rects[-1]
+    stair_area = np.zeros((ctx.rows, ctx.cols), dtype=bool)
+    stair_area[top[1] + 1 : top[1] + top[3] - 1, top[0] + 1 : top[0] + top[2] - 1] = True
+    links = _stair_links(ctx, stair_area)
+    rect = rects[ctx.floor - ctx.lowest_floor]
+    lookout = ctx.floor == ctx.top_floor and ctx.floor_count > 1
+    roles = ("lookout",) if lookout else ("study", "bedroom", "storage")
+    density = float(ctx.setting("clutter_density")) * (
+        float(ctx.config.get("sites.furnish.lookout_density")) if lookout else 1.0
     )
-    keep_reachable(grid, sorted(reserved))
-    return grid
+    spec = _spec(ctx, roles, density, shapes=("rect",), subdivide=False)
+    x, y, w, h = rect
+    building = build_building(h, w, stream, spec, _gate_target(ctx, rect) if ctx.floor == 0 else None)
+    if building is None:
+        return None
+    grid = np.full((ctx.rows, ctx.cols), _VOID, dtype=np.uint8)
+    _stamp(grid, building, rect)
+    up, down = floor_links(links, ctx.floor, ctx.lowest_floor, ctx.floor_count)
+    reserved = stamp_stairs(grid, up, down)
+    keep_reachable(grid, sorted(reserved | set((x + dx, y + dy) for dx, dy in building.doors)))
+    if ctx.floor == 0:
+        _approach(ctx, grid, building, rect)
+    outside = np.full_like(grid, _VOID)
+    if ctx.floor == 0:
+        outside = grid.copy()
+        outside[gy : gy + gh, gx : gx + gw][building.footprint] = _ROOF
+    return grid, outside
+
+
+# ------------------------------------------------------------------------------------------------------------ ruin
+def _breach(grid: np.ndarray, rect: Rect, stream: random.Random, count: int) -> None:
+    """Knock gaps in the walls: a run of two to six wall cells each, along a wall."""
+    x, y, w, h = rect
+    walls = [(int(cx), int(cy)) for cy, cx in np.argwhere(grid[y : y + h, x : x + w] == _WALL).tolist()]
+    walls = [(cx + x, cy + y) for cx, cy in walls]
+    for _ in range(count):
+        if not walls:
+            return
+        cx, cy = stream.choice(walls)
+        length = stream.randint(2, 6)
+        step = (1, 0) if grid[cy, min(cx + 1, grid.shape[1] - 1)] == _WALL else (0, 1)
+        for i in range(length):
+            nx, ny = cx + step[0] * i, cy + step[1] * i
+            if 0 <= nx < grid.shape[1] and 0 <= ny < grid.shape[0] and grid[ny, nx] == _WALL:
+                grid[ny, nx] = _RUBBLE if stream.random() < 0.6 else _VOID
 
 
 @layout("ruin")
-def build_ruin(ctx: SiteContext) -> Optional[np.ndarray]:
-    """A ruin: a building, eroded into breaches and rubble, strewn with debris."""
-    built = _build(ctx)
-    if built is None:
+def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """A ruin: a building fallen in, with breaches, rubble, trees and the rooms that kept their roofs."""
+    stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
+    rows = max(9, round(ctx.rows * 0.85))
+    cols = max(round(rows * ctx.aspect * 1.4), round(ctx.cols * 0.75))
+    rect = _fit(ctx, min(rows, ctx.rows - 2), min(cols, ctx.cols - 2))
+    if rect is None:
         return None
-    grid, _rooms, reserved = built
-    roll = rng.derive_numpy(ctx.seed, "site.erode").random(grid.shape)
-    erosion = float(ctx.setting("ruin_erosion"))
-    grid[(grid == _WALL) & (roll < erosion)] = _VOID
-    grid[(grid == _FLOOR) & (roll < erosion * _furnish_setting(ctx, "ruin_crack"))] = int(Cell.RUBBLE)
-    density = min(0.9, _clutter(ctx) * _furnish_setting(ctx, "ruin_density"))
-    table = _table(ctx)
-    scatter(
-        grid,
-        _furnish_stream(ctx),
-        free_floor(grid, reserved),
-        density,
-        lambda stream, _x, _y: weighted_choice(stream, table),
+    x, y, w, h = rect
+    spec = _spec(
+        ctx,
+        ("hall", "debris"),
+        float(ctx.setting("clutter_density")) * float(ctx.config.get("sites.furnish.ruin_density")),
     )
-    return grid
+    building = build_building(h, w, stream, spec, _gate_target(ctx, rect))
+    if building is None:
+        return None
+    grid = np.full((ctx.rows, ctx.cols), _VOID, dtype=np.uint8)
+    _stamp(grid, building, rect)
+    erosion = float(ctx.setting("ruin_erosion"))
+    _breach(grid, rect, stream, max(2, round(erosion * len(building.rooms) * 3)))
+    floor = grid == _FLOOR
+    roll = rng.derive_numpy(ctx.seed, "site.erode").random(grid.shape)
+    crack = erosion * float(ctx.config.get("sites.furnish.ruin_crack"))
+    grid[floor & (roll < crack)] = _RUBBLE
+    standing = [room for room in building.rooms if stream.random() >= erosion]
+    plants = [
+        (cx, cy)
+        for cy, cx in np.argwhere(grid == _FLOOR).tolist()
+        if all(not (rx <= cx - x < rx + rw and ry <= cy - y < ry + rh) for rx, ry, rw, rh in standing)
+    ]
+    for cx, cy in stream.sample(plants, min(len(plants), len(plants) // 8)):
+        grid[cy, cx] = int(Cell.TREE) if stream.random() < 0.5 else int(Cell.BUSH)
+    if ctx.patch.gates:
+        _approach(ctx, grid, building, rect)
+    outside = grid.copy()
+    outside[outside == _WALL] = _STONE
+    for rx, ry, rw, rh in standing:
+        outside[y + ry : y + ry + rh, x + rx : x + rx + rw] = _ROOF
+    return grid, outside

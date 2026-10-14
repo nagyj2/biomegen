@@ -42,6 +42,7 @@ class Building:
         front: The open cell outside the street door (in this grid, possibly just off it), or None.
         doors: Every door cell, the street door first.
         roles: ``(role, floor cells)`` per room, largest first.
+        rooms: Each room's outer rectangle ``(x, y, w, h)`` (walls included), in the order the rooms were cut.
     """
 
     cells: np.ndarray
@@ -49,6 +50,7 @@ class Building:
     front: Optional[Point]
     doors: tuple[Point, ...]
     roles: tuple[tuple[str, int], ...]
+    rooms: tuple[Rect, ...]
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,7 @@ class Spec:
         furniture: Weights per role (a role with no entry stays bare).
         density: Share of a room's floor cells that get furniture.
         shapes: Which of ``rect``, ``L`` and ``T`` are allowed.
+        subdivide: False keeps the building one room (a gatehouse or a tower floor, where a stair must stand on floor).
     """
 
     min_room_rows: int
@@ -70,6 +73,7 @@ class Spec:
     furniture: dict[str, Weights]
     density: float
     shapes: tuple[str, ...] = ("rect", "L", "T")
+    subdivide: bool = True
 
 
 def _wings(rows: int, cols: int, shape: str, rgen: random.Random) -> list[Rect]:
@@ -161,7 +165,11 @@ def build_building(
     flip_y = rgen.random() < 0.5
     rooms: list[Rect] = []
     for wing in _wings(rows, cols, shape, rgen):
-        rooms += _split(rgen, wing, spec.min_room_rows, spec.aspect, 3 * spec.min_room_rows + 1)
+        rooms += (
+            _split(rgen, wing, spec.min_room_rows, spec.aspect, 3 * spec.min_room_rows + 1)
+            if spec.subdivide
+            else [wing]
+        )
 
     grid = np.full((rows, cols), _VOID, dtype=np.uint8)
     footprint = np.zeros((rows, cols), dtype=bool)
@@ -219,7 +227,7 @@ def build_building(
                 doors.append(door)
 
     roles = _furnish(grid, rooms, start, rgen, spec, doors)
-    return Building(grid, footprint, front, tuple(doors), roles)
+    return Building(grid, footprint, front, tuple(doors), roles, tuple(rooms))
 
 
 def _furnish(

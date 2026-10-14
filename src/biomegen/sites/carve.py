@@ -114,3 +114,20 @@ def nearest_true(mask: np.ndarray, point: Point, aspect: float = 2.0) -> Optiona
     distance = ((cells[:, 1] - px) / aspect) ** 2 + (cells[:, 0] - py) ** 2
     y, x = cells[int(np.argmin(distance))]
     return int(x), int(y)
+
+
+def fit_rect(mask: np.ndarray, rows: int, cols: int, near: Point, aspect: float = 2.0) -> Optional[Rect]:
+    """Return the ``(x, y, w, h)`` rectangle of ``rows x cols`` inside ``mask`` nearest ``near``, or None."""
+    height, width = mask.shape
+    if rows > height or cols > width or rows < 1 or cols < 1:
+        return None
+    table = np.zeros((height + 1, width + 1), dtype=np.int64)
+    table[1:, 1:] = mask.astype(np.int64).cumsum(0).cumsum(1)
+    full = (table[rows:, cols:] - table[:-rows, cols:] - table[rows:, :-cols] + table[:-rows, :-cols]) == rows * cols
+    spots = np.argwhere(full)
+    if len(spots) == 0:
+        return None
+    centre_x, centre_y = spots[:, 1] + cols / 2.0, spots[:, 0] + rows / 2.0
+    distance = ((centre_x - near[0]) / aspect) ** 2 + (centre_y - near[1]) ** 2
+    y, x = spots[int(np.argmin(distance))]
+    return int(x), int(y), cols, rows

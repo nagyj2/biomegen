@@ -69,6 +69,7 @@ _SITE_ROW = {
     "rows_per_tile": "count",
     "grows_with_pop": "bool",
     "plaza_tiles": "positive",
+    "walled": "bool",
 }
 _STYLE_ROW = {
     "label": "text",
@@ -97,7 +98,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "tiers": (_TIER_ROW, frozenset({"bg"})),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
-    "sites": (_SITE_ROW, frozenset({"plaza_tiles"})),
+    "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled"})),
 }
 
 
@@ -145,34 +146,39 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
 
 
 def _validate_furniture(tables: Dict[str, Any], errors: List[str]) -> None:
-    """Check the furniture sets: every key a furniture cell, every weight a number >= 0, each set not all zero; and
-    that every site row names a set that exists."""
+    """Check the furniture families: each a table of roles, each role a table of weights, every key a furniture cell,
+    every weight a number >= 0, no role all zero; and that every site row names a family that exists."""
     from ..world.tile import Cell
 
     furniture = tables.get("furniture", {})
     if not isinstance(furniture, dict):
-        errors.append("tables.furniture must be a table of sets")
+        errors.append("tables.furniture must be a table of families")
         return
     names = {cell.name.lower() for cell in Cell}
-    for set_name in sorted(furniture):
-        weights = furniture[set_name]
-        where = f"tables.furniture.{set_name}"
-        if not isinstance(weights, dict):
-            errors.append(f"{where} must be a table of cell weights")
+    for family in sorted(furniture):
+        roles = furniture[family]
+        if not isinstance(roles, dict):
+            errors.append(f"tables.furniture.{family} must be a table of roles")
             continue
-        for key in sorted(weights):
-            if key not in names:
-                errors.append(f"{where}: unknown cell {key!r}")
-            elif not _is_number(weights[key]) or weights[key] < 0:
-                errors.append(f"{where}.{key}: expected a weight >= 0, got {weights[key]!r}")
-        if weights and all(_is_number(w) and w == 0 for w in weights.values()):
-            errors.append(f"{where}: needs at least one weight above 0")
+        for role in sorted(roles):
+            weights = roles[role]
+            where = f"tables.furniture.{family}.{role}"
+            if not isinstance(weights, dict):
+                errors.append(f"{where} must be a table of cell weights")
+                continue
+            for key in sorted(weights):
+                if key not in names:
+                    errors.append(f"{where}: unknown cell {key!r}")
+                elif not _is_number(weights[key]) or weights[key] < 0:
+                    errors.append(f"{where}.{key}: expected a weight >= 0, got {weights[key]!r}")
+            if weights and all(_is_number(w) and w == 0 for w in weights.values()):
+                errors.append(f"{where}: needs at least one weight above 0")
     sites = tables.get("sites", {})
     if isinstance(sites, dict):
         for kind in sorted(sites):
             row = sites[kind]
             if isinstance(row, dict) and row.get("furniture") not in furniture:
-                errors.append(f"tables.sites.{kind}.furniture: no furniture set named {row.get('furniture')!r}")
+                errors.append(f"tables.sites.{kind}.furniture: no furniture family named {row.get('furniture')!r}")
 
 
 def _validate_member_tables(tables: Dict[str, Any], errors: List[str]) -> None:

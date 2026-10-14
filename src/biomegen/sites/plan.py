@@ -16,6 +16,7 @@ import numpy as np
 
 from ..config.model import Config
 from ..world.entities import POI
+from ..world.tile import Cell
 from ..world.world import World
 from . import boat, camp, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
@@ -86,8 +87,12 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         lowest_floor=int(poi.lowest_floor),
         floor_count=int(poi.floor_count),
         patch=read_patch(poi, geometry, world, config),
-        furniture=tuple(sorted(config.get(f"tables.furniture.{row['furniture']}").items())),
+        furniture={
+            role: [(Cell[name.upper()], float(weight)) for name, weight in sorted(weights.items())]
+            for role, weights in sorted(config.get(f"tables.furniture.{row['furniture']}").items())
+        },
         plaza_rows=round(float(row.get("plaza_tiles", 0.0)) * int(row["rows_per_tile"])),
+        walled=bool(row.get("walled", False)),
         config=config,
     )
     built = LAYOUTS[row["layout"]](context)

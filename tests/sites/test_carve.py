@@ -113,3 +113,28 @@ def test_nearest_true_finds_the_closest_cell_on_screen() -> None:
 
 def test_nearest_true_of_an_empty_mask_is_none() -> None:
     assert nearest_true(np.zeros((3, 3), dtype=bool), (1, 1)) is None
+
+
+def test_fit_rect_finds_a_rectangle_inside_the_mask() -> None:
+    from biomegen.sites.carve import fit_rect
+
+    mask = np.zeros((10, 20), dtype=bool)
+    mask[2:8, 3:15] = True
+    assert fit_rect(mask, 4, 8, (9, 5)) is not None
+    x, y, w, h = fit_rect(mask, 4, 8, (9, 5))  # type: ignore[misc]
+    assert mask[y : y + h, x : x + w].all() and (w, h) == (8, 4)
+
+
+def test_fit_rect_takes_the_spot_nearest_the_point() -> None:
+    from biomegen.sites.carve import fit_rect
+
+    mask = np.ones((10, 30), dtype=bool)
+    assert fit_rect(mask, 4, 6, (3, 5))[0] < 3  # type: ignore[index]
+
+
+def test_fit_rect_gives_none_when_nothing_fits() -> None:
+    from biomegen.sites.carve import fit_rect
+
+    mask = np.zeros((10, 20), dtype=bool)
+    mask[3:5, 3:9] = True
+    assert fit_rect(mask, 4, 8, (5, 5)) is None

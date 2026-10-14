@@ -19,7 +19,7 @@ _FLOOR = int(Cell.FLOOR)
 
 
 @layout("camp")
-def build_camp(ctx: SiteContext) -> Optional[np.ndarray]:
+def build_camp(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     """A camp floor: clearing, campfire, tents, a wagon and supplies, all on dry ground."""
     rows, cols, aspect = ctx.rows, ctx.cols, ctx.aspect
     dry = ctx.patch.dry
@@ -53,7 +53,7 @@ def build_camp(ctx: SiteContext) -> Optional[np.ndarray]:
         grid[wy, wx] = int(Cell.WAGON)
 
     density = max(0.04, float(ctx.setting("clutter_density")) * float(ctx.config.get("sites.furnish.supply_density")))
-    table = [(Cell[name.upper()], weight) for name, weight in ctx.furniture]
+    table = ctx.weights("supplies")
     furnish = rng.derive(ctx.seed, "site.furnish", ctx.floor)
     scatter(grid, furnish, free_floor(grid), density, lambda r, _x, _y: weighted_choice(r, table))
     grid[~dry] = _VOID  # a tent or wagon that landed on water is gone
@@ -63,4 +63,4 @@ def build_camp(ctx: SiteContext) -> Optional[np.ndarray]:
         edge = nearest_true(clearing, (gate.col, gate.row), aspect)
         if edge is not None:
             lay_street(grid, dry, (gate.col, gate.row), edge, ctx.street_rules)
-    return grid
+    return grid, grid.copy()

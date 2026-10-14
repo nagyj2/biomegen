@@ -46,10 +46,10 @@ def test_nearly_every_site_has_a_plan(world: World, cfg: Config) -> None:
 
 
 def test_no_structure_stands_on_water(world: World, cfg: Config) -> None:
-    # Away from boats, every non-void plan cell is dry ground, except bridge decks and their railings.
+    # Away from boats and underground floors, every non-void plan cell is dry ground, except bridge decks and railings.
     for poi, geometry, plan in _plans(world, cfg):
-        if poi.kind == "boat":
-            continue
+        if poi.kind == "boat" or plan.floor < 0:
+            continue  # a boat floats; an underground floor is rock and has no surface to be on
         dry = read_patch(poi, geometry, world, cfg).dry
         bad = (plan.cells != VOID) & ~dry & ~np.isin(plan.cells, list(OVER_WATER))
         assert not bad.any(), f"{poi.kind} at {poi.x},{poi.y} has {int(bad.sum())} cells over water"
@@ -73,20 +73,23 @@ def test_doors_and_stairs_are_mutually_reachable(world: World, cfg: Config) -> N
         assert len(marks - {0}) <= 1, f"{poi.kind} at {poi.x},{poi.y} floor {plan.floor}"
 
 
-def test_every_settlement_door_opens_onto_a_street(world: World, cfg: Config) -> None:
-    # A building's door has a path, bridge or plaza cell in front of it, so it connects to the street network.
-    path = {int(Cell.PATH), int(Cell.BRIDGE)}
+def test_no_building_door_opens_onto_bare_ground(world: World, cfg: Config) -> None:
+    # In a settlement a door joins two rooms, or a room and a street: never a room and the empty terrain. (A gate in a
+    # city wall has street on both ends, so it is skipped; a structure with no road may open onto bare ground.)
+    street = {int(Cell.PATH), int(Cell.BRIDGE)}
     for poi, _geometry, plan in _plans(world, cfg):
         if poi.kind not in {"capital", "city", "town", "village"}:
             continue
         cells = plan.cells
+        rows, cols = cells.shape
         for y, x in np.argwhere(cells == int(Cell.DOOR)).tolist():
-            around = [
-                int(cells[ny, nx])
-                for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1))
-                if 0 <= ny < cells.shape[0] and 0 <= nx < cells.shape[1]
-            ]
-            assert path & set(around), f"{poi.kind} at {poi.x},{poi.y}"
+            above = int(cells[y - 1, x]) if y else VOID
+            below = int(cells[y + 1, x]) if y + 1 < rows else VOID
+            left = int(cells[y, x - 1]) if x else VOID
+            right = int(cells[y, x + 1]) if x + 1 < cols else VOID
+            if (above in street and below in street) or (left in street and right in street):
+                continue
+            assert VOID not in (above, below, left, right), f"{poi.kind} at {poi.x},{poi.y} floor {plan.floor}"
 
 
 def test_the_ground_floor_of_a_structure_has_a_door(world: World, cfg: Config) -> None:
