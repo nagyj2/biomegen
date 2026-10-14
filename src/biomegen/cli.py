@@ -4,7 +4,8 @@ Run the CLI application with::
 
     uv run biomegen [--seed N] [--config path.toml] [--width W] [--height H]
                     [--noise-backend {perlin,value,opensimplex}] [--poi-sampler {bluenoise,random,grid}]
-                    [--headless]
+                    [--headless] [--view NAME] [--labels {all,cities,none}] [--color {auto,truecolor,256,none}]
+                    [--ascii] [--no-legend] [--save FILE] [--html FILE] [--color-test]
 
 This launcher wires together the three top-level concerns and nothing else:
     1. parse CLI arguments,
@@ -19,6 +20,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
+from pathlib import Path
 from typing import Any, Optional, Sequence
 
 from biomegen.config import Config, load_config
@@ -73,11 +76,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Generate the world and print summary statistics without launching the UI.",
     )
     parser.add_argument(
-        "--preview",
-        action="store_true",
-        help="Print a no-colour ASCII rendering of the biome map (no terminal needed).",
-    )
-    parser.add_argument(
         "--preview-zoom", action="store_true", help="Print a no-colour ASCII rendering of the mid 'zoom' detail view."
     )
     parser.add_argument(
@@ -94,7 +92,122 @@ def _build_parser() -> argparse.ArgumentParser:
             "full resolution, 'view' = the biome map. Writes SVG always, PNG if Pillow is installed."
         ),
     )
+    parser.add_argument("--style", default=None, help="Landmass style (a tables.styles row, or 'seed' to draw one).")
+    parser.add_argument(
+        "--size-km", type=_parse_size_km, default=None, metavar="WxH", help="Map extent in km, east-west x north-south."
+    )
+    parser.add_argument(
+        "--lat", type=float, default=None, help="Latitude of the map centre in degrees (north positive)."
+    )
+    parser.add_argument(
+        "--lon", type=float, default=None, help="Longitude of the map centre in degrees (east positive)."
+    )
+    parser.add_argument(
+        "--view",
+        default=None,
+        help="Print a static map of this render.views entry (terrain, elevation, temperature, rainfall) and exit.",
+    )
+    parser.add_argument("--labels", choices=("all", "cities", "none"), default="all", help="Which names to draw.")
+    parser.add_argument(
+        "--color",
+        choices=("auto", "truecolor", "256", "none"),
+        default="auto",
+        help="Colour mode of static output (auto detects the terminal).",
+    )
+    parser.add_argument("--ascii", action="store_true", help="Use only 7-bit ASCII glyphs in static output.")
+    parser.add_argument("--no-legend", action="store_true", help="Print only the map, without the legend.")
+    parser.add_argument(
+        "--save",
+        metavar="FILE",
+        default=None,
+        help="Also save the static map; the suffix picks .txt, .html, .svg or .png.",
+    )
+    parser.add_argument(
+        "--html", metavar="FILE", default=None, help="Also save a coloured HTML copy of the static map."
+    )
+    parser.add_argument("--color-test", action="store_true", help="Show colour and glyph test swatches and exit.")
     return parser
+
+
+def _parse_size_km(text: str) -> tuple[float, float]:
+    """Parse ``6000x3000`` (km, east-west x north-south) for ``--size-km``."""
+    try:
+        east_west, north_south = text.lower().replace("km", "").split("x")
+        return float(east_west), float(north_south)
+    except ValueError:
+        raise argparse.ArgumentTypeError("size must look like 6000x3000 (width x height in km)") from None
+
+
+def _detect_color() -> str:
+    """Return the colour mode this terminal supports: ``truecolor``, ``256`` or ``none`` (piped or NO_COLOR)."""
+    if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
+        return "none"
+    colorterm = os.environ.get("COLORTERM", "").lower()
+    if (
+        colorterm in ("truecolor", "24bit")
+        or os.environ.get("WT_SESSION")
+        or os.name == "nt"
+        or os.environ.get("TERM_PROGRAM") in ("iTerm.app", "vscode", "WezTerm")
+    ):
+        return "truecolor"
+    return "256"
+
+
+def _print_color_test(color: str) -> None:
+    from biomegen.render.backends.ansi import to_ansi
+    from biomegen.render.backends.plain import to_plain
+    from biomegen.render.colortest import color_test
+
+    hints = {k: os.environ[k] for k in ("WT_SESSION", "COLORTERM", "TERM", "TERM_PROGRAM") if os.environ.get(k)}
+    document = color_test(_detect_color(), hints)
+    mode = _detect_color() if color == "auto" else color
+    print(to_plain(document) if mode == "none" else to_ansi(document, mode))
+
+
+def _run_static(world: Any, config: Config, args: argparse.Namespace) -> None:
+    """Print (and optionally save) a static map of the whole world."""
+    from biomegen.render.backends.ansi import to_ansi
+    from biomegen.render.backends.html import to_html
+    from biomegen.render.backends.plain import to_plain
+    from biomegen.render.static import render_static
+
+    mode = _detect_color() if args.color == "auto" else args.color
+    static = render_static(
+        world,
+        config,
+        args.view or "terrain",
+        labels=args.labels,
+        ascii_only=args.ascii,
+        color=mode != "none",
+        legend=not args.no_legend,
+    )
+    print(to_plain(static.document) if mode == "none" else to_ansi(static.document, mode))
+    title = f"The World of {world.island_name}"
+    if args.html:
+        Path(args.html).write_text(to_html(static.document, title), encoding="utf-8")
+    if args.save:
+        _save_static(static, Path(args.save), config, title)
+
+
+def _save_static(static: Any, path: Path, config: Config, title: str) -> None:
+    """Write ``static`` to ``path`` in the back-end its suffix names (.html, .svg, .png, else plain text)."""
+    from biomegen.render.backends.html import to_html
+    from biomegen.render.backends.plain import to_plain
+    from biomegen.render.backends.png import render_png
+    from biomegen.render.backends.svg import render_svg
+
+    suffix = path.suffix.lower()
+    background = tuple(config.get("export.background"))
+    cell_px = int(config.get("export.cell_px"))
+    if suffix == ".svg":
+        path.write_text(render_svg(static.grid, cell_px, background), encoding="utf-8")
+    elif suffix == ".png":
+        if not render_png(static.grid, cell_px, background, str(path)):
+            print("(install Pillow to save PNG)", file=sys.stderr)
+    elif suffix in (".html", ".htm"):
+        path.write_text(to_html(static.document, title), encoding="utf-8")
+    else:
+        path.write_text(to_plain(static.document) + "\n", encoding="utf-8")
 
 
 def resolve_seed(cli_seed: Optional[str], config: Config) -> int:
@@ -112,11 +225,8 @@ def resolve_seed(cli_seed: Optional[str], config: Config) -> int:
     return rng.normalize_seed(int.from_bytes(os.urandom(8), "big"))
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    args = _build_parser().parse_args(argv)
-    config = load_config(args.config)
-
-    # Apply CLI overrides directly onto the merged config tree (CLI > config file > defaults).
+def _apply_overrides(args: argparse.Namespace, config: Config, parser: argparse.ArgumentParser) -> None:
+    """Apply CLI overrides directly onto the merged config tree (CLI > config file > defaults)."""
     if args.width is not None:
         config.data["world"]["width"] = args.width
     if args.height is not None:
@@ -125,6 +235,36 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         config.data["terrain"]["noise_backend"] = args.noise_backend
     if args.poi_sampler is not None:
         config.data["poi"]["sampler"] = args.poi_sampler
+    if args.style is not None:
+        if args.style != "seed" and args.style not in config.get("tables.styles"):
+            parser.error(f"unknown style {args.style!r}; available: seed, {', '.join(config.get('tables.styles'))}")
+        config.data["terrain"]["style"] = args.style
+    if args.view is not None and args.view not in config.get("render.views"):
+        parser.error(f"unknown view {args.view!r}; available: {', '.join(config.get('render.views'))}")
+    if args.size_km is not None:
+        config.data["world"]["size_km"] = list(args.size_km)
+    if args.lat is not None:
+        config.data["world"]["center_lat"] = args.lat
+    if args.lon is not None:
+        config.data["world"]["center_lon"] = args.lon
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    if os.name == "nt":
+        os.system("")  # enables VT escape processing on Windows 10+
+    if not args.ascii:
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        except AttributeError, ValueError:
+            pass
+    if args.color_test:
+        _print_color_test(args.color)
+        return 0
+    config = load_config(args.config)
+
+    _apply_overrides(args, config, parser)
 
     seed = resolve_seed(args.seed, config)
     print(f"biomegen: seed={seed}")
@@ -138,11 +278,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _print_stats(pipeline.stats(world))
         return 0
 
-    if args.preview or args.preview_zoom or args.preview_local:
+    if args.view or args.save or args.html:
+        _run_static(world, config, args)
+        return 0
+
+    if args.preview_zoom or args.preview_local:
         from biomegen.render import preview
 
-        if args.preview:
-            print(preview.render_biome_ascii(world, config))
         if args.preview_zoom:
             print(preview.render_zoom_ascii(world, config))
         if args.preview_local:

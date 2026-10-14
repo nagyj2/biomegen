@@ -53,7 +53,7 @@ uv run biomegen --noise-backend value                  # use value noise (cheape
 uv run biomegen --poi-sampler random                   # random POI placement instead of default blue-noise
 uv run biomegen --poi-sampler grid                     # evenly-spaced POI placement
 uv run biomegen --seed 1 --headless                    # generate + print stats, no terminal needed
-uv run biomegen --seed 1 --preview                     # ASCII biome map, no curses
+uv run biomegen --seed 1 --view terrain --color none    # static map with legend, no curses
 uv run biomegen --seed 1 --preview-zoom                # ASCII mid-detail (zoom) view
 uv run biomegen --seed 1 --preview-local               # ASCII close-detail (local) view
 uv run biomegen --seed 1 --export world                # write a full-island image to ./images, no UI
