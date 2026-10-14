@@ -17,6 +17,7 @@ _VOID = int(Cell.VOID)
 _FLOOR = int(Cell.FLOOR)
 _HULL = int(Cell.HULL)
 _MIN_DECK = 12  # a deck with fewer cells than this is no boat
+_MIN_CABIN_ROWS = 4  # a deckhouse needs at least this many rows (walls included)
 
 
 def _hull(rows: int, cols: int) -> np.ndarray:
@@ -31,15 +32,23 @@ def _hull(rows: int, cols: int) -> np.ndarray:
 
 
 def _deckhouse(grid: np.ndarray, ctx: SiteContext, share: float) -> None:
-    """Build a small thin-walled cabin near the stern, wholly on deck, with a door onto the open deck."""
+    """Build a small thin-walled cabin in the stern half, wholly on deck, with a door onto the open deck."""
     ys, xs = np.nonzero(grid == _FLOOR)
     if len(xs) < _MIN_DECK:
         return
-    min_x, max_x, min_y, max_y = int(xs.min()), int(xs.max()), int(ys.min()), int(ys.max())
+    min_x, max_x = int(xs.min()), int(xs.max())
     cols = max(8, round((max_x - min_x) * share))
-    rows = max(5, (max_y - min_y) // 2)
-    x0, y0 = min_x + 2, (min_y + max_y) // 2 - rows // 2
-    window = grid[y0 : y0 + rows, x0 : x0 + cols]
+    x0 = min_x + (max_x - min_x) // 4
+    x1 = min(x0 + cols, max_x)
+    deck = grid[:, x0:x1] == _FLOOR
+    height = int(deck.sum(axis=0).min())  # the shortest stretch of deck under the cabin
+    rows = height - 2  # leave a walkway round it
+    if rows < _MIN_CABIN_ROWS or x1 - x0 < _MIN_CABIN_ROWS:
+        return
+    ys_here = np.nonzero(deck.any(axis=1))[0]
+    y0 = (int(ys_here.min()) + int(ys_here.max())) // 2 - rows // 2 + 1
+    cols = x1 - x0
+    window = grid[y0 : y0 + rows, x0:x1]
     if window.shape != (rows, cols) or not (window == _FLOOR).all():
         return
     spec = Spec(1, ctx.aspect, ("cabin",), {"cabin": ctx.weights("cabin")}, 0.12, ("rect",), False)
