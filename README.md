@@ -179,17 +179,21 @@ Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[ta
 | `density` | `1.0` | Multiplies every wild kind's count (one per `km2_per_poi`) |
 | `types.*` | — | Per-kind rules: `priority`, `km2_per_poi`, `min_spacing_km`, `biomes`, `elevation_min_m/max_m`, `floors` |
 
-#### `[interiors]`
+#### `[sites]`
 | Key | Default | Description |
 |-----|---------|-------------|
-| `partition` | `"bsp"` | Interior room generator: `"bsp"` · `"tcod_bsp"` |
-| `cells_per_tile` | `6` | Canonical interior resolution — detail cells per world tile |
-| `room_min` / `room_max` | `4` / `10` | Min/max room side in interior cells |
-| `clutter_density` | `0.10` | Fraction of free interior cells furnished (rubble/barrels/chests) |
-| `size_jitter` | `0.4` | Per-POI footprint size variation (structures of a kind spawn larger/smaller) |
-| `ruin_erosion` | `0.45` | Fraction of a ruin's walls that collapse to gaps / floor that cracks to rubble |
-| `shape` | `"mixed"` | Outer-boundary shape for solid buildings (dungeon/tower/ruin): `rectangle`/`blob`/`cellular`/`drunkard`/`diamond`/`cross`/`mixed` |
-| `footprints.*` | per-kind | Interior footprint in world tiles `[w, h]`, centred on the anchor |
+| `size_jitter` | `0.25` | Seeded per-POI variation of a site's extent |
+| `margin_tiles` | `0.5` | Terrain kept round a site's extent in the site view |
+| `max_gates` | `3` | Road gates cut into a site's edge |
+| `room_rows` / `building_rows` | `[3, 6]` / `[3, 5]` | Room and building height range in rows (widths follow `render.cell_aspect`) |
+| `street_gap` | `[2, 1]` | Clear ground `[columns, rows]` round each settlement building |
+| `clutter_density` | `0.10` | Fraction of free floor cells furnished |
+| `shape` | `"mixed"` | Outline for solid buildings: `rectangle`/`blob`/`cellular`/`drunkard`/`diamond`/`cross`/`mixed` |
+| `ruin_erosion` | `0.45` | Fraction of a ruin's walls that have collapsed |
+| `bridge_max_rows` | `6` | The widest water a settlement street will bridge |
+
+Per-kind rows (layout, `extent_tiles`, `rows_per_tile`, furniture set) are in `src/biomegen/data/sites.toml`; furniture
+weights in `furniture.toml`.
 
 #### `[roads]`
 | Key | Default | Description |
@@ -261,7 +265,7 @@ The world is built by an ordered, fully seed-reproducible pipeline:
 
 ```
 terrain → climate → hydrology → biomes → geography → regions → settlements
-         → pois → roads → poi_interiors → naming
+         → pois → roads → naming
 ```
 
 All algorithms are industry-standard and most are swappable via config (see `docs/ARCHITECTURE.md`).

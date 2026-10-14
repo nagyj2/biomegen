@@ -24,10 +24,6 @@ parts:
    angle. Freshwater runs of any length and saltwater (ocean) runs of at most ``_MAX_OCEAN_BRIDGE`` tiles
    are bridged; longer ocean crossings are silently skipped. Mixed ocean+river runs are split at the
    salt/fresh boundary so each sub-run gets its own correctly positioned bridge.
-5. **Entrances.** This stage runs *before* POI interiors, so after routing it records on each POI the
-   direction the road network arrives from (``extra['road_entry']``); the interiors stage turns that into
-   the footprint perimeter entrance and biases the interior door to face the road. Roads arriving from
-   the same side share one entrance.
 """
 
 from __future__ import annotations
@@ -81,11 +77,8 @@ def _road_eligible(world: World) -> List[Tuple[int, "POI"]]:
 
 
 def _endpoint(poi: "POI") -> Coord:
-    """Road endpoint for a POI: its entrance, falling back to the anchor if entrance is unset/sentinel."""
-    ex, ey = poi.entrance
-    if (ex, ey) == (0, 0):
-        return (poi.x, poi.y)
-    return (ex, ey)
+    """Road endpoint for a POI: its anchor."""
+    return (poi.x, poi.y)
 
 
 def _candidate_edges(coords: List[Tuple[float, float]], k: int) -> List[Tuple[int, int, float]]:
@@ -367,49 +360,6 @@ def _straighten_coastal_detours(world: World, path: List[Coord]) -> List[Coord]:
 # Longer ocean runs are skipped to prevent implausible open-sea bridges.
 _MAX_OCEAN_BRIDGE = 2
 
-# How far from a POI anchor to look for the road(s) that reach it, when recording its entrance side.
-_ENTRANCE_SCAN_RADIUS = 2
-
-
-def _sign(v: int) -> int:
-    """Return -1, 0 or +1 for the sign of ``v``."""
-    return (v > 0) - (v < 0)
-
-
-def _record_entrances(world: World) -> None:
-    """Record, on each non-bridge POI, the direction the road network arrives from.
-
-    Roads route to a POI's anchor, so after routing the anchor's neighbourhood holds the road tiles of
-    every approach. Each approaching land-road tile is bucketed into one of the 8 compass directions
-    (its sign relative to the anchor); the dominant direction is stored as ``extra['road_entry']`` and
-    the full set as ``extra['road_dirs']``. Roads arriving from the same side collapse to one entry, so
-    multiple roads share a single entrance. The interiors stage turns ``road_entry`` into the footprint
-    perimeter entrance and biases the interior door to that side. POIs with no road keep no entry.
-    """
-    for poi in world.pois:
-        if poi.kind == "bridge":
-            continue
-        counts: Dict[Coord, int] = {}
-        for radius in range(1, _ENTRANCE_SCAN_RADIUS + 1):
-            for dy in range(-radius, radius + 1):
-                for dx in range(-radius, radius + 1):
-                    if max(abs(dx), abs(dy)) != radius:
-                        continue  # only the ring at this radius (inner rings handled already)
-                    x, y = poi.x + dx, poi.y + dy
-                    if not world.in_bounds(x, y):
-                        continue
-                    if world.road[y, x] and world.water_type[y, x] == int(WaterType.NONE):
-                        d = (_sign(dx), _sign(dy))
-                        counts[d] = counts.get(d, 0) + 1
-            if counts:
-                break  # nearest ring with any road wins; don't dilute it with farther tiles
-        if not counts:
-            continue
-        # Dominant direction (most approaching tiles), tie-broken by a stable sorted order.
-        primary = max(sorted(counts), key=lambda d: counts[d])
-        poi.extra["road_entry"] = list(primary)
-        poi.extra["road_dirs"] = [list(d) for d in sorted(counts)]
-
 
 def _emit_bridge(
     world: World,
@@ -456,8 +406,6 @@ def _emit_bridge(
                 interior_seed=rng.derive_int(seed, "roads", "bridge", mx, my),
                 civilized=False,
                 region_id=region_id,
-                footprint=(1, 1),
-                entrance=(mx, my),
                 extra={"p0": [int(p0[0]), int(p0[1])], "p1": [int(p1[0]), int(p1[1])]},
             )
         )
@@ -636,7 +584,3 @@ def run(world: World, config: Config, seed: int) -> None:
                     world.road_tier[y, x] = 2
             if bridges_on:
                 _place_bridges(world, seed, path, tier=2, bridged=bridged)
-
-    # Record where the finished network reaches each POI, so the interiors stage can site the entrance
-    # (and the interior door) on the side the road arrives from.
-    _record_entrances(world)

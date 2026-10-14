@@ -155,7 +155,7 @@ def _detail_roads(ctx: LayerContext, grid: CellGrid, sampler: DetailSampler) -> 
             if 0 <= nx < world.width and 0 <= ny < world.height and land_road[ny, nx]:
                 _mark_segment(sampler, nearest, kind, warped, (tx, ty), (nx, ny), reach, half, link_kind)
 
-    bed = np.isfinite(nearest) & ctx.land & ~ctx.river
+    bed = np.isfinite(nearest) & ctx.land & ~ctx.river & ~ctx.site_mask
     if not bed.any():
         return
     key = "ascii" if ctx.ascii_only else "glyphs"
@@ -190,7 +190,7 @@ def roads_layer(ctx: LayerContext, grid: CellGrid) -> None:
         _detail_roads(ctx, grid, ctx.sampler)
         return
     cfg = ctx.config.get("render.roads")
-    road = ctx.sampler.inside & (ctx.sampler.nearest(ctx.world.road) > 0)
+    road = ctx.sampler.inside & (ctx.sampler.nearest(ctx.world.road) > 0) & ~ctx.site_mask
     if not road.any():
         return
     glyphs = road_glyph_table(ctx.config, ctx.ascii_only)

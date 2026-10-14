@@ -156,8 +156,6 @@ def _commit(world: World, reach: dict[str, np.ndarray], seed: int, tier: str, x:
         interior_seed=rng.derive_int(seed, "poi_interior", x, y),
         civilized=True,
         region_id=region_id,
-        footprint=(1, 1),  # refined by the interiors stage
-        entrance=(x, y),
         pop=population,
         tags=tags,
     )

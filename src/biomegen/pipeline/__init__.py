@@ -4,11 +4,10 @@
 stages so there is no backtracking:
 
     terrain -> climate -> hydrology -> biomes -> geography -> regions -> settlements
-    -> pois -> roads -> poi_interiors -> naming
+    -> pois -> roads -> naming
 
-Roads run **before** POI interiors so the road network knows where every POI anchor is: each road
-that reaches a POI records its approach direction on the POI, and the interiors stage then sites that
-POI's footprint entrance (and the interior door) on the side the road arrives from.
+Roads end at every POI's anchor. A POI's site plan (:mod:`biomegen.sites`) is built lazily and finds the roads
+that reach it from the world arrays, so no stage records anything for it.
 
 A **land-exists sanity gate** wraps the cheap leading terrain stage: if a seed yields too little land,
 the seed is deterministically perturbed and the stage re-runs, preventing empty-world cascades from
@@ -36,7 +35,6 @@ from . import (
 )
 from .civilization import roads, settlements
 from .physical import biomes, climate, geography, hydrology, terrain
-from .story import poi_interiors
 
 
 def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = None) -> World:
@@ -92,7 +90,6 @@ def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = No
         ("settlements", settlements.run),
         ("pois", pois.run),
         ("roads", roads.run),
-        ("poi_interiors", poi_interiors.run),
         ("naming", naming.run),
     ):
         timed(name, stage, world, gen_seed)

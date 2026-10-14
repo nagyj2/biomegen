@@ -8,7 +8,8 @@ High-level package map (see docs/ARCHITECTURE.md for the full code-map):
     config/    - TOML + in-code defaults, deep-merged into a frozen Config object.
     util/      - cross-cutting utilities: rng (determinism anchor), noise, geometry.
     world/     - the data model: immutable World (numpy fields) + mutable Overlay + entities.
-    interiors/ - lazy, deterministic POI interior builders (built on demand from a POI).
+    sampling/  - how a grid cell reads the world.
+    sites/     - lazy, deterministic site plans for POIs (built on demand from a POI).
     pipeline/  - the ordered procedural generation stages (terrain -> ... -> naming).
     naming/    - procedural name + lore generation (Markov + Tracery-style grammar).
     render/    - curses rendering: palette, glyphs, map/zoom views, HUD, input, app loop.

@@ -17,6 +17,7 @@ from ...config.model import Config
 from ...registry import Registry
 from ...sampling.sampler import Sampler
 from ...sampling.terrain import land_mask, river_mask
+from ...sites import extent_mask
 from ...util import rng
 from ...world.overlay import Overlay
 from ...world.tile import Biome
@@ -113,6 +114,11 @@ class LayerContext:
         return river_mask(self.sampler, self.world, self.land, self.biome_style.water)
 
     @cached_property
+    def site_mask(self) -> np.ndarray:
+        """Cells under any POI's site, where the plan replaces the world's roads."""
+        return extent_mask(self.world, self.config, self.sampler)
+
+    @cached_property
     def relief(self) -> np.ndarray:
         """Relief integer per cell (read where the biome is, so mountain edges wobble with biome edges)."""
         return self.sampler.blended(self.world.relief)
@@ -189,11 +195,11 @@ from . import (  # noqa: E402,F401  (registers the built-in layers)
     bridges,
     clutter,
     compass,
-    interiors,
     markers,
     names,
     relief,
     roads,
+    sites,
     terrain,
     tint,
     water,

@@ -8,4 +8,5 @@ VALUES: Dict[str, Any] = {
     # Holding Shift with an arrow key (or using capital W/A/S/D / H/J/K/L) moves this many tiles
     # at once for fast travel across the map.
     "fast_step": 8,
+    "site_margin": 4,  # cells between the cursor and the edge of the screen before the site view scrolls
 }

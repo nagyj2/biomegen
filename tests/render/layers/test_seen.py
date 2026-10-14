@@ -11,7 +11,7 @@ from biomegen.world.tile import Biome, Cell
 from tests.render.conftest import make_world
 
 TERRAIN = View("t", ("terrain",))
-INTERIORS = View("t", ("terrain", "interiors"))
+INTERIORS = View("t", ("terrain", "sites"))
 
 
 def test_seen_lists_the_biomes_under_the_cells(config) -> None:
@@ -31,7 +31,7 @@ def test_seen_ignores_cells_outside_the_world(config) -> None:
 
 def test_seen_lists_the_interior_cells_drawn_at_detail_scale(config) -> None:
     world = make_world(10, 10, Biome.GRASS)
-    world.pois.append(POI(kind="tower", x=5, y=5, interior_seed=11, footprint=(3, 3), floor_count=2))
+    world.pois.append(POI(kind="tower", x=5, y=5, interior_seed=11, floor_count=2))
     seen = Seen()
     build_grid(world, config, INTERIORS, DetailSampler(world, config, 18, 9, 0, 0, 10, 10, "local"), seen=seen)
     assert int(Cell.WALL) in seen.cells and int(Cell.VOID) not in seen.cells

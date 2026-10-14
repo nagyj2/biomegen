@@ -45,7 +45,7 @@ def _world(tower: bool = False):
     world = make_world(40, 20, Biome.GRASS)
     world.island_name = "Testland"
     if tower:
-        world.pois.append(POI(kind="tower", x=20, y=10, interior_seed=3, footprint=(3, 3), floor_count=2))
+        world.pois.append(POI(kind="tower", x=20, y=10, interior_seed=3, floor_count=2))
         world.poi_index[10, 20] = 0
     return world
 

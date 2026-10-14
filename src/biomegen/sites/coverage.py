@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import weakref
 from typing import Optional
 
 import numpy as np
@@ -12,14 +13,22 @@ from ..world.entities import POI
 from ..world.world import World
 from .geometry import SiteGeometry, site_geometry
 
+_Entry = tuple[Config, int, list[tuple[POI, SiteGeometry]]]
+_CACHE: "weakref.WeakKeyDictionary[World, dict[int, _Entry]]" = weakref.WeakKeyDictionary()
+
 
 def site_pois(world: World, config: Config) -> list[tuple[POI, SiteGeometry]]:
-    """Return every POI that has a site, with its geometry, in POI order."""
+    """Return every POI that has a site, with its geometry, in POI order (cached while the POI list is unchanged)."""
+    per_config = _CACHE.setdefault(world, {})
+    entry = per_config.get(id(config))
+    if entry is not None and entry[0] is config and entry[1] == len(world.pois):
+        return entry[2]
     found = []
     for poi in world.pois:
         geometry = site_geometry(poi, config)
         if geometry is not None:
             found.append((poi, geometry))
+    per_config[id(config)] = (config, len(world.pois), found)
     return found
 
 

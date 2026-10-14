@@ -3,6 +3,11 @@
 The cursor is always a world-tile coordinate ``(cx, cy)`` whatever the scale, so changing scale never has to
 translate it. The camera ``(cam_x, cam_y)`` is the top-left tile of the viewport for the 1:1 map and the zoom
 and local scales; the fit map ignores it. The camera only scrolls when the cursor reaches a viewport edge.
+
+The highest zoom of a point of interest is the **site** scale: the explorer shows that POI's plan one plan cell per
+terminal cell, and the cursor is one cell ``(px, py)`` of the site's window with its own camera. ``(cx, cy)`` follows
+the tile under that cell, so leaving the site (moving past the window edge, or stepping out) lands on the right tile.
+Everywhere that is not a POI the highest zoom is still the local scale.
 """
 
 from __future__ import annotations
@@ -13,9 +18,9 @@ from typing import Optional
 import numpy as np
 
 from ..config.model import Config
-from ..interiors import INTERIOR_BUILDERS, footprint_origin
 from ..render.fit import tile_priority
-from ..sampling.detail import SCALE_LOCAL, SCALE_MAP, SCALE_ZOOM
+from ..sampling.detail import SCALE_LOCAL, SCALE_MAP, SCALE_SITE, SCALE_ZOOM
+from ..sites import site_at, site_geometry, site_plan
 from ..world.entities import POI
 from ..world.tile import WaterType
 from ..world.world import World
@@ -60,6 +65,11 @@ class ViewState:
         cam_x: Viewport top-left tile column (1:1, zoom and local).
         cam_y: Viewport top-left tile row.
         floor: Current floor when the cursor is on a multi-floor structure.
+        poi: The POI whose site is open at the site scale (``None`` otherwise).
+        px: Cursor column in the open site's window, in plan cells.
+        py: Cursor row in the open site's window.
+        site_cam_x: First window column shown at the site scale.
+        site_cam_y: First window row shown.
         recenter: Centre the camera on the cursor at the next draw.
         messages: Recent status messages, newest last.
     """
@@ -72,6 +82,11 @@ class ViewState:
     cam_x: int = 0
     cam_y: int = 0
     floor: int = 0
+    poi: Optional[POI] = None
+    px: int = 0
+    py: int = 0
+    site_cam_x: int = 0
+    site_cam_y: int = 0
     recenter: bool = False
     messages: list[str] = field(default_factory=list)
 
@@ -108,31 +123,20 @@ def initial_cursor(world: World, config: Config) -> tuple[int, int]:
     return int(candidates_x[nearest]), int(candidates_y[nearest])
 
 
-def poi_under_cursor(world: World, state: ViewState) -> Optional[POI]:
-    """Return the interior-bearing POI whose footprint covers the cursor, or ``None``.
-
-    Footprints come from the POI list (``poi_index`` only marks anchors), so this drives floor cycling: the
-    cursor is "inside" a structure anywhere on its footprint.
-    """
-    for poi in world.pois:
-        if not INTERIOR_BUILDERS.has(poi.kind):
-            continue
-        width, height = poi.footprint
-        if width <= 0 or height <= 0:
-            continue
-        left, top = footprint_origin(poi)
-        if left <= state.cx < left + width and top <= state.cy < top + height:
-            return poi
-    return None
+def poi_under_cursor(world: World, config: Config, state: ViewState) -> Optional[POI]:
+    """Return the POI whose site the cursor is in: the open site, or the one covering the cursor's tile."""
+    if state.scale == SCALE_SITE and state.poi is not None:
+        return state.poi
+    return site_at(world, config, state.cx, state.cy)
 
 
-def sync_floor(world: World, state: ViewState, previous: object) -> object:
+def sync_floor(world: World, config: Config, state: ViewState, previous: object) -> object:
     """Keep ``state.floor`` valid for the structure under the cursor and return the new tracking id.
 
     Entering a structure starts at its ground floor (0); moving within it keeps and clamps the chosen floor;
     leaving every structure resets to 0.
     """
-    poi = poi_under_cursor(world, state)
+    poi = poi_under_cursor(world, config, state)
     current = id(poi) if poi is not None else None
     if current != previous:
         state.floor = 0
@@ -141,9 +145,9 @@ def sync_floor(world: World, state: ViewState, previous: object) -> object:
     return current
 
 
-def cycle_floor(world: World, state: ViewState, delta: int) -> None:
+def cycle_floor(world: World, config: Config, state: ViewState, delta: int) -> None:
     """Move up or down a floor on the structure under the cursor, or say why it cannot."""
-    poi = poi_under_cursor(world, state)
+    poi = poi_under_cursor(world, config, state)
     if poi is None:
         state.notify("no interior here - move onto a structure to cycle floors")
         return
@@ -159,19 +163,51 @@ def cycle_floor(world: World, state: ViewState, delta: int) -> None:
 
 
 def step_out(state: ViewState) -> None:
-    """The zoom key steps out: map to zoom, zoom to map, local to zoom."""
+    """The zoom key steps out: site to zoom, local to zoom, zoom to map, map to zoom."""
+    if state.scale == SCALE_SITE:
+        _leave_site(state, SCALE_ZOOM)
+        return
     state.scale = SCALE_MAP if state.scale == SCALE_ZOOM else SCALE_ZOOM
     state.recenter = True
 
 
-def step_in(state: ViewState) -> None:
-    """The local key steps in: map to zoom, zoom to local, local stays."""
+def _enter_site(world: World, config: Config, state: ViewState, poi: POI) -> bool:
+    """Open ``poi``'s site with the cursor on its anchor; False if it has no plan to show."""
+    geometry = site_geometry(poi, config)
+    if geometry is None or site_plan(poi, 0, config, world) is None:
+        return False
+    state.scale = SCALE_SITE
+    state.poi = poi
+    state.px, state.py = geometry.cell_at(poi.x, poi.y)
+    state.floor = 0
+    state.recenter = True
+    state.notify(f"{poi.name or poi.kind}: inside")
+    return True
+
+
+def _leave_site(state: ViewState, scale: str) -> None:
+    """Close the open site and show ``scale`` centred on the cursor's tile."""
+    state.scale = scale
+    state.poi = None
+    state.recenter = True
+
+
+def step_in(world: World, config: Config, state: ViewState) -> None:
+    """The local key steps in: map to zoom; zoom to the site of the POI under the cursor, else local.
+
+    From local, the key opens the site of a POI under the cursor; it does nothing elsewhere or inside a site.
+    """
     if state.scale == SCALE_MAP:
         state.scale = SCALE_ZOOM
         state.recenter = True
-    elif state.scale == SCALE_ZOOM:
-        state.scale = SCALE_LOCAL
-        state.recenter = True
+        return
+    poi = site_at(world, config, state.cx, state.cy)
+    if state.scale == SCALE_ZOOM:
+        if poi is None or not _enter_site(world, config, state, poi):
+            state.scale = SCALE_LOCAL
+            state.recenter = True
+    elif state.scale == SCALE_LOCAL and poi is not None:
+        _enter_site(world, config, state, poi)
 
 
 def toggle_mode(state: ViewState) -> None:
@@ -185,7 +221,31 @@ def toggle_mode(state: ViewState) -> None:
     state.notify(f"view: {'1:1 pan' if state.mode == MODE_ONE_TO_ONE else 'fit-to-screen'}")
 
 
-def move_cursor(world: World, state: ViewState, dx: int, dy: int) -> None:
-    """Move the cursor by ``(dx, dy)`` tiles, staying inside the world."""
+def move_cursor(world: World, config: Config, state: ViewState, dx: int, dy: int) -> None:
+    """Move the cursor by ``(dx, dy)``: tiles on the map scales, plan cells inside a site (leaving it at the edge)."""
+    if state.scale == SCALE_SITE and state.poi is not None:
+        _move_in_site(world, config, state, dx, dy)
+        return
     state.cx = clamp(state.cx + dx, 0, world.width - 1)
     state.cy = clamp(state.cy + dy, 0, world.height - 1)
+
+
+def _move_in_site(world: World, config: Config, state: ViewState, dx: int, dy: int) -> None:
+    """Move the plan-cell cursor; stepping past the site window (or off the world) leaves for the local scale."""
+    poi = state.poi
+    geometry = site_geometry(poi, config) if poi is not None else None
+    if poi is None or geometry is None:
+        _leave_site(state, SCALE_LOCAL)
+        return
+    col, row = state.px + dx, state.py + dy
+    x, y = geometry.position_of(col, row)
+    tile_x, tile_y = round(x), round(y)
+    off_window = not (0 <= col < geometry.cols and 0 <= row < geometry.rows)
+    off_world = not (0 <= tile_x < world.width and 0 <= tile_y < world.height)
+    if off_window or off_world:
+        state.cx, state.cy = clamp(tile_x, 0, world.width - 1), clamp(tile_y, 0, world.height - 1)
+        state.notify(f"left {poi.name or poi.kind}")
+        _leave_site(state, SCALE_LOCAL)
+        return
+    state.px, state.py = col, row
+    state.cx, state.cy = tile_x, tile_y

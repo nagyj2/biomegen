@@ -17,9 +17,8 @@ from typing import List, Optional, Tuple
 class POI:
     """A point of interest (village, town, city, capital, tower, dungeon, ruin, camp, boat, ...).
 
-    Placement (Phase 4) fills the location/kind/region; the interiors stage (Phase 5) fills the cheap
-    metadata (``floor_count``, ``footprint``, ``entrance``) while the actual interior grids are
-    generated lazily from ``interior_seed`` and never stored here.
+    Placement fills the location, kind, region and floors; the plan of each floor is generated lazily from
+    ``interior_seed`` (see :mod:`biomegen.sites`) and never stored here.
     """
 
     kind: str  # "capital", "city", "town", "village", "tower", "dungeon", ...
@@ -31,9 +30,6 @@ class POI:
     region_id: int = -1
     floor_count: int = 1  # >1 for towers (above ground) and dungeons (below ground)
     lowest_floor: int = 0  # 0 for ground-level; negative for dungeons going underground
-    footprint: Tuple[int, int] = (0, 0)  # interior footprint in world tiles (w, h), centred on anchor
-    bbox: Tuple[int, int, int, int] = (0, 0, 0, 0)  # footprint extent in world tiles (x0,y0,x1,y1), clamped
-    entrance: Tuple[int, int] = (0, 0)  # door coordinate roads should connect to
     pop: int = 0  # population (settlements only)
     tags: Tuple[str, ...] = ()  # site traits, e.g. "port", "river"
     extra: dict = field(default_factory=dict)  # kind-specific data (e.g. boat cargo type)

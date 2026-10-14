@@ -60,38 +60,25 @@ max_capitals = 16
 
 [poi]
 density = 1.0                    # multiplies every wild POI kind's count (one per km2_per_poi)
-min_footprint_land = 0.5        # min dry-land fraction of a land structure's footprint for an eligible
-                                # anchor (1.0 = no footprint water; structures form around any they clip)
+min_footprint_land = 0.5        # min dry-land fraction of the tiles a wild POI's site covers for an eligible anchor
 
 # Per-kind rules live under [poi.types.<kind>]; only overrides shown here (see src/biomegen/config/defaults/poi.py for all).
 
-[interiors]
-partition = "bsp"               # room layout: "bsp" | "tcod_bsp"
-cells_per_tile = 6              # canonical interior resolution (detail cells per world tile)
-room_min = 4                    # min/max room side in interior cells
-room_max = 10
-coast_margin = 2                # detail-cell coast strip kept clear between a structure and clipped water
-                                # (a band of bare biome floor reads as shoreline; 0 builds to the water)
-expand_max_factor = 2.0         # grow a carved coastal footprint back to nominal land area, up to this
-                                # multiple of its area (never grows over another POI); <=1.0 disables
-clutter_density = 0.10          # fraction of free interior cells furnished (rubble/barrels/chests)
-size_jitter = 0.4               # per-POI footprint size variation (0 disables): structures spawn larger/smaller
-ruin_erosion = 0.45             # fraction of a ruin's walls that collapse to gaps / floor that cracks to rubble
-shape = "mixed"                 # solid-building outline (dungeon/tower/ruin): rectangle|blob|cellular|
-                                # drunkard|diamond|cross|mixed ("mixed" picks an organic shape per structure
-                                # so none is square; settlements/camps/boats use their own layout)
-# Per-kind interior footprint in WORLD TILES (w, h), centred on the anchor. Every kind below has an
-# interior builder; only bridges (placed by the roads stage) remain plain map markers.
-[interiors.footprints]
-dungeon = [6, 4]
-tower = [3, 3]
-capital = [9, 6]
-city = [7, 5]
-town = [5, 4]
-village = [4, 3]
-ruin = [4, 3]
-camp = [3, 3]
-boat = [3, 2]
+[sites]
+size_jitter = 0.25              # each site's extent is scaled by a seeded factor in [1 - jitter, 1 + jitter]
+margin_tiles = 0.5              # terrain kept round the extent in the site view
+max_gates = 3                   # road gates cut into a site's edge
+room_rows = [3, 6]              # room height range in rows (widths are widened by render.cell_aspect)
+building_rows = [3, 5]          # settlement building height range in rows
+street_gap = [2, 1]             # clear ground [columns, rows] kept round each settlement building
+clutter_density = 0.10          # fraction of free floor cells furnished
+shape = "mixed"                 # solid-building outline: rectangle|blob|cellular|drunkard|diamond|cross|mixed
+ruin_erosion = 0.45             # fraction of a ruin's walls that have collapsed
+coast_margin_rows = 1           # bare ground kept between a solid structure and any water
+bridge_max_rows = 6             # the widest water a settlement street will bridge
+# Per-kind site rows (layout, extent in tiles, plan resolution, furniture set) live in
+# src/biomegen/data/sites.toml; furniture weights in furniture.toml. Override one with e.g.
+# [tables.sites.village] extent_tiles = [1.5, 1.0]
 
 [roads]
 pathfinder = "astar"            # "astar" | "tcod" | "dijkstra"

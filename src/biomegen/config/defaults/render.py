@@ -81,22 +81,22 @@ VALUES: Dict[str, Any] = {
     # name of the colour ramp its ``tint`` layer applies ("" = no tint). Drop or reorder layers freely.
     "views": {
         "terrain": {
-            "layers": ["terrain", "relief", "water", "roads", "interiors", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "bridges", "markers", "interiors"],
+            "layers": ["terrain", "relief", "water", "roads", "sites", "markers", "labels", "compass"],
+            "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "bridges", "markers", "sites"],
             "tint": "",
         },
         "elevation": {
-            "layers": ["terrain", "relief", "tint", "water", "roads", "interiors", "markers", "labels", "compass"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
             "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges", "markers"],
             "tint": "elevation",
         },
         "temperature": {
-            "layers": ["terrain", "relief", "tint", "water", "roads", "interiors", "markers", "labels", "compass"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
             "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges", "markers"],
             "tint": "temperature",
         },
         "rainfall": {
-            "layers": ["terrain", "relief", "tint", "water", "roads", "interiors", "markers", "labels", "compass"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
             "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges", "markers"],
             "tint": "rainfall",
         },

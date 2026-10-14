@@ -18,8 +18,9 @@ from ..render.fit import FitSampler
 from ..render.grid import CellGrid
 from ..render.layers import Seen, build_grid
 from ..render.views import resolve_view, view_names
-from ..sampling.detail import DetailSampler, centre_camera, detail_cell_size
+from ..sampling.detail import SCALE_SITE, DetailSampler, centre_camera, detail_cell_size
 from ..sampling.sampler import Sampler
+from ..sites import SiteGeometry, site_geometry, window_sampler
 from ..world.overlay import Overlay
 from ..world.world import World
 from .exports import export_screen, export_world
@@ -115,6 +116,59 @@ def _highlight_cursor(grid: CellGrid, sampler: Sampler, state: ViewState) -> Non
         _reverse(grid, slice(cell[1], cell[1] + 1), slice(cell[0], cell[0] + 1))
 
 
+def _site_view(
+    world: World,
+    config: Config,
+    view_name: str,
+    state: ViewState,
+    overlay: Overlay,
+    area: Size,
+    seen: Seen,
+    geometry: SiteGeometry,
+    color: bool,
+    ascii_only: bool,
+) -> tuple[CellGrid, CellGrid]:
+    """Draw the open site's window and crop it to ``area`` around the cursor; return ``(map grid, shown grid)``.
+
+    The window is drawn once per frame (a few thousand cells) and the camera, in cells, scrolls over it as the cursor
+    nears an edge. A window smaller than the area is centred, the outside left blank. The cursor is one cell.
+    """
+    cols, rows = area
+    window = build_grid(
+        world,
+        config,
+        resolve_view(config, view_name),
+        window_sampler(world, config, geometry),
+        overlay,
+        ascii_only,
+        color,
+        floor=state.floor,
+        seen=seen,
+    )
+    margin = int(config.get("controls.site_margin"))
+    if state.recenter:
+        state.site_cam_x = centre_camera(state.px, cols, geometry.cols)
+        state.site_cam_y = centre_camera(state.py, rows, geometry.rows)
+    else:
+        state.site_cam_x = edge_pan(state.site_cam_x, state.px, cols, geometry.cols, margin)
+        state.site_cam_y = edge_pan(state.site_cam_y, state.py, rows, geometry.rows, margin)
+    state.recenter = False
+    view = CellGrid(rows, cols)
+    src_rows = slice(max(0, state.site_cam_y), min(geometry.rows, state.site_cam_y + rows))
+    src_cols = slice(max(0, state.site_cam_x), min(geometry.cols, state.site_cam_x + cols))
+    dst_rows = slice(src_rows.start - state.site_cam_y, src_rows.stop - state.site_cam_y)
+    dst_cols = slice(src_cols.start - state.site_cam_x, src_cols.stop - state.site_cam_x)
+    for name in ("glyph", "fg", "bg", "bold"):
+        getattr(view, name)[dst_rows, dst_cols] = getattr(window, name)[src_rows, src_cols]
+    shown = CellGrid(rows, cols)
+    for name in ("glyph", "fg", "bg", "bold"):
+        getattr(shown, name)[...] = getattr(view, name)
+    cursor_row, cursor_col = state.py - state.site_cam_y, state.px - state.site_cam_x
+    if 0 <= cursor_row < rows and 0 <= cursor_col < cols:
+        _reverse(shown, slice(cursor_row, cursor_row + 1), slice(cursor_col, cursor_col + 1))
+    return view, shown
+
+
 def compose_frame(
     world: World,
     config: Config,
@@ -136,23 +190,29 @@ def compose_frame(
         text = "terminal too small - enlarge the window"[:cols]
         screen.glyph[0, : len(text)] = list(text)
         return Frame(screen, screen, view_name)
-    sampler = _map_sampler(world, config, state, (cols, map_rows))
     seen = Seen()
-    map_grid = build_grid(
-        world,
-        config,
-        resolve_view(config, view_name),
-        sampler,
-        overlay,
-        ascii_only,
-        color,
-        floor=state.floor,
-        seen=seen,
-    )
-    shown = CellGrid(map_grid.rows, map_grid.cols)
-    for name in ("glyph", "fg", "bg", "bold"):
-        getattr(shown, name)[...] = getattr(map_grid, name)
-    _highlight_cursor(shown, sampler, state)
+    geometry = site_geometry(state.poi, config) if state.scale == SCALE_SITE and state.poi is not None else None
+    if geometry is not None:
+        map_grid, shown = _site_view(
+            world, config, view_name, state, overlay, (cols, map_rows), seen, geometry, color, ascii_only
+        )
+    else:
+        sampler = _map_sampler(world, config, state, (cols, map_rows))
+        map_grid = build_grid(
+            world,
+            config,
+            resolve_view(config, view_name),
+            sampler,
+            overlay,
+            ascii_only,
+            color,
+            floor=state.floor,
+            seen=seen,
+        )
+        shown = CellGrid(map_grid.rows, map_grid.cols)
+        for name in ("glyph", "fg", "bg", "bold"):
+            getattr(shown, name)[...] = getattr(map_grid, name)
+        _highlight_cursor(shown, sampler, state)
     _paste(screen, shown, 0)
     _paste(screen, build_panel(world, config, state, view_name, seen, cols, panel_height, ascii_only), map_rows)
     if help_open:
@@ -209,7 +269,7 @@ def run(
         writer.enter()
         try:
             while True:
-                tracking = sync_floor(world, state, tracking)
+                tracking = sync_floor(world, config, state, tracking)
                 frame = compose_frame(
                     world, config, state, overlay, size_of(), color_mode != "none", ascii_only, help_open
                 )
@@ -222,12 +282,12 @@ def run(
                 if name == "quit":
                     break
                 if name == "move":
-                    move_cursor(world, state, action[1], action[2])
+                    move_cursor(world, config, state, action[1], action[2])
                 elif name == "zoom":
                     step_out(state)
                     state.notify(f"scale: {state.scale}")
                 elif name == "local":
-                    step_in(state)
+                    step_in(world, config, state)
                     state.notify(f"scale: {state.scale}")
                 elif name == "toggle_scale":
                     toggle_mode(state)
@@ -235,7 +295,7 @@ def run(
                     state.view_index = (state.view_index + 1) % len(view_names(config))
                     state.notify(f"view: {view_names(config)[state.view_index]}")
                 elif name == "floor":
-                    cycle_floor(world, state, action[1])
+                    cycle_floor(world, config, state, action[1])
                 elif name == "export":
                     _export(world, config, state, overlay, frame, action[1])
                 elif name == "help":

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.explorer.state import (
     MODE_FIT,
@@ -20,16 +21,33 @@ from biomegen.explorer.state import (
     sync_floor,
     toggle_mode,
 )
-from biomegen.sampling.detail import SCALE_LOCAL, SCALE_MAP, SCALE_ZOOM
+from biomegen.sampling.detail import SCALE_LOCAL, SCALE_MAP, SCALE_SITE, SCALE_ZOOM
+from biomegen.sites import site_geometry
 from biomegen.world.entities import POI
 from biomegen.world.tile import Biome, WaterType
 from tests.render.conftest import make_world
 
 
+@pytest.fixture(scope="module")
+def site_config() -> Config:
+    """Defaults with the extent jitter off, so a site covers its nominal tiles."""
+    config = load_config(None)
+    config.data["sites"]["size_jitter"] = 0.0
+    config.data["sites"]["pop_scale"] = [1.0, 1.0]
+    return config
+
+
 def _tower_world():
-    """A 20 x 20 world with a two-floor tower whose 3 x 3 footprint covers tiles 9-11."""
+    """A 20 x 20 world with a two-floor tower at (10, 10): half a tile, so it covers only its own tile."""
     world = make_world(20, 20, Biome.GRASS)
-    world.pois.append(POI(kind="tower", x=10, y=10, interior_seed=3, footprint=(3, 3), floor_count=2))
+    world.pois.append(POI(kind="tower", x=10, y=10, interior_seed=3, floor_count=2))
+    return world
+
+
+def _dungeon_world():
+    """A 20 x 20 world with a two-floor dungeon at (10, 10): 1.5 x 1.0 tiles, so it covers tiles 9-11 across."""
+    world = make_world(20, 20, Biome.GRASS)
+    world.pois.append(POI(kind="dungeon", x=10, y=10, interior_seed=3, floor_count=2, lowest_floor=-1))
     return world
 
 
@@ -73,29 +91,127 @@ def test_detail_flag_follows_the_scale() -> None:
 
 
 def test_zoom_key_steps_out_one_scale() -> None:
-    # map -> zoom, zoom -> map, local -> zoom.
+    # map -> zoom, zoom -> map, local -> zoom, site -> zoom.
     scales = []
-    for start in (SCALE_MAP, SCALE_ZOOM, SCALE_LOCAL):
+    for start in (SCALE_MAP, SCALE_ZOOM, SCALE_LOCAL, SCALE_SITE):
         state = ViewState(scale=start)
         step_out(state)
         scales.append(state.scale)
-    assert scales == [SCALE_ZOOM, SCALE_MAP, SCALE_ZOOM]
+    assert scales == [SCALE_ZOOM, SCALE_MAP, SCALE_ZOOM, SCALE_ZOOM]
 
 
-def test_local_key_steps_in_one_scale() -> None:
-    # map -> zoom, zoom -> local, local stays.
+def test_local_key_steps_in_one_scale_away_from_a_poi(site_config: Config) -> None:
+    # Off any POI: map -> zoom, zoom -> local, local stays.
+    world = make_world(20, 20, Biome.GRASS)
     scales = []
     for start in (SCALE_MAP, SCALE_ZOOM, SCALE_LOCAL):
-        state = ViewState(scale=start)
-        step_in(state)
+        state = ViewState(scale=start, cx=3, cy=3)
+        step_in(world, site_config, state)
         scales.append(state.scale)
     assert scales == [SCALE_ZOOM, SCALE_LOCAL, SCALE_LOCAL]
 
 
-def test_changing_scale_asks_for_a_recentre() -> None:
-    state = ViewState()
-    step_in(state)
-    assert state.recenter
+def test_zooming_in_on_a_poi_opens_its_site(site_config: Config) -> None:
+    world = _dungeon_world()
+    state = ViewState(scale=SCALE_ZOOM, cx=10, cy=10)
+    step_in(world, site_config, state)
+    assert state.scale == SCALE_SITE and state.poi is world.pois[0]
+
+
+def test_the_site_cursor_starts_on_the_anchor_cell(site_config: Config) -> None:
+    world = _dungeon_world()
+    state = ViewState(scale=SCALE_ZOOM, cx=10, cy=10)
+    step_in(world, site_config, state)
+    geometry = site_geometry(world.pois[0], site_config)
+    assert geometry is not None and (state.px, state.py) == geometry.cell_at(10, 10)
+
+
+def test_the_local_key_on_a_poi_at_local_scale_opens_its_site(site_config: Config) -> None:
+    world = _dungeon_world()
+    state = ViewState(scale=SCALE_LOCAL, cx=11, cy=10)
+    step_in(world, site_config, state)
+    assert state.scale == SCALE_SITE
+
+
+def test_the_local_key_inside_a_site_does_nothing(site_config: Config) -> None:
+    world = _dungeon_world()
+    state = ViewState(scale=SCALE_ZOOM, cx=10, cy=10)
+    step_in(world, site_config, state)
+    before = (state.px, state.py)
+    step_in(world, site_config, state)
+    assert state.scale == SCALE_SITE and (state.px, state.py) == before
+
+
+def test_stepping_out_of_a_site_closes_it(site_config: Config) -> None:
+    world = _dungeon_world()
+    state = ViewState(scale=SCALE_ZOOM, cx=10, cy=10)
+    step_in(world, site_config, state)
+    step_out(state)
+    assert state.scale == SCALE_ZOOM and state.poi is None and state.recenter
+
+
+def test_zooming_in_beside_a_sub_tile_poi_goes_to_local(site_config: Config) -> None:
+    # A tower covers only its own tile, so the tile beside it opens no site.
+    world = _tower_world()
+    state = ViewState(scale=SCALE_ZOOM, cx=11, cy=10)
+    step_in(world, site_config, state)
+    assert state.scale == SCALE_LOCAL
+
+
+def _open(site_config: Config) -> tuple:
+    world = _dungeon_world()
+    state = ViewState(scale=SCALE_ZOOM, cx=10, cy=10)
+    step_in(world, site_config, state)
+    return world, state
+
+
+def test_the_cursor_moves_one_plan_cell_inside_a_site(site_config: Config) -> None:
+    world, state = _open(site_config)
+    col, row = state.px, state.py
+    move_cursor(world, site_config, state, 1, 0)
+    assert (state.px, state.py, state.scale) == (col + 1, row, SCALE_SITE)
+
+
+def test_the_tile_cursor_follows_the_plan_cell(site_config: Config) -> None:
+    # Walking east across the window moves the tile cursor to the tile under the cell.
+    world, state = _open(site_config)
+    geometry = site_geometry(world.pois[0], site_config)
+    assert geometry is not None
+    move_cursor(world, site_config, state, geometry.cell_w, 0)
+    assert (state.cx, state.cy) == (11, 10)
+
+
+def test_walking_off_the_site_window_leaves_for_local(site_config: Config) -> None:
+    world, state = _open(site_config)
+    geometry = site_geometry(world.pois[0], site_config)
+    assert geometry is not None
+    state.px = geometry.cols - 1
+    move_cursor(world, site_config, state, 1, 0)
+    assert state.scale == SCALE_LOCAL and state.poi is None and "left" in state.last_message
+
+
+def test_leaving_a_site_lands_on_the_tile_beyond_the_edge(site_config: Config) -> None:
+    world, state = _open(site_config)
+    geometry = site_geometry(world.pois[0], site_config)
+    assert geometry is not None
+    state.px = geometry.cols - 1
+    move_cursor(world, site_config, state, 1, 0)
+    assert state.cx == geometry.cam_x + geometry.tiles_w
+
+
+def test_a_site_at_the_world_edge_is_left_before_the_world_ends(site_config: Config) -> None:
+    world = make_world(20, 20, Biome.GRASS)
+    world.pois.append(POI(kind="tower", x=0, y=10, interior_seed=3, floor_count=1))
+    state = ViewState(scale=SCALE_ZOOM, cx=0, cy=10)
+    step_in(world, site_config, state)
+    geometry = site_geometry(world.pois[0], site_config)
+    assert geometry is not None
+    state.px = 0
+    for _ in range(geometry.cell_w):  # walk west until off the world
+        move_cursor(world, site_config, state, -1, 0)
+        if state.scale != SCALE_SITE:
+            break
+    assert state.scale == SCALE_LOCAL and state.cx == 0
 
 
 def test_fit_and_one_to_one_toggle() -> None:
@@ -116,17 +232,17 @@ def test_toggle_is_refused_at_detail_scale() -> None:
     assert (state.mode, "map only" in state.last_message) == (MODE_FIT, True)
 
 
-def test_cursor_stops_at_the_world_edge() -> None:
+def test_cursor_stops_at_the_world_edge(config: Config) -> None:
     world = make_world(5, 4)
     state = ViewState(cx=4, cy=0)
-    move_cursor(world, state, 3, -3)
+    move_cursor(world, config, state, 3, -3)
     assert (state.cx, state.cy) == (4, 0)
 
 
-def test_cursor_moves_by_the_step() -> None:
+def test_cursor_moves_by_the_step(config: Config) -> None:
     world = make_world(10, 10)
     state = ViewState(cx=2, cy=2)
-    move_cursor(world, state, 3, 1)
+    move_cursor(world, config, state, 3, 1)
     assert (state.cx, state.cy) == (5, 3)
 
 
@@ -151,59 +267,71 @@ def test_initial_cursor_on_a_world_without_land_is_the_centre(config: Config) ->
     assert initial_cursor(world, config) == (5, 3)
 
 
-def test_structure_under_the_cursor_covers_its_whole_footprint() -> None:
-    world = _tower_world()
-    assert poi_under_cursor(world, ViewState(cx=11, cy=9)) is world.pois[0]
+def test_structure_under_the_cursor_covers_its_whole_extent(site_config: Config) -> None:
+    world = _dungeon_world()
+    assert poi_under_cursor(world, site_config, ViewState(cx=11, cy=10)) is world.pois[0]
 
 
-def test_no_structure_outside_the_footprint() -> None:
-    assert poi_under_cursor(_tower_world(), ViewState(cx=12, cy=10)) is None
+def test_no_structure_outside_the_extent(site_config: Config) -> None:
+    assert poi_under_cursor(_dungeon_world(), site_config, ViewState(cx=12, cy=10)) is None
 
 
-def test_entering_a_structure_starts_on_the_ground_floor() -> None:
-    world = _tower_world()
-    state = ViewState(cx=10, cy=10, floor=1)
-    sync_floor(world, state, None)
+def test_the_open_site_is_the_structure_under_the_cursor(site_config: Config) -> None:
+    world, state = _open(site_config)
+    state.cx = 2  # even with the tile cursor elsewhere, the open site wins
+    assert poi_under_cursor(world, site_config, state) is world.pois[0]
+
+
+def test_entering_a_structure_starts_on_the_ground_floor(site_config: Config) -> None:
+    world = _dungeon_world()
+    state = ViewState(cx=10, cy=10, floor=-1)
+    sync_floor(world, site_config, state, None)
     assert state.floor == 0
 
 
-def test_moving_within_a_structure_keeps_the_floor() -> None:
-    world = _tower_world()
+def test_moving_within_a_structure_keeps_the_floor(site_config: Config) -> None:
+    world = _dungeon_world()
     state = ViewState(cx=10, cy=10)
-    tracking = sync_floor(world, state, None)
-    state.floor = 1
+    tracking = sync_floor(world, site_config, state, None)
+    state.floor = -1
     state.cx = 11
-    sync_floor(world, state, tracking)
-    assert state.floor == 1
+    sync_floor(world, site_config, state, tracking)
+    assert state.floor == -1
 
 
-def test_leaving_every_structure_resets_the_floor() -> None:
-    world = _tower_world()
+def test_leaving_every_structure_resets_the_floor(site_config: Config) -> None:
+    world = _dungeon_world()
     state = ViewState(cx=10, cy=10)
-    tracking = sync_floor(world, state, None)
-    state.floor, state.cx = 1, 2
-    sync_floor(world, state, tracking)
+    tracking = sync_floor(world, site_config, state, None)
+    state.floor, state.cx = -1, 2
+    sync_floor(world, site_config, state, tracking)
     assert state.floor == 0
 
 
-def test_floor_cycles_up_and_stops_at_the_top() -> None:
-    world = _tower_world()
+def test_floor_cycles_down_and_stops_at_the_bottom(site_config: Config) -> None:
+    world = _dungeon_world()
     state = ViewState(cx=10, cy=10)
-    cycle_floor(world, state, 1)
-    cycle_floor(world, state, 1)
-    assert (state.floor, "no further floor" in state.last_message) == (1, True)
+    cycle_floor(world, site_config, state, -1)
+    cycle_floor(world, site_config, state, -1)
+    assert (state.floor, "no further floor" in state.last_message) == (-1, True)
 
 
-def test_cycling_off_a_structure_explains_itself() -> None:
+def test_floors_cycle_inside_an_open_site(site_config: Config) -> None:
+    world, state = _open(site_config)
+    cycle_floor(world, site_config, state, -1)
+    assert state.floor == -1
+
+
+def test_cycling_off_a_structure_explains_itself(site_config: Config) -> None:
     state = ViewState(cx=0, cy=0)
-    cycle_floor(_tower_world(), state, 1)
+    cycle_floor(_dungeon_world(), site_config, state, 1)
     assert "no interior here" in state.last_message
 
 
 @pytest.mark.parametrize("delta", [1, -1])
-def test_single_floor_structure_cannot_change_floor(delta: int) -> None:
+def test_single_floor_structure_cannot_change_floor(site_config: Config, delta: int) -> None:
     world = make_world(10, 10)
-    world.pois.append(POI(kind="camp", x=5, y=5, interior_seed=1, footprint=(2, 2), floor_count=1))
+    world.pois.append(POI(kind="camp", x=5, y=5, interior_seed=1, floor_count=1))
     state = ViewState(cx=5, cy=5)
-    cycle_floor(world, state, delta)
+    cycle_floor(world, site_config, state, delta)
     assert (state.floor, "single floor" in state.last_message) == (0, True)

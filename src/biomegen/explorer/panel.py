@@ -13,9 +13,10 @@ from ..render.colors import biome_style, interior_style
 from ..render.grid import RGB, CellGrid
 from ..render.layers import Seen
 from ..sampling.detail import SCALE_MAP
+from ..world.entities import POI
 from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
-from .state import MODE_ONE_TO_ONE, ViewState
+from .state import MODE_ONE_TO_ONE, ViewState, poi_under_cursor
 
 _LEGEND_INDENT = 9
 
@@ -49,10 +50,21 @@ class _Canvas:
 
 
 def view_label(state: ViewState) -> str:
-    """The scale shown in the panel: ``ZOOM``, ``LOCAL``, or ``FIT`` / ``1:1`` for the map."""
+    """The scale shown in the panel: ``ZOOM``, ``LOCAL``, ``SITE``, or ``FIT`` / ``1:1`` for the map."""
     if state.scale != SCALE_MAP:
         return state.scale.upper()
     return "1:1" if state.mode == MODE_ONE_TO_ONE else "FIT"
+
+
+def _poi_line(poi: Optional[POI]) -> str:
+    """The panel's POI line: name, kind, and for settlements the population and tags."""
+    if poi is None:
+        return " POI: -"
+    detail = [poi.kind]
+    if poi.pop:
+        detail.append(f"pop {poi.pop:,}")
+    detail.extend(poi.tags)
+    return f" POI: {poi.name or poi.kind} ({', '.join(detail)})"
 
 
 def controls_line(config: Config) -> str:
@@ -145,8 +157,8 @@ def build_panel(
             canvas.text(4, 1, region.lore[0], dim)
     else:
         canvas.text(3, 0, " region: open ocean")
-    poi = world.poi_at(state.cx, state.cy)
-    canvas.text(5, 0, f" POI: {poi.name or poi.kind} ({poi.kind})" if poi is not None else " POI: -")
+    poi = poi_under_cursor(world, config, state)
+    canvas.text(5, 0, _poi_line(poi))
     last = height - 1
     if config.get("render.show_legend", True) and 6 < last:
         _legend(canvas, config, seen, 6, last, ascii_only)

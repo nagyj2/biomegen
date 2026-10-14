@@ -52,13 +52,6 @@ LABELS: frozenset[str] = frozenset(
         "biomeblend.y",  # detail-view biome-boundary blend warp (y component)
         "poi",  # POI placement sampling
         "poi_interior",  # per-POI interior seed minting (keyed on coordinates too)
-        "interior.footprint",  # poi_interiors metadata stage: per-POI footprint size jitter
-        "interior",  # interior floor layout (BSP rooms/corridors), keyed on interior_seed + floor
-        "interior.shaft",  # aligned stair-shaft positions (floor-independent, so floors stack)
-        "interior.shape",  # solid-building outer-boundary shape mask (per-structure, floor-independent)
-        "interior.door",  # exterior entrance door position (entry floor only)
-        "interior.furnish",  # role-based furnishing pass, keyed on interior_seed + floor
-        "interior.erode",  # ruin erosion: which walls collapse / floor cracks into rubble
         "site.extent",  # per-POI site size jitter, keyed on the site seed
         "site.shape",  # solid-structure outline (floor-independent), keyed on the site seed
         "site.layout",  # a floor's rooms, buildings and streets, keyed on the site seed and floor

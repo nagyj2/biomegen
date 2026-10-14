@@ -4,7 +4,7 @@ Settlements come from the settlements stage first, so they count for spacing and
 kind in ``poi.types`` then gets one pass, in ``priority`` order:
 
 1. a hard **eligibility** mask (biome whitelist, elevation bounds, land or water, a free tile, and for land kinds
-   enough dry land under the largest footprint it may grow to);
+   enough dry land under the largest site it may grow to);
 2. a soft **score** (freshwater and coastal closeness, remoteness from settlements, seeded jitter), with every
    falloff in km;
 3. **blue-noise picking**: best score first, kept when no placed POI is closer than ``min_spacing_km``.
@@ -32,15 +32,13 @@ _CANDIDATE_LIMIT = 4000  # only the best-scoring eligible cells are tried; place
 
 
 def max_footprint(config: Config, kind: str) -> tuple[int, int] | None:
-    """Largest ``(w, h)`` footprint (tiles) a kind can grow to given ``interiors.size_jitter`` (None: no footprint)."""
-    footprint = config.get("interiors.footprints").get(kind)
-    if not footprint:
+    """Return the most tiles ``(w, h)`` a kind's site can cover given ``sites.size_jitter``, or None (no site)."""
+    row = config.get(f"tables.sites.{kind}", None)
+    if row is None:
         return None
-    jitter = float(config.get("interiors.size_jitter"))
-    return (
-        max(1, math.ceil(int(footprint[0]) * (1.0 + jitter))),
-        max(1, math.ceil(int(footprint[1]) * (1.0 + jitter))),
-    )
+    jitter = float(config.get("sites.size_jitter"))
+    width, height = row["extent_tiles"]
+    return max(1, math.ceil(width * (1.0 + jitter))), max(1, math.ceil(height * (1.0 + jitter)))
 
 
 def footprint_land_fraction_mask(world: World, width: int, height: int, min_fraction: float) -> np.ndarray:
@@ -136,8 +134,6 @@ def _commit(world: World, seed: int, kind: str, x: int, y: int, floors: tuple[in
         region_id=region_id,
         floor_count=floors[0],
         lowest_floor=floors[1],
-        footprint=(1, 1),  # refined by the interiors stage
-        entrance=(x, y),
     )
     index = len(world.pois)
     world.pois.append(poi)
