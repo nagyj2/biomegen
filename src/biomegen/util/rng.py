@@ -75,6 +75,7 @@ LABELS: frozenset[str] = frozenset(
         "diplomacy",  # vassalage, relations, fronts, claims
         "history",  # the derived chronicle (per-event streams are suffixed)
         "pois",  # config-driven POI kinds placed from chronicle events
+        "render",  # view-only scatter (sparse glyphs, sea sparkle); never changes the world
     }
 )
 

@@ -136,6 +136,41 @@ VALUES: Dict[str, Any] = {
             [3200, [40, 70, 170]],
         ],
     },
+    # Terrain layer. Hillshade lights each land cell from the north-west: the height difference between
+    # its south-east and north-west neighbours, over ``relief_m`` metres, times ``strength``, is added
+    # to a brightness of 1 and clamped to [min, max]. Sea brightness uses ``sea_depth_m`` (the depth that
+    # draws as full deep ocean). ``sparse_density`` is the share of cells of a sparse biome that show
+    # their glyph; ``sea_sparkle`` is the share of deep-ocean cells that show a wave glyph.
+    "shade": {"strength": 3.5, "relief_m": 4000.0, "min": 0.72, "max": 1.25},
+    "sea_depth_m": 4000.0,
+    "sparse_density": 0.45,
+    "sea_sparkle": {"density": 0.05, "glyph": "~", "ascii": "~", "boost": 1.6},
+    # Relief layer: how each relief class recolours the terrain under its glyph. ``scale`` darkens the
+    # fill; ``mix`` blends the fill toward a colour by ``mix_t``; ``bg`` / ``fg`` replace outright.
+    # Mountains below ``snow_below_c`` degrees C are snow-capped (``snow_*`` keys).
+    "relief_tints": {
+        "hills": {"scale": 0.9},
+        "mountain": {
+            "mix": [128, 114, 100],
+            "mix_t": 0.55,
+            "snow_below_c": 0.0,
+            "snow_mix": [235, 238, 245],
+            "snow_t": 0.55,
+            "snow_fg": [90, 90, 110],
+        },
+        "peak": {"bg": [214, 218, 228], "fg": [110, 110, 130]},
+        "volcano": {"bg": [80, 40, 34]},
+    },
+    # Water layer: fresh water over land (rivers) is a glyph tinted toward ``river_mix``; the tint is
+    # weaker over a data-view ramp (``river_mix_t_tinted``) so the ramp stays readable.
+    "water": {
+        "river_glyph": "~",
+        "river_ascii": "~",
+        "river_fg": [150, 205, 255],
+        "river_mix": [40, 100, 180],
+        "river_mix_t": 0.6,
+        "river_mix_t_tinted": 0.35,
+    },
     # Overlay glyphs drawn on top of biome cells.
     "markers": {
         "road": "+",
