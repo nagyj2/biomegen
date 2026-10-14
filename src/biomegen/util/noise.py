@@ -13,9 +13,10 @@ into meandering coastlines and ridgelines. This module provides:
     - ``opensimplex``- the opensimplex library (smooth, isotropic; sampled point-wise so it also
                        works under domain warping).
     - ``noise_lib``  - the optional ``noise`` C-extension Perlin; only registered if importable.
-* **fBm** (:func:`fbm`) and **domain warp** (:func:`domain_warp`) that work on any backend.
-* Helpers to build a coordinate grid (:func:`coordinate_grid`) and to normalise a field to [0, 1]
-  (:func:`normalize01`).
+* **fBm** (:func:`fbm`), **ridged** multifractal (:func:`ridged`), **mountain belts**
+  (:func:`belt_lines`) and **domain warp** (:func:`domain_warp`) that work on any backend.
+* Helpers to build a coordinate grid in tiles (:func:`coordinate_grid`) or in km (:func:`km_grid`) and to
+  normalise a field to [0, 1] (:func:`normalize01`).
 
 A backend is a callable ``sample(xs, ys) -> ndarray`` where ``xs``/``ys`` are float64 arrays of equal
 shape (arbitrary coordinates, not necessarily a separable grid) and the result is roughly in
@@ -29,6 +30,7 @@ from typing import Callable, Tuple
 import numpy as np
 
 from ..registry import Registry
+from .units import GridScale
 
 # A noise sampler maps two coordinate arrays to a value array in ~[-1, 1].
 Sampler = Callable[[np.ndarray, np.ndarray], np.ndarray]
@@ -207,6 +209,19 @@ def coordinate_grid(
     return cx, cy
 
 
+def km_grid(shape: Tuple[int, int], scale: GridScale, feature_km: float) -> Tuple[np.ndarray, np.ndarray]:
+    """Return ``(cx, cy)`` coordinates of cell centres in units of ``feature_km`` kilometres.
+
+    Unlike :func:`coordinate_grid`, one unit is the same physical distance on both axes, so noise
+    features stay round on anisotropic cells and keep their km size when the grid resolution changes.
+    """
+    h, w = shape
+    ys, xs = np.meshgrid(np.arange(h, dtype=np.float64), np.arange(w, dtype=np.float64), indexing="ij")
+    cx = (xs + 0.5) * (scale.km_per_col / feature_km)
+    cy = (ys + 0.5) * (scale.km_per_row / feature_km)
+    return cx, cy
+
+
 def fbm(
     sampler: Sampler,
     cx: np.ndarray,
@@ -231,6 +246,52 @@ def fbm(
         amplitude *= persistence
         frequency *= lacunarity
     return total / norm if norm else total
+
+
+def ridged(
+    sampler: Sampler,
+    cx: np.ndarray,
+    cy: np.ndarray,
+    *,
+    octaves: int,
+    persistence: float = 0.5,
+    lacunarity: float = 2.1,
+) -> np.ndarray:
+    """Ridged multifractal noise in [0, 1]: sharp crests where the base noise crosses zero.
+
+    Each octave contributes ``(1 - |n|)^2``, so the zero-crossings of the sampler become narrow
+    ridges; the sum is normalised by the total amplitude.
+    """
+    total = np.zeros_like(cx)
+    amplitude = 1.0
+    frequency = 1.0
+    norm = 0.0
+    for _ in range(int(octaves)):
+        crest = 1.0 - np.abs(sampler(cx * frequency, cy * frequency))
+        total += amplitude * crest * crest
+        norm += amplitude
+        amplitude *= persistence
+        frequency *= lacunarity
+    return np.clip(total / norm, 0.0, 1.0) if norm else total
+
+
+def belt_lines(
+    sampler: Sampler,
+    cx: np.ndarray,
+    cy: np.ndarray,
+    *,
+    width: float,
+    octaves: int = 3,
+    persistence: float = 0.5,
+    lacunarity: float = 2.0,
+) -> np.ndarray:
+    """Mountain-belt strength in [0, 1]: 1 on the winding zero-crossings of a low-frequency fBm.
+
+    Strength falls linearly to 0 where ``|fbm|`` reaches ``width``, so ``width`` (in fBm units) sets
+    how broad the belts are. Sampled at a low frequency, the result is a few long, curving bands.
+    """
+    field = fbm(sampler, cx, cy, octaves=octaves, persistence=persistence, lacunarity=lacunarity)
+    return np.clip(1.0 - np.abs(field) / max(width, 1e-12), 0.0, 1.0)
 
 
 def domain_warp(
