@@ -6,7 +6,7 @@ legend of what is on screen, and the controls with the latest message. The help 
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from ..config.model import Config
 from ..render.colors import biome_style, interior_style
@@ -25,9 +25,8 @@ def panel_color(config: Config, key: str) -> RGB:
     return int(red), int(green), int(blue)
 
 
-def _rgb(color: object) -> RGB:
-    red, green, blue = color  # type: ignore[misc]
-    return int(red), int(green), int(blue)
+def _rgb(color: Any) -> RGB:
+    return int(color[0]), int(color[1]), int(color[2])
 
 
 class _Canvas:

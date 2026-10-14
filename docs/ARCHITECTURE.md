@@ -11,12 +11,13 @@ reproducible. Each module also carries a docstring describing its own role in mo
 `biomegen.cli` (`uv run biomegen`) parses CLI args, loads config, resolves a seed, and calls `biomegen.pipeline.generate`,
 which runs a fixed sequence of stages that fill an immutable `World` (parallel numpy arrays per
 tile). Runtime/gameplay changes never touch that base — they go into a separate `Overlay` that is
-composited on read. The `render` layer draws the composited world with curses. Every interchangeable
+composited on read. The `render` layer draws the composited world through one layer stack and does no
+terminal I/O; the `explorer` runs it interactively. Every interchangeable
 algorithm is looked up from a `Registry` by a string key read from config, so swapping algorithms is
 normally a config change, not a code change. A subset of algorithm families is also exposed as
 direct CLI flags (`--noise-backend`, `--poi-sampler`) for single-run overrides without touching any
-file. The `export` layer turns the same pure render frames into colour SVG/PNG images, from the UI
-(`e` / `E`) or headlessly (`--export`).
+file. The same layers produce static maps, zoomed views and colour SVG/PNG images, from the UI
+(`e` / `E`) or headlessly (`--view`, `--scale`, `--save`).
 
 ---
 
@@ -25,7 +26,7 @@ file. The `export` layer turns the same pure render frames into colour SVG/PNG i
 ```
 src/biomegen/
   __main__.py           `python -m biomegen` entry
-  cli.py                CLI entry (argparse → config → generate → curses app | headless | preview)
+  cli.py                CLI entry (argparse → config → generate → explorer | static map | headless)
   registry.py           Generic name→implementation registry (the swappability mechanism)
   config/
     defaults/           Authoritative defaults, one module per section — every tunable key lives here
@@ -85,22 +86,27 @@ src/biomegen/
     grammar.py          Tracery-style grammar expander
     grammar_rules.toml  Lore sentence templates (machine-readable; mirrored in docs/GRAMMAR.md)
     lore.py             Region fact extraction + lore assembly
-  render/
-    palette.py          Colour authority — truecolor / 256-color / basic / mono capability ladder
-    glyphs.py           Glyph lookup tables from config
-    state.py            ViewState + camera helpers (edge-pan, center-cam)
-    map_view.py         Biome-map frame construction (fit-to-screen or 1:1)
-    zoom_view.py        Detail-view frame construction (zoom + local scales) with biome blending
-    status.py           Status panel + legend rendering
-    preview.py          ASCII preview (no curses — usable headlessly)
-    input.py            Key-binding resolution
-    app.py              Curses bootstrap + main event loop
-  export/               Curses-free SVG/PNG export of the island and the current view
-    colors.py           RGB colour authority mirroring Palette (no curses) for the exporters
-    svg.py              Frame-grid → deterministic standalone SVG document (no deps)
-    png.py              Frame-grid → PNG via Pillow (optional; degrades gracefully if absent)
-    __init__.py         export_world() / export_view() facades: frame → grid → file(s)
-tests/                  pytest suite mirroring src/: golden-world hash, RNG determinism, config, overlay, UI, export …
+  render/               Pure frame building (no terminal I/O); layer stack shared by every output
+    grid.py             CellGrid IR (glyph, fg, bg, bold arrays) and the Document / Span form for static text
+    sampler.py          Sampler: how a grid cell reads the world (one cell per tile, strided viewport)
+    fit.py              FitSampler: fit-to-screen map, each cell shows its block's most salient tile
+    detail.py           DetailSampler: zoom and local scales, warped continuous lookup; camera helpers
+    views.py            View: layer lists per scale family + tint ramp, from render.views
+    colors.py           Colour maths and per-biome / relief / detail / interior lookup arrays from the tables
+    scatter.py          Stable per-cell decoration keyed on tile and sub-cell
+    static.py           render_static (framed map + legend) and render_detail (zoom/local grid)
+    colortest.py        --color-test swatches
+    layers/             terrain relief tint water clutter roads bridges interiors markers names(labels) compass
+    furniture/          frame, graticule, scale bar, legend for static maps
+    backends/           ansi plain html svg png (a grid or document -> text or image)
+  explorer/             Interactive terminal app (the only place that reads keys or writes the screen)
+    state.py            ViewState, edge-pan camera, cursor start, floor sync and cycling, scale and mode steps
+    input.py            Key readers (termios / msvcrt), key tokens, rebindable key -> action table
+    writer.py           ANSI diff writer: alternate screen, writes only changed runs of cells
+    panel.py            Info panel (tile, region, POI, legend, controls) and the ? help overlay
+    exports.py          e / E: SVG (and PNG) of the screen's map or the whole world
+    app.py              compose_frame (map + cursor + panel) and the event-driven loop
+tests/                  pytest suite mirroring src/: golden-world hash, RNG determinism, config, overlay, renderer, explorer …
 docs/GRAMMAR.md         Naming/lore grammar reference
 config.example.toml     Sparse-overlay example (every key with its default value)
 ```
@@ -235,8 +241,7 @@ forest, jungle, swamp, taiga, tundra, snow) and `relief`. Ported from the refere
    1700 m, peaks 3200 m); peaks are snow.
 4. **Volcanoes**: `volcano_counts` (one drawn per seed) mountain or peak cells near the coast.
 
-The old curses views and exporters read the cover through `render/surface.py`, which draws river cells
-as lake water until the phase-4 renderer adds a river layer.
+The renderer draws rivers with its `water` layer over the land biome.
 
 ### Stage 5 — Geography (`pipeline/physical/geography.py`)
 
@@ -393,60 +398,73 @@ overlay and the built-in default for that run only.
 
 ## Render layer
 
-Three view scales share one biome-tile cursor and one camera:
+`render/` turns a world into a **cell grid** (`CellGrid`: glyph, foreground, background and bold arrays) and
+does no terminal I/O. Everything that draws is a *layer*, a function that paints onto the grid; the
+explorer, `--view`, `--scale` and the SVG/PNG exports all run the same stack, so they always agree.
 
-- **Biome map** (`map_view.py`): whole-island overview. `fit` mode downsamples the world to fit the
-  terminal; `1:1` panning mode shows one tile per cell. Toggle with `f`.
-- **Zoom** (`zoom_view.py`): each biome tile is rendered as a `zoom_scale × (zoom_scale × cell_aspect)`
-  block of detail cells. The cursor tile is outlined.
-- **Local** (`zoom_view.py`, same renderer): the screen shows `local_rows` biome tiles vertically,
-  each magnified further. Full furnished POI interiors render at this scale.
+- **Samplers** decide what a cell reads. A layer never indexes the world arrays directly; it asks the
+  sampler, which maps each cell to a world position. `Sampler.viewport` is one cell per tile (or a stride);
+  `FitSampler` covers a block of tiles per cell and shows the block's most salient tile (priorities in the
+  `priority` columns of `tables.biomes` / `tables.relief` and `render.fit_priority`, so a lone lake, a river
+  or a road survives); `DetailSampler` is the zoom and local scales.
+- **Views** (`render.views`) list the layers per scale family: `layers` for the map and `detail_layers` for
+  zoom and local, plus an optional tint ramp (elevation, temperature, rainfall). `v` cycles them.
+- **Layers** (`render/layers/`): `terrain`, `relief`, `tint`, `water`, `clutter`, `roads`, `bridges`,
+  `interiors`, `markers`, `labels`, `compass`. Colours and glyphs come from `tables.biomes`, `tables.relief`,
+  `tables.detail` and `tables.detail_relief` (`data/*.toml`), and the `render.*` config; none are literals.
+- **Back-ends** (`render/backends/`) turn a grid or document into ANSI, plain text, HTML, SVG or PNG.
+- Hot paths are numpy; the only Python loops are over POIs and road links.
 
-**Layered renderer, detail scales (phase 4b).** The curses app above still runs on `zoom_view.py` until
-phase 4c; the layered renderer draws the same scales for `--scale zoom|local` (`render/detail.py`,
-`render_detail` in `render/static.py`). A `DetailSampler` maps each cell of a tile's `cell_w x cell_h` block
-to a continuous world position (tile centres on the integers) and reads the biome, relief and river
-coverage through the biome-blend warp; `view.detail_layers` lists the layers drawn there: `terrain` (floor
-glyph per biome, rocky floor on mountain relief), `relief` (recolour only), `clutter` (`tables.detail`
-rows), `water` (river coverage), `roads` (the thin bed, numpy), `bridges`, `markers` (one cell per tile),
-`interiors` (zoom shell, local furniture). Colours come from `render.detail_colors` and the tables, not the
-curses palette. Output is the bare grid; the frame and legend are map-scale furniture.
+**Scales and the cursor.** Three scales share one tile cursor and one camera:
+
+- **Map**: `fit` (the whole world scaled down) or `1:1` (one cell per tile, panned). Toggle with `f`.
+- **Zoom**: each tile is a `zoom_scale x (zoom_scale * cell_aspect)` block of cells.
+- **Local**: the screen shows `local_rows` tiles vertically, each magnified further; furnished interiors
+  appear here.
+
+**Detail scales.** A `DetailSampler` maps each cell of a tile's `cell_w x cell_h` block to a continuous world
+position (tile centres on the integers) and reads the biome, relief and river coverage through the
+biome-blend warp. `terrain` draws the biome's floor glyph on every cell (a rocky floor on mountain relief),
+`relief` only recolours, `clutter` scatters the `tables.detail` glyphs (denser where wetter or higher),
+`water` draws river coverage, `roads` the thin bed, `bridges` the decks, `markers` one cell per tile and
+`interiors` the zoom shell or local furniture. Hillshade is bilinear elevation, the same at every scale.
 
 **Biome blending** at detail scales: each cell looks up its biome at a domain-warped world
 position (`blend_strength`, `blend_scale`). The warp is a pure function of world position + seed, so
 zoom and local are consistent samplings of the same blend — they look like zooms of each other.
-Setting `blend_strength = 0` gives a crisp grid.
+Setting `blend_strength = 0` gives a crisp grid. Water is blended by bilinear coverage
+(`water_blend_threshold`) so diagonal rivers and lakes join.
 
-**Roads & bridges** at detail scales (`zoom_view._draw_roads` / `_draw_bridges`, drawn over terrain
-but under POI markers and interiors): the biome-map overview keeps its single-cell road marker, but at
-zoom/local roads are not markers — they render like the rivers do.
+**Roads & bridges** at detail scales (the `roads` and `bridges` layers, drawn over terrain but under POI
+markers and interiors): the map keeps its single-cell road glyphs, but at zoom/local roads are not
+markers — they render like the rivers do.
 
 - *Roads* are a thin meandering **bed**: a detail cell is road when its (road-warped) world position
   lies within `road_half_width` tiles of the straight line joining two 8-adjacent land-road tile
   centres. That distance test is a pure function of world position, so zoom and local are the same
-  shape at different scales. The bed is `road_glyph` (`:`) in the `road` colour with small clutter
-  scattered along it (`road_clutter`, plus `road_clutter_local` fine detail at the close scale). A
-  small `road_warp` gives it an organic wobble; water cells are never drawn over (bridges carry those).
+  shape at different scales. The bed is `road_glyph` (`:`) in the `detail_colors.road_*` colours with small
+  clutter scattered along it (`road_clutter`, plus `road_clutter_local` fine detail at the close scale). A
+  small `road_warp` gives it an organic wobble; water and river cells are never drawn over (bridges carry those).
 - *Bridges* are a straight **deck flanked by walls**, drawn from each bridge POI's stored span
   endpoints (`extra['p0']`/`['p1']`) at whatever real angle the crossing has — cells within
   `road_half_width` of the span (perpendicular, clamped to its length, then extended `bridge_overhang`
-  tiles past each end so the deck overlaps the road bed with no gap) are the brown `bridge` deck, a
-  band just beyond on either long side is the `bridge_wall` railing. Unlike roads this draws over the
-  water it spans. Colours come from `render.palette` (`road`/`bridge`/`bridge_wall`); the renderer
-  encodes them as overlay colour ids above `OVERLAY_COLOR_BASE`, which `Palette`/`ExportPalette` decode.
+  tiles past each end so the deck overlaps the road bed with no gap) are the deck, a band just beyond on
+  either long side is the railing (`detail_colors.deck_*` / `wall_*`). Unlike roads this draws over the
+  water it spans.
 
-### Interiors (`interiors/`, rendered by `zoom_view.py`)
+### Interiors (`interiors/`, drawn by the `interiors` layer)
 
-POIs with a registered builder get **three forms**: the biome-map marker, a **zoom** structure
-outline, and a **local** full interior — all anchored in world space, so panning moves seamlessly
+POIs with a registered builder get **three forms**: the map marker (with a small wall outline of the
+structure on the overview), a **zoom** shell, and a **local** full interior — all anchored in world space, so panning moves seamlessly
 between outside and inside (the interior is *embedded in the terrain*, not a separate screen).
 
 - **One artifact, two samplings.** Each interior is generated once at a *canonical* resolution
   (`interiors.cells_per_tile` cells per world tile across the footprint) by the per-kind builder,
-  then `_stamp_interiors` **nearest-neighbour samples** it into the footprint's detail-cell block.
+  the layer **nearest-neighbour samples** it into the footprint's block of cells (`sample_rect_array`).
   So zoom and local are coarse/fine views of the same grid, exactly like the biome blend. At **zoom**
-  only `STRUCTURAL` cells (walls/doors/stairs) are drawn — the outline; at **local** every non-`VOID`
-  cell is drawn — the full furnished interior. `VOID` is transparent, so terrain shows through gaps.
+  the building shell is drawn (`ZOOM_VISIBLE`: walls and floor, furniture shown as floor); at **local**
+  every non-`VOID` cell is drawn — the full furnished interior; on the **map** only `STRUCTURAL` cells
+  (walls/doors/stairs) of the top floor, leaving the marker cell clear. `VOID` is transparent, so terrain shows through gaps.
 - **Lazy + cached + deterministic.** `build_interior(poi, floor, config, world=None)` dispatches to
   the kind's builder, memoised by `functools.lru_cache` on the cheap scalar inputs; the cached base
   array is read-only. Everything is a pure function of `interior_seed` (+ floor), so a POI regenerates
@@ -458,7 +476,7 @@ between outside and inside (the interior is *embedded in the terrain*, not a sep
   (`build_room_structure`); settlements drop only buildings that fit on land; the camp clips its
   clearing. The eroded margin stays `VOID`, so a strip of bare biome floor reads as a little coast.
   An inland POI's mask is empty (`b""`) → it builds exactly as before and shares that cache entry.
-  As a hard backstop, the detail renderer (`zoom_view._stamp_interiors`) never draws an interior cell
+  As a hard backstop, the `interiors` layer never draws an interior cell
   over a water tile — **except `boat`**, which floats on water by design. So no structure is ever
   stamped over water even if a corridor clips the shore; bridges have no builder and are unaffected.
 - **Signed floors, both directions.** **Floor 0 is always the ground/entry level** (set by
@@ -466,10 +484,9 @@ between outside and inside (the interior is *embedded in the terrain*, not a sep
   on **aligned shafts** fixed across floors (seeded floor-independently) so floors stack vertically;
   floor 0 gets the exterior DOOR, the far end only the stairs back. `grid.floor_links` /
   `grid.stamp_circulation` encode this once for every stacked builder. `<` / `>` cycle floors when the
-  cursor is on the footprint (`app._cycle_floor`); `_sync_floor_to_cursor` enters at floor 0.
-- **Colour.** Detail cells carry a *colour id*: a biome int, or an interior `Cell` colour encoded as
-  `INTERIOR_COLOR_BASE + cell`. `Palette.zoom_attr` decodes either; interior colours come from
-  `render.interior_palette`.
+  cursor is on the footprint (`explorer.state.cycle_floor`); `sync_floor` enters at floor 0.
+- **Colour.** Interior cells are filled with `render.interior_palette` (bridge cells with the deck and wall
+  colours of `render.detail_colors`); the glyph is the same colour lightened by `render.interior_fg_scale`.
 
 **Every archetype except `bridge` has a builder**, all sharing the `grid.py` toolkit:
 
@@ -485,36 +502,38 @@ A new archetype plugs in the same way: drop `interiors/<kind>.py` with an
 `@register_interior("<kind>")` builder, add a footprint entry, import it in `interiors/__init__.py` —
 no render or pipeline changes (both iterate the registry generically).
 
-**Colour capability ladder** (`palette.py`): the palette detects terminal capability and uses the
-highest available mode — truecolor (`init_color` with per-region RGB), 256-color, 8-color, or
-monochrome — falling back gracefully.
+---
+
+## Explorer (`explorer/`)
+
+The only place that reads keys or writes the screen. `explorer.app.run` is **event driven**: it composes a
+frame, diff-writes it, blocks on a key, and repeats, so an idle explorer uses no CPU.
+
+- **Frame.** `compose_frame` builds the map for the current scale and mode (the sampler, with the camera
+  edge-panned so it scrolls only when the cursor reaches a viewport edge), reverses the cursor's cell (its
+  whole tile block at zoom and local), and pastes the info panel under it into one terminal-sized grid.
+  `e` exports the map grid *without* the cursor.
+- **Writer.** `DiffWriter` compares the grid with the last frame (numpy) and sends a cursor move and the
+  new cells for each run of changed cells, with a style sequence only where the style changes; an
+  unchanged frame writes nothing. It owns the alternate screen, the hidden cursor and line wrap, and
+  restores them on exit even after an error. Colour is truecolor, 256 or none.
+- **Keys.** A reader yields tokens (`termios` cbreak on POSIX with a self-pipe for resize, `msvcrt` on
+  Windows); `resolve_action` maps them through the rebindable `keys` table. Any key closes the `?` help.
+- **Testing.** The loop takes an injected key source and output stream, so the tests drive it with a
+  scripted keyboard, replay the written escape codes on a tiny virtual screen, and run the real program on a
+  pseudo-terminal. The Windows paths cannot be exercised on Linux.
+- **Not in 4c.** Regenerating the world (`r`) returns in phase 9 with the chronicle panel.
 
 ---
 
-## Export layer (`export/`)
+## Exports
 
-Writes the island to image files. Two facades mirror the two in-game keys (and the `--export` CLI
-flag): `export_world` renders the whole island at full 1:1 resolution (one `export.cell_px` square per
-world tile); `export_view` renders exactly the frame currently on screen (biome / zoom / local at the
-current camera), so a POI interior can be captured as you see it.
-
-- **Reuses the render frame builders.** Export does **not** re-implement layout: it calls the same
-  pure `build_biome_frame` / `build_detail_frame` the curses renderer uses, then flattens the frame
-  into a renderer-agnostic *grid* of `(fill_rgb, glyph, glyph_rgb, bold)` cells. The SVG and PNG
-  back-ends both consume that one grid, so the two formats are pixel-faithful to each other and to the
-  TUI's layout (terrain < POI/road marker < interior outline; the transient cursor is omitted).
-- **Curses-free colour.** `colors.ExportPalette` mirrors `render.palette.Palette` method-for-method
-  but returns raw `(r, g, b)` triples instead of curses attributes, reading the **same** source
-  numbers (`render.palette`, per-region `base_color`, `render.interior_palette`). So images match the
-  terminal without importing curses (the headless `--export` path needs no TTY). Glyph colour is a
-  luma-based black/white contrast so every glyph stays legible over its tile.
-- **SVG always, PNG optional.** `svg.grid_to_svg` builds a standalone SVG with **zero dependencies**
-  (filled `<rect>` runs + centred `<text>` glyphs, XML-escaped). `png.grid_to_png` rasterises the same
-  grid via Pillow, imported **lazily**; if Pillow is absent it returns `False` and the caller falls
-  back to SVG-only with a friendly notice — the package still imports cleanly.
-- **Deterministic.** Cells are emitted in fixed row-major order with fixed numeric formatting, so a
-  fixed seed yields byte-identical SVG — the export analogue of the golden-world fingerprint (pinned
-  by `tests/export/test_export.py`).
+`explorer/exports.py` writes SVG (always, dependency free) and PNG (when `export.png` is set and Pillow is
+installed) from a cell grid, named by `export.filename_pattern` in `export.dir`. `e` writes the on-screen map
+grid, `E` the whole world at one cell per tile through `render_static`; `--save FILE` writes the same images
+headlessly by suffix. The back-ends are `render/backends/svg.py` and `png.py` (Pillow is imported lazily and a
+missing Pillow just drops the PNG). Cells are emitted in fixed row-major order with fixed numeric formatting,
+so a fixed seed yields byte-identical SVG, the export analogue of the golden-world fingerprint.
 
 ---
 

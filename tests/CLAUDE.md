@@ -5,7 +5,7 @@ Run with `scripts/test.sh [pytest args]` (or `uv run pytest -q`). `scripts/check
 ## Rules
 
 - Mirror `src/biomegen/`: `config/`, `util/`, `world/`, `interiors/`, `pipeline/` (with `physical/`),
-  `render/`, `export/`. `widget.py` is tested in `test_widget.py`; each folder has an `__init__.py`.
+  `render/`, `explorer/`. `widget.py` is tested in `test_widget.py`; each folder has an `__init__.py`.
 - One assertion concept per test (all assertions relate to one behaviour). Put a comment at the top of the
   test saying what is verified when the code does not make it obvious.
 - No mocking unless I/O or time is involved; use real objects and in-memory fakes.
@@ -22,7 +22,8 @@ Run with `scripts/test.sh [pytest args]` (or `uv run pytest -q`). `scripts/check
 
 ## Known skips
 
-- `tests/render/test_ui.py` skips the curses loop test without a TTY (one skip is expected headless).
+- None expected on Linux or macOS. The explorer's pseudo-terminal tests (`tests/explorer/test_input.py`,
+  `tests/test_cli.py`) are skipped on Windows, where the Windows key reader and VT handling are untested.
 - Non-strict xfails (user decision, phase 3): `test_interior_door_faces_road` (river can split a settlement
   footprint; phase 5) and two tower-stair tests (the entrance corridor can overwrite a stair). They xpass
   on the current default world; they guard seed-dependent edge cases.

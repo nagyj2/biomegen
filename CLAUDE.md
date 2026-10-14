@@ -26,11 +26,13 @@ All wrap `uv run` and pin fixture seeds and sizes in `scripts/_fixtures.sh`:
 - `scripts/fingerprint.sh [seed ...]`: world fingerprints (default seeds 42, 7, 1337); the before/after
   proof for refactors.
 - `scripts/export.sh [seed] [dir]`: headless SVG/PNG export (default `build/export`).
+- `scripts/view.sh [view] [seed] [args]`: a static map; add `--scale zoom|local --at X,Y` for a magnified part.
+- `scripts/bench_render.sh [runs] [seed] [COLSxROWS]`: frame times of the detail layers and the explorer frame.
 
 ## Layering
 
-Dependency direction: `util -> config -> world -> interiors, naming -> pipeline -> render -> cli`. A lower
-layer never imports a higher one. The target layout (adds `explorer/`, `data/`) is in the plan, section 11.
+Dependency direction: `util -> config -> world -> interiors, naming -> pipeline -> render -> explorer -> cli`. A lower
+layer never imports a higher one; `render/` does no terminal I/O (rules in `src/biomegen/render/CLAUDE.md`).
 
 ## Determinism (do not break)
 

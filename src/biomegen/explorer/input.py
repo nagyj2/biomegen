@@ -11,6 +11,7 @@ Actions: ``("move", dx, dy)``, ``("zoom",)``, ``("local",)``, ``("toggle_scale",
 
 from __future__ import annotations
 
+import importlib
 import os
 import re
 import sys
@@ -202,7 +203,7 @@ class WindowsKeyReader:
         return None
 
     def read_key(self) -> str:
-        import msvcrt  # type: ignore[import-not-found,unused-ignore]
+        msvcrt = importlib.import_module("msvcrt")  # Windows only; looked up at call time
 
         char = msvcrt.getwch()
         if char in ("\x00", "\xe0"):

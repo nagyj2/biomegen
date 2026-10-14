@@ -3,14 +3,14 @@
 A seed-reproducible **procedural island generator and explorer** that runs in your terminal. It
 builds a realistic island — terrain, climate, rivers and lakes, natural biomes grouped into named
 regions with generated lore, points of interest (villages, towns, cities, towers, dungeons, ruin,
-camps, boats) connected by meandering roads — and lets you explore it with a colored curses UI,
+camps, boats) connected by meandering roads — and lets you explore it in a colour terminal UI,
 zoom in to see structure detail, and export the view to SVG/PNG.
 
-> **Status:** Phases 0–6 are complete and playable. Every POI archetype (dungeon, tower, city, town,
-> village, ruin, camp, boat) renders an interior embedded in the terrain at the zoom (outline) and
-> local (full, furnished) scales, with multi-floor cycling for dungeons and towers. The whole island
-> or the current view can be exported to colour SVG (and PNG, if Pillow is installed) from the UI
-> (`e` / `E`) or headlessly (`--export`). See the phase checklist below.
+> **Status:** The world generator and the layered renderer are in place (redesign phases 0–4; see
+> `docs/redesign_plan.md`). One layer stack draws the interactive explorer, static maps, zoomed views and
+> the SVG/PNG exports, so they all look alike. Every POI archetype renders an interior embedded in the
+> terrain at the zoom (shell) and local (full, furnished) scales, with floor cycling for towers and dungeons.
+> Settlements, politics and the chronicle are the next phases.
 
 ---
 
@@ -24,7 +24,8 @@ export UV_PROJECT_ENVIRONMENT=~/.venvs/biome   # selects the environment for eve
 uv sync --extra dev                            # runtime + dev tooling; installs biomegen editable
 ```
 
-`windows-curses` is installed automatically on Windows (the `curses` module is stdlib on Linux/macOS).
+The explorer talks to the terminal directly with ANSI escape codes (no curses), on Linux, macOS and Windows 10+.
+Truecolor is used where the terminal supports it (`--color` overrides the detection).
 
 `noise` is an **optional** extra noise backend (`noise_lib`) that needs a C compiler. biomegen runs
 correctly without it using the default pure-numpy `perlin` backend.
@@ -53,11 +54,9 @@ uv run biomegen --noise-backend value                  # use value noise (cheape
 uv run biomegen --poi-sampler random                   # random POI placement instead of default blue-noise
 uv run biomegen --poi-sampler grid                     # evenly-spaced POI placement
 uv run biomegen --seed 1 --headless                    # generate + print stats, no terminal needed
-uv run biomegen --seed 1 --view terrain --color none    # static map with legend, no curses
-uv run biomegen --seed 1 --preview-zoom                # ASCII mid-detail (zoom) view
-uv run biomegen --seed 1 --preview-local               # ASCII close-detail (local) view
-uv run biomegen --seed 1 --export world                # write a full-island image to ./images, no UI
-uv run biomegen --seed 1 --export view                 # write the biome map to ./images, no UI
+uv run biomegen --seed 1 --view terrain --color none    # static map with legend, no UI
+uv run biomegen --seed 1 --scale zoom --at 60,30        # a magnified part of the world (zoom or local)
+uv run biomegen --seed 1 --view terrain --save map.svg  # write a map image (.svg .png .html .txt), no UI
 ```
 
 Algorithm flags override the TOML config value for that run only — they do not modify any file.
@@ -72,8 +71,9 @@ A random seed is always echoed to stdout so every run remains reproducible.
 
 ## Controls (interactive)
 
-There are **three view scales**: the **biome map** (whole island), **zoom** (mid detail), and
-**local** (close detail). All three share one cursor — a biome-tile coordinate.
+Run `uv run biomegen` (or `scripts/run.sh`) in a terminal. There are **three view scales**: the **map**
+(whole island), **zoom** (mid detail), and **local** (close detail). All three share one cursor — a
+tile coordinate — and an info panel under the map shows the tile, region, point of interest and a legend.
 
 | Key | Action |
 |-----|--------|
@@ -81,11 +81,12 @@ There are **three view scales**: the **biome map** (whole island), **zoom** (mid
 | `Shift`+arrows / capital `WASD` · `HJKL` | Fast-move (`controls.fast_step` tiles at a time) |
 | `Space` | Step **out** one scale: biome↔zoom, local→zoom |
 | `z` | Step **in** one scale: biome→zoom→local |
-| `f` | Toggle fit-to-screen ↔ 1:1 panning (biome map only) |
-| `r` | Regenerate the world with a fresh random seed |
+| `f` | Toggle fit-to-screen ↔ 1:1 panning (map only) |
+| `v` | Next view: terrain, elevation, temperature, rainfall |
+| `?` | Show the key help |
 | `<` / `>` | Cycle floors up / down when standing on a multi-floor structure (e.g. a dungeon) |
 | `e` / `E` | Export current view / whole island to `export.dir` (SVG always, PNG if Pillow present) |
-| `q` | Quit |
+| `q` / `Esc` | Quit |
 
 > Most terminals send the same code for `Space` and `Shift`+`Space`, so a dedicated key (`z`) is
 > used for the deeper zoom. Set `keys.local = " "` only if your terminal distinguishes them.
@@ -211,11 +212,12 @@ Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[ta
 | `blend_strength` | `0.85` | Biome boundary bleed at detail scales (0 = crisp grid) |
 | `blend_scale` | `2.5` | Feature size (tiles) of the boundary-blend warp |
 | `default_view` | `"fit"` | Starting biome-map view: `"fit"` · `"onetoone"` |
-| `status_height` | `12` | Terminal rows reserved for the status/legend panel |
-| `try_truecolor` | `true` | Attempt per-region RGB colour where the terminal supports it |
-| `palette.*` | — | Biome RGB base colours (0-255) |
-| `glyphs.*` | — | Per-biome display character |
-| `markers.*` | — | Per-POI/road display character |
+| `status_height` | `12` | Terminal rows reserved for the info panel |
+| `views.*` | — | Layer lists per view (`layers` for the map, `detail_layers` for zoom and local) and its tint ramp |
+| `ramps.*` | — | Colour ramps for the elevation, temperature and rainfall views |
+| `markers.*` | — | Per-POI display character |
+| `detail_colors.*` | — | Colours of the road bed and bridges at zoom and local |
+| `palette.*` | — | Biome base colours the region stage reads (the renderer uses `tables.biomes`) |
 
 #### `[export]`
 | Key | Default | Description |
@@ -223,12 +225,12 @@ Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[ta
 | `dir` | `"./images"` | Output directory for exported images (created on demand) |
 | `cell_px` | `12` | Tile/cell size in pixels for exported images |
 | `png` | `true` | Also write a PNG alongside the SVG (needs Pillow; SVG is always written) |
-| `filename_pattern` | `"{name}_{seed}_{view}"` | Output basename; `{name}` island name, `{seed}` master seed, `{view}` = `world`/`biome`/`zoom`/`local` |
+| `filename_pattern` | `"{name}_{seed}_{view}"` | Output basename; `{name}` island name, `{seed}` master seed, `{view}` = `world`/`map`/`zoom`/`local` (with `-<view>` for data views) |
 
-Exports are colour-faithful to the TUI (same region/biome/interior palette) and **deterministic** —
-a given seed always produces byte-identical SVG. The whole-island export (`E` / `--export world`)
-renders every world tile at `cell_px`; the view export (`e`) captures the on-screen frame at its
-current scale and camera, including any open POI interior.
+Exports come from the same layer stack as the screen and are **deterministic** — a given seed always
+produces byte-identical SVG. The whole-island export (`E`) renders every world tile at `cell_px`; the
+view export (`e`) captures the on-screen map (without the cursor) at its current scale and camera,
+including any open POI interior. `--save FILE` writes the same images without the UI.
 
 #### `[keys]`
 | Key | Default | Description |
@@ -236,7 +238,9 @@ current scale and camera, including any open POI interior.
 | `zoom` | `" "` | Step out a scale (Space) |
 | `local` | `"z"` | Step into the deeper scale |
 | `toggle_scale` | `"f"` | Toggle fit-to-screen ↔ 1:1 |
-| `refresh` | `"r"` | Regenerate the world |
+| `cycle_view` | `"v"` | Next view |
+| `help` | `"?"` | Key help |
+| `refresh` | `"r"` | Regenerate the world (unbound until phase 9) |
 | `export_view` | `"e"` | Export current view |
 | `export_world` | `"E"` | Export whole island |
 | `quit` | `"q"` | Quit |
@@ -277,7 +281,7 @@ The naming and lore grammar is documented in **[docs/GRAMMAR.md](docs/GRAMMAR.md
 - [x] Phase 0 — contracts + scaffolding (config, RNG, World/Overlay data model)
 - [x] Phase 1 — utilities (noise, geometry) + tests
 - [x] Phase 2 — generation core (heightmap → regions) + headless stats
-- [x] Phase 3 — curses TUI — playable biome-map explorer
+- [x] Phase 3 — terminal explorer — playable map (now the ANSI explorer of redesign phase 4)
 - [x] Phase 4 — POIs, meandering A\* roads + bridges, mixed-culture names & region lore
 - [x] Phase 5 — detail interiors, clutter, multi-floor POIs, overlay
   - [x] Infrastructure: lazy/LRU-cached interior builders, registry, embedded detail rendering
@@ -289,4 +293,4 @@ The naming and lore grammar is documented in **[docs/GRAMMAR.md](docs/GRAMMAR.md
 - [x] Phase 6 — SVG/PNG export
   - [x] Curses-free RGB colour resolver (palette-faithful, no terminal needed)
   - [x] Deterministic colour-SVG exporter; optional PNG raster via Pillow (graceful without it)
-  - [x] `E` whole island (full-res) / `e` current view (biome/zoom/local) + headless `--export`
+  - [x] `E` whole island (full-res) / `e` current view (biome/zoom/local) + headless `--save` (this phase's `--export` flag was replaced in redesign phase 4)
