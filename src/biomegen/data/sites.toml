@@ -17,34 +17,34 @@
 [sites.capital]
 furniture = "home"
 layout = "settlement"
-extent_tiles = [3.0, 2.0]
+extent_tiles = [3.0, 2.25]
 rows_per_tile = 14
 grows_with_pop = true
-plaza_tiles = 0.5
+plaza_tiles = 0.25
 
 [sites.city]
 furniture = "home"
 layout = "settlement"
-extent_tiles = [2.0, 1.5]
+extent_tiles = [2.25, 1.75]
 rows_per_tile = 14
 grows_with_pop = true
-plaza_tiles = 0.4
+plaza_tiles = 0.18
 
 [sites.town]
 furniture = "home"
 layout = "settlement"
-extent_tiles = [1.5, 1.0]
+extent_tiles = [1.75, 1.25]
 rows_per_tile = 14
 grows_with_pop = true
-plaza_tiles = 0.3
+plaza_tiles = 0.12
 
 [sites.village]
 furniture = "home"
 layout = "settlement"
-extent_tiles = [1.0, 0.75]
+extent_tiles = [1.25, 1.0]
 rows_per_tile = 16
 grows_with_pop = true
-plaza_tiles = 0.2
+plaza_tiles = 0.08
 
 [sites.tower]
 furniture = "tower"

@@ -33,8 +33,8 @@ def test_kind_without_a_site_row_has_no_geometry(cfg: Config) -> None:
 
 
 def test_extent_is_centred_on_the_anchor(cfg: Config) -> None:
-    # A village is 1.0 x 0.75 tiles, so its extent runs half that either side of tile (10, 8).
-    assert _geometry(cfg, "village").extent == (9.5, 7.625, 10.5, 8.375)
+    # A village is 1.25 x 1.0 tiles, so its extent runs half that either side of tile (10, 8).
+    assert _geometry(cfg, "village").extent == (9.375, 7.5, 10.625, 8.5)
 
 
 def test_a_tower_is_smaller_than_one_tile(cfg: Config) -> None:
@@ -68,9 +68,9 @@ def test_box_lies_inside_the_window(cfg: Config) -> None:
 
 
 def test_box_size_follows_the_extent_and_resolution(cfg: Config) -> None:
-    # A village extent of 1.0 x 0.75 tiles at 32 x 16 cells per tile is 32 x 12 cells.
+    # A village extent of 1.25 x 1.0 tiles at 32 x 16 cells per tile is 40 x 16 cells.
     geometry = _geometry(cfg, "village")
-    assert (geometry.box_cols, geometry.box_rows) == (32, 12)
+    assert (geometry.box_cols, geometry.box_rows) == (40, 16)
 
 
 def test_cell_at_and_position_of_are_inverse(cfg: Config) -> None:

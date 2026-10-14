@@ -40,3 +40,17 @@ def test_a_grid_too_small_for_two_rooms_gives_one() -> None:
 
 def test_a_big_grid_is_split_into_several_rooms() -> None:
     assert len(_rooms(1, 120, 40)) >= 4
+
+
+def test_inset_keeps_neighbouring_rooms_apart() -> None:
+    # With an inset of (3, 2) every pair of rooms is separated by at least twice that on one axis.
+    rooms = bsp_rooms(random.Random(2), 120, 40, (3, 5), 2.0, 1, (3, 2))
+    for i, (ax, ay, aw, ah) in enumerate(rooms):
+        for bx, by, bw, bh in rooms[i + 1 :]:
+            gap_x = max(bx - (ax + aw), ax - (bx + bw))
+            gap_y = max(by - (ay + ah), ay - (by + bh))
+            assert gap_x >= 6 or gap_y >= 4
+
+
+def test_inset_rooms_stay_off_the_border() -> None:
+    assert all(x >= 4 and y >= 3 for x, y, _w, _h in bsp_rooms(random.Random(2), 120, 40, (3, 5), 2.0, 1, (3, 2)))
