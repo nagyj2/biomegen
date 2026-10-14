@@ -188,6 +188,15 @@ VALUES: Dict[str, Any] = {
         "river_mix_t": 0.6,
         "river_mix_t_tinted": 0.35,
     },
+    # Roads layer: a road cell draws the glyph for which of its four neighbours (north 1, east 2, south 4,
+    # west 8) are also road; ``glyphs`` / ``ascii`` are indexed by that 0..15 mask.
+    "roads": {
+        "fg": [96, 58, 30],
+        "glyphs": ["·", "│", "─", "╰", "│", "│", "╭", "├", "─", "╯", "─", "┴", "╮", "┤", "┬", "┼"],
+        "ascii": ["+", "|", "-", "+", "|", "|", "+", "+", "-", "+", "-", "+", "+", "+", "+", "+"],
+    },
+    # Markers layer: points of interest draw their ``markers`` glyph (below) in bold with this colour pair.
+    "marker_style": {"fg": [255, 130, 255], "bg": [70, 20, 70]},
     # Overlay glyphs drawn on top of biome cells.
     "markers": {
         "road": "+",

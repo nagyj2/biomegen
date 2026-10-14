@@ -52,6 +52,10 @@ class Overlay:
         """Remove any surface delta at ``(x, y)`` (revert to the generated base)."""
         self._surface.pop((int(x), int(y)), None)
 
+    def surface_edits(self) -> list[tuple[Coord, Dict[str, Any]]]:
+        """Return every surface delta as ``((x, y), attrs)``, sorted by coordinate (deterministic order)."""
+        return sorted(self._surface.items())
+
     @property
     def has_surface_edits(self) -> bool:
         return bool(self._surface)

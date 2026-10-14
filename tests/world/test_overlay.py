@@ -60,3 +60,11 @@ def test_overlay_surface_roundtrip_serialisation() -> None:
     restored = Overlay.from_dict(overlay.to_dict())
     assert restored.get_surface(1, 2) == {"glyph": "x", "blocked": True}
     assert restored.get_interior_cell(7, -1, 0, 0) == int(Cell.WALL)
+
+
+def test_surface_edits_are_listed_in_coordinate_order() -> None:
+    # Iteration order is sorted by (x, y) so rendering never depends on edit order.
+    overlay = Overlay()
+    overlay.set_surface(5, 1, glyph="b")
+    overlay.set_surface(2, 9, glyph="a")
+    assert [coord for coord, _ in overlay.surface_edits()] == [(2, 9), (5, 1)]
