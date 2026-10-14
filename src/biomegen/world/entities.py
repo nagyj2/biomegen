@@ -15,14 +15,14 @@ from typing import List, Optional, Tuple
 
 @dataclass
 class POI:
-    """A point of interest (village, town, city, tower, dungeon, ruin, camp, boat, ...).
+    """A point of interest (village, town, city, capital, tower, dungeon, ruin, camp, boat, ...).
 
     Placement (Phase 4) fills the location/kind/region; the interiors stage (Phase 5) fills the cheap
     metadata (``floor_count``, ``footprint``, ``entrance``) while the actual interior grids are
     generated lazily from ``interior_seed`` and never stored here.
     """
 
-    kind: str  # e.g. "village", "town", "city", "tower", "dungeon", ...
+    kind: str  # "capital", "city", "town", "village", "tower", "dungeon", ...
     x: int  # anchor cell on the biome map
     y: int
     interior_seed: int  # per-POI seed minted at placement; deterministic lazy interiors
@@ -34,6 +34,8 @@ class POI:
     footprint: Tuple[int, int] = (0, 0)  # interior footprint in world tiles (w, h), centred on anchor
     bbox: Tuple[int, int, int, int] = (0, 0, 0, 0)  # footprint extent in world tiles (x0,y0,x1,y1), clamped
     entrance: Tuple[int, int] = (0, 0)  # door coordinate roads should connect to
+    pop: int = 0  # population (settlements only)
+    tags: Tuple[str, ...] = ()  # site traits, e.g. "port", "river"
     extra: dict = field(default_factory=dict)  # kind-specific data (e.g. boat cargo type)
 
 

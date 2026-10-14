@@ -69,12 +69,13 @@ src/biomegen/
       biomes.py         Stage 4 — biome from °C / mm / m, relief, volcanoes
       geography.py      Stage 5 — landmass_id; landmass, range, peak, lake, sea, river features
     regions.py          Stage 6 — region segmentation + colour
-    poi_placement.py    Stage 7 — POI anchor placement
+    poi_placement.py    Stage 8 — wild POI anchor placement (interim; rewritten as pois.py)
     poi_fields.py       Shared suitability distance fields for POI scoring
     poi_rules.py        Per-kind POI rules, eligibility masks, score arrays
     poi_sampler.py      Blue-noise / random / grid POI samplers
     civilization/
-      roads.py          Stage 8 — road network + bridge POIs + per-POI road-entrance recording
+      settlements.py    Stage 7 — habitability, capital / city / town / village placement
+      roads.py          Stage 9 — road network + bridge POIs + per-POI road-entrance recording
     story/
       poi_interiors.py  Stage 9 — POI interior metadata (footprint/bbox/entrance; no grids)
     naming.py           Stage 10 — names and lore for all entities
@@ -131,10 +132,10 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `landmass_id` | int32 | 0..L-1 largest first, -1=water | geography |
 | `water_type` | uint8 | `WaterType` enum int | terrain, hydrology |
 | `region_id` | int32 | 0..R-1, -1=ocean | regions |
-| `poi_index` | int32 | 0..P-1, -1=none | poi_placement |
+| `poi_index` | int32 | 0..P-1, -1=none | settlements, poi_placement |
 | `road` | uint8 | 0 / 1 | roads |
 | `road_tier` | uint8 | 0=none, 1=trunk, 2=spur | roads |
-| `dist_to_ocean` | float32 | ≥ 0 tiles (km in phase 5) | terrain |
+| `dist_to_ocean` | float32 | ≥ 0 km (aspect-aware) | terrain |
 | `flow_accum` | float64 | km², wetness-weighted catchment | hydrology |
 
 Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `features` (`GeoFeature`), `island_name`.
@@ -168,7 +169,7 @@ backtracking. A **land-exists gate** wraps the cheap terrain stage: if a seed yi
 rank, so the gate only trips when a style's land fraction is configured below the minimum.
 
 ```
-terrain → climate → hydrology → biomes → geography → regions
+terrain → climate → hydrology → biomes → geography → regions → settlements
          → poi_placement → roads → poi_interiors → naming
 ```
 
@@ -178,8 +179,8 @@ entrance (and biases the interior door) to the road-facing side.
 
 ### Stage 1 — Terrain (`pipeline/physical/terrain.py`)
 
-Produces `elevation_m`, the salt ocean (`water_type`) and `dist_to_ocean` (tiles, for POI scoring until
-the phase-5 rewrite). Ported from the reference `_elevation`:
+Produces `elevation_m`, the salt ocean (`water_type`) and `dist_to_ocean` (km, for settlement and POI
+scoring). Ported from the reference `_elevation`:
 
 1. **Style**: a `tables.styles` row (`data/terrain.toml`) sets the land fraction, base feature size and
    the blend of base fBm, coarse continent fBm, a centre pull (pangaea) and island blobs (islands).
@@ -270,28 +271,40 @@ Groups tiles into named regions — contiguous zones of biologically similar cov
 6. **Per-region colour**: each region gets its dominant biome's palette colour ± a per-region
    `color_jitter` drawn from a seeded RNG, so adjacent same-biome regions remain visually distinct.
 
-### Stage 7 — POI placement (`pipeline/poi_placement.py`, `poi_fields.py`, `poi_rules.py`, `poi_sampler.py`)
+### Stage 7 — Settlements (`pipeline/civilization/settlements.py`)
 
-Places cities, towns, villages, towers, dungeons, ruin, camps, and boats:
+Places the four settlement tiers (`capital`, `city`, `town`, `village`; rows in `data/tiers.toml`):
+
+1. **Habitability** per land cell: `tables.biomes.<biome>.habitability` × the relief's `habitability_mul`, plus
+   bonuses for a river, the coast or a lake within reach (`settlements.*_reach_km`, aspect-aware), × a seeded
+   per-cell jitter. Water and cells at or below `settlements.min_habitability` are never settled.
+2. **Placement** in tier `rank` order. A tier's count is land km² ÷ its `land_per_settlement_km2` × `settlements.density`
+   (capitals are capped by `settlements.max_capitals`). Candidates are tried best-scoring first and kept when
+   every earlier settlement is at least the tier's `spacing_km` away. Capitals need a landmass of at least
+   `settlements.capital_min_landmass_km2` (or the biggest); cities and towns need a named-feature landmass.
+3. **Record**: a `POI` of the tier's kind with a population from the tier's range and `port` / `river` / `lake` tags.
+
+### Stage 8 — POI placement (`pipeline/poi_placement.py`, `poi_fields.py`, `poi_rules.py`, `poi_sampler.py`)
+
+Places towers, dungeons, ruins, camps and boats (interim; settlements come from Stage 7 and count for spacing and remoteness):
 
 1. **Shared suitability fields**: `freshwater_distance` and `coast_distance` are computed once.
    A `remoteness` field is updated after each civilized POI lands, so later uncivilized kinds
    naturally cluster away from settlements.
-2. **Priority order**: `city → town → village → tower → dungeon → ruin → camp → boat`. Higher-value
-   settlements claim the best land first; the shared spacing set prevents stacking.
+2. **Priority order**: `tower → dungeon → ruin → camp → boat`; the shared spacing set prevents stacking.
 3. **Scoring**: each kind defines eligibility (allowed biomes, elevation bounds) and weighting
    (freshwater affinity, coastal affinity, remoteness weight). Score = product of applicable
    weights + per-tile jitter noise. Land kinds additionally require their (max) footprint to be at
    least `poi.min_footprint_land` dry land (`poi_rules.footprint_land_fraction_mask`, a summed-area
    table over the water mask), so a structure can sit on a coast but never mostly over water; the
-   interior builder then forms it *around* whatever water the footprint clips (see Stage 8 / Interiors).
+   interior builder then forms it *around* whatever water the footprint clips (see Stage 9 / Interiors).
    Boats (`on_water`) are exempt — they anchor on water by design.
 4. **Blue-noise sampling** (default): candidate tiles are drawn from the scored distribution and
    accepted only if they are ≥ `min_spacing` tiles from all previously placed POIs (Poisson-disk
    style). Alternatives: `random` (unconstrained sampling) and `grid` (evenly spaced).
-5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy interior builder (see Stage 8 and the Render layer).
+5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy interior builder (see Stage 9 and the Render layer).
 
-### Stage 8 — Roads (`pipeline/civilization/roads.py`)
+### Stage 9 — Roads (`pipeline/civilization/roads.py`)
 
 Connects POIs with meandering least-cost roads, **before** interiors so the network can shape each
 POI's entrance:

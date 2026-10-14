@@ -55,9 +55,10 @@ _HOME_FURNITURE: List[Tuple[Cell, float]] = [
 ]
 _HOME_DENSITY_FACTOR = 1.6  # homes are cosier than dungeons - dress a bit more of the floor
 _MAX_BUILDING = 8  # cap a building's side so no single plot becomes a giant hall (keeps them house-scale)
-_PLAZA_RADIUS = {"city": 3, "town": 2, "village": 1}  # central PATH square, scaled by settlement size
+_PLAZA_RADIUS = {"capital": 4, "city": 3, "town": 2, "village": 1}  # central PATH square, scaled by settlement size
 
 
+@register_interior("capital")
 @register_interior("city")
 @register_interior("town")
 @register_interior("village")

@@ -275,6 +275,7 @@ VALUES: Dict[str, Any] = {
     },
     # Overlay glyphs drawn on top of biome cells.
     "markers": {
+        "capital": "K",
         "city": "C",
         "town": "T",
         "village": "v",

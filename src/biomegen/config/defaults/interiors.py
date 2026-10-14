@@ -48,6 +48,7 @@ VALUES: Dict[str, Any] = {
     "footprints": {
         "dungeon": [6, 4],
         "tower": [3, 3],
+        "capital": [9, 6],
         "city": [7, 5],
         "town": [5, 4],
         "village": [4, 3],

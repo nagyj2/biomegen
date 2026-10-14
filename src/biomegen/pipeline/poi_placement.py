@@ -1,6 +1,6 @@
 """Stage 7: POI placement.
 
-Places points of interest (city, town, village, tower, dungeon, ruin, camp, boat) on the finished
+Places the wild points of interest (tower, dungeon, ruin, camp, boat) on the finished
 terrain. Approach: build shared suitability fields once, then walk the kinds in a fixed priority order
 (high-value civilized settlements first) and, for each, score every eligible tile and pick anchors
 with a capacity-constrained blue-noise sampler that enforces per-kind spacing against a *shared* set
@@ -29,9 +29,6 @@ from .poi_sampler import POI_SAMPLERS
 
 # Fixed priority so higher-value civilized POIs claim the best land first; also makes results stable.
 KIND_PRIORITY: Tuple[str, ...] = (
-    "city",
-    "town",
-    "village",
     "tower",
     "dungeon",
     "ruin",
@@ -100,8 +97,9 @@ def run(world: World, config: Config, seed: int) -> None:
     fresh_w = poi_fields.closeness_weight(fresh_dist, fresh_scale)
     coast_w = poi_fields.closeness_weight(coast_dist, coast_scale)
 
-    placed: List[Tuple[int, int]] = []  # all anchors (shared spacing)
-    civ_points: List[Tuple[int, int]] = []  # civilized anchors (drive remoteness)
+    # Settlements are placed by the settlements stage first; they count for spacing and remoteness.
+    placed: List[Tuple[int, int]] = [(p.x, p.y) for p in world.pois]  # all anchors (shared spacing)
+    civ_points: List[Tuple[int, int]] = [(p.x, p.y) for p in world.pois if p.civilized]  # drive remoteness
 
     for kind in KIND_PRIORITY:
         raw = types_cfg.get(kind)

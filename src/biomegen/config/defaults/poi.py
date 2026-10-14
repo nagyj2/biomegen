@@ -20,36 +20,6 @@ VALUES: Dict[str, Any] = {
     # Per-kind rules. ``count`` is a target; ``min_spacing`` enforces blue-noise separation;
     # ``biomes`` whitelists land cover; ``civilized`` affects road connection probability.
     "types": {
-        "city": {
-            "count": 1,
-            "min_spacing": 40,
-            "civilized": True,
-            "biomes": ["grass", "savanna", "forest"],
-            "elevation_max_m": 1100.0,
-            "near_freshwater": 0.6,
-            "coastal": 0.2,
-            "floors": 1,
-        },
-        "town": {
-            "count": 3,
-            "min_spacing": 24,
-            "civilized": True,
-            "biomes": ["grass", "savanna", "forest", "beach"],
-            "elevation_max_m": 1300.0,
-            "near_freshwater": 0.5,
-            "coastal": 0.3,
-            "floors": 1,
-        },
-        "village": {
-            "count": 7,
-            "min_spacing": 12,
-            "civilized": True,
-            "biomes": ["grass", "savanna", "forest", "taiga"],
-            "elevation_max_m": 1450.0,
-            "near_freshwater": 0.5,
-            "coastal": 0.1,
-            "floors": 1,
-        },
         "tower": {
             "count": 4,
             "min_spacing": 16,

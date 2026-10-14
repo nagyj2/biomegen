@@ -44,7 +44,7 @@ from ...world.world import World
 
 Coord = Tuple[int, int]
 _MOUNTAINISH = frozenset({int(Relief.MOUNTAIN), int(Relief.PEAK), int(Relief.VOLCANO)})
-_SETTLEMENT_KINDS = frozenset({"city", "town", "village"})
+_SETTLEMENT_KINDS = frozenset({"capital", "city", "town", "village"})
 
 
 # --------------------------------------------------------------------------- union-find (Kruskal MST)
