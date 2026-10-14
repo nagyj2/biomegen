@@ -89,3 +89,78 @@ def test_bridges_do_not_overlap():
         }
         assert not (water & seen), f"bridge at {(b.x, b.y)} overlaps an existing bridge deck"
         seen |= water
+
+
+# --------------------------------------------------------------------------- tiers and cost tables
+def _flat_world(width: int = 20, height: int = 9):
+    """An all-grass land strip of 30 km square cells with no rivers."""
+    from biomegen.util.units import grid_scale
+    from biomegen.world.tile import Biome
+    from biomegen.world.world import World
+
+    world = World(width, height, 1, grid_scale(width, height, (width * 30.0, height * 30.0), 30.0, 0.0))
+    world.water_type[:] = int(WaterType.NONE)
+    world.biome[:] = int(Biome.GRASS)
+    world.elevation_m[:] = 50.0
+    return world
+
+
+def _add_poi(world, kind: str, x: int, y: int) -> None:
+    from biomegen.world.entities import POI
+
+    world.poi_index[y, x] = len(world.pois)
+    world.pois.append(POI(kind=kind, x=x, y=y, interior_seed=0, civilized=True))
+
+
+def test_road_avoids_swamp_when_a_grass_detour_is_cheaper():
+    # Swamp's move_cost makes a three-cell swamp band dearer than walking round it, so the road skips the band.
+    from biomegen.pipeline.civilization import roads
+    from biomegen.world.tile import Biome
+
+    cfg = load_config(None)
+    cfg.data["roads"]["meander_strength"] = 0.0
+    world = _flat_world()
+    world.biome[2:, 8:11] = int(Biome.SWAMP)  # open grass remains on rows 0 and 1
+    _add_poi(world, "town", 2, 5)
+    _add_poi(world, "town", 16, 5)
+    roads.run(world, cfg, 1)
+    assert world.road.any() and not (world.road.astype(bool) & (world.biome == int(Biome.SWAMP))).any()
+
+
+def test_villages_branch_off_the_backbone_as_spurs():
+    # Villages are not backbone tiers, so with certain connection a village is a spur node, never a trunk end.
+    import random
+
+    from biomegen.pipeline.civilization.roads import _classify_edges
+
+    coords = [(0.0, 0.0), (100.0, 0.0), (50.0, 50.0)]
+    trunk, spurs = _classify_edges(coords, [True] * 3, [True, True, False], 3, random.Random(1), (1.0, 1.0, 0.0))
+    assert trunk == [(0, 1)] and spurs == [2]
+
+
+def test_trunk_spans_backbone_nodes_whose_nearest_neighbours_are_villages():
+    # Two far-apart backbone towns, each ringed by villages, still get joined: the MST ignores non-backbone nodes.
+    import random
+
+    from biomegen.pipeline.civilization.roads import _classify_edges
+
+    coords = [(0.0, 0.0), (1000.0, 0.0)] + [(float(dx), float(dy)) for dx in (10, 20) for dy in (10, 20)] * 2
+    flags = [True, True] + [False] * (len(coords) - 2)
+    trunk, _spurs = _classify_edges(coords, [True] * len(coords), flags, 5, random.Random(1), (1.0, 1.0, 0.0))
+    assert trunk == [(0, 1)]
+
+
+def test_every_backbone_town_is_joined_into_one_network():
+    # Four towns on a flat strip end up connected: the trunk is a spanning tree over the backbone tier.
+    from biomegen.pipeline.civilization import roads
+
+    cfg = load_config(None)
+    world = _flat_world()
+    for x, y in ((1, 1), (17, 1), (1, 7), (17, 7)):
+        _add_poi(world, "town", x, y)
+    roads.run(world, cfg, 1)
+    from scipy import ndimage
+
+    labels, _count = ndimage.label(world.road > 0, structure=np.ones((3, 3)))
+    towns = {int(labels[y, x]) for x, y in ((1, 1), (17, 1), (1, 7), (17, 7))}
+    assert len(towns) == 1 and 0 not in towns

@@ -13,6 +13,7 @@
 #   pop           [min, max] population
 #   spacing_km    minimum distance to any already-placed settlement
 #   land_per_settlement_km2  one settlement of this tier per this much land area (km²)
+#   backbone      true when roads join this tier into the trunk network; false tiers branch off it as spurs
 
 [tiers.capital]
 label = "Capital"
@@ -24,6 +25,7 @@ bg = [110, 20, 20]
 pop = [40000, 160000]
 spacing_km = 480.0
 land_per_settlement_km2 = 750000.0
+backbone = true
 
 [tiers.city]
 label = "City"
@@ -35,6 +37,7 @@ bg = [60, 40, 30]
 pop = [9000, 40000]
 spacing_km = 390.0
 land_per_settlement_km2 = 800000.0
+backbone = true
 
 [tiers.town]
 label = "Town"
@@ -45,6 +48,7 @@ fg = [250, 240, 220]
 pop = [1500, 8000]
 spacing_km = 240.0
 land_per_settlement_km2 = 400000.0
+backbone = true
 
 [tiers.village]
 label = "Village"
@@ -55,3 +59,4 @@ fg = [245, 235, 215]
 pop = [80, 1200]
 spacing_km = 150.0
 land_per_settlement_km2 = 200000.0
+backbone = false

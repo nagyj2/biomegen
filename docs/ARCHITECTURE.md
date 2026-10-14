@@ -307,14 +307,15 @@ POI's entrance:
 1. **Landmass grouping**: `water_type != SALT` (land + rivers + lakes, but not ocean) is labelled
    with 8-connected components. Roads are only routed within one component — they cannot cross open
    ocean, and a river slicing an island does not split it for routing purposes.
-2. **Connection graph**: k-nearest-neighbour candidate edges → Kruskal MST over the civilized POIs
-   (the settlement backbone; falls back to all POIs if none exist) → probabilistic attachment of
-   remaining POIs (civilized at `civilized_connect_prob`, uncivilized at `uncivilized_connect_prob`)
+2. **Connection graph**: k-nearest-neighbour candidate edges (km) → Kruskal MST over the backbone tiers
+   (`tables.tiers.<tier>.backbone`: capital, city, town; falls back to all POIs if none exist) → probabilistic attachment of
+   remaining POIs (villages and other civilized POIs at `civilized_connect_prob`, uncivilized at `uncivilized_connect_prob`)
    → extra loop edges at `extra_edge_prob`. All random draws consume a per-component RNG in a fixed
    sorted edge order. Roads route to each POI's anchor (interiors set the perimeter entrance later).
-3. **Routing**: A* over a per-tile cost surface. Cost factors: `base_cost` (flat ground) +
-   `slope_cost_per_km × |Δelevation_m| / 1000` + `uphill_surcharge_per_km` (uphill only) + `water_cost` (cross water) +
-   `mountain_cost` (high terrain). Existing road tiles are discounted by `road_discount`.
+3. **Routing**: A* over a per-tile cost surface. Cost factors: `base_cost` × the biome's `move_cost` + the
+   relief's `move_cost` (tables `biomes`, `relief`) + `slope_cost_per_km × |Δelevation_m| / 1000` +
+   `uphill_surcharge_per_km` (uphill only) + `water_cost` (cross water). A step costs its km length, so on tall
+   cells a north-south step costs more than an east-west one. Existing road tiles are discounted by `road_discount`.
    A low-frequency noise field (`meander_strength`) bends roads organically. A `turn_cost` penalty
    reduces zigzagging. Search is bounded to a padded bounding box + `max_expansions` cap; a
    Bresenham straight-line fallback fires if A* exhausts its budget.

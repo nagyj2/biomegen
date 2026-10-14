@@ -60,6 +60,7 @@ _TIER_ROW = {
     "pop": "range",
     "spacing_km": "positive",
     "land_per_settlement_km2": "positive",
+    "backbone": "bool",
 }
 _STYLE_ROW = {
     "label": "text",

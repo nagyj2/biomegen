@@ -7,14 +7,16 @@ parts:
    - i.e. land plus the rivers/lakes embedded in it. Components of that mask are the islands. POIs are
    grouped by the component under their anchor, and a road is only ever routed *within* one component,
    so roads structurally cannot cross the open ocean (and a river slicing an island does not split it).
-2. **Connection graph (per component).** k-nearest-neighbour candidate edges → a minimum spanning tree
-   over the civilized POIs (the settlement backbone; falls back to all POIs if a component has none) →
+2. **Connection graph (per component).** k-nearest-neighbour candidate edges (km) → a minimum spanning tree
+   over the backbone tiers (``tables.tiers.<tier>.backbone``: capitals, cities, towns; villages are spurs; falls
+   back to all POIs if a component has none) →
    probabilistically attach the remaining POIs (civilized more likely than uncivilized) → a few extra
    loop edges. All random draws come from one per-component RNG consumed in a fixed sorted edge order.
-3. **Routing.** Each selected edge is routed with A* over a precomputed cost surface (flat/downhill is
-   cheap; slopes, water and mountains are dear; existing road is discounted; a smooth noise field adds
-   meander). The search is confined to the component's mask and a padded bounding box and capped, with
-   a straight-line fallback, so it stays fast on the non-monotone cost.
+3. **Routing.** Each selected edge is routed with A* over a precomputed cost surface (the biome and relief
+   ``move_cost`` rows; slopes and water are dear; existing road is discounted; a smooth noise field adds
+   meander). Step lengths are km, so a north-south step costs more than an east-west one on a tall cell. The
+   search is confined to the component's mask and a padded bounding box and capped, with a straight-line
+   fallback, so it stays fast on the non-monotone cost.
 4. **Bridges.** Each maximal run of same-type water tiles a routed road crosses becomes one ``bridge``
    POI, minted the moment the crossing is identified. The bridge joins the two land road pieces flanking
    the run (``p0``/``p1``), and its marker sits on the **centre of that straight span** (not a run end);
@@ -30,6 +32,7 @@ parts:
 
 from __future__ import annotations
 
+import math
 import random
 from typing import Dict, List, Tuple, cast
 
@@ -39,11 +42,10 @@ from ...config.model import Config
 from ...util import geometry as geo
 from ...util import noise, rng
 from ...world.entities import POI
-from ...world.tile import Relief, WaterType
+from ...world.tile import BIOME_NAME, RELIEF_NAME, WaterType
 from ...world.world import World
 
 Coord = Tuple[int, int]
-_MOUNTAINISH = frozenset({int(Relief.MOUNTAIN), int(Relief.PEAK), int(Relief.VOLCANO)})
 _SETTLEMENT_KINDS = frozenset({"capital", "city", "town", "village"})
 
 
@@ -86,7 +88,7 @@ def _endpoint(poi: "POI") -> Coord:
     return (ex, ey)
 
 
-def _candidate_edges(coords: List[Coord], k: int) -> List[Tuple[int, int, float]]:
+def _candidate_edges(coords: List[Tuple[float, float]], k: int) -> List[Tuple[int, int, float]]:
     """k-nearest-neighbour undirected candidate edges, deduped and sorted by (dist^2, i, j)."""
     m = len(coords)
     pts = np.array(coords, dtype=np.float64)
@@ -106,47 +108,61 @@ def _candidate_edges(coords: List[Coord], k: int) -> List[Tuple[int, int, float]
 
 
 def _classify_edges(
-    coords: List[Coord],
+    km_coords: List[Tuple[float, float]],
     civ_flags: List[bool],
-    cand: List[Tuple[int, int, float]],
+    backbone_flags: List[bool],
+    k: int,
     edge_rng: random.Random,
     probs: Tuple[float, float, float],
 ) -> Tuple[List[Tuple[int, int]], List[int]]:
     """Split connections into trunk edges and spur node indices.
 
-    Trunk edges are MST backbone connections between civilized POIs plus a few extra loop edges.
-    Spur nodes are isolated (non-backbone) POIs that should branch off the road network; they are
-    routed to the nearest existing road tile after the trunk is built rather than to a specific POI,
-    which prevents the parallel-road problem caused by many POIs independently targeting the same
-    distant destination.
+    Trunk edges are a minimum spanning tree over *every pair* of backbone-tier settlements (so no backbone node
+    is left out because its nearest neighbours are villages), plus a few extra loop edges drawn from each
+    backbone node's ``k`` nearest backbone neighbours. Spur nodes are the other POIs that should branch off the
+    road network; they are routed to the nearest existing road tile after the trunk is built rather than to a
+    specific POI, which prevents the parallel-road problem caused by many POIs independently targeting the same
+    distant destination. ``km_coords`` are positions in km, so distances are aspect-aware.
 
     Returns ``(trunk_edges, spur_node_indices)``.
     """
-    m = len(coords)
+    m = len(km_coords)
     civ_prob, unciv_prob, extra_prob = probs
-    backbone_nodes: set = {i for i in range(m) if civ_flags[i]} or set(range(m))
+    backbone = sorted({i for i in range(m) if backbone_flags[i]} or set(range(m)))
+    backbone_set = set(backbone)
 
-    # 1. MST over backbone nodes — this forms the trunk.
+    # 1. Kruskal MST over all backbone pairs, shortest first (ties by index) - this forms the trunk.
+    pairs = sorted(
+        (
+            (km_coords[i][0] - km_coords[j][0]) ** 2 + (km_coords[i][1] - km_coords[j][1]) ** 2,
+            i,
+            j,
+        )
+        for n, i in enumerate(backbone)
+        for j in backbone[n + 1 :]
+    )
     uf = _UnionFind(m)
     trunk_edges: List[Tuple[int, int]] = []
-    for i, j, _w in cand:
-        if i in backbone_nodes and j in backbone_nodes and uf.union(i, j):
+    for _d2, i, j in pairs:
+        if uf.union(i, j):
             trunk_edges.append((i, j))
 
-    # 2. Collect non-backbone nodes to attach as spurs (probabilistic, same odds as before).
+    # 2. Collect non-backbone nodes to attach as spurs (probabilistic, civilized more likely).
     spur_nodes: List[int] = []
-    for node in sorted(set(range(m)) - backbone_nodes):
+    for node in sorted(set(range(m)) - backbone_set):
         prob = civ_prob if civ_flags[node] else unciv_prob
         if edge_rng.random() < prob:
             spur_nodes.append(node)
 
-    # 3. Extra loop edges between backbone nodes reinforce the trunk (not spurs).
+    # 3. Extra loop edges between near backbone neighbours reinforce the trunk (not spurs).
     chosen = set(trunk_edges)
-    for i, j, _w in cand:
-        if (i, j) not in chosen and i in backbone_nodes and j in backbone_nodes:
-            if edge_rng.random() < extra_prob:
-                trunk_edges.append((i, j))
-                chosen.add((i, j))
+    if len(backbone) > 1:
+        near = _candidate_edges([km_coords[i] for i in backbone], k)
+        for a, b, _w in near:
+            edge = (backbone[a], backbone[b])
+            if edge not in chosen and edge_rng.random() < extra_prob:
+                trunk_edges.append(edge)
+                chosen.add(edge)
 
     return trunk_edges, spur_nodes
 
@@ -201,6 +217,7 @@ def _route(
     noise field without affecting path topology on smooth terrain.
     """
     h, w = world.height, world.width
+    col_km, row_km = world.scale.km_per_col, world.scale.km_per_row  # a step costs its km length over col_km
     elev = world.elevation_m / 1000.0  # km, so the slope costs are per km of height change
     road = world.road
     slope_cost, uphill, discount, base_cost = costs
@@ -224,7 +241,7 @@ def _route(
 
         def cost(p, q) -> float:
             qx, qy = cast(Coord, q)
-            dist = 1.4142135623730951 if p[0] != qx and p[1] != qy else 1.0
+            dist = geo.step_length(cast(Coord, p), (qx, qy), col_km, row_km) / col_km
             de = float(elev[qy, qx] - elev[p[1], p[0]])
             c = (enter_base[qy, qx] + slope_cost * abs(de) + (uphill * de if de > 0 else 0.0)) * dist
             if road[qy, qx] or (settlement is not None and settlement[qy, qx]):
@@ -237,7 +254,9 @@ def _route(
             b,
             neighbors,
             cost,
-            heuristic_fn=lambda n, g: geo.octile_distance(cast(Coord, n), cast(Coord, g)) * base_cost,
+            heuristic_fn=lambda n, g: (
+                geo.octile_distance(cast(Coord, n), cast(Coord, g), col_km, row_km) / col_km * base_cost
+            ),
             max_expansions=cap,
         )
     else:
@@ -257,7 +276,7 @@ def _route(
         def dir_cost(p_state, q_state) -> float:
             px, py, pdx, pdy = cast(tuple, p_state)
             qx, qy, qdx, qdy = cast(tuple, q_state)
-            dist = 1.4142135623730951 if qdx != 0 and qdy != 0 else 1.0
+            dist = math.hypot(qdx * col_km, qdy * row_km) / col_km
             de = float(elev[qy, qx] - elev[py, px])
             c = (enter_base[qy, qx] + slope_cost * abs(de) + (uphill * de if de > 0 else 0.0)) * dist
             if road[qy, qx] or (settlement is not None and settlement[qy, qx]):
@@ -269,7 +288,7 @@ def _route(
 
         def _dir_heuristic(n, g) -> float:
             nt = cast(tuple, n)
-            return geo.octile_distance(cast(Coord, (nt[0], nt[1])), cast(Coord, g)) * base_cost
+            return geo.octile_distance(cast(Coord, (nt[0], nt[1])), cast(Coord, g), col_km, row_km) / col_km * base_cost
 
         def _dir_goal(s) -> bool:
             st = cast(tuple, s)
@@ -533,12 +552,12 @@ def run(world: World, config: Config, seed: int) -> None:
         comp = int(labels[poi.y, poi.x])
         groups.setdefault(comp, []).append((idx, poi))
 
-    # 2. Precompute the static entry-cost surface (water/mountain penalties + meander noise).
+    # 2. Precompute the static entry-cost surface (biome and relief move costs, water penalty, meander noise).
     base_cost = float(config.get("roads.base_cost"))
     enter_base = (
-        base_cost
+        base_cost * config.table_array("biomes", "move_cost", BIOME_NAME)[world.biome]
+        + config.table_array("relief", "move_cost", RELIEF_NAME)[world.relief]
         + float(config.get("roads.water_cost")) * (world.water_type != int(WaterType.NONE))
-        + float(config.get("roads.mountain_cost")) * np.isin(world.relief, list(_MOUNTAINISH))
         + _meander_field(world, config, seed)
     ).astype(np.float64)
     costs = (
@@ -548,6 +567,10 @@ def run(world: World, config: Config, seed: int) -> None:
         base_cost,
     )
     turn_cost = float(config.get("roads.turn_cost"))
+
+    col_km, row_km = world.scale.km_per_col, world.scale.km_per_row
+    tiers = config.get("tables.tiers")
+    backbone_kinds = {name: bool(row["backbone"]) for name, row in tiers.items()}  # tier kind -> joins the trunk
 
     # 3. Build and route connections for each component.
     #    Settlement tiles attract roads exactly as existing road tiles do (same discount factor).
@@ -570,9 +593,10 @@ def run(world: World, config: Config, seed: int) -> None:
             continue
         coords = [_endpoint(p) for (_i, p) in group]
         civ_flags = [bool(p.civilized) for (_i, p) in group]
-        cand = _candidate_edges(coords, k)
+        backbone_flags = [backbone_kinds.get(p.kind, False) for (_i, p) in group]
+        km_coords = [(x * col_km, y * row_km) for x, y in coords]
         edge_rng = rng.derive(seed, "roads", comp)
-        trunk_edges, spur_indices = _classify_edges(coords, civ_flags, cand, edge_rng, probs)
+        trunk_edges, spur_indices = _classify_edges(km_coords, civ_flags, backbone_flags, k, edge_rng, probs)
 
         comp_mask = labels == comp
 
@@ -593,14 +617,15 @@ def run(world: World, config: Config, seed: int) -> None:
         for node_idx in spur_indices:
             start = coords[node_idx]
             if len(road_yx) > 0:
-                d2 = (road_yx[:, 1] - start[0]) ** 2 + (road_yx[:, 0] - start[1]) ** 2
+                d2 = ((road_yx[:, 1] - start[0]) * col_km) ** 2 + ((road_yx[:, 0] - start[1]) * row_km) ** 2
                 best = road_yx[int(np.argmin(d2))]
                 target = (int(best[1]), int(best[0]))  # (x, y)
             else:
                 # No trunk yet (e.g. single backbone node); fall back to nearest backbone POI.
                 backbone = [i for i, f in enumerate(civ_flags) if f] or list(range(len(coords)))
                 d2_list = [
-                    (coords[node_idx][0] - coords[t][0]) ** 2 + (coords[node_idx][1] - coords[t][1]) ** 2
+                    ((coords[node_idx][0] - coords[t][0]) * col_km) ** 2
+                    + ((coords[node_idx][1] - coords[t][1]) * row_km) ** 2
                     for t in backbone
                 ]
                 target = coords[backbone[int(np.argmin(d2_list))]]

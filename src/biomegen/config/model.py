@@ -11,6 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
+import numpy as np
+
 _MISSING = object()
 
 
@@ -40,6 +42,17 @@ class Config:
                     raise KeyError(f"config key {path!r} not found")
                 return default
         return node
+
+    def table_array(self, table: str, key: str, names: Dict[int, str]) -> np.ndarray:
+        """Return ``tables.<table>.<name>.<key>`` as a float array indexed by enum value.
+
+        ``names`` maps each enum value to its row name (``BIOME_NAME``, ``RELIEF_NAME``), so a stage can index the
+        array with a whole ``biome`` or ``relief`` grid instead of looping over cells.
+        """
+        out = np.zeros(max(names) + 1, dtype=np.float64)
+        for value, name in names.items():
+            out[value] = float(self.get(f"tables.{table}.{name}.{key}"))
+        return out
 
     def section(self, name: str) -> "Config":
         """Return a :class:`Config` scoped to the subtree at ``name`` (empty if absent)."""

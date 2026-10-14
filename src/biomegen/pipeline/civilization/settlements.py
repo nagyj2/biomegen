@@ -29,14 +29,6 @@ from ...world.world import World
 _LANDMASS_REQUIRED = {"capital", "city", "town"}
 
 
-def _lookup(names: dict[int, str], config: Config, table: str, key: str) -> np.ndarray:
-    """Return a lookup array indexed by enum value, holding ``tables.<table>.<name>.<key>``."""
-    out = np.zeros(max(names) + 1, dtype=np.float64)
-    for value, name in names.items():
-        out[value] = float(config.get(f"tables.{table}.{name}.{key}"))
-    return out
-
-
 def _reach(world: World, config: Config, mask: np.ndarray, reach_km: float) -> np.ndarray:
     """Bool grid: True where ``mask`` lies within ``reach_km`` (aspect-aware); all False if ``mask`` is empty."""
     if not mask.any():
@@ -64,8 +56,8 @@ def _reach_masks(world: World, config: Config) -> dict[str, np.ndarray]:
 
 def _score(world: World, config: Config, seed: int, reach: dict[str, np.ndarray]) -> np.ndarray:
     """Habitability from the biome and relief tables, the water bonuses in ``reach`` and the seeded jitter."""
-    base = _lookup(BIOME_NAME, config, "biomes", "habitability")[world.biome]
-    relief_mul = _lookup(RELIEF_NAME, config, "relief", "habitability_mul")[world.relief]
+    base = config.table_array("biomes", "habitability", BIOME_NAME)[world.biome]
+    relief_mul = config.table_array("relief", "habitability_mul", RELIEF_NAME)[world.relief]
     bonus = np.zeros(base.shape, dtype=np.float64)
     for prefix in _REACH_PREFIXES:
         bonus += np.where(reach[prefix], float(config.get(f"settlements.{prefix}_bonus")), 0.0)
