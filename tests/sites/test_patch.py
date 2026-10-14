@@ -119,3 +119,36 @@ def test_elevation_is_read_from_the_world(cfg: Config) -> None:
     world = make_world(9, 7, Biome.GRASS, elevation_m=250.0)
     poi, geometry = _village(world, cfg)
     assert np.allclose(read_patch(poi, geometry, world, cfg).elevation_m, 250.0)
+
+
+def test_a_gate_is_where_the_road_link_crosses_the_edge(cfg: Config) -> None:
+    # The link from the village's tile (4, 3) to the road tile (5, 3) crosses the extent's east edge at x = 4.625, a
+    # little past the middle of the box's height, on the box's last column.
+    world = make_world(9, 7, Biome.GRASS)
+    world.road[3, 4:6] = 1
+    poi, geometry = _village(world, cfg)
+    (gate,) = read_patch(poi, geometry, world, cfg).gates
+    assert (gate.col, gate.dx, gate.dy) == (geometry.box_cols - 1, 1, 0) and abs(gate.row - geometry.box_rows // 2) <= 1
+
+
+def test_a_diagonal_road_link_makes_a_gate_on_the_corner_side(cfg: Config) -> None:
+    world = make_world(9, 7, Biome.GRASS)
+    world.road[2, 5] = world.road[3, 4] = 1  # a link from the anchor up and to the right
+    poi, geometry = _village(world, cfg)
+    (gate,) = read_patch(poi, geometry, world, cfg).gates
+    assert gate.row < geometry.box_rows // 2 and gate.col > geometry.box_cols // 2
+
+
+def test_road_tiles_not_linked_to_the_anchor_make_no_gate(cfg: Config) -> None:
+    # A road tile two away with a gap between it and the anchor is not a link into the site.
+    world = make_world(9, 7, Biome.GRASS)
+    world.road[3, 6] = 1
+    poi, geometry = _village(world, cfg)
+    assert read_patch(poi, geometry, world, cfg).gates == ()
+
+
+def test_a_road_passing_beside_the_site_makes_no_gate(cfg: Config) -> None:
+    world = make_world(9, 7, Biome.GRASS)
+    world.road[0, :] = 1
+    poi, geometry = _village(world, cfg)
+    assert read_patch(poi, geometry, world, cfg).gates == ()

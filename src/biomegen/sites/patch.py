@@ -93,42 +93,58 @@ def window_sampler(
     )
 
 
+def _crossing(
+    inner: tuple[int, int], outer: tuple[int, int], rect: tuple[float, float, float, float]
+) -> tuple[float, float, bool]:
+    """Return where the link from ``inner`` (inside ``rect``) to ``outer`` leaves it, and whether by a side edge."""
+    left, top, right, bottom = rect
+    dx, dy = outer[0] - inner[0], outer[1] - inner[1]
+    to_side = ((right if dx > 0 else left) - inner[0]) / dx if dx else math.inf
+    to_edge = ((bottom if dy > 0 else top) - inner[1]) / dy if dy else math.inf
+    t = max(0.0, min(to_side, to_edge))
+    return inner[0] + dx * t, inner[1] + dy * t, to_side <= to_edge
+
+
 def _find_gates(poi: POI, geometry: SiteGeometry, world: World, max_gates: int) -> tuple[Gate, ...]:
-    """Return up to ``max_gates`` gates, one per direction the roads arrive from, nearest road first."""
+    """Return up to ``max_gates`` gates: where road links cross the extent's edge, one per direction, nearest first.
+
+    A road is a chain of links between neighbouring road tiles' centres, and the renderer draws its bed along them, so a
+    gate at the crossing point meets the drawn road exactly. The anchor counts as road (roads end there).
+    """
     left, top, right, bottom = geometry.extent
-    half_w, half_h = (right - left) / 2.0, (bottom - top) / 2.0
-    reach = max(half_w, half_h) + 1.5
+    rect = (left, top, right, bottom)
+    reach = max((right - left) / 2.0, (bottom - top) / 2.0) + 1.5
     x0, x1 = max(0, math.floor(poi.x - reach)), min(world.width, math.ceil(poi.x + reach) + 1)
     y0, y1 = max(0, math.floor(poi.y - reach)), min(world.height, math.ceil(poi.y + reach) + 1)
-    nearest: dict[int, tuple[float, int, int]] = {}
-    for row, col in np.argwhere(world.road[y0:y1, x0:x1] > 0).tolist():
-        tx, ty = x0 + col, y0 + row
-        if geometry.covers_tile(tx, ty):
-            continue
-        dx, dy = tx - poi.x, ty - poi.y
-        sector = int(((math.atan2(dy, dx) / (2.0 * math.pi) * _SECTORS) + 0.5) % _SECTORS)
-        distance = math.hypot(dx, dy)
-        if sector not in nearest or (distance, tx, ty) < nearest[sector]:
-            nearest[sector] = (distance, tx, ty)
+    road = {(x0 + col, y0 + row) for row, col in np.argwhere(world.road[y0:y1, x0:x1] > 0).tolist()}
+    road.add((poi.x, poi.y))
+
+    def inside(tile: tuple[int, int]) -> bool:
+        return left <= tile[0] <= right and top <= tile[1] <= bottom
+
+    nearest: dict[int, tuple[float, float, float, bool]] = {}
+    for tile in sorted(road):
+        for step_x, step_y in ((1, 0), (0, 1), (1, 1), (1, -1)):
+            other = (tile[0] + step_x, tile[1] + step_y)
+            if other not in road or inside(tile) == inside(other):
+                continue
+            inner, outer = (tile, other) if inside(tile) else (other, tile)
+            x, y, through_side = _crossing(inner, outer, rect)
+            sector = int(((math.atan2(y - poi.y, x - poi.x) / (2.0 * math.pi) * _SECTORS) + 0.5) % _SECTORS)
+            distance = math.hypot(x - poi.x, y - poi.y)
+            if sector not in nearest or (distance, x, y) < nearest[sector][:3]:
+                nearest[sector] = (distance, x, y, through_side)
     gates = []
-    for _distance, tx, ty in sorted(nearest.values())[:max_gates]:
-        gates.append(_gate(poi, geometry, tx - poi.x, ty - poi.y, half_w, half_h))
+    for _distance, x, y, through_side in sorted(nearest.values())[:max_gates]:
+        col, row = geometry.cell_at(x, y)
+        col0, row0, col1, row1 = geometry.box
+        col = min(max(col, col0), col1 - 1) - col0
+        row = min(max(row, row0), row1 - 1) - row0
+        if through_side:
+            gates.append(Gate(col, row, 1 if x > poi.x else -1, 0))
+        else:
+            gates.append(Gate(col, row, 0, 1 if y > poi.y else -1))
     return tuple(gates)
-
-
-def _gate(poi: POI, geometry: SiteGeometry, dx: float, dy: float, half_w: float, half_h: float) -> Gate:
-    """Return the gate where the ray from the anchor along ``(dx, dy)`` leaves the extent."""
-    to_side = half_w / abs(dx) if dx else math.inf
-    to_edge = half_h / abs(dy) if dy else math.inf
-    through_side = to_side <= to_edge
-    t = min(to_side, to_edge)
-    col, row = geometry.cell_at(poi.x + dx * t, poi.y + dy * t)
-    col0, row0, col1, row1 = geometry.box
-    col = min(max(col, col0), col1 - 1) - col0
-    row = min(max(row, row0), row1 - 1) - row0
-    if through_side:
-        return Gate(col, row, int(math.copysign(1, dx)), 0)
-    return Gate(col, row, 0, int(math.copysign(1, dy)))
 
 
 def read_patch(poi: POI, geometry: SiteGeometry, world: World, config: Config) -> SitePatch:

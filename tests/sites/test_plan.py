@@ -168,7 +168,7 @@ def test_a_structure_stays_off_the_water(config: Config) -> None:
 def test_the_entrance_door_faces_the_road(config: Config) -> None:
     # A road arriving from the west puts the dungeon's door on its western half.
     world = flat_world()
-    world.road[5, 3:6] = 1
+    world.road[5, 3:7] = 1
     _poi, _world, plan = _plan(config, "dungeon", world=world, floor_count=1)
     assert plan is not None
     xs = np.nonzero(plan.cells == DOOR)[1]
@@ -177,7 +177,7 @@ def test_the_entrance_door_faces_the_road(config: Config) -> None:
 
 def test_the_entrance_door_faces_a_road_from_the_east(config: Config) -> None:
     world = flat_world()
-    world.road[5, 9:12] = 1
+    world.road[5, 8:12] = 1
     _poi, _world, plan = _plan(config, "dungeon", world=world, floor_count=1)
     assert plan is not None
     xs = np.nonzero(plan.cells == DOOR)[1]
@@ -186,7 +186,7 @@ def test_the_entrance_door_faces_a_road_from_the_east(config: Config) -> None:
 
 def test_a_road_gate_is_joined_to_the_door_by_a_street(config: Config) -> None:
     world = flat_world()
-    world.road[5, 3:6] = 1
+    world.road[5, 3:7] = 1
     _poi, _world, plan = _plan(config, "dungeon", world=world, floor_count=1)
     assert plan is not None and PATH in plan.cells
 
@@ -198,8 +198,8 @@ def test_a_village_between_two_rivers_is_bridged_to_the_roads(config: Config) ->
     world = flat_world()
     world.water_type[:, 6] = int(WaterType.FRESH)
     world.water_type[:, 8] = int(WaterType.FRESH)
-    world.road[5, 4:6] = 1
-    world.road[5, 9:11] = 1
+    world.road[5, 4:7] = 1
+    world.road[5, 8:11] = 1
     _poi, _world, plan = _plan(wide, "village", world=world, pop=500)
     assert plan is not None and int(Cell.BRIDGE) in plan.cells
 
