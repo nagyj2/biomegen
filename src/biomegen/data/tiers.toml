@@ -1,0 +1,57 @@
+# Settlement tier table, keyed by tier name. Loaded into the config tree as `tables.tiers`; override
+# with e.g. `[tables.tiers.town]` + `spacing_km = 200.0` in a user config.
+#
+# Distances and areas are km / km². They are the reference generator's column-based values converted
+# at its 201-column, 6000 km default (29.85 km per column); phase 5 re-tunes them.
+#
+# Keys:
+#   label         display name
+#   rank          placement order, 0 first (capitals before cities ...); unique
+#   glyph, ascii  map marker (one character) for unicode and ASCII output
+#   fg            marker colour, [r, g, b] or "#rrggbb"
+#   bg            optional marker background colour (omit to keep the terrain background)
+#   pop           [min, max] population
+#   spacing_km    minimum distance to any already-placed settlement
+#   land_km2_per  one settlement of this tier per this much land area
+
+[tiers.capital]
+label = "Capital"
+rank = 0
+glyph = "★"
+ascii = "@"
+fg = [255, 215, 40]
+bg = [110, 20, 20]
+pop = [40000, 160000]
+spacing_km = 480.0
+land_km2_per = 750000.0
+
+[tiers.city]
+label = "City"
+rank = 1
+glyph = "●"
+ascii = "O"
+fg = [255, 245, 200]
+bg = [60, 40, 30]
+pop = [9000, 40000]
+spacing_km = 390.0
+land_km2_per = 800000.0
+
+[tiers.town]
+label = "Town"
+rank = 2
+glyph = "○"
+ascii = "o"
+fg = [250, 240, 220]
+pop = [1500, 8000]
+spacing_km = 240.0
+land_km2_per = 400000.0
+
+[tiers.village]
+label = "Village"
+rank = 3
+glyph = "•"
+ascii = "+"
+fg = [245, 235, 215]
+pop = [80, 1200]
+spacing_km = 150.0
+land_km2_per = 200000.0

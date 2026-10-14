@@ -137,6 +137,11 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     # --- every biome name referenced anywhere in config must be a real Biome enum member ---
     _validate_biome_names(cfg, errors)
 
+    # --- the attribute tables loaded from biomegen/data/*.toml (local import: tables imports this module) ---
+    from .tables import validate_tables
+
+    validate_tables(cfg, errors)
+
     # --- the Whittaker matrix must be rectangular and band-aligned ---
     matrix = biomes.get("matrix")
     temp_bands = biomes.get("temp_bands", [])

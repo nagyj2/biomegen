@@ -1,0 +1,238 @@
+# Biome and relief attribute tables, keyed by the lower-case enum member name.
+#
+# Loaded into the config tree as `tables.biomes` and `tables.relief`; a user config overrides any
+# attribute with e.g. `[tables.biomes.desert]` + `goods = "glass"` (deep-merged, like every section).
+# Adding a biome is an enum entry in world/tile.py plus a row here with every key.
+# Rows follow the reference generator (docs/reference/worldgen.py); the Biome enum switches to this
+# set in phase 3.
+#
+# Biome keys:
+#   label         display name
+#   glyph, ascii  map glyph (one character) for unicode and ASCII output
+#   fg, bg        glyph and background colour, [r, g, b] or "#rrggbb"
+#   water         true for water surfaces (not walkable, never settled)
+#   sparse        true when the terrain glyph is scattered rather than drawn on every cell
+#   habitability  0..1 settlement suitability before relief
+#   move_cost     road / travel cost per cell on flat land, >= 1 (ignored for water)
+#   goods         trade good the biome is known for ("" for none)
+
+[biomes.deep]
+label = "Deep ocean"
+glyph = " "
+ascii = " "
+fg = [40, 70, 130]
+bg = [12, 30, 70]
+water = true
+sparse = false
+habitability = 0.0
+move_cost = 1.0
+goods = "pearls"
+
+[biomes.shallow]
+label = "Shallows"
+glyph = "~"
+ascii = "~"
+fg = [120, 175, 225]
+bg = [40, 88, 146]
+water = true
+sparse = false
+habitability = 0.0
+move_cost = 1.0
+goods = "pearls"
+
+[biomes.seaice]
+label = "Sea ice"
+glyph = "░"
+ascii = "#"
+fg = [200, 214, 230]
+bg = [176, 194, 214]
+water = true
+sparse = false
+habitability = 0.0
+move_cost = 1.0
+goods = ""
+
+[biomes.lake]
+label = "Lake"
+glyph = "≈"
+ascii = "="
+fg = [150, 205, 245]
+bg = [44, 100, 165]
+water = true
+sparse = false
+habitability = 0.0
+move_cost = 1.0
+goods = ""
+
+[biomes.beach]
+label = "Beach"
+glyph = "·"
+ascii = "."
+fg = [170, 150, 95]
+bg = [216, 198, 142]
+water = false
+sparse = true
+habitability = 0.6
+move_cost = 1.0
+goods = "salt fish"
+
+[biomes.desert]
+label = "Desert"
+glyph = "∴"
+ascii = ":"
+fg = [176, 134, 72]
+bg = [224, 192, 122]
+water = false
+sparse = true
+habitability = 0.1
+move_cost = 2.0
+goods = "salt"
+
+[biomes.savanna]
+label = "Savanna"
+glyph = ","
+ascii = ","
+fg = [130, 122, 40]
+bg = [184, 174, 88]
+water = false
+sparse = true
+habitability = 0.75
+move_cost = 1.0
+goods = "ivory"
+
+[biomes.grass]
+label = "Grassland"
+glyph = '"'
+ascii = '"'
+fg = [64, 118, 36]
+bg = [116, 168, 70]
+water = false
+sparse = true
+habitability = 1.0
+move_cost = 1.0
+goods = "grain"
+
+[biomes.forest]
+label = "Temperate forest"
+glyph = "♣"
+ascii = "T"
+fg = [22, 70, 24]
+bg = [62, 122, 52]
+water = false
+sparse = false
+habitability = 0.7
+move_cost = 2.0
+goods = "timber"
+
+[biomes.jungle]
+label = "Jungle"
+glyph = "♠"
+ascii = "&"
+fg = [8, 58, 18]
+bg = [38, 104, 46]
+water = false
+sparse = false
+habitability = 0.4
+move_cost = 3.0
+goods = "spices"
+
+[biomes.swamp]
+label = "Swamp"
+glyph = "ψ"
+ascii = "%"
+fg = [40, 70, 40]
+bg = [82, 104, 72]
+water = false
+sparse = false
+habitability = 0.25
+move_cost = 4.0
+goods = "peat and eels"
+
+[biomes.taiga]
+label = "Taiga"
+glyph = "↑"
+ascii = "t"
+fg = [24, 60, 46]
+bg = [72, 110, 92]
+water = false
+sparse = false
+habitability = 0.35
+move_cost = 2.0
+goods = "furs"
+
+[biomes.tundra]
+label = "Tundra"
+glyph = "¨"
+ascii = "-"
+fg = [120, 128, 118]
+bg = [164, 170, 152]
+water = false
+sparse = true
+habitability = 0.12
+move_cost = 2.0
+goods = "walrus ivory"
+
+[biomes.snow]
+label = "Snow / glacier"
+glyph = "*"
+ascii = "*"
+fg = [190, 200, 215]
+bg = [230, 236, 244]
+water = false
+sparse = true
+habitability = 0.0
+move_cost = 4.0
+goods = "whale oil"
+
+# Relief keys (one row per Relief enum member):
+#   label             display name
+#   glyph, ascii      overlay glyph ("" draws the biome glyph instead)
+#   fg                overlay glyph colour
+#   habitability_mul  0..1 multiplier on the biome's habitability
+#   move_cost         extra cost per cell added to the biome's move_cost, >= 0
+#   goods             trade good of the high ground ("" uses the biome's)
+
+[relief.none]
+label = "Flat"
+glyph = ""
+ascii = ""
+fg = [0, 0, 0]
+habitability_mul = 1.0
+move_cost = 0.0
+goods = ""
+
+[relief.hills]
+label = "Hills"
+glyph = "∩"
+ascii = "n"
+fg = [70, 60, 36]
+habitability_mul = 0.7
+move_cost = 2.0
+goods = "iron"
+
+[relief.mountain]
+label = "Mountains"
+glyph = "^"
+ascii = "^"
+fg = [52, 44, 36]
+habitability_mul = 0.15
+move_cost = 8.0
+goods = "iron"
+
+[relief.peak]
+label = "High peaks"
+glyph = "▲"
+ascii = "A"
+fg = [255, 255, 255]
+habitability_mul = 0.0
+move_cost = 30.0
+goods = "iron"
+
+[relief.volcano]
+label = "Volcano"
+glyph = "Λ"
+ascii = "V"
+fg = [255, 90, 30]
+habitability_mul = 0.0
+move_cost = 40.0
+goods = "iron"

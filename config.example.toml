@@ -134,3 +134,8 @@ quit = "q"
 
 [controls]
 fast_step = 8             # tiles moved per Shift+arrow (or capital WASD/HJKL)
+
+# [tables.*] holds per-name attribute tables (biomes, relief, settlement tiers) read from
+# src/biomegen/data/*.toml. Override any attribute of one row; the rest of the row is kept:
+# [tables.biomes.desert]
+# goods = "glass"

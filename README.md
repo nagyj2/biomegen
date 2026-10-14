@@ -249,6 +249,12 @@ current scale and camera, including any open POI interior.
 |-----|---------|-------------|
 | `fast_step` | `8` | Tiles moved per Shift+arrow (capital WASD/HJKL) |
 
+#### `[tables]`
+Per-name attribute tables loaded from `src/biomegen/data/*.toml`: `tables.biomes` and `tables.relief`
+(`biomes.toml`: glyphs, colours, habitability, move cost, goods) and `tables.tiers` (`tiers.toml`:
+settlement markers, population, spacing and density in km). Override one attribute of one row in your
+config, e.g. `[tables.biomes.desert]` with `goods = "glass"`; each file documents its keys.
+
 ---
 
 ## How it works

@@ -31,6 +31,7 @@ from . import (
     regions,
     render,
     roads,
+    tables,
     terrain,
     world,
 )
@@ -54,6 +55,7 @@ DEFAULTS: Dict[str, Any] = {
     "export": export.VALUES,
     "keys": keys.VALUES,
     "controls": controls.VALUES,
+    "tables": tables.VALUES,
 }
 
 
