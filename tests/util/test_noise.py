@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from biomegen.util import noise
+from biomegen.util.units import grid_scale
 
 
 def test_default_perlin_backend_registered() -> None:
@@ -43,6 +44,51 @@ def test_coordinate_grid_axis_scaling() -> None:
     span1 = cx1[0, -1] - cx1[0, 0]
     span2 = cx2[0, -1] - cx2[0, 0]
     assert span2 < span1
+
+
+def test_km_grid_has_equal_km_spacing_on_both_axes() -> None:
+    # 6000x3000 km over 60x10 cells: 100 km columns, 300 km rows -> one row step is 3x a column step.
+    scale = grid_scale(60, 10, (6000.0, 3000.0), 0.0, 0.0)
+    cx, cy = noise.km_grid((10, 60), scale, feature_km=100.0)
+    assert np.isclose(cx[0, 1] - cx[0, 0], 1.0)
+    assert np.isclose(cy[1, 0] - cy[0, 0], 3.0)
+
+
+def test_km_grid_samples_cell_centres() -> None:
+    # The first cell's centre sits half a cell from the map origin.
+    scale = grid_scale(10, 10, (1000.0, 1000.0), 0.0, 0.0)
+    cx, cy = noise.km_grid((10, 10), scale, feature_km=100.0)
+    assert np.isclose(cx[0, 0], 0.5) and np.isclose(cy[0, 0], 0.5)
+
+
+def test_ridged_is_within_unit_range() -> None:
+    cx, cy = noise.coordinate_grid((40, 40), scale=8.0)
+    field = noise.ridged(noise.get_sampler("perlin", 3), cx, cy, octaves=4)
+    assert field.min() >= 0.0 and field.max() <= 1.0
+
+
+def test_ridged_crests_where_base_noise_crosses_zero() -> None:
+    # Perlin is exactly 0 on integer lattice points, so a one-octave ridged field is 1 there.
+    xs = np.arange(5, dtype=np.float64).reshape(1, 5)
+    ys = np.zeros_like(xs)
+    field = noise.ridged(noise.get_sampler("perlin", 9), xs, ys, octaves=1)
+    assert np.allclose(field, 1.0)
+
+
+def test_belt_lines_cover_a_minority_of_the_map() -> None:
+    # Belts are thin bands along zero-crossings, not a general uplift.
+    cx, cy = noise.coordinate_grid((80, 160), scale=40.0)
+    belts = noise.belt_lines(noise.get_sampler("perlin", 11), cx, cy, width=0.09)
+    assert belts.min() >= 0.0 and belts.max() <= 1.0
+    assert 0.0 < (belts > 0).mean() < 0.5
+
+
+def test_belt_lines_widen_with_width() -> None:
+    cx, cy = noise.coordinate_grid((80, 160), scale=40.0)
+    sampler = noise.get_sampler("perlin", 11)
+    narrow = noise.belt_lines(sampler, cx, cy, width=0.05)
+    wide = noise.belt_lines(sampler, cx, cy, width=0.2)
+    assert (wide > 0).sum() > (narrow > 0).sum()
 
 
 def test_domain_warp_changes_the_field_but_stays_deterministic() -> None:
