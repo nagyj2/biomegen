@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from biomegen.config import load_config
+from biomegen.render.detail import DetailSampler
 from biomegen.render.layers import build_grid
 from biomegen.render.sampler import Sampler
 from biomegen.render.views import View
@@ -41,3 +43,24 @@ def test_tinted_views_blend_the_river_more_gently(config) -> None:
     plain = _draw(world, config).bg[1, 1].astype(int)
     tinted = _draw(world, config, View("t", ("terrain", "water"), "elevation")).bg[1, 1].astype(int)
     assert abs(int(tinted[0]) - int(plain[0])) > 0
+
+
+def _draw_detail(world, view=VIEW):
+    # Warp off, so the 10 x 5 cells of each tile line up with the tile grid.
+    config = load_config(None)
+    config.data["render"]["blend_strength"] = 0.0
+    return build_grid(world, config, view, DetailSampler(world, config, 10, 5, 0, 0, world.width, world.height))
+
+
+def test_diagonal_river_tiles_join_at_detail_scale(config) -> None:
+    # Two river tiles touching at a corner give the cell between them water, so the stream is unbroken.
+    world = make_world(2, 2, Biome.GRASS)
+    world.water_type[0, 0] = world.water_type[1, 1] = int(WaterType.FRESH)
+    assert _draw_detail(world).glyph[4, 9] == config.get("render.water.river_glyph")
+
+
+def test_detail_river_leaves_distant_land_alone(config) -> None:
+    # The far side of a land tile beside a river tile is still land.
+    world = make_world(3, 1, Biome.GRASS)
+    world.water_type[0, 0] = int(WaterType.FRESH)
+    assert _draw_detail(world).glyph[2, 29] != config.get("render.water.river_glyph")

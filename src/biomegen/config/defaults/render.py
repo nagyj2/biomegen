@@ -90,22 +90,22 @@ VALUES: Dict[str, Any] = {
     "views": {
         "terrain": {
             "layers": ["terrain", "relief", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "clutter"],
+            "detail_layers": ["terrain", "relief", "clutter", "water"],
             "tint": "",
         },
         "elevation": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint"],
+            "detail_layers": ["terrain", "relief", "tint", "water"],
             "tint": "elevation",
         },
         "temperature": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint"],
+            "detail_layers": ["terrain", "relief", "tint", "water"],
             "tint": "temperature",
         },
         "rainfall": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint"],
+            "detail_layers": ["terrain", "relief", "tint", "water"],
             "tint": "rainfall",
         },
     },
