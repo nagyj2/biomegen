@@ -1,22 +1,25 @@
-"""Stage 4: hydrology - rivers, lakes, salt/fresh classification, freshwater moisture.
+"""Stage 3: hydrology - rivers, lakes, salt/fresh classification, freshwater moisture.
 
 This is the standard GIS surface-hydrology pipeline (the family used by RichDEM and GRASS GIS), all
 in pure numpy + a binary heap:
 
-1. **Priority-flood** depression filling (Barnes, Lehman & Soille 2014): flood inward from the ocean,
-   raising every pit to its spill level. Cells whose filled level exceeds their real elevation are
-   under standing water -> lakes. Provably terminating and O(n log n).
+1. **Priority-flood** depression filling (Barnes, Lehman & Soille 2014) on ``elevation_m``: flood inward
+   from the ocean, raising every pit to its spill level. Cells whose filled level stands
+   ``lake_min_depth_m`` above their ground are under standing water -> lakes. O(n log n).
 2. **D8 flow directions** (O'Callaghan & Mark 1984): each cell drains to its lowest neighbour on the
    filled surface. A tiny tie-break on the priority-flood finalisation order routes flow across flats
    toward the outlet, avoiding stuck water.
-3. **Flow accumulation**: process cells from high to low and push their drainage area downstream; the
-   result approximates each cell's upstream catchment area.
-4. **River extraction**: cells whose accumulation exceeds a channelisation threshold become river
-   channels; channels are traced into named :class:`River` paths.
-5. **Lakes**: connected standing-water cells of sufficient size become :class:`Lake` objects.
-6. **Salt vs fresh**: the ocean is salt (set by the mask stage); lakes and rivers are fresh.
+3. **Flow accumulation**: process cells from high to low and push their drainage downstream. Each land
+   cell contributes its area in km² times ``runoff_base + moisture`` (wet land feeds more water), so
+   ``flow_accum`` is a wetness-weighted catchment area in km².
+4. **River extraction**: land cells in the top ``river_land_share`` of catchments (and above
+   ``river_min_drainage_km2``) become channels, traced source -> mouth into :class:`River` paths with
+   km lengths.
+5. **Lakes**: connected standing-water cells of at least ``min_lake_area_km2`` become :class:`Lake`
+   objects; their surface in ``elevation_m`` is flattened to the spill level.
+6. **Salt vs fresh**: the ocean is salt (set by the terrain stage); lakes and rivers are fresh.
 7. **Freshwater-proximity moisture**: land near fresh water gets a moisture bonus feeding the biomes
-   stage, so river valleys read greener.
+   stage, so river valleys read greener; ``rain_mm`` is recomputed from the new moisture.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ from ...util import geometry as geo
 from ...world.entities import Lake, River
 from ...world.tile import Biome, WaterType
 from ...world.world import World
+from . import climate
 
 # Direction offsets indexed by the small ints stored in the receiver-direction array.
 _OFFSETS8 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1))
@@ -98,14 +102,16 @@ def _compute_receivers(key: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return rx, ry  # for sinks (best_dir == -1) receiver stays self
 
 
-def _flow_accumulation(filled: np.ndarray, order: np.ndarray, rx: np.ndarray, ry: np.ndarray) -> np.ndarray:
-    """Accumulate unit drainage area downstream. Returns a float accumulation field.
+def _flow_accumulation(
+    filled: np.ndarray, order: np.ndarray, rx: np.ndarray, ry: np.ndarray, weight: np.ndarray
+) -> np.ndarray:
+    """Accumulate each cell's ``weight`` downstream. Returns a float accumulation field.
 
     Processing cells in descending ``key`` order guarantees every cell is handled before its receiver
     (receivers always have a strictly smaller key), so a single linear pass is a valid topological sweep.
     """
     h, w = filled.shape
-    accum = np.ones((h, w), dtype=np.float64)
+    accum = weight.astype(np.float64, copy=True)
     key = filled + order * 1e-9
     # Indices sorted by key descending (process upstream cells first).
     flat_order = np.argsort(key, axis=None)[::-1]
@@ -125,7 +131,7 @@ def _flow_accumulation(filled: np.ndarray, order: np.ndarray, rx: np.ndarray, ry
 
 
 def _extract_rivers(
-    channel: np.ndarray, accum: np.ndarray, rx: np.ndarray, ry: np.ndarray, max_rivers: int
+    channel: np.ndarray, accum: np.ndarray, rx: np.ndarray, ry: np.ndarray, max_rivers: int, sampling: tuple
 ) -> list[River]:
     """Trace channel cells into ordered :class:`River` paths from sources downstream.
 
@@ -165,7 +171,19 @@ def _extract_rivers(
             x, y = tx, ty
         if len(path) >= 2:
             mouth = (x, y) if not channel[y, x] else None
-            rivers.append(River(id=len(rivers), path=path, length=len(path), mouth=mouth))
+            row_km, col_km = sampling
+            steps = path + ([mouth] if mouth is not None else [])
+            length_km = sum(geo.step_length(a, b, col_km, row_km) for a, b in zip(steps, steps[1:], strict=False))
+            rivers.append(
+                River(
+                    id=len(rivers),
+                    path=path,
+                    length=len(path),
+                    mouth=mouth,
+                    source=path[0],
+                    length_km=float(length_km),
+                )
+            )
     return rivers
 
 
@@ -219,9 +237,11 @@ def run(world: World, config: Config, seed: int) -> None:
     h_cfg = config.section("hydrology")
     backend = config.get("compute.backend")
     sea_level = float(config.get("world.sea_level"))
+    cell_km2 = world.scale.cell_area_km2
 
-    elevation = world.elevation
+    elevation = world.elevation_m
     ocean = world.water_type == int(WaterType.SALT)
+    land = world.water_type == int(WaterType.NONE)
 
     # Without an ocean to drain to, seed the flood from the map border instead (degenerate maps).
     seeds = ocean
@@ -229,39 +249,48 @@ def run(world: World, config: Config, seed: int) -> None:
         seeds = np.zeros_like(ocean)
         seeds[0, :] = seeds[-1, :] = seeds[:, 0] = seeds[:, -1] = True
 
-    # 1. Build the depression-filled surface, drainage directions, and flow accumulation.
+    # 1. Build the depression-filled surface, drainage directions, and wetness-weighted accumulation.
     filled, order = _priority_flood(elevation, seeds)
     key = filled + order * 1e-9
     rx, ry = _compute_receivers(key)
-    accum = _flow_accumulation(filled, order, rx, ry)
+    weight = np.where(land, cell_km2 * (float(h_cfg.get("runoff_base")) + world.moisture), 0.0)
+    accum = _flow_accumulation(filled, order, rx, ry, weight)
     world.flow_accum = accum
 
-    # 2. Lakes: connected standing-water cells whose filled level noticeably exceeds their real surface.
-    depth = filled - elevation
-    lake_mask = (depth > float(h_cfg.get("lake_min_depth"))) & (~ocean)
+    # 2. Lakes: connected cells under at least lake_min_depth_m of standing water, large enough by area.
+    lake_mask = ((filled - elevation) >= float(h_cfg.get("lake_min_depth_m"))) & land
     if lake_mask.any():
         labels, n = geo.label_by_value(lake_mask.astype(np.uint8), connectivity=4, backend=backend)
-        min_size = int(h_cfg.get("min_lake_size"))
+        min_area = float(h_cfg.get("min_lake_area_km2"))
         for lab in range(n):
             comp = (labels == lab) & lake_mask
             size = int(comp.sum())
-            if size < min_size:
-                continue  # a tiny pit, not a lake; leave it as land
+            if size * cell_km2 < min_area:
+                continue  # a small pit, not a lake; leave it as land
+            surface = float(filled[comp].max())
             world.biome[comp] = int(Biome.LAKE)
             world.water_type[comp] = int(WaterType.FRESH)
+            world.elevation_m[comp] = surface  # flat water surface at the spill level
             ly, lx = np.nonzero(comp)
             world.lakes.append(
-                Lake(id=len(world.lakes), tiles=list(zip(lx.tolist(), ly.tolist(), strict=True)), area=size, salt=False)
+                Lake(
+                    id=len(world.lakes),
+                    tiles=list(zip(lx.tolist(), ly.tolist(), strict=True)),
+                    area=size,
+                    salt=False,
+                    area_km2=size * cell_km2,
+                    surface_m=surface,
+                )
             )
 
-    # 3. Rivers: channelise high-accumulation land cells and widen them by drainage area.
-    threshold = float(h_cfg.get("accumulation_threshold"))
-    is_lake = world.biome == int(Biome.LAKE)
+    # 3. Rivers: channelise the largest-catchment land cells and widen them by drainage area.
+    still_land = world.water_type == int(WaterType.NONE)
+    threshold = _river_threshold(accum[still_land], h_cfg)
     # The single-tile "thalweg" (deepest line) drives flow tracing and entity extraction.
-    thalweg = (accum >= threshold) & (elevation >= sea_level) & (~ocean) & (~is_lake)
+    thalweg = still_land & (accum >= threshold)
     world.biome[thalweg] = int(Biome.RIVER)
     world.water_type[thalweg] = int(WaterType.FRESH)
-    world.rivers = _extract_rivers(thalweg, accum, rx, ry, int(h_cfg.get("max_rivers")))
+    world.rivers = _extract_rivers(thalweg, accum, rx, ry, int(h_cfg.get("max_rivers")), world.scale.sampling)
     # Widen the channel onto neighbouring land in proportion to its drainage area, so great rivers
     # span several tiles near the sea while headwater streams stay one tile.
     _widen_rivers(
@@ -274,10 +303,21 @@ def run(world: World, config: Config, seed: int) -> None:
         sea_level,
     )
 
-    # 4. Freshwater-proximity moisture bonus (feeds the biomes stage).
+    # 4. Freshwater-proximity moisture bonus (feeds the biomes stage); rainfall follows the new moisture.
     fresh = world.water_type == int(WaterType.FRESH)
     if fresh.any():
-        dist = geo.distance_to(fresh, backend=backend, metric="euclidean")
-        radius = max(1e-6, float(h_cfg.get("moisture_radius")))
-        bonus = float(h_cfg.get("moisture_strength")) * np.exp(-dist / radius)
+        dist_km = geo.distance_to(fresh, backend=backend, metric="euclidean", sampling=world.scale.sampling)
+        radius = max(1e-6, float(h_cfg.get("moisture_radius_km")))
+        bonus = float(h_cfg.get("moisture_strength")) * np.exp(-dist_km.astype(np.float64) / radius)
         world.moisture = np.clip(world.moisture + bonus, 0.0, 1.0)
+    world.rain_mm = climate.rainfall_mm(world.moisture, world.temperature_c, config)
+
+
+def _river_threshold(land_accum: np.ndarray, h_cfg: Config) -> float:
+    """Return the channel threshold: the top ``river_land_share`` of land catchments, floored in km²."""
+    floor = float(h_cfg.get("river_min_drainage_km2"))
+    share = float(np.clip(float(h_cfg.get("river_land_share")), 0.0, 1.0))
+    if land_accum.size == 0 or share <= 0.0:
+        return float("inf")
+    quantile = float(np.sort(land_accum)[min(land_accum.size - 1, int(land_accum.size * (1.0 - share)))])
+    return max(quantile, floor)

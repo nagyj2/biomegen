@@ -158,9 +158,10 @@ The authoritative defaults and inline documentation are in
 #### `[hydrology]`
 | Key | Default | Description |
 |-----|---------|-------------|
-| `flow_model` | `"d8"` | `"d8"` or `"dinf"` |
-| `accumulation_threshold` | `55` | Minimum upstream area to form a river channel |
-| `min_lake_size` | `5` | Depression pools below this tile count are not lakes |
+| `river_land_share` | `0.035` | Share of land cells (largest catchments first) that become river channel |
+| `river_min_drainage_km2` | `5000.0` | Minimum wetness-weighted catchment (km²) for a river channel |
+| `min_lake_area_km2` | `3000.0` | Depressions smaller than this are not lakes |
+| `lake_min_depth_m` | `25.0` | Minimum standing-water depth (m) for a lake cell |
 | `river_width_scale` | `0.5` | How fast rivers widen with drainage area |
 | `river_max_width` | `5` | Maximum river width in tiles |
 

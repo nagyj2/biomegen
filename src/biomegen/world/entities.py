@@ -63,8 +63,10 @@ class River:
     id: int
     path: List[Tuple[int, int]] = field(default_factory=list)  # ordered upstream→downstream cells
     name: str = ""
-    length: int = 0
+    length: int = 0  # number of channel cells in ``path``
     mouth: Optional[Tuple[int, int]] = None  # where it meets ocean/lake (None if it dries out inland)
+    source: Tuple[int, int] = (0, 0)  # first (most upstream) cell of ``path``
+    length_km: float = 0.0  # length along ``path`` in km (aspect-aware step lengths)
 
 
 @dataclass
@@ -74,5 +76,7 @@ class Lake:
     id: int
     tiles: List[Tuple[int, int]] = field(default_factory=list)
     name: str = ""
-    area: int = 0
+    area: int = 0  # number of cells
     salt: bool = False
+    area_km2: float = 0.0
+    surface_m: float = 0.0  # height of the flat water surface (the depression's spill level)

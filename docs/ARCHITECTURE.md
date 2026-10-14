@@ -117,10 +117,10 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | Field | dtype | Range | Set by |
 |-------|-------|-------|--------|
 | `elevation` | float64 | [0, 1] | heightmap (legacy, removed in phase 3) |
-| `elevation_m` | float64 | metres, < 0 = sea depth | terrain (phase 3; zeros until then) |
+| `elevation_m` | float64 | metres, < 0 = sea depth | terrain; hydrology flattens lake surfaces |
 | `temperature` | float64 | [0, 1] | climate (legacy, removed in phase 3) |
 | `temperature_c` | float64 | °C | climate (phase 3; zeros until then) |
-| `rain_mm` | float64 | mm / year | climate (phase 3; zeros until then) |
+| `rain_mm` | float64 | mm / year | climate; recomputed by hydrology after its moisture bonus |
 | `moisture` | float64 | [0, 1] | climate + hydrology |
 | `biome` | uint8 | `Biome` enum int | island_mask, hydrology, biomes |
 | `relief` | uint8 | `Relief` enum int | biomes (phase 3; NONE until then) |
@@ -131,7 +131,7 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `road` | uint8 | 0 / 1 | roads |
 | `road_tier` | uint8 | 0=none, 1=trunk, 2=spur | roads |
 | `dist_to_ocean` | float32 | ≥ 0 | island_mask |
-| `flow_accum` | float64 | ≥ 0 | hydrology |
+| `flow_accum` | float64 | km², wetness-weighted catchment | hydrology |
 
 Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `island_name`.
 

@@ -48,9 +48,9 @@ moisture_redistribution = 1.5    # >1 => drier map (more desert/savanna/grasslan
 coastal_bias = 0.10
 
 [hydrology]
-flow_model = "d8"                # "d8" | "dinf"
-accumulation_threshold = 55
-min_lake_size = 5
+river_land_share = 0.035         # share of land cells with the largest catchments that become river
+river_min_drainage_km2 = 5000.0  # ...but only where the weighted catchment is at least this big
+min_lake_area_km2 = 3000.0       # smaller depressions are not lakes
 river_width_scale = 0.5          # how fast rivers widen with drainage area
 river_max_width = 5              # widest a great river can get (tiles)
 
