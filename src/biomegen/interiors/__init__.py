@@ -39,6 +39,7 @@ from .grid import (
     footprint_cells,
     footprint_origin,
     sample_rect,
+    sample_rect_array,
 )
 
 __all__ = [
@@ -52,4 +53,5 @@ __all__ = [
     "footprint_cells",
     "footprint_origin",
     "sample_rect",
+    "sample_rect_array",
 ]

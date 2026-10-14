@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..config.model import Config
-from ..world.tile import BIOME_NAME, Biome, Relief
+from ..world.tile import BIOME_NAME, Biome, Cell, Relief
 
 RGB = tuple[int, int, int]
 
@@ -169,3 +169,43 @@ def detail_style(config: Config, ascii_only: bool = False) -> DetailStyle:
         np.array([FACTOR_CODE[row["factor"]] for row in rows], dtype=np.int64),
         biome_count,
     )
+
+
+@dataclass(frozen=True)
+class InteriorStyle:
+    """Per-cell lookups for POI interiors, indexed by the :class:`~biomegen.world.tile.Cell` integer.
+
+    Attributes:
+        glyph: Glyph per cell (U1 ``[cells]``), from ``render.interior_glyphs``.
+        fg: Glyph colour per cell (uint8 ``[cells, 3]``): the cell colour lightened by ``render.interior_fg_scale``.
+        bg: Fill per cell (uint8 ``[cells, 3]``): ``render.interior_palette``, with the bridge cells taking the
+            deck and wall colours of ``render.detail_colors``.
+    """
+
+    glyph: np.ndarray
+    fg: np.ndarray
+    bg: np.ndarray
+
+
+def interior_style(config: Config) -> InteriorStyle:
+    """Build the interior lookup arrays from ``render.interior_glyphs`` and ``render.interior_palette``."""
+    glyphs = config.get("render.interior_glyphs")
+    palette = config.get("render.interior_palette")
+    detail = config.get("render.detail_colors")
+    count = max(int(c) for c in Cell) + 1
+    glyph = np.full(count, "?", dtype="U1")
+    fg = np.zeros((count, 3), dtype=np.uint8)
+    bg = np.zeros((count, 3), dtype=np.uint8)
+    boost = float(config.get("render.interior_fg_scale"))
+    for cell in Cell:
+        name = cell.name.lower()
+        index = int(cell)
+        glyph[index] = glyphs.get(name, "?")
+        if cell == Cell.BRIDGE:
+            bg[index], fg[index] = detail["deck_bg"], detail["deck_fg"]
+        elif cell == Cell.BRIDGE_WALL:
+            bg[index], fg[index] = detail["wall_bg"], detail["wall_fg"]
+        elif name in palette:
+            bg[index] = palette[name]
+            fg[index] = scale_colors(palette[name], boost)
+    return InteriorStyle(glyph, fg, bg)

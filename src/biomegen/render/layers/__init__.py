@@ -19,7 +19,16 @@ from ...util import rng
 from ...world.overlay import Overlay
 from ...world.tile import Biome, WaterType
 from ...world.world import World
-from ..colors import BiomeStyle, DetailStyle, ReliefStyle, biome_style, detail_style, relief_style
+from ..colors import (
+    BiomeStyle,
+    DetailStyle,
+    InteriorStyle,
+    ReliefStyle,
+    biome_style,
+    detail_style,
+    interior_style,
+    relief_style,
+)
 from ..grid import CellGrid
 from ..sampler import Sampler
 from ..scatter import scatter01
@@ -38,6 +47,7 @@ class LayerContext:
         overlay: Runtime edits composited over the world, or ``None``.
         ascii_only: Use the ``ascii`` glyph columns of the tables.
         labels: ``"all"`` draws feature names, ``"none"`` leaves them off.
+        floor: The floor of a multi-floor interior to draw (clamped to each POI's own floors).
         color: Whether the output is coloured. Without colour the glyphs must carry the information, so
             sparse biomes show their glyph on every cell and the sea sparkle is off.
     """
@@ -50,6 +60,7 @@ class LayerContext:
     ascii_only: bool = False
     color: bool = True
     labels: str = "all"
+    floor: int = 0
 
     @cached_property
     def biome_style(self) -> BiomeStyle:
@@ -58,6 +69,10 @@ class LayerContext:
     @cached_property
     def relief_style(self) -> ReliefStyle:
         return relief_style(self.config, self.ascii_only)
+
+    @cached_property
+    def interior_style(self) -> InteriorStyle:
+        return interior_style(self.config)
 
     @cached_property
     def detail_style(self) -> DetailStyle:
@@ -137,11 +152,12 @@ def build_grid(
     ascii_only: bool = False,
     color: bool = True,
     labels: str = "all",
+    floor: int = 0,
 ) -> CellGrid:
     """Draw ``view`` of ``world`` through ``sampler`` and return the finished grid."""
     # resolve first so a typo fails before any work
     layers = [LAYERS.get(name) for name in view.layers_for(sampler.detailed)]
-    context = LayerContext(world, config, view, sampler, overlay, ascii_only, color, labels)
+    context = LayerContext(world, config, view, sampler, overlay, ascii_only, color, labels, floor)
     grid = CellGrid(sampler.rows, sampler.cols)
     for layer in layers:
         layer(context, grid)
@@ -152,6 +168,7 @@ from . import (  # noqa: E402,F401  (registers the built-in layers)
     bridges,
     clutter,
     compass,
+    interiors,
     markers,
     names,
     relief,

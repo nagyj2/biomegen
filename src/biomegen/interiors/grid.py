@@ -184,6 +184,24 @@ def sample_rect(grid: np.ndarray, r0: int, c0: int, span_rows: int, span_cols: i
                     yield r, c, int(grid[sy, sx])
 
 
+def sample_rect_array(
+    grid: np.ndarray, r0: int, c0: int, span_rows: int, span_cols: int, max_rows: int, max_cols: int
+) -> Optional[Tuple[slice, slice, np.ndarray]]:
+    """Return :func:`sample_rect` as one array: ``(row_slice, col_slice, values)`` over the on-screen part.
+
+    ``values`` holds the interior cell at each screen cell of the slices (same nearest-neighbour mapping as
+    :func:`sample_rect`), or the result is ``None`` when the rect misses ``[0, max_rows) x [0, max_cols)``.
+    """
+    gh, gw = grid.shape
+    row_lo, row_hi = max(0, r0), min(max_rows, r0 + span_rows)
+    col_lo, col_hi = max(0, c0), min(max_cols, c0 + span_cols)
+    if row_hi <= row_lo or col_hi <= col_lo:
+        return None
+    sy = np.minimum(np.arange(row_lo - r0, row_hi - r0) * gh // span_rows, gh - 1)
+    sx = np.minimum(np.arange(col_lo - c0, col_hi - c0) * gw // span_cols, gw - 1)
+    return slice(row_lo, row_hi), slice(col_lo, col_hi), grid[np.ix_(sy, sx)]
+
+
 # --------------------------------------------------------------------------- BSP partition
 # Tuning knobs for the recursive split. Lower stop probability + deeper recursion => more (smaller)
 # leaves => more rooms and corridors. Bumped for Phase 5 dungeons (denser warrens).

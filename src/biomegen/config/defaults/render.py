@@ -100,7 +100,7 @@ VALUES: Dict[str, Any] = {
     "views": {
         "terrain": {
             "layers": ["terrain", "relief", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "bridges", "markers"],
+            "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "bridges", "markers", "interiors"],
             "tint": "",
         },
         "elevation": {
@@ -324,6 +324,8 @@ VALUES: Dict[str, Any] = {
         "bridge": ":",
         "bridge_wall": "#",
     },
+    # Interior glyphs are drawn in the cell colour times this factor on top of the plain cell colour fill.
+    "interior_fg_scale": 1.45,
     # Interior Cell -> RGB base colour, used when a detail cell belongs to a POI interior (the
     # single colour authority for interiors, shared with SVG/PNG export later). ``void`` is never
     # drawn (the surrounding terrain shows through), so it has no colour entry.
