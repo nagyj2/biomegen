@@ -1,25 +1,10 @@
-"""Defaults for the ``climate`` section (climate)."""
+"""Defaults for the ``climate`` section (``pipeline/physical/climate.py``)."""
 
 from __future__ import annotations
 
 from typing import Any, Dict
 
 VALUES: Dict[str, Any] = {
-    # "equator-center": warm band across the vertical middle, cooler toward top & bottom.
-    # "north-pole-top": cold at the top, warm at the bottom.
-    "orientation": "equator-center",
-    "equator_temp": 1.0,  # normalised temperature at the warm latitude
-    "pole_temp": 0.05,  # normalised temperature at the cold latitude
-    "lapse_rate": 0.55,  # temperature drop with elevation (higher = colder mountains)
-    "moisture_scale": 95.0,
-    "moisture_octaves": 4,
-    "moisture_persistence": 0.5,
-    # Exponent applied to normalised moisture: >1 biases the map drier (more desert/savanna/
-    # grassland and less forest/jungle), giving more biome variety. 1.0 = neutral.
-    "moisture_redistribution": 1.5,
-    "coastal_bias": 0.10,  # extra moisture near the coast (0 disables; lower => drier interiors)
-    "coastal_range": 7.0,  # tiles over which the coastal moisture bonus decays
-    # --- physical/climate.py (replaces the keys above, which go with the old climate.py in phase-3 cleanup) ---
     # Mean annual sea-level temperature: equator_c - lat_coefficient * latitude² + offset_c (°C).
     "equator_c": 28.0,
     "lat_coefficient": 0.0079,  # °C per degree² of latitude
@@ -27,7 +12,7 @@ VALUES: Dict[str, Any] = {
     "lapse_c_per_km": 6.5,  # temperature drop per km of height above sea level
     "temperature_noise_c": 4.0,  # amplitude of the regional temperature noise, °C
     "temperature_feature_km": 1500.0,
-    "temperature_octaves_fbm": 3,  # fBm gain and lacunarity are terrain.fbm_gain / terrain.fbm_lacunarity
+    "temperature_octaves": 3,  # fBm gain and lacunarity are terrain.fbm_gain / terrain.fbm_lacunarity
     # Prevailing winds carry moisture across each row: from the west between these absolute latitudes
     # (westerlies), from the east elsewhere (trade winds and polar easterlies).
     "westerly_band_deg": [30.0, 60.0],
@@ -45,7 +30,7 @@ VALUES: Dict[str, Any] = {
     "coast_weight": 0.25,
     "coast_km": 215.0,  # e-folding distance of the coastal moisture term
     "moisture_feature_km": 1200.0,
-    "moisture_octaves_fbm": 4,
+    "moisture_octaves": 4,
     # Annual rainfall: (rain_min_mm + rain_span_mm * moisture^rain_exponent) * cold factor, where the cold
     # factor clamp(cold_floor + (t + cold_offset_c) / cold_span_c, cold_floor, 1) dries out cold air.
     "rain_min_mm": 50.0,

@@ -37,7 +37,7 @@ def test_deep_merge_is_sparse() -> None:
     assert base["world"]["width"] == 64
     # Untouched sibling keys survive the merge (compare against the pristine defaults, not literals).
     assert base["world"]["height"] == original["world"]["height"]
-    assert base["terrain"]["octaves"] == original["terrain"]["octaves"]
+    assert base["terrain"]["base_octaves"] == original["terrain"]["base_octaves"]
 
 
 def test_validate_coerces_hex_color() -> None:
@@ -50,11 +50,11 @@ def test_validate_coerces_hex_color() -> None:
 def test_validate_collects_errors() -> None:
     cfg = get_defaults()
     cfg["world"]["width"] = -5
-    cfg["climate"]["orientation"] = "sideways"
+    cfg["world"]["size_mode"] = "sideways"
     with pytest.raises(ConfigError) as exc:
         validate(cfg)
     msg = str(exc.value)
-    assert "world.width" in msg and "orientation" in msg
+    assert "world.width" in msg and "size_mode" in msg
 
 
 def test_whittaker_matrix_shape_matches_bands() -> None:

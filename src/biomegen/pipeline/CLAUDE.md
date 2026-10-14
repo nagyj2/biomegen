@@ -6,8 +6,8 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 
 - A stage is `run(world, config, seed) -> None`. It reads only fields produced by earlier stages and writes
   only its own; there is no backtracking.
-- One rng label per stage (a stage may add suffixes, e.g. `heightmap.warp`). Labels must be in
-  `util.rng.LABELS`; add new ones there, never ad-hoc strings. Streams come from `rng.derive*`, never
+- One rng label per stage (a stage may add sub-labels, e.g. `rng.derive(seed, "terrain", "warp")`). First
+  labels must be in `util.rng.LABELS`; add new ones there, never ad-hoc strings. Streams come from `rng.derive*`, never
   `random` or `numpy.random` seeded by hand, never builtin `hash()`.
 - Iterate collections in a defined order (`sorted()`); dict and set order is not a contract.
 - Every tunable comes from `config.get(...)`, not a literal (see `config/CLAUDE.md`).

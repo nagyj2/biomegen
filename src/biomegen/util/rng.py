@@ -45,11 +45,6 @@ _UINT64_MASK = 0xFFFFFFFFFFFFFFFF
 # ---------------------------------------------------------------------------
 LABELS: frozenset[str] = frozenset(
     {
-        "heightmap",  # base elevation fBm permutation
-        "heightmap.warp",  # domain-warp fBm permutation
-        "heightmap.coast",  # coastline-detail mask noise
-        "heightmap.island",  # archipelago land-distribution noise
-        "moisture",  # climate moisture fBm permutation
         "hydrology",  # hydrology general
         "hydrology.rivers",  # river source selection / meander
         "regions",  # region colour jitter / tie-breaks

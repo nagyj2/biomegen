@@ -17,13 +17,13 @@ from biomegen.util import rng
 
 
 def test_derive_int_is_stable_across_calls():
-    assert rng.derive_int(12345, "heightmap") == rng.derive_int(12345, "heightmap")
+    assert rng.derive_int(12345, "terrain") == rng.derive_int(12345, "terrain")
 
 
 def test_derive_int_distinguishes_labels_and_seeds():
-    a = rng.derive_int(12345, "heightmap")
+    a = rng.derive_int(12345, "terrain")
     b = rng.derive_int(12345, "moisture")
-    c = rng.derive_int(99999, "heightmap")
+    c = rng.derive_int(99999, "terrain")
     assert a != b  # different labels -> different streams
     assert a != c  # different seeds -> different streams
 
@@ -40,8 +40,8 @@ def test_derive_random_streams_match_for_same_inputs():
 
 
 def test_numpy_generator_is_reproducible():
-    g1 = rng.derive_numpy(7, "heightmap")
-    g2 = rng.derive_numpy(7, "heightmap")
+    g1 = rng.derive_numpy(7, "terrain")
+    g2 = rng.derive_numpy(7, "terrain")
     assert (g1.integers(0, 1000, size=10) == g2.integers(0, 1000, size=10)).all()
 
 

@@ -15,10 +15,6 @@ VALUES: Dict[str, Any] = {
     # the current terminal at launch (nicer fit, but the same seed yields different worlds on
     # differently sized terminals - documented trade-off).
     "size_mode": "fixed",
-    # Global per-axis multipliers applied to noise sample coordinates: >1 stretches features along
-    # that axis (zooms out), <1 compresses them. Distinct from per-feature ``terrain.scale``.
-    "scale_x": 1.0,
-    "scale_y": 1.0,
     # Physical extent of the whole map, [east-west, north-south] in km. Cells are
     # size_km / (width, height) km, so they are anisotropic whenever the ratios differ.
     "size_km": [6000.0, 3000.0],

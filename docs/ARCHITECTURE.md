@@ -59,9 +59,6 @@ src/biomegen/
     boat.py             Boat: bespoke planked hull + deck + cargo, floating on water
   pipeline/             Ordered generation stages (see Pipeline section below)
     __init__.py         generate() orchestrator + stats()
-    heightmap.py        Unused since phase 3 (replaced by physical/terrain.py; deleted in phase-3 cleanup)
-    island_mask.py      Unused since phase 3 (replaced by physical/terrain.py; deleted in phase-3 cleanup)
-    climate.py          Unused since phase 3 (replaced by physical/climate.py; deleted in phase-3 cleanup)
     physical/
       terrain.py        Stage 1 — style, mountain belts, rank sea level, elevation_m, ocean, dist_to_ocean
       climate.py        Stage 2 — °C (latitude, lapse), wind moisture + rain shadow, rain_mm
@@ -116,21 +113,21 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 
 | Field | dtype | Range | Set by |
 |-------|-------|-------|--------|
-| `elevation` | float64 | [0, 1] | heightmap (legacy, removed in phase 3) |
+| `elevation` | float64 | [0, 1] | terrain (legacy shim, removed in phase 3) |
 | `elevation_m` | float64 | metres, < 0 = sea depth | terrain; hydrology flattens lake surfaces |
 | `temperature` | float64 | [0, 1] | climate (legacy, removed in phase 3) |
 | `temperature_c` | float64 | °C | climate (phase 3; zeros until then) |
 | `rain_mm` | float64 | mm / year | climate; recomputed by hydrology after its moisture bonus |
 | `moisture` | float64 | [0, 1] | climate + hydrology |
-| `biome` | uint8 | `Biome` enum int | island_mask, hydrology, biomes |
+| `biome` | uint8 | `Biome` enum int | terrain, hydrology, biomes |
 | `relief` | uint8 | `Relief` enum int | biomes (phase 3; NONE until then) |
 | `landmass_id` | int32 | 0..L-1, -1=water | geography (phase 3; -1 until then) |
-| `water_type` | uint8 | `WaterType` enum int | island_mask, hydrology |
+| `water_type` | uint8 | `WaterType` enum int | terrain, hydrology |
 | `region_id` | int32 | 0..R-1, -1=ocean | regions |
 | `poi_index` | int32 | 0..P-1, -1=none | poi_placement |
 | `road` | uint8 | 0 / 1 | roads |
 | `road_tier` | uint8 | 0=none, 1=trunk, 2=spur | roads |
-| `dist_to_ocean` | float32 | ≥ 0 | island_mask |
+| `dist_to_ocean` | float32 | ≥ 0 tiles | terrain |
 | `flow_accum` | float64 | km², wetness-weighted catchment | hydrology |
 
 Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `island_name`.
@@ -158,12 +155,13 @@ JSON-serialisable. The base biome arrays are never mutated after generation.
 ## Generation pipeline
 
 Order is load-bearing: each stage only consumes fields produced by earlier stages, eliminating
-backtracking. A **land-exists gate** wraps the first two cheap stages: if a seed yields less than
-`world.min_land_fraction` land, the seed is deterministically perturbed and those stages re-run (up
-to `world.regen_attempts` times) before the expensive downstream stages run.
+backtracking. A **land-exists gate** wraps the cheap terrain stage: if a seed yields less than
+`world.min_land_fraction` land, the seed is deterministically perturbed and terrain re-runs (up to
+`world.regen_attempts` times) before the expensive downstream stages run. Terrain sets its sea level by
+rank, so the gate only trips when a style's land fraction is configured below the minimum.
 
 ```
-heightmap → island_mask → climate → hydrology → biomes → regions
+terrain → climate → hydrology → biomes → regions
          → poi_placement → roads → poi_interiors → naming
 ```
 
@@ -171,54 +169,35 @@ Roads run **before** POI interiors: the road network is laid to each POI anchor 
 direction it arrives from on every POI, and the interiors stage then sites that POI's footprint
 entrance (and biases the interior door) to the road-facing side.
 
-### Stage 1 — Heightmap (`pipeline/heightmap.py`)
+### Stage 1 — Terrain (`pipeline/physical/terrain.py`)
 
-Produces `world.elevation` [0, 1]. Algorithm:
+Produces `elevation_m`, the salt ocean (`water_type`), `dist_to_ocean` (tiles, until phase-3 task 19)
+and the legacy normalised `elevation`. Ported from the reference `_elevation`:
 
-1. **fBm terrain**: sum `octaves` of the configured noise backend at geometrically growing
-   frequencies (`lacunarity`) and shrinking amplitudes (`persistence`). The result is normalised to
-   [0, 1].
-2. **Domain warp** (Inigo Quilez): before sampling, offset the coordinate grid by two decorrelated
-   low-frequency fBm fields scaled by `warp_strength`. This bends straight noise contours into
-   organic, meandering coastlines and ridgelines without adding extra octaves.
-3. **Island mask**: a radial falloff centred on the map (falloff `= 1 - r^falloff_power`) is shaped
-   by two independent noise fields:
-   - *Coast detail*: medium-frequency noise, weighted by `(1 - core)` so it only acts near the
-     shoreline. The interior stays solid; the outline gets peninsulas, bays, and gulfs.
-   - *Archipelago*: low-frequency, positive-only lobes added outside the core, raising patches of
-     ocean into small satellite islands.
-4. **Blending**: `elevation = mask × (land_floor + (1 - land_floor) × terrain)`. A small
-   `land_floor` lifts the interior gently so the main island stays solid and above sea level.
-5. **Redistribution**: an optional exponent reshapes the elevation distribution (values > 1 push
-   terrain toward the extremes — more flatlands and more mountains, fewer mid-slopes).
+1. **Style**: a `tables.styles` row (`data/terrain.toml`) sets the land fraction, base feature size and
+   the blend of base fBm, coarse continent fBm, a centre pull (pangaea) and island blobs (islands).
+   `terrain.style = "seed"` draws a row per seed, weighted.
+2. **Raw height**: domain-warped fBm sampled in km (`noise.km_grid`), plus **mountain belts** (ridged
+   uplift along the zero-crossings of a coarse fBm, `noise.belt_lines`, masked on and off).
+3. **Ocean frame**: height drops within `edge_margin` of the map edges.
+4. **Rank-based sea level**: the quantile that leaves exactly the style's land fraction above water.
+5. **Metres**: a hypsometric curve over land height rank; sea depth scales with sea-floor height.
 
-Config keys: `terrain.*` (noise_backend, octaves, persistence, lacunarity, scale, warp_strength,
-falloff_power, land_floor, coast_detail, archipelago, redistribution, …).
+### Stage 2 — Climate (`pipeline/physical/climate.py`)
 
-### Stage 2 — Island mask (`pipeline/island_mask.py`)
+Produces `temperature_c`, `moisture` (0..1) and `rain_mm`, plus the legacy normalised `temperature`.
+Ported from the reference `_climate`:
 
-Classifies tiles as ocean, interior water, or land and computes `dist_to_ocean`:
+- **Temperature**: `equator_c - lat_coefficient × lat² + offset_c` per row (latitude from
+  `World.scale`), regional noise, minus `lapse_c_per_km` per km of height.
+- **Wind moisture**: per row a prevailing wind (westerlies inside `westerly_band_deg`, easterlies
+  elsewhere) carries moisture: recharged over sea, rained out over land (more on rising ground), drying
+  with distance and losing extra behind every rise, so ranges cast rain shadows.
+- **Moisture**: wind rain + regional noise + coastal nearness, rank-normalised over land.
+- **Rainfall**: `climate.rainfall_mm` maps moisture to mm, reduced in cold air. Hydrology recomputes it
+  after its fresh-water moisture bonus.
 
-- **Ocean**: water tiles 4-connected to the map border (saltwater, edge-connected = open sea).
-- **Interior water**: water tiles not connected to the border (provisionally freshwater lakes;
-  hydrology refines them).
-- **Land**: tiles at or above `world.sea_level`.
-- `dist_to_ocean`: exact Euclidean distance transform from every tile to the nearest ocean tile
-  (scipy `distance_transform_edt`; in-house BFS fallback). Used by climate, biomes, and hydrology.
-
-### Stage 3 — Climate (`pipeline/climate.py`)
-
-Produces `world.temperature` and base `world.moisture`.
-
-- **Temperature**: a smooth, physically motivated field — no noise. A latitude gradient (warm equator
-  / cold poles, controlled by `climate.orientation`) minus an elevation lapse rate (`lapse_rate ×
-  normalised height above sea level`).
-- **Moisture**: a statistically independent low-frequency fBm field (deliberately decorrelated from
-  elevation so mountains are not automatically wet) with an optional coastal bonus that decays
-  exponentially with `dist_to_ocean`. A `moisture_redistribution` exponent biases the map drier
-  (> 1) for more biome variety.
-
-### Stage 4 — Hydrology (`pipeline/physical/hydrology.py`)
+### Stage 3 — Hydrology (`pipeline/physical/hydrology.py`)
 
 Standard GIS surface-hydrology pipeline (RichDEM / GRASS GIS family):
 

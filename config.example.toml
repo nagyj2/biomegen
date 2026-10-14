@@ -12,8 +12,6 @@ width = 192           # tiles; default fits a ~209-wide terminal at 1:1
 height = 75           # tiles; taller than a 58-line terminal, so "fit" view downsamples
 sea_level = 0.40      # normalised elevation below which tiles are ocean/water
 size_mode = "fixed"   # "fixed" (reproducible) or "auto" (fit to current terminal)
-scale_x = 1.0         # global per-axis generation scale (>1 stretches features along X)
-scale_y = 1.0
 size_km = [6000.0, 3000.0]   # physical map extent [east-west, north-south] in km
 center_lat = "seed"   # map-centre latitude in degrees (north positive; clamped to keep edges within +-89),
                       # or "seed" to pick one per seed in center_lat_range_deg
@@ -25,27 +23,13 @@ backend = "scipy"     # "scipy" | "numpy" | "pure"
 
 [terrain]
 noise_backend = "perlin"   # "perlin" | "value" | "opensimplex" | "noise_lib"
-octaves = 7
-persistence = 0.54
-lacunarity = 2.0
-scale = 58.0
-warp_strength = 0.55       # higher => more meandering coastlines and ridges
-falloff_power = 2.2        # lower => broader/larger main island; higher => smaller with more sea ring
-land_floor = 0.18          # gentle interior lift so the main island is solid + a touch larger
-coast_detail = 0.42        # ragged coastlines: peninsulas, bays, gulfs, channels (0 = smooth/round)
-coast_scale = 20.0
-archipelago = 0.42         # small satellite islands around the dominant main island (0 = single)
-archipelago_scale = 68.0
-redistribution = 1.0
 style = "seed"             # "continents" | "pangaea" | "archipelago" | "islands" (tables.styles), or "seed"
 land_fraction_jitter = 0.04   # +- per-seed jitter on the style's land fraction
 max_elevation_m = [4300.0, 7400.0]   # [min, max] height of the highest summit
 
 [climate]
-orientation = "equator-center"   # or "north-pole-top"
-lapse_rate = 0.55
-moisture_redistribution = 1.5    # >1 => drier map (more desert/savanna/grassland, less forest/jungle)
-coastal_bias = 0.10
+offset_c = 0.0                   # warm (+) or cool (-) the whole world, °C
+lapse_c_per_km = 6.5             # temperature drop per km of height
 
 [hydrology]
 river_land_share = 0.035         # share of land cells with the largest catchments that become river

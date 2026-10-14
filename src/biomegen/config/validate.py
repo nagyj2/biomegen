@@ -132,12 +132,6 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     for key in ("beach_max", "mountain_min", "snow_min", "snow_temp"):
         _clamp(biomes, key, 0.0, 1.0, errors, "biomes")
 
-    climate = cfg.get("climate", {})
-    for key in ("equator_temp", "pole_temp", "coastal_bias"):
-        _clamp(climate, key, 0.0, 1.0, errors, "climate")
-    if climate.get("orientation") not in (None, "equator-center", "north-pole-top"):
-        errors.append("climate.orientation must be 'equator-center' or 'north-pole-top'")
-
     # --- colour coercion for the render palette ---
     render = cfg.get("render", {})
     palette = render.get("palette", {})

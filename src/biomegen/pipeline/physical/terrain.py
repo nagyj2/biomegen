@@ -75,7 +75,7 @@ def _raw_height(world: World, config: Config, seed: int, stream: random.Random, 
 
     # Domain warp (one field, two offsets) twists coastlines into peninsulas and gulfs.
     warp, wcx, wcy = _sample(config, seed, stream, "warp", xs, ys, float(t.get("warp_feature_km")))
-    warp_octaves = int(t.get("warp_octaves_fbm"))
+    warp_octaves = int(t.get("warp_octaves"))
     warp_km = float(t.get("warp_km"))
     wx = xs + warp_km * fbm(warp, wcx, wcy, warp_octaves)
     wy = ys + warp_km * fbm(warp, wcx + 91.0, wcy + 37.0, warp_octaves)

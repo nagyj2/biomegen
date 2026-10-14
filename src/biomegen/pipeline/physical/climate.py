@@ -49,7 +49,7 @@ def _temperature(world: World, config: Config, seed: int) -> np.ndarray:
         sampler,
         cx + stream.uniform(0, 256),
         cy + stream.uniform(0, 256),
-        octaves=int(c.get("temperature_octaves_fbm")),
+        octaves=int(c.get("temperature_octaves")),
         persistence=float(config.get("terrain.fbm_gain")),
         lacunarity=float(config.get("terrain.fbm_lacunarity")),
     )
@@ -103,7 +103,7 @@ def _moisture(world: World, config: Config, seed: int, rain: np.ndarray) -> np.n
         sampler,
         cx + stream.uniform(0, 256),
         cy + stream.uniform(0, 256),
-        octaves=int(c.get("moisture_octaves_fbm")),
+        octaves=int(c.get("moisture_octaves")),
         persistence=float(config.get("terrain.fbm_gain")),
         lacunarity=float(config.get("terrain.fbm_lacunarity")),
     )

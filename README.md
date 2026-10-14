@@ -120,8 +120,6 @@ The authoritative defaults and inline documentation are in
 | `height` | `75` | Map height in tiles |
 | `sea_level` | `0.40` | Normalised elevation below which tiles are ocean/water |
 | `size_mode` | `"fixed"` | `"fixed"` (reproducible) or `"auto"` (fit to current terminal) |
-| `scale_x` | `1.0` | Stretch all terrain features along X (> 1 = wider landforms) |
-| `scale_y` | `1.0` | Stretch all terrain features along Y |
 | `size_km` | `[6000.0, 3000.0]` | Physical map extent `[east-west, north-south]` in km |
 | `center_lat` | `"seed"` | Map-centre latitude in degrees (north positive), or `"seed"` to pick one per seed |
 | `center_lat_range_deg` | `[18.0, 48.0]` | Absolute latitude range used by `center_lat = "seed"` |
@@ -136,24 +134,17 @@ The authoritative defaults and inline documentation are in
 | Key | Default | Description |
 |-----|---------|-------------|
 | `noise_backend` | `"perlin"` | `"perlin"` · `"value"` · `"opensimplex"` · `"noise_lib"` |
-| `octaves` | `7` | fBm octave count (more = finer terrain detail) |
-| `persistence` | `0.54` | Amplitude falloff per octave (higher = rougher terrain) |
-| `lacunarity` | `2.0` | Frequency growth per octave |
-| `scale` | `58.0` | Base feature size in tiles (larger = broader landforms) |
-| `warp_strength` | `0.55` | Domain-warp magnitude — higher gives more meandering coasts |
-| `falloff_power` | `2.2` | Island falloff steepness — lower = broader/larger main island |
-| `land_floor` | `0.18` | Interior elevation lift — keeps the main island solid |
-| `coast_detail` | `0.42` | Coastline irregularity: peninsulas, bays, gulfs (0 = round) |
-| `archipelago` | `0.42` | Satellite island strength (0 = single island) |
-| `redistribution` | `1.0` | Post-normalisation exponent (> 1 pushes heights toward extremes) |
+| `style` | `"seed"` | Terrain style row (`continents` · `pangaea` · `archipelago` · `islands`), or `"seed"` |
+| `land_fraction_jitter` | `0.04` | ± per-seed jitter on the style's land fraction |
+| `max_elevation_m` | `[4300.0, 7400.0]` | Range for the height of the highest summit (m) |
+| `max_depth_m` | `[4500.0, 7500.0]` | Range for the depth of the deepest sea (m) |
 
 #### `[climate]`
 | Key | Default | Description |
 |-----|---------|-------------|
-| `orientation` | `"equator-center"` | `"equator-center"` (warm middle) · `"north-pole-top"` |
-| `lapse_rate` | `0.55` | Temperature drop with elevation (higher = colder mountains) |
-| `moisture_redistribution` | `1.5` | > 1 biases the map drier (more desert/savanna) |
-| `coastal_bias` | `0.10` | Extra moisture near the coast |
+| `offset_c` | `0.0` | Warm (+) or cool (-) the whole world, °C |
+| `lapse_c_per_km` | `6.5` | Temperature drop per km of height |
+| `westerly_band_deg` | `[30.0, 60.0]` | Latitudes with westerly winds (easterlies elsewhere) |
 
 #### `[hydrology]`
 | Key | Default | Description |
@@ -264,7 +255,7 @@ config, e.g. `[tables.biomes.desert]` with `goods = "glass"`; each file document
 The world is built by an ordered, fully seed-reproducible pipeline:
 
 ```
-heightmap → island_mask → climate → hydrology → biomes → regions
+terrain → climate → hydrology → biomes → regions
          → poi_placement → roads → poi_interiors → naming
 ```
 
