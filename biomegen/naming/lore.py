@@ -56,10 +56,26 @@ _CIVIL = (POIType.CITY, POIType.TOWN, POIType.VILLAGE)
 _WILD = (POIType.TOWER, POIType.DUNGEON, POIType.RUIN, POIType.CAMP, POIType.BRIDGE)
 _NUMBER = {1: "a", 2: "two", 3: "three"}
 
-_SINGULAR = { POIType.CITY: "city", POIType.TOWN: "town", POIType.VILLAGE: "village", POIType.TOWER: "tower",
-              POIType.DUNGEON: "dungeon", POIType.RUIN: "ruin", POIType.CAMP: "camp", POIType.BRIDGE: "bridge" }
-_PLURAL = {  POIType.CITY: "cities", POIType.TOWN: "towns", POIType.VILLAGE: "villages", POIType.TOWER: "towers",
-              POIType.DUNGEON: "dungeons", POIType.RUIN: "ruin", POIType.CAMP: "camps", POIType.BRIDGE: "bridges" }
+_SINGULAR = {
+    POIType.CITY: "city",
+    POIType.TOWN: "town",
+    POIType.VILLAGE: "village",
+    POIType.TOWER: "tower",
+    POIType.DUNGEON: "dungeon",
+    POIType.RUIN: "ruin",
+    POIType.CAMP: "camp",
+    POIType.BRIDGE: "bridge",
+}
+_PLURAL = {
+    POIType.CITY: "cities",
+    POIType.TOWN: "towns",
+    POIType.VILLAGE: "villages",
+    POIType.TOWER: "towers",
+    POIType.DUNGEON: "dungeons",
+    POIType.RUIN: "ruin",
+    POIType.CAMP: "camps",
+    POIType.BRIDGE: "bridges",
+}
 
 
 def geo_word(rng: random.Random, biome_class: int) -> str:

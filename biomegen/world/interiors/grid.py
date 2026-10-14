@@ -64,7 +64,9 @@ STRUCTURAL: frozenset = frozenset({int(Cell.WALL), int(Cell.DOOR), int(Cell.STAI
 # paths - but NOT furniture/clutter (which stays a LOCAL-only detail). Drawing the floor (not just the
 # walls) makes the dungeon read as a solid, filled-in structure rather than an outline with terrain
 # showing through. The LOCAL scale still draws every non-void cell (the full furnished interior).
-ZOOM_VISIBLE: frozenset = STRUCTURAL | frozenset({int(Cell.FLOOR), int(Cell.WATER), int(Cell.PATH), int(Cell.BRIDGE), int(Cell.BRIDGE_WALL)})
+ZOOM_VISIBLE: frozenset = STRUCTURAL | frozenset(
+    {int(Cell.FLOOR), int(Cell.WATER), int(Cell.PATH), int(Cell.BRIDGE), int(Cell.BRIDGE_WALL)}
+)
 
 
 @dataclass(frozen=True)
@@ -822,7 +824,9 @@ def place_settlement_bridges(
             if not (span_end < gw - 1 and buildable[row, span_end + 1]):
                 continue
             # Skip if any water component in this span was already bridged horizontally.
-            span_labels = {int(water_labeled[row, c]) for c in range(span_start, span_end + 1) if water_labeled[row, c] > 0}
+            span_labels = {
+                int(water_labeled[row, c]) for c in range(span_start, span_end + 1) if water_labeled[row, c] > 0
+            }
             if span_labels & bridged_h:
                 continue
             cells = [(row, c) for c in range(span_start, span_end + 1) if grid[row, c] == path_int]
@@ -847,7 +851,9 @@ def place_settlement_bridges(
                 continue
             if not (span_end < gh - 1 and buildable[span_end + 1, col]):
                 continue
-            span_labels = {int(water_labeled[r, col]) for r in range(span_start, span_end + 1) if water_labeled[r, col] > 0}
+            span_labels = {
+                int(water_labeled[r, col]) for r in range(span_start, span_end + 1) if water_labeled[r, col] > 0
+            }
             if span_labels & bridged_v:
                 continue
             cells = [(r, col) for r in range(span_start, span_end + 1) if grid[r, col] == path_int]
@@ -905,7 +911,9 @@ def bridge_disconnected_regions(
                 r, c = nr0, nc0
                 gap = 0
                 while 0 <= r < gh and 0 <= c < gw and not buildable[r, c]:
-                    r += dr; c += dc; gap += 1
+                    r += dr
+                    c += dc
+                    gap += 1
                 if 0 <= r < gh and 0 <= c < gw and labeled[r, c] == main_label:
                     if gap <= max_span and (best is None or gap < best[2]):
                         best = ((row, col), (int(r), int(c)), gap)
@@ -931,7 +939,8 @@ def bridge_disconnected_regions(
                     wr, wc = r + wdr, c + wdc
                     if 0 <= wr < gh and 0 <= wc < gw and not buildable[wr, wc] and grid[wr, wc] == void_int:
                         grid[wr, wc] = bwall_int
-            r += dr; c += dc
+            r += dr
+            c += dc
 
         # Connect the main-side landing to the plaza.
         carve_path_guarded(grid, (dst_rc[1], dst_rc[0]), center)

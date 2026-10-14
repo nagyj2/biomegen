@@ -20,25 +20,25 @@ from __future__ import annotations
 # Importing these modules runs their @register_* decorators (registration side-effect). The builders
 # only look a shape/partition up at call time, so the registries are populated regardless of order.
 from . import (
-                   boat,  # noqa: F401  (imported for its @register_interior side-effect)
-                   camp,  # noqa: F401
-                   dungeon,  # noqa: F401
-                   ruin,  # noqa: F401
-                   settlement,  # noqa: F401
-                   shapes,  # noqa: F401  (imported for its SHAPES registration side-effect)
-                   tower,  # noqa: F401
+    boat,  # noqa: F401  (imported for its @register_interior side-effect)
+    camp,  # noqa: F401
+    dungeon,  # noqa: F401
+    ruin,  # noqa: F401
+    settlement,  # noqa: F401
+    shapes,  # noqa: F401  (imported for its SHAPES registration side-effect)
+    tower,  # noqa: F401
 )
 from .grid import (
-                   INTERIOR_BUILDERS,
-                   SHAPES,
-                   STRUCTURAL,
-                   ZOOM_VISIBLE,
-                   build_interior,
-                   clear_cache,
-                   ctx_buildable,
-                   footprint_cells,
-                   footprint_origin,
-                   sample_rect,
+    INTERIOR_BUILDERS,
+    SHAPES,
+    STRUCTURAL,
+    ZOOM_VISIBLE,
+    build_interior,
+    clear_cache,
+    ctx_buildable,
+    footprint_cells,
+    footprint_origin,
+    sample_rect,
 )
 
 __all__ = [
