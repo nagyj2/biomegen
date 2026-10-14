@@ -18,6 +18,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.render.surface import river_mask
 from biomegen.util.units import KM_PER_DEGREE
 from biomegen.world.tile import Biome, WaterType
 from biomegen.world.world import World
@@ -56,7 +57,7 @@ def test_different_seeds_produce_different_worlds(cfg: Config) -> None:
 def test_world_has_land_and_ocean_and_regions(cfg: Config) -> None:
     world = pipeline.generate(cfg, 777)
     land = world.water_type == int(WaterType.NONE)
-    ocean = world.biome == int(Biome.OCEAN)
+    ocean = world.water_type == int(WaterType.SALT)
     assert land.mean() >= float(cfg.get("world.min_land_fraction"))
     assert ocean.any()
     assert len(world.regions) > 0
@@ -67,26 +68,25 @@ def test_world_has_land_and_ocean_and_regions(cfg: Config) -> None:
 
 def test_water_classification_salt_vs_fresh(cfg: Config) -> None:
     world = pipeline.generate(cfg, 9999)
-    ocean = world.biome == int(Biome.OCEAN)
+    sea = np.isin(world.biome, [int(Biome.DEEP), int(Biome.SHALLOW)])
     lake = world.biome == int(Biome.LAKE)
-    river = world.biome == int(Biome.RIVER)
-    # Ocean is salt; inland water is fresh.
-    assert (world.water_type[ocean] == int(WaterType.SALT)).all()
+    # Open sea is salt; lakes are fresh.
+    assert (world.water_type[sea] == int(WaterType.SALT)).all()
     if lake.any():
         assert (world.water_type[lake] == int(WaterType.FRESH)).all()
-    if river.any():
-        assert (world.water_type[river] == int(WaterType.FRESH)).all()
 
 
 def test_beaches_only_border_the_ocean(cfg: Config) -> None:
     world = pipeline.generate(cfg, 9999)
     beach = world.biome == int(Biome.BEACH)
-    if beach.any():
-        # Beaches are gated on distance-to-ocean, so they stay coastal and never ring a lake or sit
-        # deep inland. The de-speckle smoothing pass may spread a beach by one (diagonal) tile, so we
-        # allow a small margin over the raw beach_dist gate.
-        margin = float(cfg.get("biomes.beach_dist")) + 2.0
-        assert world.dist_to_ocean[beach].max() <= margin
+    # Beaches touch the sea (an 8-neighbour is salt water), so they never ring a lake or sit inland.
+    salt = np.pad(world.water_type == int(WaterType.SALT), 1)
+    h, w = beach.shape
+    near_sea = np.zeros_like(beach)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            near_sea |= salt[1 + dy : 1 + dy + h, 1 + dx : 1 + dx + w]
+    assert beach.any() and near_sea[beach].all()
 
 
 def test_small_world_generates(cfg: Config) -> None:
@@ -95,7 +95,7 @@ def test_small_world_generates(cfg: Config) -> None:
     small.data["world"]["height"] = 30
     world = pipeline.generate(small, 5)
     assert world.width == 48 and world.height == 30
-    assert (world.biome == int(Biome.OCEAN)).any()
+    assert (world.water_type == int(WaterType.SALT)).any()
 
 
 def test_stats_reports_expected_keys(cfg: Config) -> None:
@@ -129,7 +129,7 @@ def test_deserts_appear_for_some_seeds(cfg: Config) -> None:
 
 def _max_river_run(world: World) -> int:
     """Return the widest contiguous run of river tiles along any row (a width proxy)."""
-    river = world.biome == int(Biome.RIVER)
+    river = river_mask(world)
     best = 0
     for row in river:
         run = 0
@@ -149,7 +149,7 @@ def test_invalid_biome_name_in_config_raises() -> None:
     from biomegen.config.validate import ConfigError, validate
 
     bad = get_defaults()
-    bad["biomes"]["matrix"][0][0] = "frest"  # typo
+    bad["biomes"]["bands"][3]["biome"] = "frest"  # typo
     with pytest.raises(ConfigError) as exc:
         validate(bad)
     assert "unknown biome" in str(exc.value) and "frest" in str(exc.value)

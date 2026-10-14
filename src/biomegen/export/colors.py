@@ -25,6 +25,7 @@ from ..world.tile import (
     OVERLAY_COLOR_NAMES,
     Biome,
     Cell,
+    WaterType,
 )
 from ..world.world import World
 
@@ -59,7 +60,7 @@ class ExportPalette:
     def __init__(self, config: Config, world: World) -> None:
         palette = config.get("render.palette")
         self._biome: dict[int, RGB] = {int(b): _as_rgb(palette.get(BIOME_NAME[int(b)])) for b in Biome}
-        self._ocean = self._biome[int(Biome.OCEAN)]
+        self._ocean = self._biome[int(Biome.DEEP)]
         # Per-region colours (the headline of the biome map); region id -> base_color.
         self._region: dict[int, RGB] = {r.id: _as_rgb(r.base_color) for r in world.regions}
         # Interior Cell colours. VOID has no entry (it is never drawn - terrain shows through).
@@ -85,7 +86,7 @@ class ExportPalette:
         Ocean tiles and unregioned water (river / lake with ``region_id == -1``) take the ocean
         colour; every land tile takes its region's ``base_color``.
         """
-        if int(world.biome[y, x]) == int(Biome.OCEAN):
+        if int(world.water_type[y, x]) == int(WaterType.SALT):
             return self._ocean
         rid = int(world.region_id[y, x])
         return self._region.get(rid, self._ocean)

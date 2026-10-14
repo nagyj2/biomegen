@@ -183,7 +183,7 @@ def run(world: World, config: Config, seed: int) -> None:
     world.terrain_style = style_name
     world.elevation_m = _metres(height, land, config, stream)
     world.elevation = _legacy_elevation(height, land, float(config.get("world.sea_level")))
-    world.biome[:] = np.where(land, int(Biome.GRASSLAND), int(Biome.OCEAN)).astype(np.uint8)
+    world.biome[:] = np.where(land, int(Biome.GRASS), int(Biome.DEEP)).astype(np.uint8)
     world.water_type[:] = np.where(land, int(WaterType.NONE), int(WaterType.SALT)).astype(np.uint8)
     world.dist_to_ocean = geo.distance_to(~land, backend=config.get("compute.backend"), metric="euclidean")
 

@@ -52,11 +52,12 @@ def test_user_override_changes_one_attribute_and_keeps_the_row(tmp_path: Path) -
     assert (desert["goods"], desert["label"]) == ("glass", "Desert")
 
 
-def test_new_row_with_every_key_is_accepted() -> None:
-    # Adding a biome row is data only (the enum entry comes with the phase-3 Biome rework).
+def test_biome_row_without_an_enum_member_is_rejected() -> None:
+    # Biome rows are tied to the Biome enum: a complete row for a name with no member is an error.
     cfg = get_defaults()
     cfg["tables"]["biomes"]["steppe"] = _new_biome_row()
-    validate(cfg)
+    with pytest.raises(ConfigError, match="one row per Biome member"):
+        validate(cfg)
 
 
 def test_new_row_missing_a_key_is_rejected() -> None:

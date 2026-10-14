@@ -10,12 +10,12 @@ VALUES: Dict[str, Any] = {
     # regions). Any biome not listed groups only with its own kind.
     "similarity_groups": [
         ["forest", "jungle", "taiga", "swamp"],
-        ["grassland", "shrubland", "savanna"],
+        ["grass", "savanna"],
         ["desert"],
         ["tundra", "snow"],
-        ["mountain"],
         ["beach"],
-        ["lake", "river"],
+        ["lake"],
+        ["deep", "shallow", "seaice"],
     ],
     "min_region_size": 22,  # regions smaller than this are merged into their best neighbour
     "max_region_size": 100,  # regions larger than this are split into equal sub-regions

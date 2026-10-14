@@ -3,8 +3,7 @@
 # Loaded into the config tree as `tables.biomes` and `tables.relief`; a user config overrides any
 # attribute with e.g. `[tables.biomes.desert]` + `goods = "glass"` (deep-merged, like every section).
 # Adding a biome is an enum entry in world/tile.py plus a row here with every key.
-# Rows follow the reference generator (docs/reference/worldgen.py); the Biome enum switches to this
-# set in phase 3.
+# Rows follow the reference generator (docs/reference/worldgen.py).
 #
 # Biome keys:
 #   label         display name
@@ -191,6 +190,8 @@ goods = "whale oil"
 #   habitability_mul  0..1 multiplier on the biome's habitability
 #   move_cost         extra cost per cell added to the biome's move_cost, >= 0
 #   goods             trade good of the high ground ("" uses the biome's)
+#   min_elevation_m   optional: land at least this high gets this relief (the highest matching row
+#                     wins); rows without it (none, volcano) are never chosen by height
 
 [relief.none]
 label = "Flat"
@@ -209,6 +210,7 @@ fg = [70, 60, 36]
 habitability_mul = 0.7
 move_cost = 2.0
 goods = "iron"
+min_elevation_m = 800.0
 
 [relief.mountain]
 label = "Mountains"
@@ -218,6 +220,7 @@ fg = [52, 44, 36]
 habitability_mul = 0.15
 move_cost = 8.0
 goods = "iron"
+min_elevation_m = 1700.0
 
 [relief.peak]
 label = "High peaks"
@@ -227,6 +230,7 @@ fg = [255, 255, 255]
 habitability_mul = 0.0
 move_cost = 30.0
 goods = "iron"
+min_elevation_m = 3200.0
 
 [relief.volcano]
 label = "Volcano"

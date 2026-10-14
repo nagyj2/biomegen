@@ -102,20 +102,21 @@ def test_water_blend_bridges_diagonal_tiles():
     import numpy as np
 
     from biomegen.render.zoom_view import _water_blend
-    from biomegen.world.tile import Biome
+    from biomegen.world.tile import Biome, WaterType
     from biomegen.world.world import World
 
     w = World(5, 5, 1)
-    w.biome[:] = int(Biome.GRASSLAND)
-    w.biome[1, 1] = int(Biome.RIVER)  # tile (x=1, y=1)
-    w.biome[2, 2] = int(Biome.RIVER)  # tile (x=2, y=2) - only corner-touches the first
+    w.biome[:] = int(Biome.GRASS)
+    w.water_type[:] = int(WaterType.NONE)
+    w.water_type[1, 1] = int(WaterType.FRESH)  # river tile (x=1, y=1): fresh water over grass
+    w.water_type[2, 2] = int(WaterType.FRESH)  # tile (x=2, y=2) - only corner-touches the first
 
     # Sample the shared corner (world 2.0, 2.0) and a neighbouring land-tile centre (2.5, 1.5).
     fx = np.array([[2.0, 2.5]])
     fy = np.array([[2.0, 1.5]])
     is_water, water_biome = _water_blend(w, fx, fy, 0.42)
     assert bool(is_water[0, 0]) is True  # diagonal gap is bridged -> water
-    assert int(water_biome[0, 0]) == int(Biome.RIVER)
+    assert int(water_biome[0, 0]) == int(Biome.LAKE)  # rivers draw as lake water until phase 4
     assert bool(is_water[0, 1]) is False  # a land tile centre stays land
 
 

@@ -63,7 +63,7 @@ src/biomegen/
       terrain.py        Stage 1 — style, mountain belts, rank sea level, elevation_m, ocean, dist_to_ocean
       climate.py        Stage 2 — °C (latitude, lapse), wind moisture + rain shadow, rain_mm
       hydrology.py      Stage 3 — rivers, lakes, flow accumulation
-    biomes.py           Stage 5 — Whittaker biome classification
+      biomes.py         Stage 4 — biome from °C / mm / m, relief, volcanoes
     regions.py          Stage 6 — region segmentation + colour
     poi_placement.py    Stage 7 — POI anchor placement
     poi_fields.py       Shared suitability distance fields for POI scoring
@@ -120,7 +120,7 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `rain_mm` | float64 | mm / year | climate; recomputed by hydrology after its moisture bonus |
 | `moisture` | float64 | [0, 1] | climate + hydrology |
 | `biome` | uint8 | `Biome` enum int | terrain, hydrology, biomes |
-| `relief` | uint8 | `Relief` enum int | biomes (phase 3; NONE until then) |
+| `relief` | uint8 | `Relief` enum int | biomes |
 | `landmass_id` | int32 | 0..L-1, -1=water | geography (phase 3; -1 until then) |
 | `water_type` | uint8 | `WaterType` enum int | terrain, hydrology |
 | `region_id` | int32 | 0..R-1, -1=ocean | regions |
@@ -221,19 +221,23 @@ Standard GIS surface-hydrology pipeline (RichDEM / GRASS GIS family):
 7. **Freshwater moisture bonus**: land near fresh water gets an exponential moisture boost
    (`moisture_strength × exp(-dist / moisture_radius)`), making river valleys biome-greener.
 
-### Stage 5 — Biomes (`pipeline/biomes.py`)
+### Stage 4 — Biomes (`pipeline/physical/biomes.py`)
 
-Whittaker-style temperature × moisture lookup, bracketed by elevation/coastal overrides:
+Writes `biome` (the reference biome set: deep, shallow, seaice, lake, beach, desert, savanna, grass,
+forest, jungle, swamp, taiga, tundra, snow) and `relief`. Ported from the reference `_biomes`:
 
-1. **Matrix lookup**: temperature and moisture are bucketed into bands (`temp_bands`,
-   `moisture_bands`) and indexed into a configurable 2-D matrix of biome names.
-2. **Elevation overrides** (applied in ascending priority — later wins):
-   - Beach: low elevation AND within `beach_dist` of ocean.
-   - Mountain: elevation ≥ `mountain_min`.
-   - Snow: elevation ≥ `snow_min`, or cold (`temp ≤ snow_temp`) at high elevation.
-3. **Majority-vote smoothing**: one or more passes replace each land tile with the most common biome
-   in its 3×3 neighbourhood, removing salt-and-pepper speckle at band edges. Vectorised via padded
-   shifts.
+1. **Sea**: sea ice below `sea_ice_c` (with noise), shallows within `shallow_km` of land, else deep.
+   Lakes (marked by hydrology) freeze to sea ice below `lake_ice_c`.
+2. **Land**: the first `biomes.bands` row whose `max_temp_c` is above the cell's °C applies; its
+   `[biome, max_rain_mm]` rules pick by rainfall, very wet lowland in `swamp` bands becomes swamp, and
+   warm low land touching the sea becomes beach. Rivers are not a biome: a river cell keeps its land
+   biome and is fresh water in `water_type`.
+3. **Relief**: the highest relief row whose `min_elevation_m` the cell reaches (hills 800 m, mountains
+   1700 m, peaks 3200 m); peaks are snow.
+4. **Volcanoes**: `volcano_counts` (one drawn per seed) mountain or peak cells near the coast.
+
+The old curses views and exporters read the cover through `render/surface.py`, which draws river cells
+as lake water until the phase-4 renderer adds a river layer.
 
 ### Stage 6 — Regions (`pipeline/regions.py`)
 
@@ -366,7 +370,6 @@ needed). All other families are changed via their config key.
 | Family | Config key | CLI flag | Built-in choices |
 |--------|-----------|----------|-----------------|
 | Noise backend | `terrain.noise_backend` | `--noise-backend` | `perlin`\* · `value` · `opensimplex` · `noise_lib`† |
-| Biome classifier | `biomes.classifier` | — | `whittaker` |
 | Flow model | `hydrology.flow_model` | — | `d8` · `dinf` |
 | POI sampler | `poi.sampler` | `--poi-sampler` | `bluenoise`\* · `random` · `grid` |
 | Pathfinder | `roads.pathfinder` | — | `astar`\* · `tcod` · `dijkstra` |

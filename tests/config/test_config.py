@@ -42,9 +42,9 @@ def test_deep_merge_is_sparse() -> None:
 
 def test_validate_coerces_hex_color() -> None:
     cfg = get_defaults()
-    cfg["render"]["palette"]["ocean"] = "#102030"
+    cfg["render"]["palette"]["deep"] = "#102030"
     validate(cfg)
-    assert cfg["render"]["palette"]["ocean"] == [16, 32, 48]
+    assert cfg["render"]["palette"]["deep"] == [16, 32, 48]
 
 
 def test_validate_collects_errors() -> None:
@@ -55,14 +55,6 @@ def test_validate_collects_errors() -> None:
         validate(cfg)
     msg = str(exc.value)
     assert "world.width" in msg and "size_mode" in msg
-
-
-def test_whittaker_matrix_shape_matches_bands() -> None:
-    cfg = get_defaults()
-    rows = len(cfg["biomes"]["temp_bands"]) + 1
-    cols = len(cfg["biomes"]["moisture_bands"]) + 1
-    assert len(cfg["biomes"]["matrix"]) == rows
-    assert all(len(row) == cols for row in cfg["biomes"]["matrix"])
 
 
 @pytest.mark.parametrize("size_km", [[6000.0], [6000.0, 0.0], ["6000", 3000.0], 6000.0])

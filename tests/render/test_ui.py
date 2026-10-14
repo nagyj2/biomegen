@@ -192,9 +192,9 @@ def test_legend_lists_only_given_biomes():
     from biomegen.world.tile import Biome
 
     glyphs = Glyphs(load_config(None))
-    entries = _legend_entries({int(Biome.OCEAN), int(Biome.FOREST)}, glyphs)
+    entries = _legend_entries({int(Biome.DEEP), int(Biome.FOREST)}, glyphs)
     names = [name for _g, name, _b in entries]
-    assert names == ["ocean", "forest"]  # sorted by biome int (ocean=0 before forest)
+    assert names == ["deep", "forest"]  # sorted by biome int (deep=0 before forest)
 
 
 def test_interior_legend_skips_void_and_sorts():

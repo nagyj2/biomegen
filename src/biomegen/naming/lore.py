@@ -11,18 +11,18 @@ import random
 from typing import Dict, List
 
 from ..world.entities import Region
-from ..world.tile import Biome, POIType, WaterType
+from ..world.tile import WATER_BIOMES, Biome, POIType, WaterType
 from ..world.world import World
 from .cultures import Culture
 
 # Natural-language word for each biome (used in lore prose).
 BIOME_WORD: Dict[int, str] = {
-    int(Biome.OCEAN): "sea",
+    int(Biome.DEEP): "sea",
+    int(Biome.SHALLOW): "shallows",
+    int(Biome.SEAICE): "ice",
     int(Biome.LAKE): "lake",
-    int(Biome.RIVER): "river",
     int(Biome.BEACH): "shore",
-    int(Biome.GRASSLAND): "grassland",
-    int(Biome.SHRUBLAND): "scrubland",
+    int(Biome.GRASS): "grassland",
     int(Biome.SAVANNA): "savanna",
     int(Biome.FOREST): "forest",
     int(Biome.JUNGLE): "jungle",
@@ -30,7 +30,6 @@ BIOME_WORD: Dict[int, str] = {
     int(Biome.DESERT): "desert",
     int(Biome.TUNDRA): "tundra",
     int(Biome.SWAMP): "wetland",
-    int(Biome.MOUNTAIN): "mountains",
     int(Biome.SNOW): "snowfields",
 }
 
@@ -40,16 +39,13 @@ GEO_WORDS: Dict[int, List[str]] = {
     int(Biome.JUNGLE): ["Jungle", "Wilds", "Tangle"],
     int(Biome.TAIGA): ["Pinewood", "Taiga", "Wood"],
     int(Biome.SWAMP): ["Marsh", "Fen", "Mire"],
-    int(Biome.GRASSLAND): ["Plains", "Vale", "Downs"],
-    int(Biome.SHRUBLAND): ["Scrub", "Heath", "Range"],
+    int(Biome.GRASS): ["Plains", "Vale", "Downs"],
     int(Biome.SAVANNA): ["Savanna", "Plains", "Flats"],
     int(Biome.DESERT): ["Sands", "Waste", "Dunes"],
     int(Biome.TUNDRA): ["Tundra", "Reach", "Barrens"],
     int(Biome.SNOW): ["Frostlands", "Wastes", "Reach"],
-    int(Biome.MOUNTAIN): ["Peaks", "Range", "Heights"],
     int(Biome.BEACH): ["Shore", "Coast", "Strand"],
     int(Biome.LAKE): ["Lakeland", "Marches"],
-    int(Biome.RIVER): ["Marches", "Waters"],
 }
 
 _CIVIL = (POIType.CITY, POIType.TOWN, POIType.VILLAGE)
@@ -141,8 +137,8 @@ def water_phrase(world: World, region: Region) -> str:
                 if not world.in_bounds(nx, ny):
                     continue
                 b = int(biome[ny, nx])
-                if b == int(Biome.RIVER):
-                    has_river = True
+                if wt[ny, nx] == int(WaterType.FRESH) and b not in WATER_BIOMES:
+                    has_river = True  # a river is fresh water over a land biome
                 elif b == int(Biome.LAKE):
                     has_lake = True
                 elif wt[ny, nx] == int(WaterType.SALT):

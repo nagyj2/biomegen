@@ -90,16 +90,13 @@ BIOME_CULTURE_WEIGHTS: Dict[int, Dict[str, float]] = {
     int(Biome.JUNGLE): {"elvish": 3, "southern": 2, "common": 1},
     int(Biome.TAIGA): {"norse": 4, "dwarvish": 2, "common": 1},
     int(Biome.SWAMP): {"common": 2, "elvish": 1, "southern": 1},
-    int(Biome.GRASSLAND): {"common": 4, "norse": 1, "elvish": 1},
-    int(Biome.SHRUBLAND): {"common": 3, "southern": 1},
+    int(Biome.GRASS): {"common": 4, "norse": 1, "elvish": 1},
     int(Biome.SAVANNA): {"southern": 4, "common": 1},
     int(Biome.DESERT): {"southern": 5},
     int(Biome.TUNDRA): {"norse": 3, "dwarvish": 2},
-    int(Biome.SNOW): {"norse": 2, "dwarvish": 2},
-    int(Biome.MOUNTAIN): {"dwarvish": 5, "norse": 2},
+    int(Biome.SNOW): {"dwarvish": 4, "norse": 2},
     int(Biome.BEACH): {"common": 2, "norse": 1, "southern": 1},
     int(Biome.LAKE): {"common": 1, "elvish": 1},
-    int(Biome.RIVER): {"common": 1, "elvish": 1},
 }
 
 

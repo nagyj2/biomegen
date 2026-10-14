@@ -15,6 +15,7 @@ from ..world.world import World
 from .glyphs import Glyphs
 from .map_view import build_biome_frame
 from .state import SCALE_LOCAL, SCALE_ZOOM, ViewState, edge_pan
+from .surface import display_biome_at
 from .zoom_view import build_detail_frame, detail_cell_size
 
 
@@ -43,7 +44,7 @@ def render_biome_ascii(
             else:
                 wx, wy = coord
                 marker = _marker_glyph(world, glyphs, wx, wy)
-                chars.append(marker or glyphs.biome_glyph(int(world.biome[wy, wx])))
+                chars.append(marker or glyphs.biome_glyph(display_biome_at(world, wx, wy)))
         lines.append("".join(chars))
     return "\n".join(lines)
 

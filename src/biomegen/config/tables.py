@@ -34,6 +34,7 @@ _RELIEF_ROW = {
     "habitability_mul": "unit",
     "move_cost": "nonneg",
     "goods": "text",
+    "min_elevation_m": "nonneg",
 }
 _TIER_ROW = {
     "label": "text",
@@ -60,7 +61,7 @@ _STYLE_ROW = {
 # Table name -> (row schema, keys a row may omit).
 SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "biomes": (_BIOME_ROW, frozenset()),
-    "relief": (_RELIEF_ROW, frozenset()),
+    "relief": (_RELIEF_ROW, frozenset({"min_elevation_m"})),
     "tiers": (_TIER_ROW, frozenset({"bg"})),
     "styles": (_STYLE_ROW, frozenset()),
 }
@@ -102,7 +103,7 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
 
 def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     """Validate every row of every table under ``cfg["tables"]``, appending problems to ``errors``."""
-    from ..world.tile import RELIEF_BY_NAME  # local import, as in validate._validate_biome_names
+    from ..world.tile import BIOME_BY_NAME, RELIEF_BY_NAME  # local import, as in validate._validate_biome_names
 
     tables = cfg.get("tables", {})
     for table_name in sorted(tables):
@@ -126,6 +127,10 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
                 errors.append(f"{where}: missing key {key!r}")
             for key in sorted(set(fields) & set(row)):
                 _check_value(row, key, fields[key], where, errors)
+
+    biomes = tables.get("biomes", {})
+    if isinstance(biomes, dict) and set(biomes) != set(BIOME_BY_NAME):
+        errors.append(f"tables.biomes must have exactly one row per Biome member: {', '.join(sorted(BIOME_BY_NAME))}")
 
     relief = tables.get("relief", {})
     if isinstance(relief, dict) and set(relief) != set(RELIEF_BY_NAME):

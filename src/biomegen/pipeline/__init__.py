@@ -26,16 +26,15 @@ import numpy as np
 from ..config.model import Config
 from ..util import rng
 from ..util.units import grid_scale
-from ..world.tile import BIOME_NAME, Biome, WaterType
+from ..world.tile import BIOME_NAME, RELIEF_NAME, WATER_BIOMES, WaterType
 from ..world.world import World
 from . import (
-    biomes,
     naming,
     poi_placement,
     regions,
 )
 from .civilization import roads
-from .physical import climate, hydrology, terrain
+from .physical import biomes, climate, hydrology, terrain
 from .story import poi_interiors
 
 
@@ -118,8 +117,13 @@ def stats(world: World) -> Dict[str, object]:
         "regions": len(world.regions),
         "rivers": len(world.rivers),
         "lakes": len(world.lakes),
-        "river_tiles": int((world.biome == int(Biome.RIVER)).sum()),
-        "lake_tiles": int((world.biome == int(Biome.LAKE)).sum()),
+        "river_tiles": int(
+            ((world.water_type == int(WaterType.FRESH)) & ~np.isin(world.biome, list(WATER_BIOMES))).sum()
+        ),
+        "lake_tiles": sum(lake.area for lake in world.lakes),
+        "relief": {
+            RELIEF_NAME[int(v)]: int(c) for v, c in zip(*np.unique(world.relief, return_counts=True), strict=True)
+        },
         "road_tiles": int((world.road != 0).sum()),
         "pois": len(world.pois),
         "poi_kinds": dict(sorted(Counter(p.kind for p in world.pois).items())),

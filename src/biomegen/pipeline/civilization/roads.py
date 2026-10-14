@@ -39,11 +39,11 @@ from ...config.model import Config
 from ...util import geometry as geo
 from ...util import noise, rng
 from ...world.entities import POI
-from ...world.tile import Biome, WaterType
+from ...world.tile import Relief, WaterType
 from ...world.world import World
 
 Coord = Tuple[int, int]
-_MOUNTAINISH = frozenset({int(Biome.MOUNTAIN), int(Biome.SNOW)})
+_MOUNTAINISH = frozenset({int(Relief.MOUNTAIN), int(Relief.PEAK), int(Relief.VOLCANO)})
 _SETTLEMENT_KINDS = frozenset({"city", "town", "village"})
 
 
@@ -538,7 +538,7 @@ def run(world: World, config: Config, seed: int) -> None:
     enter_base = (
         base_cost
         + float(config.get("roads.water_cost")) * (world.water_type != int(WaterType.NONE))
-        + float(config.get("roads.mountain_cost")) * np.isin(world.biome, list(_MOUNTAINISH))
+        + float(config.get("roads.mountain_cost")) * np.isin(world.relief, list(_MOUNTAINISH))
         + _meander_field(world, config, seed)
     ).astype(np.float64)
     costs = (

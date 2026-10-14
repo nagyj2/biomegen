@@ -209,7 +209,6 @@ def _widen_rivers(
     width = np.clip(1 + np.floor(ratio * width_scale), 1, max_width).astype(np.int32)
     half = (width - 1) // 2  # 0 for width 1-2, 1 for width 3-4, 2 for width 5, ...
 
-    river = int(Biome.RIVER)
     fresh = int(WaterType.FRESH)
     dry = int(WaterType.NONE)
     ys, xs = np.nonzero(thalweg)
@@ -228,7 +227,6 @@ def _widen_rivers(
                     and world.water_type[ny, nx] == dry
                     and world.elevation[ny, nx] >= sea_level
                 ):
-                    world.biome[ny, nx] = river
                     world.water_type[ny, nx] = fresh
 
 
@@ -288,8 +286,7 @@ def run(world: World, config: Config, seed: int) -> None:
     threshold = _river_threshold(accum[still_land], h_cfg)
     # The single-tile "thalweg" (deepest line) drives flow tracing and entity extraction.
     thalweg = still_land & (accum >= threshold)
-    world.biome[thalweg] = int(Biome.RIVER)
-    world.water_type[thalweg] = int(WaterType.FRESH)
+    world.water_type[thalweg] = int(WaterType.FRESH)  # a river keeps its land biome (set by the biomes stage)
     world.rivers = _extract_rivers(thalweg, accum, rx, ry, int(h_cfg.get("max_rivers")), world.scale.sampling)
     # Widen the channel onto neighbouring land in proportion to its drainage area, so great rivers
     # span several tiles near the sea while headwater streams stay one tile.

@@ -45,6 +45,7 @@ from ..world.tile import (
 from ..world.world import World
 from .glyphs import interior_glyph_table
 from .state import SCALE_LOCAL, SCALE_ZOOM, ViewState
+from .surface import display_biome
 
 # Per-biome clutter: (list of glyphs, base probability a given detail cell becomes clutter).
 _CLUTTER = {
@@ -52,11 +53,9 @@ _CLUTTER = {
     int(Biome.JUNGLE): (["T", "t", "%"], 0.30),
     int(Biome.TAIGA): (["t", "^"], 0.18),
     int(Biome.SWAMP): ([";", '"', "w"], 0.25),
-    int(Biome.MOUNTAIN): (["."], 0.22),  # rocky '^' floor with scattered '.' scree
     int(Biome.SNOW): (["."], 0.14),  # snowy highland: '^' floor with '.' clutter
-    int(Biome.GRASSLAND): (['"', ","], 0.12),
+    int(Biome.GRASS): (['"', ","], 0.12),
     int(Biome.SAVANNA): (['"', ".", "t"], 0.10),
-    int(Biome.SHRUBLAND): ([";", '"'], 0.14),
     int(Biome.DESERT): ([".", "o"], 0.06),
     int(Biome.TUNDRA): ([",", "."], 0.08),
     int(Biome.BEACH): ([",", "."], 0.06),
@@ -69,21 +68,20 @@ _VEGETATION = {
     int(Biome.JUNGLE),
     int(Biome.TAIGA),
     int(Biome.SWAMP),
-    int(Biome.GRASSLAND),
+    int(Biome.GRASS),
     int(Biome.SAVANNA),
-    int(Biome.SHRUBLAND),
 }
-_ROCKY = {int(Biome.MOUNTAIN), int(Biome.SNOW)}
+_ROCKY = {int(Biome.SNOW)}  # mountains are relief now; phase 4 shades them
 
 # Highland biomes share a '^' floor; everything else is '.'. Water is rendered as '~'.
-_HIGHLAND = {int(Biome.MOUNTAIN), int(Biome.SNOW)}
+_HIGHLAND = {int(Biome.SNOW)}
 _BASE_GLYPH = {
-    int(Biome.OCEAN): "~",
+    int(Biome.DEEP): "~",
+    int(Biome.SHALLOW): "~",
+    int(Biome.SEAICE): "~",
     int(Biome.LAKE): "~",
-    int(Biome.RIVER): "~",
     int(Biome.BEACH): ".",
-    int(Biome.GRASSLAND): ".",
-    int(Biome.SHRUBLAND): ".",
+    int(Biome.GRASS): ".",
     int(Biome.SAVANNA): ".",
     int(Biome.FOREST): ".",
     int(Biome.JUNGLE): ".",
@@ -91,7 +89,6 @@ _BASE_GLYPH = {
     int(Biome.DESERT): ".",
     int(Biome.TUNDRA): ".",
     int(Biome.SWAMP): ".",
-    int(Biome.MOUNTAIN): "^",
     int(Biome.SNOW): "^",
 }
 
@@ -103,7 +100,7 @@ for _b, (_glyphs, _density) in _CLUTTER.items():
 _VEG_ARR = np.array(sorted(_VEGETATION), dtype=np.int64)
 _ROCK_ARR = np.array(sorted(_ROCKY), dtype=np.int64)
 _WATER_ARR = np.array(sorted(WATER_BIOMES), dtype=np.int64)
-_OCEAN = int(Biome.OCEAN)
+_OCEAN = int(Biome.DEEP)
 
 
 @dataclass
@@ -199,8 +196,8 @@ def _water_blend(world: World, wfx: np.ndarray, wfy: np.ndarray, threshold: floa
     bridged cell takes the right water colour (river vs lake vs ocean).
     """
     h, w = world.height, world.width
-    iwg = np.isin(world.biome, _WATER_ARR).astype(np.float64)
-    bgrid = world.biome
+    bgrid = display_biome(world)
+    iwg = np.isin(bgrid, _WATER_ARR).astype(np.float64)
 
     gx = wfx - 0.5
     gy = wfy - 0.5
@@ -540,11 +537,12 @@ def build_detail_frame(
     wfx, wfy = _warp_coords(world, config, FX, FY)
     bx = np.clip(np.floor(wfx).astype(np.int64), 0, world.width - 1)
     by = np.clip(np.floor(wfy).astype(np.int64), 0, world.height - 1)
-    warped_biome = world.biome[by, bx]
+    surface = display_biome(world)
+    warped_biome = surface[by, bx]
 
     is_water, water_biome = _water_blend(world, wfx, wfy, float(config.get("render.water_blend_threshold")))
     # For non-water cells, fall back to an unwarped land biome if the warp happened to land in water.
-    land_fallback = world.biome[
+    land_fallback = surface[
         np.clip(np.floor(FY).astype(np.int64), 0, world.height - 1),
         np.clip(np.floor(FX).astype(np.int64), 0, world.width - 1),
     ]

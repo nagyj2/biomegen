@@ -29,6 +29,7 @@ from ..world.tile import (
     OVERLAY_COLOR_NAMES,
     Biome,
     Cell,
+    WaterType,
 )
 from ..world.world import World
 
@@ -183,7 +184,7 @@ class Palette:
         for biome in Biome:
             rgb = palette.get(BIOME_NAME[int(biome)], [128, 128, 128])
             self._biome_attr[int(biome)] = curses.color_pair(self._alloc_pair_rgb(rgb))
-        self._ocean_attr = self._biome_attr[int(Biome.OCEAN)]
+        self._ocean_attr = self._biome_attr[int(Biome.DEEP)]
         # Per-region colours (the headline feature of this mode).
         for region in world.regions:
             self._region_attr[region.id] = curses.color_pair(self._alloc_pair_rgb(region.base_color))
@@ -197,7 +198,7 @@ class Palette:
         for biome in Biome:
             rgb = palette.get(BIOME_NAME[int(biome)], [128, 128, 128])
             self._biome_attr[int(biome)] = curses.color_pair(self._alloc_pair_256(tuple(rgb)))
-        self._ocean_attr = self._biome_attr[int(Biome.OCEAN)]
+        self._ocean_attr = self._biome_attr[int(Biome.DEEP)]
         for region in world.regions:
             self._region_attr[region.id] = curses.color_pair(self._alloc_pair_256(region.base_color))
         self._marker_attr = curses.color_pair(self._alloc_pair_256((255, 255, 255))) | curses.A_BOLD
@@ -237,7 +238,7 @@ class Palette:
         for biome in Biome:
             rgb = palette.get(BIOME_NAME[int(biome)], [128, 128, 128])
             self._biome_attr[int(biome)] = curses.color_pair(self._alloc_pair_basic(rgb))
-        self._ocean_attr = self._biome_attr[int(Biome.OCEAN)]
+        self._ocean_attr = self._biome_attr[int(Biome.DEEP)]
         for region in world.regions:
             self._region_attr[region.id] = curses.color_pair(self._alloc_pair_basic(region.base_color))
         self._marker_attr = curses.A_BOLD
@@ -249,7 +250,7 @@ class Palette:
         """Attribute for a biome-map tile: coloured by its region (so regions are distinguishable)."""
         if self.mode == "mono":
             return curses.A_NORMAL
-        if world.biome[y, x] == int(Biome.OCEAN):
+        if world.water_type[y, x] == int(WaterType.SALT):
             return self._ocean_attr
         rid = int(world.region_id[y, x])
         if rid in self._region_attr:

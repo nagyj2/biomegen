@@ -159,10 +159,15 @@ The authoritative defaults and inline documentation are in
 #### `[biomes]`
 | Key | Default | Description |
 |-----|---------|-------------|
-| `classifier` | `"whittaker"` | Biome classification algorithm |
-| `beach_max` | `0.45` | Max elevation for a tile to be eligible for beach |
-| `mountain_min` | `0.76` | Elevation above which land becomes bare mountain |
-| `snow_min` | `0.88` | Elevation above which land is permanent snow |
+| `bands` | 5 bands | Temperature bands (°C), each with rainfall rules (mm) and a default biome |
+| `swamp_min_rain_mm` | `2600.0` | Rain above which wet lowland becomes swamp |
+| `swamp_max_elevation_m` | `300.0` | Swamp only below this height |
+| `beach_max_elevation_m` | `150.0` | Warm land touching the sea below this height is beach |
+| `shallow_km` | `75.0` | Sea within this distance of land is shallows |
+| `sea_ice_c` | `-1.8` | Sea colder than this (with noise) freezes |
+| `volcano_counts` | `[0, 1, 1, 2, 2, 3]` | Volcano count, one value drawn per seed |
+
+Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[tables.relief.*]`.
 
 #### `[regions]`
 | Key | Default | Description |

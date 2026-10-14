@@ -39,10 +39,11 @@ river_width_scale = 0.5          # how fast rivers widen with drainage area
 river_max_width = 5              # widest a great river can get (tiles)
 
 [biomes]
-classifier = "whittaker"
-beach_max = 0.45
-mountain_min = 0.76
-snow_min = 0.88
+# Land bands by temperature (see src/biomegen/config/defaults/biomes.py for the full list), e.g.
+# bands = [{ max_temp_c = -9.0, rain = [], biome = "snow", swamp = false }, ...]
+swamp_min_rain_mm = 2600.0       # very wet lowland below swamp_max_elevation_m becomes swamp
+beach_max_elevation_m = 150.0    # warm land touching the sea below this height is beach
+shallow_km = 75.0                # sea within this distance of land is shallows
 
 [regions]
 min_region_size = 22

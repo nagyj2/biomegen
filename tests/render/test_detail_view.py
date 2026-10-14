@@ -55,7 +55,7 @@ def test_road_bed_is_thin_not_full_tile():
 
     cfg = load_config(None)
     w = World(12, 9, 7)
-    w.biome[:] = int(Biome.GRASSLAND)
+    w.biome[:] = int(Biome.GRASS)
     w.road[4, 1:11] = 1  # a straight horizontal road on tile-row 4
     frame, cw, ch, vs = _detail_frame_at(w, cfg, 5, 4, scale="zoom", aw=12 * 8, ah=9 * 8)
     # Inspect the detail-cell block of road tile (5, 4): it must contain road cells but not be filled.

@@ -18,29 +18,29 @@ from enum import IntEnum
 
 
 class Biome(IntEnum):
-    """The discrete land-cover / water class shown on the biome map.
+    """The discrete land-cover / water class of a cell (the reference generator's biome set).
 
-    Values are stable (stored in ``uint8`` arrays and hashed by the golden-world test), so append new
-    biomes at the end rather than renumbering. Water classes (OCEAN/LAKE/RIVER) describe appearance;
-    the orthogonal :class:`WaterType` field carries the salt-vs-fresh *semantics* used by lore and
-    rendering tints.
+    Values are stored in ``uint8`` arrays; append new biomes at the end rather than renumbering. Every
+    attribute (label, glyphs, colours, habitability, move cost, goods) lives in the ``biomes`` table of
+    ``data/biomes.toml``, keyed by the lower-case member name. Rivers are not a biome: a river cell keeps
+    its land biome and is marked fresh water in :class:`WaterType`. High ground is the orthogonal
+    :class:`Relief`.
     """
 
-    OCEAN = 0  # open saltwater sea (connected to the map edge)
-    LAKE = 1  # standing freshwater body
-    RIVER = 2  # flowing freshwater channel
-    BEACH = 3  # sandy shore: low-elevation land adjacent to the ocean
-    GRASSLAND = 4
-    SHRUBLAND = 5
+    DEEP = 0  # deep ocean
+    SHALLOW = 1  # sea within a short distance of land
+    SEAICE = 2  # frozen sea or frozen lake
+    LAKE = 3  # standing fresh water
+    BEACH = 4  # low, warm shore next to the sea
+    DESERT = 5
     SAVANNA = 6
-    FOREST = 7  # temperate forest
-    JUNGLE = 8  # tropical rainforest
-    TAIGA = 9  # boreal / cold conifer forest
-    DESERT = 10
-    TUNDRA = 11
-    SWAMP = 12  # wetland / marsh
-    MOUNTAIN = 13  # bare high-elevation rock
-    SNOW = 14  # permanent snow cap
+    GRASS = 7  # grassland
+    FOREST = 8  # temperate forest
+    JUNGLE = 9  # tropical rainforest
+    SWAMP = 10  # wetland on wet lowland
+    TAIGA = 11  # boreal / cold conifer forest
+    TUNDRA = 12
+    SNOW = 13  # snow / glacier, and every high peak
 
 
 class POIType(IntEnum):
@@ -134,13 +134,15 @@ OVERLAY_COLOR_NAMES: dict[int, str] = {
 }
 
 # Convenient lookup tables for config parsing and HUD display. Names are lower-case so they read
-# naturally both in TOML (e.g. ``biomes = ["grassland", "forest"]``) and in status text.
+# naturally both in TOML (e.g. ``biomes = ["grass", "forest"]``) and in status text.
 BIOME_BY_NAME: dict[str, Biome] = {b.name.lower(): b for b in Biome}
 BIOME_NAME: dict[int, str] = {int(b): b.name.lower() for b in Biome}
 RELIEF_BY_NAME: dict[str, Relief] = {r.name.lower(): r for r in Relief}
+RELIEF_NAME: dict[int, str] = {int(r): r.name.lower() for r in Relief}
 
-# Biomes that are water surfaces (used by several stages to test "is this a water tile?").
-WATER_BIOMES: frozenset[int] = frozenset({int(Biome.OCEAN), int(Biome.LAKE), int(Biome.RIVER)})
+# Biomes that are water surfaces. A river cell is water too but keeps its land biome, so "is this cell
+# water?" is ``water_type != WaterType.NONE``; this set answers "is the cover itself water?".
+WATER_BIOMES: frozenset[int] = frozenset({int(Biome.DEEP), int(Biome.SHALLOW), int(Biome.SEAICE), int(Biome.LAKE)})
 
 
 def biome_from_name(name: str) -> Biome:
@@ -186,4 +188,4 @@ class TileView:
 
     @property
     def is_water(self) -> bool:
-        return int(self.biome) in WATER_BIOMES
+        return self.water_type != WaterType.NONE

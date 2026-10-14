@@ -25,6 +25,7 @@ from ..world.tile import INTERIOR_COLOR_BASE, Biome
 from ..world.world import World
 from .glyphs import interior_glyph_table
 from .state import ViewState
+from .surface import display_biome_at
 
 Coord = Tuple[int, int]
 # A stamped interior cell: (glyph, colour-id) where the colour-id is INTERIOR_COLOR_BASE + Cell int.
@@ -33,10 +34,11 @@ Override = Tuple[str, int]
 # Feature priority for fit-to-screen reduction: a block shows its highest-priority tile. Landmarks
 # and water beat plain land so small but important features (a lone lake, a river thread) survive.
 _BIOME_PRIORITY = {
-    int(Biome.OCEAN): 5,
+    int(Biome.DEEP): 5,
+    int(Biome.SHALLOW): 6,
+    int(Biome.SEAICE): 7,
     int(Biome.DESERT): 28,
-    int(Biome.GRASSLAND): 30,
-    int(Biome.SHRUBLAND): 30,
+    int(Biome.GRASS): 30,
     int(Biome.SAVANNA): 30,
     int(Biome.TUNDRA): 35,
     int(Biome.FOREST): 40,
@@ -44,10 +46,8 @@ _BIOME_PRIORITY = {
     int(Biome.JUNGLE): 42,
     int(Biome.BEACH): 48,
     int(Biome.SWAMP): 50,
-    int(Biome.MOUNTAIN): 58,
     int(Biome.SNOW): 60,
-    int(Biome.LAKE): 75,
-    int(Biome.RIVER): 80,
+    int(Biome.LAKE): 75,  # rivers draw as lake water (render.surface) and share this priority
 }
 _POI_PRIORITY = 100
 _ROAD_PRIORITY = 90
@@ -75,7 +75,7 @@ def feature_priority(world: World, x: int, y: int) -> int:
         return _POI_PRIORITY
     if world.road[y, x]:
         return _ROAD_PRIORITY
-    return _BIOME_PRIORITY.get(int(world.biome[y, x]), 20)
+    return _BIOME_PRIORITY.get(display_biome_at(world, x, y), 20)
 
 
 def fit_blocks(world_w: int, world_h: int, area_w: int, area_h: int) -> Tuple[int, int, int, int]:

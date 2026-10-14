@@ -12,7 +12,7 @@ from biomegen.config import load_config
 from biomegen.export import png, svg
 from biomegen.export.colors import ExportPalette, contrast_rgb
 from biomegen.render.state import SCALE_ZOOM, ViewState
-from biomegen.world.tile import INTERIOR_COLOR_BASE, Biome, Cell
+from biomegen.world.tile import INTERIOR_COLOR_BASE, Biome, Cell, WaterType
 
 
 @pytest.fixture(scope="module")
@@ -40,18 +40,18 @@ def test_biome_rgb_matches_palette_config(cfg, world):
 def test_tile_rgb_ocean_uses_ocean_colour(cfg, world):
     # An ocean tile resolves to the ocean palette colour, not a region colour.
     pal = ExportPalette(cfg, world)
-    ys, xs = np.nonzero(world.biome == int(Biome.OCEAN))
+    ys, xs = np.nonzero(world.water_type == int(WaterType.SALT))
     y, x = int(ys[0]), int(xs[0])
-    assert pal.tile_rgb(world, x, y) == tuple(cfg.get("render.palette")["ocean"])
+    assert pal.tile_rgb(world, x, y) == tuple(cfg.get("render.palette")["deep"])
 
 
 def test_tile_rgb_land_uses_region_base_color(cfg, world):
     # A land tile takes its region's base_color (the per-region jittered hue). Coastal-ocean tiles a
-    # region claims for naming still render as ocean (tile_attr checks the OCEAN biome first), so pick
+    # region claims for naming still render as ocean (tile_attr checks for salt water first), so pick
     # a genuinely dry tile of the region here.
     pal = ExportPalette(cfg, world)
     region = world.regions[0]
-    ys, xs = np.nonzero((world.region_id == region.id) & (world.biome != int(Biome.OCEAN)))
+    ys, xs = np.nonzero((world.region_id == region.id) & (world.water_type == int(WaterType.NONE)))
     y, x = int(ys[0]), int(xs[0])
     assert pal.tile_rgb(world, x, y) == tuple(region.base_color)
 

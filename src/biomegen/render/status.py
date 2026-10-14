@@ -18,6 +18,7 @@ from ..world.world import World
 from .glyphs import Glyphs
 from .palette import Palette
 from .state import ViewState
+from .surface import display_biome
 
 
 def safe_addstr(stdscr: curses.window, y: int, x: int, text: str, attr: int = 0) -> None:
@@ -114,7 +115,7 @@ def draw(
         x = 9
         y = legend_top
         if visible_biomes is None:
-            visible_biomes = {int(v) for v in np.unique(world.biome)}
+            visible_biomes = {int(v) for v in np.unique(display_biome(world))}
         for glyph, name, biome_int in _legend_entries(visible_biomes, glyphs):
             entry = f"{glyph} {name}  "
             if x + len(entry) >= width:

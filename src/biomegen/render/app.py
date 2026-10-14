@@ -29,6 +29,7 @@ from .map_view import Frame, build_biome_frame
 from .palette import Palette
 from .state import SCALE_BIOME, SCALE_LOCAL, SCALE_ZOOM, ViewState, center_cam, clamp, edge_pan
 from .status import safe_addstr
+from .surface import display_biome, display_biome_at
 from .zoom_view import ZoomFrame, build_detail_frame, detail_cell_size
 
 
@@ -61,12 +62,13 @@ def _interesting_cursor(world: World) -> tuple[int, int]:
     if not land.any():
         return _initial_cursor(world)
 
-    max_biome = int(world.biome.max()) + 1
+    shown = display_biome(world)
+    max_biome = int(shown.max()) + 1
     lut = np.zeros(max_biome, dtype=float)
     for biome_int, prio_val in map_view._BIOME_PRIORITY.items():
         if biome_int < max_biome:
             lut[biome_int] = prio_val
-    priority = lut[world.biome]
+    priority = lut[shown]
     priority[~land] = -1.0  # never start on open water
     priority[world.road != 0] = map_view._ROAD_PRIORITY
     priority[world.poi_index >= 0] = map_view._POI_PRIORITY
@@ -145,7 +147,7 @@ def _tile_glyph(world: World, glyphs: Glyphs, overlay: Overlay, x: int, y: int) 
         return glyphs.marker(world.pois[i].kind, "?")
     if world.road[y, x]:
         return glyphs.marker("road", "+")
-    return glyphs.biome_glyph(int(world.biome[y, x]))
+    return glyphs.biome_glyph(display_biome_at(world, x, y))
 
 
 def _draw_biome(
@@ -212,7 +214,7 @@ def _visible_biomes_map(world: World, frame: Frame) -> set[int]:
         for coord in row:
             if coord is not None:
                 wx, wy = coord
-                seen.add(int(world.biome[wy, wx]))
+                seen.add(display_biome_at(world, wx, wy))
     return seen
 
 

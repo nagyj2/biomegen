@@ -94,7 +94,7 @@ class World:
         self.moisture = np.zeros(shape, dtype=np.float64)
 
         # Discrete / classified fields.
-        self.biome = np.full(shape, int(Biome.OCEAN), dtype=np.uint8)
+        self.biome = np.full(shape, int(Biome.DEEP), dtype=np.uint8)
         self.relief = np.full(shape, int(Relief.NONE), dtype=np.uint8)
         self.landmass_id = np.full(shape, -1, dtype=np.int32)
         self.region_id = np.full(shape, -1, dtype=np.int32)

@@ -66,9 +66,12 @@ def _validate_biome_names(cfg: Dict[str, Any], errors: List[str]) -> None:
             errors.append(f"{where}: unknown biome {name!r} (valid: {', '.join(sorted(allowed))})")
 
     biomes = cfg.get("biomes", {})
-    for ri, row in enumerate(biomes.get("matrix", []) or []):
-        for name in row:
-            check(name, f"biomes.matrix[{ri}]")
+    for bi, band in enumerate(biomes.get("bands", []) or []):
+        check(band.get("biome"), f"biomes.bands[{bi}].biome")
+        for rule in band.get("rain", []) or []:
+            check(rule[0] if isinstance(rule, list) and rule else rule, f"biomes.bands[{bi}].rain")
+    if "peak_biome" in biomes:
+        check(biomes["peak_biome"], "biomes.peak_biome")
 
     render = cfg.get("render", {})
     for name in render.get("palette", {}) or {}:
@@ -128,10 +131,6 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     for key in ("civilized_connect_prob", "uncivilized_connect_prob", "extra_edge_prob", "road_discount"):
         _clamp(roads, key, 0.0, 1.0, errors, "roads")
 
-    biomes = cfg.get("biomes", {})
-    for key in ("beach_max", "mountain_min", "snow_min", "snow_temp"):
-        _clamp(biomes, key, 0.0, 1.0, errors, "biomes")
-
     # --- colour coercion for the render palette ---
     render = cfg.get("render", {})
     palette = render.get("palette", {})
@@ -149,18 +148,12 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     validate_tables(cfg, errors)
 
-    # --- the Whittaker matrix must be rectangular and band-aligned ---
-    matrix = biomes.get("matrix")
-    temp_bands = biomes.get("temp_bands", [])
-    moisture_bands = biomes.get("moisture_bands", [])
-    if matrix is not None:
-        expected_rows = len(temp_bands) + 1
-        expected_cols = len(moisture_bands) + 1
-        if len(matrix) != expected_rows:
-            errors.append(f"biomes.matrix has {len(matrix)} rows but temp_bands implies {expected_rows}")
-        for ri, row in enumerate(matrix):
-            if len(row) != expected_cols:
-                errors.append(f"biomes.matrix row {ri} has {len(row)} cols but moisture_bands implies {expected_cols}")
+    # --- biome bands must be ordered by temperature so each cell falls in one band ---
+    bands = cfg.get("biomes", {}).get("bands", []) or []
+    tops = [band.get("max_temp_c") for band in bands if isinstance(band, dict)]
+    numeric = [float(t) for t in tops if isinstance(t, (int, float)) and not isinstance(t, bool)]
+    if len(numeric) != len(tops) or numeric != sorted(numeric):
+        errors.append("biomes.bands must list numeric max_temp_c in ascending order")
 
     if errors:
         raise ConfigError("invalid configuration:\n  - " + "\n  - ".join(errors))

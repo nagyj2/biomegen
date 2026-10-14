@@ -23,7 +23,7 @@ from ..config.model import Config
 from ..util import geometry as geo
 from ..util import rng
 from ..world.entities import Region
-from ..world.tile import BIOME_NAME, Biome, biome_from_name
+from ..world.tile import BIOME_NAME, Biome, WaterType, biome_from_name
 from ..world.world import World
 
 _OFFSETS4 = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -150,7 +150,7 @@ def run(world: World, config: Config, seed: int) -> None:
     group_grid = _group_lookup(config)[world.biome]
     labels, n = geo.label_by_value(group_grid, connectivity=4, backend=backend)
 
-    ocean = world.biome == int(Biome.OCEAN)
+    ocean = world.water_type == int(WaterType.SALT)
     ocean_labels = set(np.unique(labels[ocean]).tolist()) if ocean.any() else set()
 
     # 2. Merge sub-threshold non-ocean components into their best neighbour, iterating to stability.
@@ -217,7 +217,7 @@ def run(world: World, config: Config, seed: int) -> None:
     #    land region reaches it first (nearest-region assignment). Deeper tiles stay at -1.
     coastal_depth = int(config.get("regions.coastal_ocean_depth", 0))
     if coastal_depth > 0 and ocean_labels:
-        ocean_mask = world.biome == int(Biome.OCEAN)
+        ocean_mask = world.water_type == int(WaterType.SALT)
         h, w = region_id.shape  # type: ignore[misc]
         land_ys, land_xs = np.nonzero(region_id >= 0)
         queue: deque = deque((int(y), int(x), 0) for y, x in zip(land_ys.tolist(), land_xs.tolist(), strict=True))

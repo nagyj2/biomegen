@@ -27,6 +27,7 @@ from ..config.model import Config
 from ..render.glyphs import Glyphs
 from ..render.map_view import Frame, build_biome_frame
 from ..render.state import ViewState
+from ..render.surface import display_biome_at
 from ..render.zoom_view import ZoomFrame, build_detail_frame, detail_cell_size
 from ..world.overlay import Overlay
 from ..world.world import World
@@ -105,7 +106,7 @@ def _biome_glyph(world: World, glyphs: Glyphs, overlay: Optional[Overlay], x: in
         return glyphs.marker(world.pois[i].kind, "?")
     if world.road[y, x]:
         return glyphs.marker("road", "+")
-    return glyphs.biome_glyph(int(world.biome[y, x]))
+    return glyphs.biome_glyph(display_biome_at(world, x, y))
 
 
 # --------------------------------------------------------------------------- filenames + writing

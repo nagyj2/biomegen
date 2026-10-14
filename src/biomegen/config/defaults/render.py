@@ -47,12 +47,12 @@ VALUES: Dict[str, Any] = {
     "try_truecolor": True,  # attempt per-region RGB via init_color where the terminal allows
     # Biome -> RGB base colour (0-255). The single source of truth for both curses and SVG/PNG.
     "palette": {
-        "ocean": [28, 70, 140],
+        "deep": [28, 70, 140],
+        "shallow": [52, 104, 172],
+        "seaice": [200, 214, 230],
         "lake": [60, 120, 205],
-        "river": [80, 140, 220],
         "beach": [240, 226, 165],
-        "grassland": [120, 190, 92],
-        "shrubland": [156, 176, 86],
+        "grass": [120, 190, 92],
         "savanna": [200, 196, 110],
         "forest": [46, 135, 60],
         "jungle": [24, 110, 44],
@@ -60,7 +60,6 @@ VALUES: Dict[str, Any] = {
         "desert": [226, 200, 124],
         "tundra": [176, 184, 174],
         "swamp": [82, 110, 84],
-        "mountain": [134, 128, 122],
         "snow": [244, 246, 250],
         # Surface overlays drawn at the detail scales (see road/bridge keys below).
         "road": [122, 102, 70],  # packed-earth road bed
@@ -70,12 +69,12 @@ VALUES: Dict[str, Any] = {
     # Biome -> single display glyph. ASCII by default for maximum windows-curses compatibility;
     # override with unicode in your own config if your terminal handles it.
     "glyphs": {
-        "ocean": "~",
+        "deep": "~",
+        "shallow": "~",
+        "seaice": "#",
         "lake": "~",
-        "river": "~",
         "beach": ".",
-        "grassland": ",",
-        "shrubland": ";",
+        "grass": ",",
         "savanna": '"',
         "forest": "f",
         "jungle": "F",
@@ -83,7 +82,6 @@ VALUES: Dict[str, Any] = {
         "desert": ":",
         "tundra": "u",
         "swamp": "w",
-        "mountain": "^",
         "snow": "*",
     },
     # Overlay glyphs drawn on top of biome cells.
