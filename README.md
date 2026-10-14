@@ -118,7 +118,6 @@ The authoritative defaults and inline documentation are in
 |-----|---------|-------------|
 | `width` | `192` | Map width in tiles |
 | `height` | `75` | Map height in tiles |
-| `sea_level` | `0.40` | Normalised elevation below which tiles are ocean/water |
 | `size_mode` | `"fixed"` | `"fixed"` (reproducible) or `"auto"` (fit to current terminal) |
 | `size_km` | `[6000.0, 3000.0]` | Physical map extent `[east-west, north-south]` in km |
 | `center_lat` | `"seed"` | Map-centre latitude in degrees (north positive), or `"seed"` to pick one per seed |
@@ -180,7 +179,7 @@ Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[ta
 | Key | Default | Description |
 |-----|---------|-------------|
 | `sampler` | `"bluenoise"` | `"bluenoise"` · `"random"` · `"grid"` |
-| `types.*` | — | Per-kind rules: `count`, `min_spacing`, `biomes`, `elevation_min/max`, `floors` |
+| `types.*` | — | Per-kind rules: `count`, `min_spacing`, `biomes`, `elevation_min_m/max_m`, `floors` |
 
 #### `[interiors]`
 | Key | Default | Description |

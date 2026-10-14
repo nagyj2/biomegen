@@ -86,7 +86,7 @@ def draw(
         top + 2,
         0,
         f" cursor ({vs.cx},{vs.cy})  biome {tv.biome_name}  water {tv.water_type.name.lower()}"
-        f"  elev {tv.elevation:.2f}  temp {tv.temperature:.2f}  moist {tv.moisture:.2f}",
+        f"  elev {tv.elevation_m:.0f} m  temp {tv.temperature_c:.1f} C  moist {tv.moisture:.2f}",
     )
 
     # Region under the cursor + a line of its lore.

@@ -114,9 +114,7 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 
 | Field | dtype | Range | Set by |
 |-------|-------|-------|--------|
-| `elevation` | float64 | [0, 1] | terrain (legacy shim, removed in phase 3) |
 | `elevation_m` | float64 | metres, < 0 = sea depth | terrain; hydrology flattens lake surfaces |
-| `temperature` | float64 | [0, 1] | climate (legacy, removed in phase 3) |
 | `temperature_c` | float64 | °C | climate (phase 3; zeros until then) |
 | `rain_mm` | float64 | mm / year | climate; recomputed by hydrology after its moisture bonus |
 | `moisture` | float64 | [0, 1] | climate + hydrology |
@@ -128,7 +126,7 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `poi_index` | int32 | 0..P-1, -1=none | poi_placement |
 | `road` | uint8 | 0 / 1 | roads |
 | `road_tier` | uint8 | 0=none, 1=trunk, 2=spur | roads |
-| `dist_to_ocean` | float32 | ≥ 0 tiles | terrain |
+| `dist_to_ocean` | float32 | ≥ 0 tiles (km in phase 5) | terrain |
 | `flow_accum` | float64 | km², wetness-weighted catchment | hydrology |
 
 Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `features` (`GeoFeature`), `island_name`.
@@ -172,8 +170,8 @@ entrance (and biases the interior door) to the road-facing side.
 
 ### Stage 1 — Terrain (`pipeline/physical/terrain.py`)
 
-Produces `elevation_m`, the salt ocean (`water_type`), `dist_to_ocean` (tiles, until phase-3 task 19)
-and the legacy normalised `elevation`. Ported from the reference `_elevation`:
+Produces `elevation_m`, the salt ocean (`water_type`) and `dist_to_ocean` (tiles, for POI scoring until
+the phase-5 rewrite). Ported from the reference `_elevation`:
 
 1. **Style**: a `tables.styles` row (`data/terrain.toml`) sets the land fraction, base feature size and
    the blend of base fBm, coarse continent fBm, a centre pull (pangaea) and island blobs (islands).
@@ -186,7 +184,7 @@ and the legacy normalised `elevation`. Ported from the reference `_elevation`:
 
 ### Stage 2 — Climate (`pipeline/physical/climate.py`)
 
-Produces `temperature_c`, `moisture` (0..1) and `rain_mm`, plus the legacy normalised `temperature`.
+Produces `temperature_c`, `moisture` (0..1) and `rain_mm`.
 Ported from the reference `_climate`:
 
 - **Temperature**: `equator_c - lat_coefficient × lat² + offset_c` per row (latitude from
@@ -302,7 +300,7 @@ POI's entrance:
    → extra loop edges at `extra_edge_prob`. All random draws consume a per-component RNG in a fixed
    sorted edge order. Roads route to each POI's anchor (interiors set the perimeter entrance later).
 3. **Routing**: A* over a per-tile cost surface. Cost factors: `base_cost` (flat ground) +
-   `slope_cost × |Δelevation|` + `uphill_surcharge` (uphill only) + `water_cost` (cross water) +
+   `slope_cost_per_km × |Δelevation_m| / 1000` + `uphill_surcharge_per_km` (uphill only) + `water_cost` (cross water) +
    `mountain_cost` (high terrain). Existing road tiles are discounted by `road_discount`.
    A low-frequency noise field (`meander_strength`) bends roads organically. A `turn_cost` penalty
    reduces zigzagging. Search is bounded to a padded bounding box + `max_expansions` cap; a

@@ -201,7 +201,7 @@ def _route(
     noise field without affecting path topology on smooth terrain.
     """
     h, w = world.height, world.width
-    elev = world.elevation
+    elev = world.elevation_m / 1000.0  # km, so the slope costs are per km of height change
     road = world.road
     slope_cost, uphill, discount, base_cost = costs
 
@@ -542,8 +542,8 @@ def run(world: World, config: Config, seed: int) -> None:
         + _meander_field(world, config, seed)
     ).astype(np.float64)
     costs = (
-        float(config.get("roads.slope_cost")),
-        float(config.get("roads.uphill_surcharge")),
+        float(config.get("roads.slope_cost_per_km")),
+        float(config.get("roads.uphill_surcharge_per_km")),
         float(config.get("roads.road_discount")),
         base_cost,
     )

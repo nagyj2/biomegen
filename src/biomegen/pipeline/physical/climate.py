@@ -12,8 +12,8 @@ Ported from the reference generator's ``_climate`` (``docs/reference/worldgen.py
    over land to an even 0..1 spread.
 4. **Rainfall.** Moisture maps to annual mm, reduced in cold air (:func:`rainfall_mm`).
 
-Writes ``temperature_c``, ``moisture`` and ``rain_mm``, and the legacy normalised ``temperature`` the old
-biomes stage still reads. Hydrology later adds a fresh-water moisture bonus and recomputes ``rain_mm``.
+Writes ``temperature_c``, ``moisture`` and ``rain_mm``. Hydrology later adds a fresh-water moisture bonus
+and recomputes ``rain_mm``.
 """
 
 from __future__ import annotations
@@ -25,9 +25,6 @@ from ...util import geometry as geo
 from ...util import noise, rng
 from ...world.tile import WaterType
 from ...world.world import World
-
-# Legacy shim only: the °C span mapped onto the old normalised temperature [0, 1] (removed in phase 3).
-_LEGACY_TEMPERATURE_RANGE_C = (-20.0, 30.0)
 
 
 def _row_latitudes(world: World) -> np.ndarray:
@@ -135,9 +132,7 @@ def rainfall_mm(moisture: np.ndarray, temperature_c: np.ndarray, config: Config)
 
 
 def run(world: World, config: Config, seed: int) -> None:
-    """Fill ``temperature_c``, ``moisture``, ``rain_mm`` and the legacy ``temperature`` in place."""
+    """Fill ``temperature_c``, ``moisture`` and ``rain_mm`` in place."""
     world.temperature_c = _temperature(world, config, seed)
     world.moisture = _moisture(world, config, seed, _wind_rain(world, config))
     world.rain_mm = rainfall_mm(world.moisture, world.temperature_c, config)
-    cold, hot = _LEGACY_TEMPERATURE_RANGE_C
-    world.temperature = np.clip((world.temperature_c - cold) / (hot - cold), 0.0, 1.0)

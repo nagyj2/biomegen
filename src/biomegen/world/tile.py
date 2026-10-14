@@ -165,9 +165,7 @@ class TileView:
 
     x: int
     y: int
-    elevation: float
     elevation_m: float
-    temperature: float
     temperature_c: float
     rain_mm: float
     moisture: float

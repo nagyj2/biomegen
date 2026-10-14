@@ -9,8 +9,6 @@ VALUES: Dict[str, Any] = {
     # room for (58 - status_height), so the "fit" view downsamples vertically.
     "width": 192,
     "height": 75,
-    # Sea level on the normalised [0, 1] elevation scale: tiles below this are ocean/water.
-    "sea_level": 0.40,
     # "fixed" keeps the dimensions above (reproducible across terminals). "auto" fits the world to
     # the current terminal at launch (nicer fit, but the same seed yields different worlds on
     # differently sized terminals - documented trade-off).

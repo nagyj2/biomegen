@@ -30,9 +30,7 @@ class World:
     ====================  =========  =====================================================
     field                 dtype      meaning
     ====================  =========  =====================================================
-    ``elevation``         float64    normalised height in [0, 1] (legacy; removed in phase 3)
     ``elevation_m``       float64    height above sea level in metres (negative = sea depth)
-    ``temperature``       float64    normalised temperature in [0, 1] (legacy; removed in phase 3)
     ``temperature_c``     float64    mean annual temperature in °C
     ``rain_mm``           float64    annual rainfall in mm
     ``moisture``          float64    normalised moisture in [0, 1] (wet=1)
@@ -56,9 +54,7 @@ class World:
     #: Names of the per-tile arrays, in a fixed order. Used by :meth:`fingerprint` so the golden test
     #: hashes every field deterministically, and by any code that wants to iterate fields generically.
     FIELDS: tuple[str, ...] = (
-        "elevation",
         "elevation_m",
-        "temperature",
         "temperature_c",
         "rain_mm",
         "moisture",
@@ -86,9 +82,7 @@ class World:
         shape = (self.height, self.width)
 
         # Continuous scalar fields.
-        self.elevation = np.zeros(shape, dtype=np.float64)
         self.elevation_m = np.zeros(shape, dtype=np.float64)
-        self.temperature = np.zeros(shape, dtype=np.float64)
         self.temperature_c = np.zeros(shape, dtype=np.float64)
         self.rain_mm = np.zeros(shape, dtype=np.float64)
         self.moisture = np.zeros(shape, dtype=np.float64)
@@ -154,9 +148,7 @@ class World:
         return TileView(
             x=x,
             y=y,
-            elevation=float(self.elevation[y, x]),
             elevation_m=float(self.elevation_m[y, x]),
-            temperature=float(self.temperature[y, x]),
             temperature_c=float(self.temperature_c[y, x]),
             rain_mm=float(self.rain_mm[y, x]),
             moisture=float(self.moisture[y, x]),

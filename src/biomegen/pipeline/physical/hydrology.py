@@ -194,7 +194,6 @@ def _widen_rivers(
     threshold: float,
     width_scale: float,
     max_width: int,
-    sea_level: float,
 ) -> None:
     """Dilate the single-tile channel into a multi-tile river based on drainage area.
 
@@ -221,12 +220,7 @@ def _widen_rivers(
                 if dx * dx + dy * dy > hw * hw:  # circular brush -> rounded banks
                     continue
                 nx, ny = x + dx, y + dy
-                if (
-                    0 <= nx < w
-                    and 0 <= ny < h
-                    and world.water_type[ny, nx] == dry
-                    and world.elevation[ny, nx] >= sea_level
-                ):
+                if 0 <= nx < w and 0 <= ny < h and world.water_type[ny, nx] == dry:
                     world.water_type[ny, nx] = fresh
 
 
@@ -234,7 +228,6 @@ def run(world: World, config: Config, seed: int) -> None:
     """Run the full hydrology pipeline, mutating ``world`` in place."""
     h_cfg = config.section("hydrology")
     backend = config.get("compute.backend")
-    sea_level = float(config.get("world.sea_level"))
     cell_km2 = world.scale.cell_area_km2
 
     elevation = world.elevation_m
@@ -297,7 +290,6 @@ def run(world: World, config: Config, seed: int) -> None:
         threshold,
         float(h_cfg.get("river_width_scale")),
         int(h_cfg.get("river_max_width")),
-        sea_level,
     )
 
     # 4. Freshwater-proximity moisture bonus (feeds the biomes stage); rainfall follows the new moisture.

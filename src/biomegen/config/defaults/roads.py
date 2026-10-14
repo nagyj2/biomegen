@@ -11,8 +11,8 @@ VALUES: Dict[str, Any] = {
     "uncivilized_connect_prob": 0.25,  # keep-probability for edges touching uncivilized POIs
     "extra_edge_prob": 0.15,  # chance to keep a non-tree candidate edge (creates loops)
     "base_cost": 1.0,  # per-step movement cost on flat ground
-    "uphill_surcharge": 2.5,  # extra cost factor for climbing (makes roads contour)
-    "slope_cost": 6.0,  # cost factor on absolute elevation change
+    "uphill_surcharge_per_km": 0.38,  # extra cost per km climbed (makes roads contour)
+    "slope_cost_per_km": 0.92,  # cost per km of height change, up or down
     "water_cost": 14.0,  # cost to cross a water tile: high enough that roads prefer land and
     # never run ALONG a river, but low enough that crossing a narrow river
     # (a bridge) beats a long detour. Ocean is unroutable regardless.

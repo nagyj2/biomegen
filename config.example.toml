@@ -10,7 +10,6 @@ seed = 0              # 0 = pick a random seed and print it (so the run is still
 [world]
 width = 192           # tiles; default fits a ~209-wide terminal at 1:1
 height = 75           # tiles; taller than a 58-line terminal, so "fit" view downsamples
-sea_level = 0.40      # normalised elevation below which tiles are ocean/water
 size_mode = "fixed"   # "fixed" (reproducible) or "auto" (fit to current terminal)
 size_km = [6000.0, 3000.0]   # physical map extent [east-west, north-south] in km
 center_lat = "seed"   # map-centre latitude in degrees (north positive; clamped to keep edges within +-89),

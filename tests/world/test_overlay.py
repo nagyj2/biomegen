@@ -11,7 +11,7 @@ from biomegen.world.world import World
 
 def test_world_allocates_expected_shapes_and_dtypes() -> None:
     w = World(width=8, height=5, seed=1)
-    assert w.elevation.shape == (5, 8)
+    assert w.elevation_m.shape == (5, 8)
     assert w.biome.dtype == np.uint8
     assert w.region_id.dtype == np.int32
     # Defaults: all deep ocean, no region, no POI.
@@ -24,11 +24,11 @@ def test_world_view_gathers_fields() -> None:
     w = World(width=4, height=4, seed=1)
     w.biome[2, 3] = int(Biome.FOREST)
     w.water_type[2, 3] = int(WaterType.NONE)
-    w.elevation[2, 3] = 0.5
+    w.elevation_m[2, 3] = 500.0
     view = w.view(3, 2)
     assert view.biome == Biome.FOREST
     assert view.x == 3 and view.y == 2
-    assert abs(view.elevation - 0.5) < 1e-9
+    assert view.elevation_m == 500.0
 
 
 def test_fingerprint_changes_when_a_field_changes() -> None:

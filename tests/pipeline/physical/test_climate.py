@@ -107,10 +107,6 @@ def test_rain_mm_matches_moisture_and_temperature(generated: World, cfg: Config)
     assert np.array_equal(generated.rain_mm, climate.rainfall_mm(generated.moisture, generated.temperature_c, cfg))
 
 
-def test_legacy_temperature_is_normalised(generated: World) -> None:
-    assert generated.temperature.min() >= 0.0 and generated.temperature.max() <= 1.0
-
-
 def test_climate_is_deterministic(cfg: Config) -> None:
     def build() -> World:
         world = World(48, 24, 9, grid_scale(48, 24, (3000.0, 1500.0), 40.0, 0.0))

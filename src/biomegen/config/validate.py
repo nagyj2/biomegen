@@ -97,7 +97,6 @@ def _validate_world(world: Dict[str, Any], errors: List[str]) -> None:
                 errors.append(f"world.{dim} must be a positive integer")
         except TypeError, ValueError:
             errors.append(f"world.{dim} must be an integer, got {world.get(dim)!r}")
-    _clamp(world, "sea_level", 0.0, 1.0, errors, "world")
     _clamp(world, "min_land_fraction", 0.0, 1.0, errors, "world")
     if world.get("size_mode") not in (None, "fixed", "auto"):
         errors.append("world.size_mode must be 'fixed' or 'auto'")

@@ -28,8 +28,8 @@ class KindRule:
     min_spacing: int  # minimum tile distance between anchors of this kind
     civilized: bool  # whether this kind counts as civilization (feeds remoteness)
     biome_ints: frozenset  # allowed biome ints (hard whitelist)
-    elevation_min: Optional[float]
-    elevation_max: Optional[float]
+    elevation_min_m: Optional[float]  # metres above sea level
+    elevation_max_m: Optional[float]
     near_freshwater: float  # weight on closeness-to-freshwater
     coastal: float  # weight on closeness-to-coast
     remoteness: float  # weight on distance-from-settlements
@@ -50,8 +50,8 @@ def parse_rule(kind: str, raw: dict) -> KindRule:
         min_spacing=int(raw.get("min_spacing", 1)),
         civilized=bool(raw.get("civilized", False)),
         biome_ints=frozenset(int(biome_from_name(n)) for n in raw.get("biomes", [])),
-        elevation_min=(float(raw["elevation_min"]) if "elevation_min" in raw else None),
-        elevation_max=(float(raw["elevation_max"]) if "elevation_max" in raw else None),
+        elevation_min_m=(float(raw["elevation_min_m"]) if "elevation_min_m" in raw else None),
+        elevation_max_m=(float(raw["elevation_max_m"]) if "elevation_max_m" in raw else None),
         near_freshwater=float(raw.get("near_freshwater", 0.0)),
         coastal=float(raw.get("coastal", 0.0)),
         remoteness=float(raw.get("remoteness", 0.0)),
@@ -87,10 +87,10 @@ def eligibility_mask(
         surface_ok = world.water_type == int(WaterType.NONE)  # land POIs on land
 
     mask = allowed & surface_ok & (world.poi_index < 0)  # never reuse an occupied tile
-    if rule.elevation_min is not None:
-        mask &= world.elevation >= rule.elevation_min
-    if rule.elevation_max is not None:
-        mask &= world.elevation <= rule.elevation_max
+    if rule.elevation_min_m is not None:
+        mask &= world.elevation_m >= rule.elevation_min_m
+    if rule.elevation_max_m is not None:
+        mask &= world.elevation_m <= rule.elevation_max_m
     if not rule.on_water and footprint is not None and min_land is not None:
         mask &= footprint_land_fraction_mask(world, footprint[0], footprint[1], min_land)
     return mask

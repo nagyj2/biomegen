@@ -77,13 +77,6 @@ def test_dist_to_ocean_is_zero_at_sea_and_positive_on_land(world: World) -> None
     assert (world.dist_to_ocean[~land] == 0).all() and (world.dist_to_ocean[land] > 0).all()
 
 
-def test_legacy_elevation_splits_at_sea_level(world: World) -> None:
-    # The shim keeps the old consumers' contract: land above world.sea_level, sea at or below it.
-    sea_level = load_config(None).get("world.sea_level")
-    land = world.water_type == int(WaterType.NONE)
-    assert (world.elevation[land] > sea_level).all() and (world.elevation[~land] <= sea_level).all()
-
-
 def test_pinned_style_is_used() -> None:
     assert _run(_config(style="islands")).terrain_style == "islands"
 

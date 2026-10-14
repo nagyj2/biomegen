@@ -134,10 +134,5 @@ def stats(world: World) -> Dict[str, object]:
             "min": round(float(world.elevation_m.min()), 1),
             "max": round(float(world.elevation_m.max()), 1),
         },
-        "elevation": {
-            "min": round(float(world.elevation.min()), 3),
-            "max": round(float(world.elevation.max()), 3),
-            "mean": round(float(world.elevation.mean()), 3),
-        },
         "fingerprint": world.fingerprint(),
     }

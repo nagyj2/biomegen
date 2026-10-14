@@ -14,9 +14,9 @@ Ported from the reference generator's ``_elevation`` (``docs/reference/worldgen.
 5. **Metres.** Land heights follow a hypsometric curve over height rank (most land is low, a few cells
    are high summits); sea depth grows with the normalised sea-floor height.
 
-Writes ``elevation_m``, ``water_type`` (every sea cell is salt, inland seas included), ``biome`` (ocean,
-or a land placeholder the biomes stage replaces), ``dist_to_ocean`` (tiles, for the old consumers) and
-the legacy normalised ``elevation`` that the old climate, hydrology and biomes stages still read.
+Writes ``elevation_m``, ``water_type`` (every sea cell is salt, inland seas included), ``biome`` (deep
+sea, or a land placeholder the biomes stage replaces) and ``dist_to_ocean`` (in tiles, for POI scoring;
+it moves to km with the phase-5 settlement rewrite).
 """
 
 from __future__ import annotations
@@ -152,21 +152,8 @@ def _metres(height: np.ndarray, land: np.ndarray, config: Config, stream: random
     return metres
 
 
-def _legacy_elevation(height: np.ndarray, land: np.ndarray, sea_level: float) -> np.ndarray:
-    """Return the old normalised ``elevation``: land in (sea_level, 1], sea in [0, sea_level].
-
-    Kept only while the old climate, hydrology, biomes, POI and road code read it (removed in phase 3).
-    """
-    top = float(height.max()) if land.any() else 1.0
-    bottom = float(height.min()) if (~land).any() else -1.0
-    legacy = np.empty(height.shape, dtype=np.float64)
-    legacy[land] = sea_level + (1.0 - sea_level) * height[land] / (top or 1.0)
-    legacy[~land] = sea_level * (1.0 - height[~land] / (bottom or -1.0))
-    return legacy
-
-
 def run(world: World, config: Config, seed: int) -> None:
-    """Fill ``elevation_m``, the ocean, ``dist_to_ocean`` and the legacy ``elevation`` in place."""
+    """Fill ``elevation_m``, the ocean and ``dist_to_ocean`` in place."""
     stream = rng.derive(seed, "terrain")
     style_name = pick_style(config, stream)
     style = config.get(f"tables.styles.{style_name}")
@@ -182,7 +169,6 @@ def run(world: World, config: Config, seed: int) -> None:
 
     world.terrain_style = style_name
     world.elevation_m = _metres(height, land, config, stream)
-    world.elevation = _legacy_elevation(height, land, float(config.get("world.sea_level")))
     world.biome[:] = np.where(land, int(Biome.GRASS), int(Biome.DEEP)).astype(np.uint8)
     world.water_type[:] = np.where(land, int(WaterType.NONE), int(WaterType.SALT)).astype(np.uint8)
     world.dist_to_ocean = geo.distance_to(~land, backend=config.get("compute.backend"), metric="euclidean")

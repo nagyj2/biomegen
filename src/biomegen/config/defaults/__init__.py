@@ -6,7 +6,7 @@ TOML only needs to specify the handful of keys they want to override. Keep this 
 ``config.example.toml`` (the example is generated to match these values).
 
 Conventions:
-    * Scalar fields (elevation/temperature/moisture) are normalised to [0, 1].
+    * Physical fields carry units: heights in m, temperatures in °C, rain in mm, distances in km.
     * Probabilities are in [0, 1]; clamped during validation.
     * Colours are ``[r, g, b]`` 0-255 triples (TOML may also give ``"#rrggbb"``; validation coerces).
 """

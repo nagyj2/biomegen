@@ -563,7 +563,7 @@ def build_detail_frame(
     # Per-cell density = per-biome base density * (moisture for vegetation / elevation for rock).
     base_density = _BASE_DENSITY_LUT[biome]
     moist = world.moisture[by, bx]
-    elev = world.elevation[by, bx]
+    elev = np.clip(world.elevation_m[by, bx] / max(1.0, float(world.elevation_m.max())), 0.0, 1.0)  # relative height
     factor = np.ones((rows, cols))
     factor = np.where(np.isin(biome, _VEG_ARR), np.clip(0.4 + 1.4 * moist, 0.25, 1.8), factor)
     factor = np.where(np.isin(biome, _ROCK_ARR), np.clip(0.4 + 1.3 * elev, 0.25, 1.8), factor)
