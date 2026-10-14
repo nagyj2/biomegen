@@ -402,6 +402,16 @@ Three view scales share one biome-tile cursor and one camera:
 - **Local** (`zoom_view.py`, same renderer): the screen shows `local_rows` biome tiles vertically,
   each magnified further. Full furnished POI interiors render at this scale.
 
+**Layered renderer, detail scales (phase 4b).** The curses app above still runs on `zoom_view.py` until
+phase 4c; the layered renderer draws the same scales for `--scale zoom|local` (`render/detail.py`,
+`render_detail` in `render/static.py`). A `DetailSampler` maps each cell of a tile's `cell_w x cell_h` block
+to a continuous world position (tile centres on the integers) and reads the biome, relief and river
+coverage through the biome-blend warp; `view.detail_layers` lists the layers drawn there: `terrain` (floor
+glyph per biome, rocky floor on mountain relief), `relief` (recolour only), `clutter` (`tables.detail`
+rows), `water` (river coverage), `roads` (the thin bed, numpy), `bridges`, `markers` (one cell per tile),
+`interiors` (zoom shell, local furniture). Colours come from `render.detail_colors` and the tables, not the
+curses palette. Output is the bare grid; the frame and legend are map-scale furniture.
+
 **Biome blending** at detail scales: each cell looks up its biome at a domain-warped world
 position (`blend_strength`, `blend_scale`). The warp is a pure function of world position + seed, so
 zoom and local are consistent samplings of the same blend — they look like zooms of each other.
