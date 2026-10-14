@@ -15,7 +15,7 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   terrain, relief, [tint], water, [clutter], roads, [bridges], sites, markers, labels, compass. A layer
   that only makes sense at one scale (`clutter`, `bridges`) returns early on the other.
 - **Sites.** The `sites` layer draws each POI's plan (`biomegen.sites`) into the cells its extent covers: the plan's
-  outside view (roofs, stone walls, streets) at the map, zoom and local scales, the inside (thin walls joined into
+  outside view (roofs, stone walls, streets) at the zoom and local scales (the map shows only the POI's marker tile), the inside (thin walls joined into
   line glyphs) at the site scale. The site scale is a
   `DetailSampler` over a site window (optionally just a region of it); the layer reads extents through the sampler's
   `col0` / `row0`, so a region draws exactly like the whole window. A layer that draws roads must skip

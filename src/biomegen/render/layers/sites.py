@@ -1,15 +1,14 @@
 """The sites layer: each POI's plan drawn over the terrain where its site lies.
 
-A plan has two faces. Seen from **outside** (the map, zoom and local scales) buildings are roofs, walls are solid and
+A plan has two faces. Seen from **outside** (the zoom and local scales) buildings are roofs, walls are solid and
 streets show; the plan is scaled to the block of cells its extent covers, and where it is finer than the view the cell
 of highest priority wins, so a one-cell wall survives. Seen from **inside** (the site scale) every cell is drawn one for
 one, and thin walls join into box-drawing lines. Void cells are skipped, so the terrain shows round an organic outline.
+The world map draws no plan: a POI there is its one-tile marker (the markers layer).
 Outside views show the surface; the inside view shows the chosen floor, with runtime edits from the overlay.
 """
 
 from __future__ import annotations
-
-import math
 
 import numpy as np
 
@@ -73,41 +72,6 @@ def _stamp(
     grid.bold[rows, cols][draw] = False
 
 
-def _map_outlines(ctx: LayerContext, grid: CellGrid) -> None:
-    """Draw each site's outside view onto the map cells its tiles cover, leaving the POI's marker cell clear."""
-    sampler = ctx.sampler
-    rows_total, cols_total = grid.glyph.shape
-    for poi, geometry in site_pois(ctx.world, ctx.config):
-        left, top, right, bottom = geometry.extent
-        first = sampler.cell_coords(math.floor(left - 0.5) + 1, math.floor(top - 0.5) + 1)
-        last = sampler.cell_coords(math.ceil(right + 0.5) - 1, math.ceil(bottom + 0.5) - 1)
-        if first is None or last is None:
-            continue
-        if first[1] >= rows_total or first[0] >= cols_total or last[1] < 0 or last[0] < 0:
-            continue
-        found = _plan_of(ctx, poi, 0, False)
-        if found is None:
-            continue
-        sampled = sample_rect(
-            found[0],
-            first[1],
-            first[0],
-            last[1] - first[1] + 1,
-            last[0] - first[0] + 1,
-            rows_total,
-            cols_total,
-            OUTSIDE_PRIORITY,
-        )
-        if sampled is None:
-            continue
-        rows, cols, values = sampled
-        draw = values != _VOID
-        marker = sampler.cell_coords(poi.x, poi.y)
-        if marker is not None and rows.start <= marker[1] < rows.stop and cols.start <= marker[0] < cols.stop:
-            draw[marker[1] - rows.start, marker[0] - cols.start] = False
-        _stamp(ctx, grid, rows, cols, values, draw)
-
-
 def _extent_cells(sampler: DetailSampler, geometry: SiteGeometry) -> tuple[int, int, int, int]:
     """Return ``(row0, col0, rows, cols)``: the cells of a detail grid that the site's extent covers."""
     left, top, right, bottom = geometry.extent
@@ -120,10 +84,9 @@ def _extent_cells(sampler: DetailSampler, geometry: SiteGeometry) -> tuple[int, 
 
 @LAYERS.register("sites")
 def sites_layer(ctx: LayerContext, grid: CellGrid) -> None:
-    """Draw every site: its outside at the map, zoom and local scales, its inside (``ctx.floor``) at the site scale."""
+    """Draw every site: its outside at the zoom and local scales, its inside (``ctx.floor``) at the site scale."""
     sampler = ctx.sampler
     if not isinstance(sampler, DetailSampler):
-        _map_outlines(ctx, grid)
         return
     inside = sampler.scale == SCALE_SITE
     for poi, geometry in site_pois(ctx.world, ctx.config):

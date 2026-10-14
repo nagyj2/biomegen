@@ -175,22 +175,13 @@ def test_the_fill_is_the_palette_colour() -> None:
     assert (grid.bg[_extent(sampler, world, config)] == np.asarray(roof, dtype=np.uint8)).all(axis=-1).any()
 
 
-def test_map_scale_draws_the_roofs() -> None:
-    # On the overview a dungeon's gatehouse shows as a roof, and none of its furniture.
-    world = _world()
-    config = _crisp_config()
-    glyphs = set(np.unique(build_grid(world, config, WITH, Sampler.viewport(world, WORLD, WORLD)).glyph))
-    assert config.get("render.interior_glyphs.roof") in glyphs
-    assert config.get("render.interior_glyphs.table") not in glyphs
-
-
-def test_map_outline_leaves_the_marker_cell_clear() -> None:
-    # The POI's own cell keeps the terrain so its marker is never hidden by a wall.
+def test_the_map_scale_draws_no_plan() -> None:
+    # A POI is a single marker tile on the world map: the sites layer changes no cell there.
     world = _world()
     config = _crisp_config()
     with_layer = build_grid(world, config, WITH, Sampler.viewport(world, WORLD, WORLD))
     without = build_grid(world, config, WITHOUT, Sampler.viewport(world, WORLD, WORLD))
-    assert with_layer.glyph[5, 5] == without.glyph[5, 5]
+    assert np.array_equal(with_layer.glyph, without.glyph)
 
 
 def test_the_site_scale_draws_the_whole_window_one_plan_cell_per_cell() -> None:
