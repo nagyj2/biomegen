@@ -24,25 +24,28 @@ VALUES: Dict[str, Any] = {
     # diagonally-adjacent (corner-touching) water tiles, so rivers/lakes read as connected instead
     # of a checkerboard. Lower = more water bleed.
     "water_blend_threshold": 0.42,
-    # Roads & bridges at the detail (zoom/local) scales. Roads render as a thin meandering BED, not
-    # a full tile: a detail cell is road when it lies within ``road_half_width`` world tiles of the
-    # straight line joining two adjacent road-tile centres. Because that test is a pure function of
-    # world position, zoom and local are the same shape at different scales (exactly like rivers). A
-    # small coherent ``road_warp`` (in tiles) wobbles the bed so it meanders organically rather than
-    # reading as straight segments. ``road_clutter`` scatters small glyphs along the bed at both
-    # detail scales; ``road_clutter_local`` adds extra fine detail only at the close (local) scale.
-    "road_half_width": 0.30,
-    "road_warp": 0.18,
-    # The bed glyph follows the direction of the road link a cell lies on (unicode / ascii).
+    # Roads & bridges at the detail scales (zoom, local, site). Roads render as a thin meandering BED, not a full
+    # tile: a detail cell is road when it lies within ``road_half_width`` world tiles of the straight line joining two
+    # adjacent road-tile centres, so a road is a fixed fraction of a tile wide and scales with the magnification
+    # (about one row at zoom, two or three at the site view). ``road_min_rows`` keeps it at least that many rows thick
+    # when the magnification is low. Because the test is a pure function of world position, every scale draws the same
+    # shape. A small coherent ``road_warp`` (in tiles) wobbles the bed so it meanders rather than reading as straight
+    # segments. ``road_clutter`` scatters small glyphs along the bed at the detail scales; ``road_clutter_local`` adds
+    # extra fine detail at the local scale only.
+    "road_half_width": 0.07,
+    "road_min_rows": 1.0,
+    "road_warp": 0.05,
     "road_bed": {
         "glyphs": {"horizontal": "─", "vertical": "│", "rising": "╱", "falling": "╲"},
         "ascii": {"horizontal": "-", "vertical": "|", "rising": "/", "falling": "\\"},
     },
     "road_clutter": {"glyphs": [".", ",", "'"], "density": 0.18},
     "road_clutter_local": {"glyphs": ['"', ".", ";"], "density": 0.10},
-    # Bridges render as a straight deck between the two road pieces they join (at any real angle): a
-    # brown ``deck`` walkway one cell wide flanked by ``wall`` railings on either side. The deck is
-    # extended ``bridge_overhang`` tiles past each end so it overlaps the road bed and leaves no gap.
+    # Bridges render as a straight deck between the two road pieces they join (at any real angle): a brown ``deck``
+    # walkway ``bridge_half_width`` tiles to each side of the span (never under ``road_min_rows`` thick), flanked by
+    # ``wall`` railings as wide again. The deck is extended ``bridge_overhang`` tiles past each end so it overlaps the
+    # road bed and leaves no gap.
+    "bridge_half_width": 0.1,
     "bridge_glyphs": {"deck": ":", "wall": "#"},
     "bridge_overhang": 0.6,
     # Colours of the road bed and bridges at the detail scales (the layered renderer's replacement for the
@@ -226,7 +229,7 @@ VALUES: Dict[str, Any] = {
         "glyphs": ["·", "│", "─", "╰", "│", "│", "╭", "├", "─", "╯", "─", "┴", "╮", "┤", "┬", "┼"],
         "ascii": ["+", "|", "-", "+", "|", "|", "+", "+", "-", "+", "-", "+", "+", "+", "+", "+"],
         "diagonal": {"glyphs": ["╱", "╲", "╳"], "ascii": ["/", "\\", "X"]},
-        "junction": {"glyphs": "✳", "ascii": "*"},
+        "junction": {"glyphs": "✱", "ascii": "*"},
     },
     # Markers layer: points of interest draw their ``markers`` glyph (below) in bold with this colour pair.
     "marker_style": {"fg": [255, 130, 255], "bg": [70, 20, 70]},

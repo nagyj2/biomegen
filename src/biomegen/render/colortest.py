@@ -28,7 +28,7 @@ def color_test(detected: str, environment: dict[str, str]) -> Document:
         [Span("    greys     : ")] + [Span(" ", None, grey) for grey in greys],
         [Span(" 2) 256-colour: ")] + banded,
         [Span("")],
-        [Span(' Glyphs      :  ≈ ~ ░ · ∴ , " ♣ ♠ ψ ↑ ¨ * ∩ ^ ▲ Λ ★ ● ○ • ¤ Ω † § × ─│╭╮╰╯┼ ═║ °C km²')],
+        [Span(' Glyphs      :  ≈ ~ ░ · ∴ , " ♣ ♠ ψ ↑ ¨ * ∩ ^ ▲ Λ ✦ ● ○ • ¤ Ω † § × ─│╭╮╰╯┼ ═║ °C km²')],
         [Span("")],
         [Span(" If row 1 is a smooth rainbow and the grey bar has no visible steps, your terminal supports")],
         [Span(" 24-bit truecolor: use --color truecolor. If row 1 looks as blocky as row 2, use --color 256.")],

@@ -69,7 +69,7 @@ src/biomegen/
     pois.py             Stage 8 — wild POI placement (interim until phase 8)
     civilization/
       settlements.py    Stage 7 — habitability, capital / city / town / village placement
-      roads.py          Stage 9 — road network + bridge POIs + per-POI road-entrance recording
+      roads.py          Stage 9 — road network + bridge POIs
     story/
     naming.py           Stage 10 — names and lore for all entities
   naming/
@@ -415,13 +415,14 @@ markers — they render like the rivers do.
 
 - *Roads* are a thin meandering **bed**: a detail cell is road when its (road-warped) world position
   lies within `road_half_width` tiles of the straight line joining two 8-adjacent land-road tile
-  centres. That distance test is a pure function of world position, so zoom and local are the same
-  shape at different scales. The bed glyph follows the direction of the link (`road_bed`: `─ │ ╱ ╲`) in the `detail_colors.road_*` colours with small
+  centres. That distance test is a pure function of world position, so every scale draws the same
+  shape. The width is a fixed fraction of a tile (0.14 by default), so it grows with the magnification (about one
+  row at zoom, two or three at the site view), but never under `road_min_rows` rows. The bed glyph follows the direction of the link (`road_bed`: `─ │ ╱ ╲`) in the `detail_colors.road_*` colours with small
   clutter scattered along it (`road_clutter`, plus `road_clutter_local` fine detail at the close scale). A
   small `road_warp` gives it an organic wobble; water and river cells are never drawn over (bridges carry those).
 - *Bridges* are a straight **deck flanked by walls**, drawn from each bridge POI's stored span
   endpoints (`extra['p0']`/`['p1']`) at whatever real angle the crossing has — cells within
-  `road_half_width` of the span (perpendicular, clamped to its length, then extended `bridge_overhang`
+  `bridge_half_width` of the span (at least `road_min_rows` thick; perpendicular, clamped to its length, then extended `bridge_overhang`
   tiles past each end so the deck overlaps the road bed with no gap) are the deck, a band just beyond on
   either long side is the railing (`detail_colors.deck_*` / `wall_*`). Unlike roads this draws over the
   water it spans.

@@ -15,8 +15,9 @@ def bridges_layer(ctx: LayerContext, grid: CellGrid) -> None:
     """Draw every ``bridge`` POI as a deck between the road pieces it joins, over whatever water it spans.
 
     The deck is the straight span from ``extra["p0"]`` to ``extra["p1"]`` at its real angle. Cells within
-    ``max(render.road_half_width, 0.18)`` tiles of it (measured across the span, clamped to its length plus
-    ``render.bridge_overhang`` at each end so it overlaps the road bed) are the deck; a band as wide again on
+    ``render.bridge_half_width`` tiles of it (at least ``render.road_min_rows`` rows thick), measured across the
+    span and clamped to its length plus ``render.bridge_overhang`` at each end so it overlaps the road bed, are the
+    deck; a band as wide again on
     either long side is the wall. The unwarped positions are used, so the span reads dead straight. At the map
     scale a bridge is a marker, so this layer draws nothing there.
     """
@@ -26,7 +27,9 @@ def bridges_layer(ctx: LayerContext, grid: CellGrid) -> None:
     cfg = ctx.config
     glyphs = cfg.get("render.bridge_glyphs") or {}
     colors = cfg.get("render.detail_colors")
-    deck_half = max(float(cfg.get("render.road_half_width")), 0.18)
+    deck_half = max(
+        float(cfg.get("render.bridge_half_width")), 0.5 * float(cfg.get("render.road_min_rows")) / sampler.cell_h
+    )
     overhang = float(cfg.get("render.bridge_overhang"))
     reach = 2.0 * deck_half + overhang
     for poi in ctx.world.pois:

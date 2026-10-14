@@ -95,7 +95,7 @@ def test_diagonal_bend_draws_a_crossing(config) -> None:
 
 def test_cardinal_and_diagonal_neighbours_meeting_draw_a_junction(config) -> None:
     # A road from the west that forks north-east and south-east: three roads meet at the centre tile.
-    assert _center_glyph(config, [(1, 0), (1, 1), (0, 2), (2, 2)]) == "✳"
+    assert _center_glyph(config, [(1, 0), (1, 1), (0, 2), (2, 2)]) == "✱"
 
 
 def test_one_cardinal_and_one_diagonal_neighbour_take_the_diagonal_slant(config) -> None:

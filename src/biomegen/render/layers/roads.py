@@ -50,9 +50,10 @@ def connection_mask8(road: np.ndarray) -> np.ndarray:
 def road_glyph_table(config: Config, ascii_only: bool) -> np.ndarray:
     """Return the glyph for each of the 256 eight-neighbour masks, so every way two roads can join is drawable.
 
-    No diagonal neighbour: the box-drawing glyph for the cardinal mask (``render.roads.glyphs``). Only diagonal
-    neighbours: ``╱`` or ``╲`` along a line, ``╳`` where they bend or cross. Both kinds: the junction glyph when
-    three or more neighbours meet, else the slant of the single diagonal link.
+    No diagonal neighbour: the box-drawing glyph for the cardinal mask (``render.roads.glyphs``), so an orthogonal
+    junction is drawn as the matching tee or cross. Any diagonal neighbour: the junction glyph (an asterisk) wherever
+    three or more links meet. Fewer than three: ``╱`` or ``╲`` along a line, ``╳`` where two diagonals bend, and the
+    slant of the diagonal when a single diagonal link joins an orthogonal one.
     """
     cfg = config.get("render.roads")
     key = "ascii" if ascii_only else "glyphs"
@@ -66,7 +67,7 @@ def road_glyph_table(config: Config, ascii_only: bool) -> np.ndarray:
         slants = {rising if bit in _RISING else falling for bit in diagonal}
         if not diagonal:
             table[mask] = cardinal[index]
-        elif index and bin(mask).count("1") >= 3:
+        elif bin(mask).count("1") >= 3:
             table[mask] = junction
         elif len(slants) == 1 and (index or len(diagonal) <= 2):
             table[mask] = next(iter(slants))
@@ -113,6 +114,9 @@ def _mark_segment(
 def _detail_roads(ctx: LayerContext, grid: CellGrid, sampler: DetailSampler) -> None:
     """Draw the road network as a thin meandering bed: cells within ``render.road_half_width`` tiles of a road link.
 
+    The width is a fixed fraction of a tile, so it grows with the magnification, but never under
+    ``render.road_min_rows`` rows thick.
+
     A link joins two neighbouring land-road tile centres (eight directions). The distance is measured at the
     road-warped position (``render.road_warp``), a pure function of world position, so zoom and local show the
     same bed at different scales. Water and river cells are left to bridges; the bed carries clutter glyphs
@@ -122,6 +126,7 @@ def _detail_roads(ctx: LayerContext, grid: CellGrid, sampler: DetailSampler) -> 
     half = float(cfg.get("render.road_half_width"))
     if half <= 0:
         return
+    half = max(half, 0.5 * float(cfg.get("render.road_min_rows")) / sampler.cell_h)
     world = ctx.world
     land_road = (world.road > 0) & (world.water_type == int(WaterType.NONE))
     warp = max(float(cfg.get("render.road_warp")), 0.0)

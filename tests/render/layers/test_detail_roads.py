@@ -44,13 +44,40 @@ def _bridge_world(lake_column: bool = False):
     return world
 
 
-def test_straight_road_is_a_bed_a_fraction_of_a_tile_wide() -> None:
-    # A road along tile row 1 with half width 0.3 covers the three cell rows within 0.3 tiles of its centre line.
+def test_straight_road_is_one_row_thick_at_zoom() -> None:
+    # A road along tile row 1 is a fraction of a tile wide: at 5 rows per tile that rounds to the one row at its centre.
     world = make_world(5, 3, Biome.GRASS)
     world.road[1, :] = 1
     grid, _, config = _draw(world, ROADS)
     rows = np.nonzero(_is_color(grid, config.get("render.detail_colors.road_bg"))[:, 25])[0].tolist()
-    assert rows == [6, 7, 8]
+    assert rows == [7]
+
+
+def test_the_road_gets_thicker_in_rows_as_the_magnification_grows() -> None:
+    # Roads scale with zoom: the same road is wider in rows at 15 rows per tile than at 5.
+    world = make_world(5, 3, Biome.GRASS)
+    world.road[1, :] = 1
+    zoom, _, config = _draw(world, ROADS)
+    local, _, _ = _draw(world, ROADS, cell=(30, 15), scale=SCALE_LOCAL)
+    road_bg = config.get("render.detail_colors.road_bg")
+    thick = lambda grid: int(_is_color(grid, road_bg)[:, 40].sum())  # noqa: E731
+    assert thick(local) > thick(zoom)
+
+
+def test_the_road_is_never_thinner_than_the_minimum_rows() -> None:
+    # A very thin configured width still draws the minimum number of rows at a low magnification.
+    world = make_world(5, 3, Biome.GRASS)
+    world.road[1, :] = 1
+    grid, _, config = _draw(world, ROADS, _crisp_config(road_half_width=0.001, road_min_rows=1.0))
+    assert int(_is_color(grid, config.get("render.detail_colors.road_bg"))[:, 25].sum()) == 1
+
+
+def test_a_road_is_far_narrower_than_a_tile_at_local_scale() -> None:
+    # At local scale (15 rows per tile) the road bed is a small share of the tile's rows, not most of it.
+    world = make_world(5, 3, Biome.GRASS)
+    world.road[1, :] = 1
+    grid, _, config = _draw(world, ROADS, cell=(30, 15), scale=SCALE_LOCAL)
+    assert int(_is_color(grid, config.get("render.detail_colors.road_bg"))[:, 75].sum()) <= 4
 
 
 def test_diagonal_road_link_is_continuous() -> None:
@@ -86,6 +113,7 @@ def test_zoom_and_local_draw_the_same_bed() -> None:
     world.road[1, :] = 1
     world.road[:, 3] = 1
     config = load_config(None)
+    config.data["render"]["road_min_rows"] = 0.0  # the floor depends on the scale; compare the pure geometry
     zoom, _, _ = _draw(world, ROADS, config, cell=(10, 5))
     local, _, _ = _draw(world, ROADS, config, cell=(30, 15), scale=SCALE_LOCAL)
     road_bg = config.get("render.detail_colors.road_bg")
@@ -104,13 +132,13 @@ def test_local_scale_adds_fine_clutter_to_the_bed() -> None:
 
 def test_bridge_deck_runs_between_its_span_ends() -> None:
     # A bridge from tile (1, 1) to (3, 1) paints three deck rows across the middle column.
-    grid, _, config = _draw(_bridge_world(), BRIDGES)
+    grid, _, config = _draw(_bridge_world(), BRIDGES, _crisp_config(bridge_half_width=0.25))
     rows = np.nonzero(_is_color(grid, config.get("render.detail_colors.deck_bg"))[:, 25])[0].tolist()
     assert rows == [6, 7, 8]
 
 
 def test_bridge_walls_flank_the_deck() -> None:
-    grid, _, config = _draw(_bridge_world(), BRIDGES)
+    grid, _, config = _draw(_bridge_world(), BRIDGES, _crisp_config(bridge_half_width=0.25))
     wall = _is_color(grid, config.get("render.detail_colors.wall_bg"))
     assert wall[5, 25] and wall[9, 25]
 
@@ -156,3 +184,9 @@ def test_ascii_bed_uses_ascii_glyphs() -> None:
     sampler = DetailSampler(world, config, 10, 5, 0, 0, world.width, world.height, "zoom")
     grid = build_grid(world, config, ROADS, sampler, ascii_only=True)
     assert _bed_glyphs(grid, config) == {"\\"}
+
+
+def test_a_default_bridge_deck_is_one_row_at_zoom() -> None:
+    grid, _, config = _draw(_bridge_world(), BRIDGES)
+    rows = np.nonzero(_is_color(grid, config.get("render.detail_colors.deck_bg"))[:, 25])[0].tolist()
+    assert rows == [7]
