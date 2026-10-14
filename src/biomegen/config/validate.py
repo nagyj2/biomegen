@@ -120,12 +120,20 @@ def _validate_world(world: Dict[str, Any], errors: List[str]) -> None:
 
 
 def _validate_render_views(render: Dict[str, Any], errors: List[str]) -> None:
-    """Check ``render.ramps`` (ascending numeric stops, colours coerced) and ``render.views`` (tints name a ramp)."""
+    """Check ``render.ramps`` (a World field and ascending stops, colours coerced) and ``render.views``."""
+    from ..world.world import World  # local import: avoids import-order coupling
+
     ramps = render.get("ramps", {}) or {}
-    for name, stops in ramps.items():
+    for name, ramp in ramps.items():
         where = f"render.ramps.{name}"
+        if not isinstance(ramp, dict):
+            errors.append(f"{where} must be a table with field and stops")
+            continue
+        if ramp.get("field") not in World.FIELDS:
+            errors.append(f"{where}.field must be a World array ({', '.join(World.FIELDS)}), got {ramp.get('field')!r}")
+        stops = ramp.get("stops")
         if not isinstance(stops, list) or len(stops) < 2:
-            errors.append(f"{where} needs at least two [value, colour] stops")
+            errors.append(f"{where}.stops needs at least two [value, colour] stops")
             continue
         values: List[float] = []
         for index, stop in enumerate(stops):
@@ -134,9 +142,14 @@ def _validate_render_views(render: Dict[str, Any], errors: List[str]) -> None:
                 values.append(float(value))
                 stops[index] = [value, list(_coerce_color(colour))]
             except (TypeError, ValueError) as exc:
-                errors.append(f"{where}[{index}]: {exc}")
+                errors.append(f"{where}.stops[{index}]: {exc}")
         if values != sorted(values):
-            errors.append(f"{where} stops must be in ascending value order")
+            errors.append(f"{where}.stops must be in ascending value order")
+        if "water_color" in ramp:
+            try:
+                ramp["water_color"] = list(_coerce_color(ramp["water_color"]))
+            except (TypeError, ValueError) as exc:
+                errors.append(f"{where}.water_color: {exc}")
     for name, view in (render.get("views", {}) or {}).items():
         where = f"render.views.{name}"
         layers = view.get("layers") if isinstance(view, dict) else None

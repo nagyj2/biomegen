@@ -118,4 +118,4 @@ def build_grid(
     return grid
 
 
-from . import relief, terrain, water  # noqa: E402,F401  (registers the built-in layers)
+from . import relief, terrain, tint, water  # noqa: E402,F401  (registers the built-in layers)

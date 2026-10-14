@@ -89,53 +89,70 @@ VALUES: Dict[str, Any] = {
     "views": {
         "terrain": {"layers": ["terrain", "relief", "water", "roads", "markers", "labels"], "tint": ""},
         "elevation": {
-            "layers": ["terrain", "relief", "water", "tint", "roads", "markers", "labels"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels"],
             "tint": "elevation",
         },
         "temperature": {
-            "layers": ["terrain", "relief", "water", "tint", "roads", "markers", "labels"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels"],
             "tint": "temperature",
         },
         "rainfall": {
-            "layers": ["terrain", "relief", "water", "tint", "roads", "markers", "labels"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels"],
             "tint": "rainfall",
         },
     },
-    # Data-view colour ramps: ``[value, [r, g, b]]`` stops in ascending value order, blended linearly.
-    # elevation is in metres, temperature in degrees C, rainfall in mm per year.
+    # Data-view colour ramps, named by the ``tint`` of a view. ``field`` is the World array coloured;
+    # ``stops`` are ``[value, [r, g, b]]`` in ascending value order, blended linearly. elevation is in
+    # metres, temperature in degrees C, rainfall in mm per year. Optional keys: ``shade`` (hillshade the
+    # land), ``keep_relief`` (keep relief glyphs; otherwise glyphs are blanked), ``water_scale`` (dim
+    # water cells by this factor) and ``water_color`` (paint water cells this colour).
     "ramps": {
-        "elevation": [
-            [-6000, [8, 20, 60]],
-            [-3000, [16, 40, 96]],
-            [-1000, [28, 66, 130]],
-            [-200, [46, 100, 165]],
-            [0, [90, 150, 196]],
-            [1, [64, 132, 72]],
-            [300, [122, 170, 92]],
-            [800, [200, 194, 120]],
-            [1700, [178, 134, 86]],
-            [3200, [140, 112, 98]],
-            [5000, [236, 236, 240]],
-            [8000, [255, 255, 255]],
-        ],
-        "temperature": [
-            [-25, [120, 60, 170]],
-            [-10, [70, 110, 220]],
-            [0, [150, 200, 240]],
-            [8, [120, 200, 120]],
-            [16, [230, 220, 100]],
-            [24, [240, 150, 60]],
-            [32, [200, 40, 40]],
-        ],
-        "rainfall": [
-            [0, [200, 160, 100]],
-            [250, [225, 205, 130]],
-            [600, [170, 200, 110]],
-            [1200, [80, 165, 95]],
-            [2000, [40, 130, 150]],
-            [3200, [40, 70, 170]],
-        ],
+        "elevation": {
+            "field": "elevation_m",
+            "shade": True,
+            "keep_relief": True,
+            "stops": [
+                [-6000, [8, 20, 60]],
+                [-3000, [16, 40, 96]],
+                [-1000, [28, 66, 130]],
+                [-200, [46, 100, 165]],
+                [0, [90, 150, 196]],
+                [1, [64, 132, 72]],
+                [300, [122, 170, 92]],
+                [800, [200, 194, 120]],
+                [1700, [178, 134, 86]],
+                [3200, [140, 112, 98]],
+                [5000, [236, 236, 240]],
+                [8000, [255, 255, 255]],
+            ],
+        },
+        "temperature": {
+            "field": "temperature_c",
+            "water_scale": 0.6,
+            "stops": [
+                [-25, [120, 60, 170]],
+                [-10, [70, 110, 220]],
+                [0, [150, 200, 240]],
+                [8, [120, 200, 120]],
+                [16, [230, 220, 100]],
+                [24, [240, 150, 60]],
+                [32, [200, 40, 40]],
+            ],
+        },
+        "rainfall": {
+            "field": "rain_mm",
+            "water_color": [16, 30, 60],
+            "stops": [
+                [0, [200, 160, 100]],
+                [250, [225, 205, 130]],
+                [600, [170, 200, 110]],
+                [1200, [80, 165, 95]],
+                [2000, [40, 130, 150]],
+                [3200, [40, 70, 170]],
+            ],
+        },
     },
+    "tint_relief_fg": 0.55,  # relief glyphs on a data-ramp fill are the fill darkened by this factor
     # Terrain layer. Hillshade lights each land cell from the north-west: the height difference between
     # its south-east and north-west neighbours, over ``relief_m`` metres, times ``strength``, is added
     # to a brightness of 1 and clamped to [min, max]. Sea brightness uses ``sea_depth_m`` (the depth that

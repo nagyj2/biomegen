@@ -17,28 +17,28 @@ def test_default_views_tint_with_a_defined_ramp() -> None:
 
 def test_default_ramps_are_ascending() -> None:
     # Stops must ascend so a value falls between exactly one pair of stops.
-    for stops in get_defaults()["render"]["ramps"].values():
-        values = [value for value, _ in stops]
+    for ramp in get_defaults()["render"]["ramps"].values():
+        values = [value for value, _ in ramp["stops"]]
         assert values == sorted(values)
 
 
 def test_validate_coerces_ramp_hex_colour() -> None:
     cfg = get_defaults()
-    cfg["render"]["ramps"]["rainfall"][0][1] = "#102030"
+    cfg["render"]["ramps"]["rainfall"]["stops"][0][1] = "#102030"
     validate(cfg)
-    assert cfg["render"]["ramps"]["rainfall"][0][1] == [16, 32, 48]
+    assert cfg["render"]["ramps"]["rainfall"]["stops"][0][1] == [16, 32, 48]
 
 
 def test_validate_rejects_a_descending_ramp() -> None:
     cfg = get_defaults()
-    cfg["render"]["ramps"]["rainfall"].reverse()
+    cfg["render"]["ramps"]["rainfall"]["stops"].reverse()
     with pytest.raises(ConfigError, match="ascending"):
         validate(cfg)
 
 
 def test_validate_rejects_a_one_stop_ramp() -> None:
     cfg = get_defaults()
-    cfg["render"]["ramps"]["rainfall"] = [[0, [1, 2, 3]]]
+    cfg["render"]["ramps"]["rainfall"]["stops"] = [[0, [1, 2, 3]]]
     with pytest.raises(ConfigError, match="at least two"):
         validate(cfg)
 
@@ -55,3 +55,17 @@ def test_validate_rejects_non_list_layers() -> None:
     cfg["render"]["views"]["terrain"]["layers"] = "terrain"
     with pytest.raises(ConfigError, match="list of layer names"):
         validate(cfg)
+
+
+def test_validate_rejects_a_ramp_over_an_unknown_field() -> None:
+    cfg = get_defaults()
+    cfg["render"]["ramps"]["rainfall"]["field"] = "rainfall"
+    with pytest.raises(ConfigError, match="World array"):
+        validate(cfg)
+
+
+def test_validate_coerces_a_water_colour() -> None:
+    cfg = get_defaults()
+    cfg["render"]["ramps"]["rainfall"]["water_color"] = "#010203"
+    validate(cfg)
+    assert cfg["render"]["ramps"]["rainfall"]["water_color"] == [1, 2, 3]
