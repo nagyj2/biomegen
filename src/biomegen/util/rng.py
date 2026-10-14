@@ -59,6 +59,12 @@ LABELS: frozenset[str] = frozenset(
         "interior.door",  # exterior entrance door position (entry floor only)
         "interior.furnish",  # role-based furnishing pass, keyed on interior_seed + floor
         "interior.erode",  # ruin erosion: which walls collapse / floor cracks into rubble
+        "site.extent",  # per-POI site size jitter, keyed on the site seed
+        "site.shape",  # solid-structure outline (floor-independent), keyed on the site seed
+        "site.layout",  # a floor's rooms, buildings and streets, keyed on the site seed and floor
+        "site.shaft",  # stair positions (floor-independent, so floors stack)
+        "site.furnish",  # furniture scatter, keyed on the site seed and floor
+        "site.erode",  # ruin erosion: which walls collapse and floors crack into rubble
         "roads",  # road graph edge selection
         "roads.meander",  # per-edge road meander noise
         "naming",  # name/lore generation
