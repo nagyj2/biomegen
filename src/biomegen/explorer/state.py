@@ -14,8 +14,8 @@ import numpy as np
 
 from ..config.model import Config
 from ..interiors import INTERIOR_BUILDERS, footprint_origin
-from ..render.detail import SCALE_LOCAL, SCALE_MAP, SCALE_ZOOM
 from ..render.fit import tile_priority
+from ..sampling.detail import SCALE_LOCAL, SCALE_MAP, SCALE_ZOOM
 from ..world.entities import POI
 from ..world.tile import WaterType
 from ..world.world import World

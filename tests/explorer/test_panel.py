@@ -8,9 +8,9 @@ from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.explorer.panel import build_panel, controls_line, draw_help, view_label
 from biomegen.explorer.state import MODE_ONE_TO_ONE, ViewState
-from biomegen.render.detail import SCALE_LOCAL, SCALE_ZOOM
 from biomegen.render.grid import CellGrid
 from biomegen.render.layers import Seen
+from biomegen.sampling.detail import SCALE_LOCAL, SCALE_ZOOM
 from biomegen.world.entities import POI, Region
 from biomegen.world.tile import Biome, Cell
 from tests.render.conftest import make_world

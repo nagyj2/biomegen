@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from biomegen.render.sampler import Sampler
+from biomegen.sampling.sampler import Sampler
 from tests.render.conftest import make_world
 
 

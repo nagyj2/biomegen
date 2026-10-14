@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from biomegen.render.layers import LAYERS, build_grid
-from biomegen.render.sampler import Sampler
 from biomegen.render.views import View
+from biomegen.sampling.sampler import Sampler
 from biomegen.world.tile import Biome
 from tests.render.conftest import make_world
 

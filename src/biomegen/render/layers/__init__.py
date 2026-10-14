@@ -15,6 +15,7 @@ import numpy as np
 
 from ...config.model import Config
 from ...registry import Registry
+from ...sampling.sampler import Sampler
 from ...util import rng
 from ...world.overlay import Overlay
 from ...world.tile import Biome, WaterType
@@ -30,7 +31,6 @@ from ..colors import (
     relief_style,
 )
 from ..grid import CellGrid
-from ..sampler import Sampler
 from ..scatter import scatter01
 from ..views import View
 

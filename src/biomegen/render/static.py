@@ -10,14 +10,14 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..config.model import Config
+from ..sampling.detail import centred_detail_sampler
+from ..sampling.sampler import Sampler
 from ..world.overlay import Overlay
 from ..world.world import World
-from .detail import centred_detail_sampler
 from .furniture.frame import build_frame
 from .furniture.legend import build_legend
 from .grid import CellGrid, Document
 from .layers import build_grid
-from .sampler import Sampler
 from .views import resolve_view
 
 

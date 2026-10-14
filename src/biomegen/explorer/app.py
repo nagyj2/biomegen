@@ -14,12 +14,12 @@ from dataclasses import dataclass
 from typing import Callable, Optional, TextIO
 
 from ..config.model import Config
-from ..render.detail import DetailSampler, centre_camera, detail_cell_size
 from ..render.fit import FitSampler
 from ..render.grid import CellGrid
 from ..render.layers import Seen, build_grid
-from ..render.sampler import Sampler
 from ..render.views import resolve_view, view_names
+from ..sampling.detail import DetailSampler, centre_camera, detail_cell_size
+from ..sampling.sampler import Sampler
 from ..world.overlay import Overlay
 from ..world.world import World
 from .exports import export_screen, export_world

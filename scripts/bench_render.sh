@@ -20,7 +20,7 @@ from biomegen.explorer.app import compose_frame
 from biomegen.explorer.state import ViewState as ExplorerState
 from biomegen.explorer.state import initial_cursor
 from biomegen.explorer.writer import DiffWriter
-from biomegen.render.detail import detail_sampler
+from biomegen.sampling.detail import detail_sampler
 from biomegen.render.layers import build_grid
 from biomegen.render.views import resolve_view
 

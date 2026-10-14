@@ -20,7 +20,7 @@ from biomegen.explorer.state import (
     sync_floor,
     toggle_mode,
 )
-from biomegen.render.detail import SCALE_LOCAL, SCALE_MAP, SCALE_ZOOM
+from biomegen.sampling.detail import SCALE_LOCAL, SCALE_MAP, SCALE_ZOOM
 from biomegen.world.entities import POI
 from biomegen.world.tile import Biome, WaterType
 from tests.render.conftest import make_world

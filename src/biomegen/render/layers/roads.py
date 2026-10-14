@@ -5,9 +5,9 @@ from __future__ import annotations
 import numpy as np
 
 from ...config.model import Config
+from ...sampling.detail import SCALE_LOCAL, DetailSampler
 from ...world.tile import WaterType
 from ..colors import scale_colors
-from ..detail import SCALE_LOCAL, DetailSampler
 from ..grid import CellGrid
 from . import LAYERS, LayerContext
 

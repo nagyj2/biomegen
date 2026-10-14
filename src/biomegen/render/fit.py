@@ -13,9 +13,9 @@ import math
 import numpy as np
 
 from ..config.model import Config
+from ..sampling.sampler import Sampler
 from ..world.tile import BIOME_NAME, Biome, Relief, WaterType
 from ..world.world import World
-from .sampler import Sampler
 
 
 def fit_blocks(world_w: int, world_h: int, area_w: int, area_h: int) -> tuple[int, int, int, int]:

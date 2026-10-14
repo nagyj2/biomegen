@@ -13,7 +13,7 @@ from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.explorer.app import compose_frame, run
 from biomegen.explorer.state import ViewState
-from biomegen.render.detail import SCALE_ZOOM
+from biomegen.sampling.detail import SCALE_ZOOM
 from biomegen.world.entities import POI
 from biomegen.world.overlay import Overlay
 from biomegen.world.tile import Biome

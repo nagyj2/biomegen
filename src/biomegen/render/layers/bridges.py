@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from ...sampling.detail import DetailSampler
 from ..colors import scale_colors
-from ..detail import DetailSampler
 from ..grid import CellGrid
 from . import LAYERS, LayerContext
 

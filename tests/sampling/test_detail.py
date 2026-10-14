@@ -7,7 +7,7 @@ import pytest
 
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.render.detail import (
+from biomegen.sampling.detail import (
     SCALE_LOCAL,
     SCALE_ZOOM,
     DetailSampler,

@@ -10,9 +10,9 @@ from typing import Any, Optional
 
 from ..config.model import Config
 from ..render.colors import biome_style, interior_style
-from ..render.detail import SCALE_MAP
 from ..render.grid import RGB, CellGrid
 from ..render.layers import Seen
+from ..sampling.detail import SCALE_MAP
 from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
 from .state import MODE_ONE_TO_ONE, ViewState

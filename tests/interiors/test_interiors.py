@@ -11,10 +11,10 @@ from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.interiors import STRUCTURAL, ZOOM_VISIBLE, build_interior, footprint_cells, footprint_origin
 from biomegen.pipeline.story import poi_interiors
-from biomegen.render.detail import centred_detail_sampler
 from biomegen.render.layers import Seen, build_grid
-from biomegen.render.sampler import Sampler
 from biomegen.render.views import View
+from biomegen.sampling.detail import centred_detail_sampler
+from biomegen.sampling.sampler import Sampler
 from biomegen.world.overlay import Overlay
 from biomegen.world.tile import Cell, WaterType
 

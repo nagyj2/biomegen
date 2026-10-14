@@ -84,11 +84,12 @@ src/biomegen/
     grammar.py          Tracery-style grammar expander
     grammar_rules.toml  Lore sentence templates (machine-readable; mirrored in docs/GRAMMAR.md)
     lore.py             Region fact extraction + lore assembly
+  sampling/             How a grid cell reads the world, shared by render and the site plans
+    sampler.py          Sampler: one cell per tile, or a strided viewport
+    detail.py           DetailSampler: magnified scales, warped continuous lookup; camera helpers
   render/               Pure frame building (no terminal I/O); layer stack shared by every output
     grid.py             CellGrid IR (glyph, fg, bg, bold arrays) and the Document / Span form for static text
-    sampler.py          Sampler: how a grid cell reads the world (one cell per tile, strided viewport)
     fit.py              FitSampler: fit-to-screen map, each cell shows its block's most salient tile
-    detail.py           DetailSampler: zoom and local scales, warped continuous lookup; camera helpers
     views.py            View: layer lists per scale family + tint ramp, from render.views
     colors.py           Colour maths and per-biome / relief / detail / interior lookup arrays from the tables
     scatter.py          Stable per-cell decoration keyed on tile and sub-cell

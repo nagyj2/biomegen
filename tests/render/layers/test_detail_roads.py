@@ -6,10 +6,10 @@ import numpy as np
 
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.render.detail import SCALE_LOCAL, DetailSampler
 from biomegen.render.layers import build_grid
-from biomegen.render.sampler import Sampler
 from biomegen.render.views import View
+from biomegen.sampling.detail import SCALE_LOCAL, DetailSampler
+from biomegen.sampling.sampler import Sampler
 from biomegen.world.entities import POI
 from biomegen.world.tile import Biome
 from tests.render.conftest import make_world

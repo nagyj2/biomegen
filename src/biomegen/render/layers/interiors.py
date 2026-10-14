@@ -12,8 +12,8 @@ from ...interiors import (
     footprint_origin,
     sample_rect_array,
 )
+from ...sampling.detail import SCALE_ZOOM, DetailSampler
 from ...world.tile import Cell, WaterType
-from ..detail import SCALE_ZOOM, DetailSampler
 from ..grid import CellGrid
 from . import LAYERS, LayerContext
 
