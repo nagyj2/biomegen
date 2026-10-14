@@ -37,6 +37,9 @@ coast_scale = 20.0
 archipelago = 0.42         # small satellite islands around the dominant main island (0 = single)
 archipelago_scale = 68.0
 redistribution = 1.0
+style = "seed"             # "continents" | "pangaea" | "archipelago" | "islands" (tables.styles), or "seed"
+land_fraction_jitter = 0.04   # +- per-seed jitter on the style's land fraction
+max_elevation_m = [4300.0, 7400.0]   # [min, max] height of the highest summit
 
 [climate]
 orientation = "equator-center"   # or "north-pole-top"
