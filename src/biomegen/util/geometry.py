@@ -10,6 +10,10 @@ selected by the ``compute.backend`` config key:
 
 :func:`astar` is the generic weighted-grid pathfinder used by the roads stage. Neighbour iterators
 round out the module.
+
+Cells may be anisotropic (see :mod:`biomegen.util.units`): ``distance_to`` takes a per-axis
+``sampling``, and :func:`octile_distance` / :func:`step_length` take a column and row size, so the
+same helpers measure km on a non-square grid. Every default is one unit per cell, the tile metric.
 """
 
 from __future__ import annotations
@@ -129,38 +133,87 @@ def _distance_bfs(targets: np.ndarray, connectivity: int) -> np.ndarray:
     return dist
 
 
-def distance_to(targets: np.ndarray, backend: str = "scipy", metric: str = "euclidean") -> np.ndarray:
+def _distance_weighted(targets: np.ndarray, connectivity: int, row_size: float, col_size: float) -> np.ndarray:
+    """Multi-source Dijkstra distance on an anisotropic grid; the BFS fallback with per-axis step sizes.
+
+    Orthogonal steps cost one cell size; a diagonal step costs the larger of the two, so with equal
+    sizes this matches the BFS Chebyshev step count scaled by the cell size.
+    """
+    h, w = targets.shape
+    dist = np.full(targets.shape, np.inf, dtype=np.float64)
+    diagonal = max(row_size, col_size)
+    offsets = _OFFSETS4 if connectivity == 4 else _OFFSETS8
+    steps = [(dx, dy, diagonal if dx and dy else (col_size if dx else row_size)) for dx, dy in offsets]
+    heap: List[Tuple[float, int, int]] = []
+    ys, xs = np.nonzero(targets)
+    for x, y in zip(xs.tolist(), ys.tolist(), strict=True):
+        dist[y, x] = 0.0
+        heap.append((0.0, y, x))
+    heapq.heapify(heap)
+    while heap:
+        d, cy, cx = heapq.heappop(heap)
+        if d > dist[cy, cx]:
+            continue
+        for dx, dy, step in steps:
+            nx, ny = cx + dx, cy + dy
+            if 0 <= nx < w and 0 <= ny < h and d + step < dist[ny, nx]:
+                dist[ny, nx] = d + step
+                heapq.heappush(heap, (d + step, ny, nx))
+    return dist.astype(np.float32)
+
+
+def distance_to(
+    targets: np.ndarray,
+    backend: str = "scipy",
+    metric: str = "euclidean",
+    sampling: Tuple[float, float] = (1.0, 1.0),
+) -> np.ndarray:
     """Return a float array of the distance from every cell to the nearest True cell in ``targets``.
 
     With the scipy backend and ``metric='euclidean'`` this is an exact Euclidean distance transform
     (``distance_transform_edt``); the in-house fallback returns an 8-connected BFS step count (a
     Chebyshev approximation). Target cells get distance 0. If there are no targets, every cell is
     ``inf``.
+
+    ``sampling`` is the ``(row, column)`` cell size, e.g. :attr:`GridScale.sampling` for km. The
+    default ``(1, 1)`` measures in tiles.
     """
     if not targets.any():
         return np.full(targets.shape, np.inf, dtype=np.float32)
+    unit = sampling[0] == 1.0 and sampling[1] == 1.0
     if backend == "scipy" and metric == "euclidean":
         try:
             from scipy import ndimage
 
             # distance_transform_edt measures distance from each True cell to the nearest False cell,
             # so invert: ~targets is True on non-target cells, giving their distance to a target.
-            dist = cast(Any, ndimage.distance_transform_edt(~targets))
+            dist = cast(Any, ndimage.distance_transform_edt(~targets, sampling=None if unit else sampling))
             return cast(np.ndarray, dist).astype(np.float32)
         except ImportError:
             pass
     connectivity = 8 if metric in ("euclidean", "chebyshev") else 4
-    return _distance_bfs(targets, connectivity)
+    if unit:
+        return _distance_bfs(targets, connectivity)
+    return _distance_weighted(targets, connectivity, float(sampling[0]), float(sampling[1]))
 
 
 # ---------------------------------------------------------------------------
 # Generic A* over a weighted graph (used for roads).
 # ---------------------------------------------------------------------------
-def octile_distance(a: Coord, b: Coord) -> float:
-    """Octile distance heuristic for 8-connected grids (admissible when min step cost is 1)."""
+def octile_distance(a: Coord, b: Coord, col_size: float = 1.0, row_size: float = 1.0) -> float:
+    """Octile distance heuristic for 8-connected grids (admissible when a step costs its length).
+
+    The path takes ``min(dx, dy)`` diagonal steps of length ``hypot(col_size, row_size)`` and the rest
+    straight. With unit sizes this is ``(dx + dy) + (sqrt(2) - 2) * min(dx, dy)``, bit for bit.
+    """
     dx = abs(a[0] - b[0])
     dy = abs(a[1] - b[1])
-    return (dx + dy) + (math.sqrt(2.0) - 2.0) * min(dx, dy)
+    return (dx * col_size + dy * row_size) + (math.hypot(col_size, row_size) - (col_size + row_size)) * min(dx, dy)
+
+
+def step_length(a: Coord, b: Coord, col_size: float = 1.0, row_size: float = 1.0) -> float:
+    """Straight-line length of the step from ``a`` to ``b`` with per-axis cell sizes (for A* costs)."""
+    return math.hypot((b[0] - a[0]) * col_size, (b[1] - a[1]) * row_size)
 
 
 def astar(
