@@ -17,7 +17,7 @@ from ...config.model import Config
 from ...registry import Registry
 from ...util import rng
 from ...world.overlay import Overlay
-from ...world.tile import Biome
+from ...world.tile import Biome, WaterType
 from ...world.world import World
 from ..colors import BiomeStyle, DetailStyle, ReliefStyle, biome_style, detail_style, relief_style
 from ..grid import CellGrid
@@ -72,6 +72,12 @@ class LayerContext:
     def land(self) -> np.ndarray:
         """Cells inside the world whose biome is not water."""
         return self.sampler.inside & ~self.biome_style.water[self.biome]
+
+    @cached_property
+    def river(self) -> np.ndarray:
+        """Land cells covered by a river: fresh water over a land biome (smoothed at the detail scales)."""
+        tiles = (self.world.water_type == int(WaterType.FRESH)) & ~self.biome_style.water[self.world.biome]
+        return self.land & self.sampler.coverage_mask(tiles)
 
     @cached_property
     def relief(self) -> np.ndarray:
@@ -143,6 +149,7 @@ def build_grid(
 
 
 from . import (  # noqa: E402,F401  (registers the built-in layers)
+    bridges,
     clutter,
     compass,
     markers,

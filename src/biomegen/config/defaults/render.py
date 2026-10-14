@@ -41,6 +41,16 @@ VALUES: Dict[str, Any] = {
     # extended ``bridge_overhang`` tiles past each end so it overlaps the road bed and leaves no gap.
     "bridge_glyphs": {"deck": ":", "wall": "#"},
     "bridge_overhang": 0.6,
+    # Colours of the road bed and bridges at the detail scales (the layered renderer's replacement for the
+    # ``palette`` road / bridge entries). ``*_bg`` fills the cell (shaded by the hillshade), ``*_fg`` the glyph.
+    "detail_colors": {
+        "road_bg": [122, 102, 70],
+        "road_fg": [92, 74, 48],
+        "deck_bg": [150, 96, 50],
+        "deck_fg": [104, 66, 34],
+        "wall_bg": [104, 66, 34],
+        "wall_fg": [70, 44, 22],
+    },
     "default_view": "fit",  # "fit" (whole map downsampled) or "onetoone" (1:1 panning)
     "status_height": 12,  # rows reserved below the map for the status/legend panel
     "show_legend": True,
@@ -90,22 +100,22 @@ VALUES: Dict[str, Any] = {
     "views": {
         "terrain": {
             "layers": ["terrain", "relief", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "clutter", "water"],
+            "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "bridges"],
             "tint": "",
         },
         "elevation": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint", "water"],
+            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges"],
             "tint": "elevation",
         },
         "temperature": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint", "water"],
+            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges"],
             "tint": "temperature",
         },
         "rainfall": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint", "water"],
+            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges"],
             "tint": "rainfall",
         },
     },

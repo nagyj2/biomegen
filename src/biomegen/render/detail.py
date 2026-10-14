@@ -71,6 +71,7 @@ class DetailSampler(Sampler):
     """A sampler whose cells are sub-tile blocks read through the biome-blend warp.
 
     Attributes:
+        scale: ``"zoom"`` or ``"local"``.
         cell_w: Cells per tile across.
         cell_h: Cells per tile down.
         cam_x: Tile column at the left edge of the grid.
@@ -91,7 +92,9 @@ class DetailSampler(Sampler):
         cam_y: int,
         tiles_w: int,
         tiles_h: int,
+        scale: str = SCALE_ZOOM,
     ) -> None:
+        self.scale = scale
         self.cell_w = cell_w
         self.cell_h = cell_h
         self.cam_x = cam_x
@@ -170,6 +173,19 @@ class DetailSampler(Sampler):
         land = np.where(np.isin(warped, _WATER), self.nearest(biome), warped)
         return np.where(is_water, _dominant_water_biome(biome, wfx, wfy), land)
 
+    def cell_window(self, x_min: float, x_max: float, y_min: float, y_max: float) -> tuple[slice, slice] | None:
+        """Return the ``(rows, cols)`` slices of the cells whose unwarped position can lie in the tile box.
+
+        The box is in tile coordinates; ``None`` means it misses the grid entirely.
+        """
+        col_lo = max(0, int(np.floor((x_min - self.cam_x + 0.5) * self.cell_w - 0.5)))
+        col_hi = min(self.cols - 1, int(np.ceil((x_max - self.cam_x + 0.5) * self.cell_w - 0.5)))
+        row_lo = max(0, int(np.floor((y_min - self.cam_y + 0.5) * self.cell_h - 0.5)))
+        row_hi = min(self.rows - 1, int(np.ceil((y_max - self.cam_y + 0.5) * self.cell_h - 0.5)))
+        if col_hi < col_lo or row_hi < row_lo:
+            return None
+        return slice(row_lo, row_hi + 1), slice(col_lo, col_hi + 1)
+
     def cell_of(self, x: float, y: float) -> tuple[int, int] | None:
         """Return the ``(col, row)`` of the centre cell of tile ``(x, y)``'s block, or ``None`` if off the grid."""
         col = (round(x) - self.cam_x) * self.cell_w + self.cell_w // 2
@@ -186,5 +202,5 @@ def detail_sampler(
     """
     cell_w, cell_h = detail_cell_size(scale, config, area_w, area_h)
     return DetailSampler(
-        world, config, cell_w, cell_h, cam_x, cam_y, max(1, area_w // cell_w), max(1, area_h // cell_h)
+        world, config, cell_w, cell_h, cam_x, cam_y, max(1, area_w // cell_w), max(1, area_h // cell_h), scale
     )
