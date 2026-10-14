@@ -169,3 +169,24 @@ def test_generate_places_map_at_center_lat() -> None:
     small.data["world"].update({"width": 48, "height": 30, "size_km": [960.0, 900.0], "center_lat": -20.0})
     world = pipeline.generate(small, 5)
     assert world.lat_top == pytest.approx(-20.0 + 450.0 / KM_PER_DEGREE)
+
+
+def test_center_lat_number_pins_the_latitude(cfg: Config) -> None:
+    pinned = load_config(None)
+    pinned.data["world"]["center_lat"] = 12.5
+    assert pipeline.center_lat(pinned, 1) == 12.5
+
+
+def test_center_lat_seed_is_reproducible(cfg: Config) -> None:
+    assert pipeline.center_lat(cfg, 777) == pipeline.center_lat(cfg, 777)
+
+
+def test_center_lat_seed_stays_in_range(cfg: Config) -> None:
+    # "seed" draws |latitude| from world.center_lat_range_deg (default 18..48).
+    lo, hi = cfg.get("world.center_lat_range_deg")
+    assert all(lo <= abs(pipeline.center_lat(cfg, s)) <= hi for s in range(200))
+
+
+def test_center_lat_seed_uses_both_hemispheres(cfg: Config) -> None:
+    signs = {pipeline.center_lat(cfg, s) > 0 for s in range(50)}
+    assert signs == {True, False}

@@ -80,3 +80,20 @@ def test_validate_clamps_center_lat() -> None:
     cfg["world"]["center_lat"] = 120.0
     validate(cfg)
     assert cfg["world"]["center_lat"] == 90.0
+
+
+def test_validate_accepts_seed_center_lat() -> None:
+    # "seed" is a mode, not a number: it passes validation untouched.
+    cfg = get_defaults()
+    cfg["world"]["center_lat"] = "seed"
+    validate(cfg)
+    assert cfg["world"]["center_lat"] == "seed"
+
+
+@pytest.mark.parametrize("lat_range", [[48.0, 18.0], [-5.0, 20.0], [10.0, 95.0], [18.0], "18-48"])
+def test_validate_rejects_malformed_center_lat_range(lat_range: object) -> None:
+    # world.center_lat_range_deg must be [min, max] with 0 <= min <= max <= 89.
+    cfg = get_defaults()
+    cfg["world"]["center_lat_range_deg"] = lat_range
+    with pytest.raises(ConfigError, match="center_lat_range_deg"):
+        validate(cfg)
