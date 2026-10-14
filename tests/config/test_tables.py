@@ -25,6 +25,7 @@ def _new_biome_row() -> dict:
         "habitability": 0.5,
         "move_cost": 1.0,
         "goods": "horses",
+        "priority": 30,
     }
 
 

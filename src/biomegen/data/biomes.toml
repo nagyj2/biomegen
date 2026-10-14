@@ -14,6 +14,8 @@
 #   habitability  0..1 settlement suitability before relief
 #   move_cost     road / travel cost per cell on flat land, >= 1 (ignored for water)
 #   goods         trade good the biome is known for ("" for none)
+#   priority      how salient the biome is when a fit-to-screen map shows one tile per block of tiles
+#                 (higher wins; POIs and roads have their own priorities in render.fit_priority)
 
 [biomes.deep]
 label = "Deep ocean"
@@ -26,6 +28,7 @@ sparse = false
 habitability = 0.0
 move_cost = 1.0
 goods = "pearls"
+priority = 5
 
 [biomes.shallow]
 label = "Shallows"
@@ -38,6 +41,7 @@ sparse = false
 habitability = 0.0
 move_cost = 1.0
 goods = "pearls"
+priority = 6
 
 [biomes.seaice]
 label = "Sea ice"
@@ -50,6 +54,7 @@ sparse = false
 habitability = 0.0
 move_cost = 1.0
 goods = ""
+priority = 7
 
 [biomes.lake]
 label = "Lake"
@@ -62,6 +67,7 @@ sparse = false
 habitability = 0.0
 move_cost = 1.0
 goods = ""
+priority = 75
 
 [biomes.beach]
 label = "Beach"
@@ -74,6 +80,7 @@ sparse = true
 habitability = 0.6
 move_cost = 1.0
 goods = "salt fish"
+priority = 48
 
 [biomes.desert]
 label = "Desert"
@@ -86,6 +93,7 @@ sparse = true
 habitability = 0.1
 move_cost = 2.0
 goods = "salt"
+priority = 28
 
 [biomes.savanna]
 label = "Savanna"
@@ -98,6 +106,7 @@ sparse = true
 habitability = 0.75
 move_cost = 1.0
 goods = "ivory"
+priority = 30
 
 [biomes.grass]
 label = "Grassland"
@@ -110,6 +119,7 @@ sparse = true
 habitability = 1.0
 move_cost = 1.0
 goods = "grain"
+priority = 30
 
 [biomes.forest]
 label = "Temperate forest"
@@ -122,6 +132,7 @@ sparse = false
 habitability = 0.7
 move_cost = 2.0
 goods = "timber"
+priority = 40
 
 [biomes.jungle]
 label = "Jungle"
@@ -134,6 +145,7 @@ sparse = false
 habitability = 0.4
 move_cost = 3.0
 goods = "spices"
+priority = 42
 
 [biomes.swamp]
 label = "Swamp"
@@ -146,6 +158,7 @@ sparse = false
 habitability = 0.25
 move_cost = 4.0
 goods = "peat and eels"
+priority = 50
 
 [biomes.taiga]
 label = "Taiga"
@@ -158,6 +171,7 @@ sparse = false
 habitability = 0.35
 move_cost = 2.0
 goods = "furs"
+priority = 40
 
 [biomes.tundra]
 label = "Tundra"
@@ -170,6 +184,7 @@ sparse = true
 habitability = 0.12
 move_cost = 2.0
 goods = "walrus ivory"
+priority = 35
 
 [biomes.snow]
 label = "Snow / glacier"
@@ -182,6 +197,7 @@ sparse = true
 habitability = 0.0
 move_cost = 4.0
 goods = "whale oil"
+priority = 60
 
 # Relief keys (one row per Relief enum member):
 #   label             display name
@@ -190,6 +206,8 @@ goods = "whale oil"
 #   habitability_mul  0..1 multiplier on the biome's habitability
 #   move_cost         extra cost per cell added to the biome's move_cost, >= 0
 #   goods             trade good of the high ground ("" uses the biome's)
+#   priority          fit-to-screen salience of the high ground (a tile shows the larger of its biome's and its
+#                     relief's priority)
 #   min_elevation_m   optional: land at least this high gets this relief (the highest matching row
 #                     wins); rows without it (none, volcano) are never chosen by height
 
@@ -201,6 +219,7 @@ fg = [0, 0, 0]
 habitability_mul = 1.0
 move_cost = 0.0
 goods = ""
+priority = 0
 
 [relief.hills]
 label = "Hills"
@@ -210,6 +229,7 @@ fg = [70, 60, 36]
 habitability_mul = 0.7
 move_cost = 2.0
 goods = "iron"
+priority = 0
 min_elevation_m = 800.0
 
 [relief.mountain]
@@ -220,6 +240,7 @@ fg = [52, 44, 36]
 habitability_mul = 0.15
 move_cost = 8.0
 goods = "iron"
+priority = 60
 min_elevation_m = 1700.0
 
 [relief.peak]
@@ -230,6 +251,7 @@ fg = [255, 255, 255]
 habitability_mul = 0.0
 move_cost = 30.0
 goods = "iron"
+priority = 65
 min_elevation_m = 3200.0
 
 [relief.volcano]
@@ -240,3 +262,4 @@ fg = [255, 90, 30]
 habitability_mul = 0.0
 move_cost = 40.0
 goods = "iron"
+priority = 70

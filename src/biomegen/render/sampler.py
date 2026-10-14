@@ -84,16 +84,22 @@ class Sampler:
         sampler._origin = (x0, y0, step_x, step_y)
         return sampler
 
-    def cell_of(self, x: float, y: float) -> tuple[int, int] | None:
-        """Return the ``(col, row)`` of the grid cell that shows tile ``(x, y)``, or ``None`` if it is off the grid.
+    def cell_coords(self, x: float, y: float) -> tuple[int, int] | None:
+        """Return the ``(col, row)`` the grid would give tile ``(x, y)``, even off the grid; ``None`` if unknown.
 
-        Only viewport samplers can invert their mapping; the warped detail samplers return ``None``.
+        Only viewport samplers can invert their mapping; the warped detail samplers override this.
         """
         if self._origin is None:
             return None
         x0, y0, step_x, step_y = self._origin
-        col = round((x - x0) / step_x)
-        row = round((y - y0) / step_y)
+        return round((x - x0) / step_x), round((y - y0) / step_y)
+
+    def cell_of(self, x: float, y: float) -> tuple[int, int] | None:
+        """Return the ``(col, row)`` of the grid cell that shows tile ``(x, y)``, or ``None`` if it is off the grid."""
+        cell = self.cell_coords(x, y)
+        if cell is None:
+            return None
+        col, row = cell
         return (col, row) if 0 <= col < self.cols and 0 <= row < self.rows else None
 
     def nearest(self, field: np.ndarray) -> np.ndarray:

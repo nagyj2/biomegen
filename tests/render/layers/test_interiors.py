@@ -153,9 +153,20 @@ def test_interior_fill_is_the_palette_colour() -> None:
     assert (grid.bg[_footprint(sampler)] == np.asarray(wall, dtype=np.uint8)).all(axis=-1).any()
 
 
-def test_map_scale_draws_no_interiors() -> None:
+def test_map_scale_draws_the_structural_outline() -> None:
+    # On the overview a tower shows its walls but none of its furniture.
+    world = _world()
+    config = _crisp_config()
+    glyphs = set(np.unique(build_grid(world, config, WITH, Sampler.viewport(world, 10, 10)).glyph))
+    assert (
+        config.get("render.interior_glyphs.wall") in glyphs and config.get("render.interior_glyphs.table") not in glyphs
+    )
+
+
+def test_map_outline_leaves_the_marker_cell_clear() -> None:
+    # The POI's own cell keeps the terrain so its marker is never hidden by a wall.
     world = _world()
     config = _crisp_config()
     with_layer = build_grid(world, config, WITH, Sampler.viewport(world, 10, 10))
     without = build_grid(world, config, WITHOUT, Sampler.viewport(world, 10, 10))
-    assert (with_layer.glyph == without.glyph).all()
+    assert with_layer.glyph[5, 5] == without.glyph[5, 5]

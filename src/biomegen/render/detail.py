@@ -187,11 +187,11 @@ class DetailSampler(Sampler):
             return None
         return slice(row_lo, row_hi + 1), slice(col_lo, col_hi + 1)
 
-    def cell_of(self, x: float, y: float) -> tuple[int, int] | None:
-        """Return the ``(col, row)`` of the centre cell of tile ``(x, y)``'s block, or ``None`` if off the grid."""
+    def cell_coords(self, x: float, y: float) -> tuple[int, int] | None:
+        """Return the ``(col, row)`` of the centre cell of tile ``(x, y)``'s block (off the grid is allowed)."""
         col = (round(x) - self.cam_x) * self.cell_w + self.cell_w // 2
         row = (round(y) - self.cam_y) * self.cell_h + self.cell_h // 2
-        return (col, row) if 0 <= col < self.cols and 0 <= row < self.rows else None
+        return col, row
 
 
 def detail_sampler(

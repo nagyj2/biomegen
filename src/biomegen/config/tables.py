@@ -28,6 +28,7 @@ _BIOME_ROW = {
     "habitability": "unit",
     "move_cost": "cost",
     "goods": "text",
+    "priority": "rank",
 }
 _RELIEF_ROW = {
     "label": "text",
@@ -37,6 +38,7 @@ _RELIEF_ROW = {
     "habitability_mul": "unit",
     "move_cost": "nonneg",
     "goods": "text",
+    "priority": "rank",
     "min_elevation_m": "nonneg",
 }
 _DETAIL_ROW = {

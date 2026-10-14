@@ -99,26 +99,30 @@ VALUES: Dict[str, Any] = {
     # name of the colour ramp its ``tint`` layer applies ("" = no tint). Drop or reorder layers freely.
     "views": {
         "terrain": {
-            "layers": ["terrain", "relief", "water", "roads", "markers", "labels", "compass"],
+            "layers": ["terrain", "relief", "water", "roads", "interiors", "markers", "labels", "compass"],
             "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "bridges", "markers", "interiors"],
             "tint": "",
         },
         "elevation": {
-            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "interiors", "markers", "labels", "compass"],
             "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges", "markers"],
             "tint": "elevation",
         },
         "temperature": {
-            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "interiors", "markers", "labels", "compass"],
             "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges", "markers"],
             "tint": "temperature",
         },
         "rainfall": {
-            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "interiors", "markers", "labels", "compass"],
             "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges", "markers"],
             "tint": "rainfall",
         },
     },
+    # Fit-to-screen map: when a cell covers a block of tiles it shows the block's most salient tile. A tile's
+    # priority is the larger of its biome's and relief's ``priority`` (data/biomes.toml), raised to ``road`` on a
+    # road tile and ``poi`` on a point of interest; rivers count as ``river``. Higher wins, first tile on a tie.
+    "fit_priority": {"poi": 100, "road": 90, "river": 75},
     # Clutter layer (zoom and local). A detail row's ``factor`` scales its density per cell: moisture (0..1)
     # or relative elevation (0..1, over the world's highest point) is mapped to ``base + slope * value`` and
     # clamped to [min, max]. The rows themselves are ``tables.detail`` / ``tables.detail_relief``.
