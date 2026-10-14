@@ -7,10 +7,10 @@ import pytest
 
 from biomegen import pipeline
 from biomegen.config import load_config
+from biomegen.interiors import STRUCTURAL, ZOOM_VISIBLE, build_interior, footprint_cells, footprint_origin
 from biomegen.pipeline import poi_interiors
 from biomegen.render.state import ViewState, edge_pan
 from biomegen.render.zoom_view import build_detail_frame, detail_cell_size
-from biomegen.world.interiors import STRUCTURAL, ZOOM_VISIBLE, build_interior, footprint_cells, footprint_origin
 from biomegen.world.overlay import Overlay
 from biomegen.world.tile import INTERIOR_COLOR_BASE, OVERLAY_COLOR_BASE, Cell
 
@@ -220,7 +220,7 @@ def test_no_land_structure_renders_over_water(seed, cfg):
     # Verifies the core fix: across seeds, no land structure (every interior kind except the boat) ever
     # draws an interior cell over an ocean/lake/river tile - it forms around the coast instead.
     w = pipeline.generate(cfg, seed)
-    from biomegen.world.interiors import INTERIOR_BUILDERS
+    from biomegen.interiors import INTERIOR_BUILDERS
 
     for poi in w.pois:
         if poi.kind == "boat" or not INTERIOR_BUILDERS.has(poi.kind):
@@ -571,7 +571,7 @@ def _mask_components(mask):
 
 def test_shapes_registry_has_the_expected_algorithms():
     # Verifies the swappable shape registry exposes the documented organic/geometric algorithms.
-    from biomegen.world.interiors import SHAPES
+    from biomegen.interiors import SHAPES
 
     assert {"rectangle", "blob", "cellular", "drunkard", "diamond", "cross"} <= set(SHAPES.names())
 
@@ -580,8 +580,8 @@ def test_shapes_registry_has_the_expected_algorithms():
 def test_each_shape_is_connected_nonempty_and_organic(name, cfg):
     # Verifies every non-rectangle shape yields a single connected region, inset from the border, that
     # leaves some VOID (i.e. is genuinely non-square) - the contract the builder relies on.
+    from biomegen.interiors import SHAPES
     from biomegen.util import rng
-    from biomegen.world.interiors import SHAPES
 
     gw, gh = 40, 32
     mask = SHAPES.get(name)(rng.derive(123, "interior.shape"), gw, gh)
@@ -601,7 +601,7 @@ def test_dungeon_outline_is_not_rectangular(dungeon, cfg):
 
 def test_mixed_shape_varies_across_dungeons(cfg):
     # Verifies "mixed" picks different shapes per dungeon (so they aren't all the same / all square).
-    from biomegen.world.interiors.grid import InteriorCtx, resolve_shape
+    from biomegen.interiors.grid import InteriorCtx, resolve_shape
 
     signatures = set()
     for seed in range(40):
@@ -613,7 +613,7 @@ def test_mixed_shape_varies_across_dungeons(cfg):
 def test_dungeon_shape_is_floor_independent(cfg):
     # Verifies a dungeon's boundary shape is chosen once per dungeon (not per floor), so every floor
     # shares one building footprint even though the room layout inside it varies floor to floor.
-    from biomegen.world.interiors.grid import InteriorCtx, resolve_shape
+    from biomegen.interiors.grid import InteriorCtx, resolve_shape
 
     masks = set()
     for f in range(-2, 1):  # different floors, same dungeon (interior_seed)
@@ -704,7 +704,7 @@ def test_ruin_is_eroded(richworld, cfg):
 
 def test_one_builder_serves_all_three_settlement_kinds(cfg):
     # Verifies city/town/village share a single registered builder (the multi-building settlement plan).
-    from biomegen.world.interiors import INTERIOR_BUILDERS
+    from biomegen.interiors import INTERIOR_BUILDERS
 
     builders = {INTERIOR_BUILDERS.get(k) for k in ("city", "town", "village")}
     assert len(builders) == 1
