@@ -128,3 +128,31 @@ def test_bridge_layer_draws_nothing_at_map_scale() -> None:
     with_layer = build_grid(world, config, BRIDGES, Sampler.viewport(world, 3, 5))
     without = build_grid(world, config, View("t", ("terrain",)), Sampler.viewport(world, 3, 5))
     assert (with_layer.glyph == without.glyph).all() and (with_layer.bg == without.bg).all()
+
+
+def _bed_glyphs(grid, config) -> set[str]:
+    return {str(g) for g in grid.glyph[_is_color(grid, config.get("render.detail_colors.road_bg"))]}
+
+
+def test_diagonal_bed_is_drawn_with_slashes_not_colons() -> None:
+    # A rising run of road tiles gets the rising-line glyph along its bed.
+    world = make_world(4, 4, Biome.GRASS)
+    world.road[3, 0] = world.road[2, 1] = world.road[1, 2] = world.road[0, 3] = 1
+    grid, _, config = _draw(world, ROADS)
+    assert "╱" in _bed_glyphs(grid, config) and ":" not in _bed_glyphs(grid, config)
+
+
+def test_straight_bed_uses_the_horizontal_glyph() -> None:
+    world = make_world(5, 3, Biome.GRASS)
+    world.road[1, :] = 1
+    grid, _, config = _draw(world, ROADS, _crisp_config(road_clutter={"glyphs": [], "density": 0.0}))
+    assert _bed_glyphs(grid, config) == {"─"}
+
+
+def test_ascii_bed_uses_ascii_glyphs() -> None:
+    world = make_world(4, 4, Biome.GRASS)
+    world.road[0, 0] = world.road[1, 1] = world.road[2, 2] = world.road[3, 3] = 1
+    config = _crisp_config(road_clutter={"glyphs": [], "density": 0.0})
+    sampler = DetailSampler(world, config, 10, 5, 0, 0, world.width, world.height, "zoom")
+    grid = build_grid(world, config, ROADS, sampler, ascii_only=True)
+    assert _bed_glyphs(grid, config) == {"\\"}

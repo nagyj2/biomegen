@@ -108,7 +108,8 @@ blend_strength = 0.85           # soften biome boundaries at detail scales (0 = 
 blend_scale = 2.5               # feature size (tiles) of the boundary-blend warp
 road_half_width = 0.30          # road-bed half-width in tiles (a thin meandering path, not a full tile)
 road_warp = 0.18                # organic wobble (tiles) of the road bed; 0 = dead-straight segments
-road_glyph = ":"                # glyph the road bed is drawn with
+# road_bed (the glyphs the detail-scale road bed is drawn with, by direction) and roads (the map-scale glyph set,
+# including the diagonal and junction glyphs) are also tunable.
 # road clutter (road_clutter, road_clutter_local), bridge_glyphs and the detail colours (detail_colors) are also
 # tunable. See src/biomegen/config/defaults/render.py.
 default_view = "fit"            # "fit" | "onetoone"

@@ -446,7 +446,7 @@ markers — they render like the rivers do.
 - *Roads* are a thin meandering **bed**: a detail cell is road when its (road-warped) world position
   lies within `road_half_width` tiles of the straight line joining two 8-adjacent land-road tile
   centres. That distance test is a pure function of world position, so zoom and local are the same
-  shape at different scales. The bed is `road_glyph` (`:`) in the `detail_colors.road_*` colours with small
+  shape at different scales. The bed glyph follows the direction of the link (`road_bed`: `─ │ ╱ ╲`) in the `detail_colors.road_*` colours with small
   clutter scattered along it (`road_clutter`, plus `road_clutter_local` fine detail at the close scale). A
   small `road_warp` gives it an organic wobble; water and river cells are never drawn over (bridges carry those).
 - *Bridges* are a straight **deck flanked by walls**, drawn from each bridge POI's stored span

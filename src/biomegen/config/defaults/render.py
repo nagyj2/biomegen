@@ -33,7 +33,11 @@ VALUES: Dict[str, Any] = {
     # detail scales; ``road_clutter_local`` adds extra fine detail only at the close (local) scale.
     "road_half_width": 0.30,
     "road_warp": 0.18,
-    "road_glyph": ":",
+    # The bed glyph follows the direction of the road link a cell lies on (unicode / ascii).
+    "road_bed": {
+        "glyphs": {"horizontal": "─", "vertical": "│", "rising": "╱", "falling": "╲"},
+        "ascii": {"horizontal": "-", "vertical": "|", "rising": "/", "falling": "\\"},
+    },
     "road_clutter": {"glyphs": [".", ",", "'"], "density": 0.18},
     "road_clutter_local": {"glyphs": ['"', ".", ";"], "density": 0.10},
     # Bridges render as a straight deck between the two road pieces they join (at any real angle): a
@@ -213,12 +217,16 @@ VALUES: Dict[str, Any] = {
         "river_mix_t": 0.6,
         "river_mix_t_tinted": 0.35,
     },
-    # Roads layer: a road cell draws the glyph for which of its four neighbours (north 1, east 2, south 4,
-    # west 8) are also road; ``glyphs`` / ``ascii`` are indexed by that 0..15 mask.
+    # Roads layer: a road cell draws the glyph for which of its eight neighbours are also road. With only
+    # orthogonal neighbours (north 1, east 2, south 4, west 8) ``glyphs`` / ``ascii`` are indexed by that 0..15
+    # mask (box drawing, U+2500 block). With only diagonal neighbours ``diagonal`` gives a rising line, a falling
+    # line and a crossing (U+2571-2573). With both kinds, ``junction`` marks three or more meeting neighbours.
     "roads": {
         "fg": [96, 58, 30],
         "glyphs": ["·", "│", "─", "╰", "│", "│", "╭", "├", "─", "╯", "─", "┴", "╮", "┤", "┬", "┼"],
         "ascii": ["+", "|", "-", "+", "|", "|", "+", "+", "-", "+", "-", "+", "+", "+", "+", "+"],
+        "diagonal": {"glyphs": ["╱", "╲", "╳"], "ascii": ["/", "\\", "X"]},
+        "junction": {"glyphs": "✳", "ascii": "*"},
     },
     # Markers layer: points of interest draw their ``markers`` glyph (below) in bold with this colour pair.
     "marker_style": {"fg": [255, 130, 255], "bg": [70, 20, 70]},

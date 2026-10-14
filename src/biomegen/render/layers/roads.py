@@ -4,36 +4,93 @@ from __future__ import annotations
 
 import numpy as np
 
+from ...config.model import Config
 from ...world.tile import WaterType
 from ..colors import scale_colors
 from ..detail import SCALE_LOCAL, DetailSampler
 from ..grid import CellGrid
 from . import LAYERS, LayerContext
 
-_NORTH, _EAST, _SOUTH, _WEST = 1, 2, 4, 8
+# Bits of the eight-neighbour connection mask, clockwise from north.
+_N, _NE, _E, _SE, _S, _SW, _W, _NW = 1, 2, 4, 8, 16, 32, 64, 128
+_CARDINAL_INDEX = ((_N, 1), (_E, 2), (_S, 4), (_W, 8))  # mask bit -> bit of the 16-entry cardinal glyph index
+_RISING = (_NE, _SW)  # neighbours on a "╱" line; the other two diagonals (_SE, _NW) lie on a "╲" line
+_DIAGONALS = (_NE, _SE, _SW, _NW)
+# Bed glyph kinds, by the direction of the road link a detail cell lies on; the last is a lone road tile.
+_BED_KINDS = ("horizontal", "vertical", "rising", "falling")
+_LONE = len(_BED_KINDS)
 
 
-def connection_mask(road: np.ndarray) -> np.ndarray:
-    """Return, per tile, a 0..15 bit mask of which of its four neighbours are also road."""
+def connection_mask8(road: np.ndarray) -> np.ndarray:
+    """Return, per tile, a bit mask of its road links (N 1, NE 2, E 4, SE 8, S 16, SW 32, W 64, NW 128).
+
+    An orthogonal neighbour counts when it is road. A diagonal neighbour counts only when neither orthogonal tile
+    between it and this tile is road: otherwise the two already join through that tile, and the corner would be
+    drawn as a spurious diagonal.
+    """
     padded = np.pad(road.astype(bool), 1)
+    north, east = padded[:-2, 1:-1], padded[1:-1, 2:]
+    south, west = padded[2:, 1:-1], padded[1:-1, :-2]
+    neighbours = (
+        (_N, north),
+        (_NE, padded[:-2, 2:] & ~north & ~east),
+        (_E, east),
+        (_SE, padded[2:, 2:] & ~south & ~east),
+        (_S, south),
+        (_SW, padded[2:, :-2] & ~south & ~west),
+        (_W, west),
+        (_NW, padded[:-2, :-2] & ~north & ~west),
+    )
     mask = np.zeros(road.shape, dtype=np.uint8)
-    mask |= np.where(padded[:-2, 1:-1], _NORTH, 0).astype(np.uint8)
-    mask |= np.where(padded[1:-1, 2:], _EAST, 0).astype(np.uint8)
-    mask |= np.where(padded[2:, 1:-1], _SOUTH, 0).astype(np.uint8)
-    mask |= np.where(padded[1:-1, :-2], _WEST, 0).astype(np.uint8)
+    for bit, present in neighbours:
+        mask |= np.where(present, bit, 0).astype(np.uint8)
     return mask
+
+
+def road_glyph_table(config: Config, ascii_only: bool) -> np.ndarray:
+    """Return the glyph for each of the 256 eight-neighbour masks, so every way two roads can join is drawable.
+
+    No diagonal neighbour: the box-drawing glyph for the cardinal mask (``render.roads.glyphs``). Only diagonal
+    neighbours: ``╱`` or ``╲`` along a line, ``╳`` where they bend or cross. Both kinds: the junction glyph when
+    three or more neighbours meet, else the slant of the single diagonal link.
+    """
+    cfg = config.get("render.roads")
+    key = "ascii" if ascii_only else "glyphs"
+    cardinal = cfg[key]
+    rising, falling, crossing = cfg["diagonal"][key]
+    junction = cfg["junction"][key]
+    table = np.empty(256, dtype="U1")
+    for mask in range(256):
+        index = sum(value for bit, value in _CARDINAL_INDEX if mask & bit)
+        diagonal = [bit for bit in _DIAGONALS if mask & bit]
+        slants = {rising if bit in _RISING else falling for bit in diagonal}
+        if not diagonal:
+            table[mask] = cardinal[index]
+        elif index and bin(mask).count("1") >= 3:
+            table[mask] = junction
+        elif len(slants) == 1 and (index or len(diagonal) <= 2):
+            table[mask] = next(iter(slants))
+        else:
+            table[mask] = crossing
+    return table
 
 
 def _mark_segment(
     sampler: DetailSampler,
-    is_road: np.ndarray,
+    nearest: np.ndarray,
+    kind: np.ndarray,
     warped: tuple[np.ndarray, np.ndarray],
     start: tuple[int, int],
     end: tuple[int, int],
     reach: float,
     half: float,
+    link_kind: int,
 ) -> None:
-    """Set ``is_road`` on the cells whose warped position is within ``half`` tiles of the segment ``start -> end``."""
+    """Claim the cells whose warped position is within ``half`` tiles of the link ``start -> end``.
+
+    ``nearest`` holds each cell's distance to its closest link so far and ``kind`` that link's direction, so a cell
+    where links meet takes the nearer one.
+    """
     ax, ay = start
     bx, by = end
     window = sampler.cell_window(min(ax, bx) - reach, max(ax, bx) + reach, min(ay, by) - reach, max(ay, by) + reach)
@@ -48,7 +105,9 @@ def _mark_segment(
     else:
         t = np.clip(((x - ax) * dx + (y - ay) * dy) / length2, 0.0, 1.0)
         distance = np.hypot(x - (ax + t * dx), y - (ay + t * dy))
-    is_road[window] |= distance <= half
+    closer = (distance <= half) & (distance < nearest[window])
+    nearest[window] = np.where(closer, distance, nearest[window])
+    kind[window] = np.where(closer, link_kind, kind[window])
 
 
 def _detail_roads(ctx: LayerContext, grid: CellGrid, sampler: DetailSampler) -> None:
@@ -81,21 +140,28 @@ def _detail_roads(ctx: LayerContext, grid: CellGrid, sampler: DetailSampler) -> 
     if len(tile_cols) == 0:
         return
     warped = sampler.warped(warp)
-    is_road = np.zeros(sampler.fx.shape, dtype=bool)
-    # Each link once: the four "forward" directions; a tile with no link is a disc at its centre.
-    forward = ((1, 0), (0, 1), (1, 1), (1, -1))
+    nearest = np.full(sampler.fx.shape, np.inf)
+    kind = np.full(sampler.fx.shape, _LONE, dtype=np.int8)
+    # Each link once: the four "forward" directions, each with its bed glyph kind (a detail tile is a physical
+    # square, so a one-tile diagonal step is a true 45 degree line); a tile with no link is a disc at its centre.
+    forward = (((1, 0), 0), ((0, 1), 1), ((1, -1), 2), ((1, 1), 3))
+    linked = connection_mask8(land_road) != 0
     for row, col in zip(tile_rows.tolist(), tile_cols.tolist(), strict=True):
         tx, ty = x_lo + col, y_lo + row
-        _mark_segment(sampler, is_road, warped, (tx, ty), (tx, ty), reach, half)
-        for step_x, step_y in forward:
+        if not linked[ty, tx]:
+            _mark_segment(sampler, nearest, kind, warped, (tx, ty), (tx, ty), reach, half, _LONE)
+        for (step_x, step_y), link_kind in forward:
             nx, ny = tx + step_x, ty + step_y
             if 0 <= nx < world.width and 0 <= ny < world.height and land_road[ny, nx]:
-                _mark_segment(sampler, is_road, warped, (tx, ty), (nx, ny), reach, half)
+                _mark_segment(sampler, nearest, kind, warped, (tx, ty), (nx, ny), reach, half, link_kind)
 
-    bed = is_road & ctx.land & ~ctx.river
+    bed = np.isfinite(nearest) & ctx.land & ~ctx.river
     if not bed.any():
         return
-    glyph = np.full(is_road.shape, str(cfg.get("render.road_glyph")), dtype="U1")
+    key = "ascii" if ctx.ascii_only else "glyphs"
+    bed_glyphs = cfg.get("render.road_bed")[key]
+    lone = cfg.get("render.roads")[key][0]
+    glyph = np.array([bed_glyphs[name] for name in _BED_KINDS] + [lone], dtype="U1")[kind]
     chance = ctx.scatter("road")
     choice = ctx.scatter("road", "glyph")
     clutter = cfg.get("render.road_clutter") or {}
@@ -116,7 +182,7 @@ def _detail_roads(ctx: LayerContext, grid: CellGrid, sampler: DetailSampler) -> 
 
 @LAYERS.register("roads")
 def roads_layer(ctx: LayerContext, grid: CellGrid) -> None:
-    """Draw road tiles with the glyph for their connection mask (``render.roads``); the fill is kept.
+    """Draw road tiles with the glyph for their eight-neighbour mask (:func:`road_glyph_table`); the fill is kept.
 
     At the detail scales roads are a thin bed instead (see :func:`_detail_roads`).
     """
@@ -127,5 +193,5 @@ def roads_layer(ctx: LayerContext, grid: CellGrid) -> None:
     road = ctx.sampler.inside & (ctx.sampler.nearest(ctx.world.road) > 0)
     if not road.any():
         return
-    glyphs = np.array(cfg["ascii" if ctx.ascii_only else "glyphs"], dtype="U1")
-    grid.put(road, glyph=glyphs[ctx.sampler.nearest(connection_mask(ctx.world.road))], fg=tuple(cfg["fg"]))
+    glyphs = road_glyph_table(ctx.config, ctx.ascii_only)
+    grid.put(road, glyph=glyphs[ctx.sampler.nearest(connection_mask8(ctx.world.road))], fg=tuple(cfg["fg"]))
