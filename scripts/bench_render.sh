@@ -14,6 +14,12 @@ import time
 
 from biomegen import pipeline
 from biomegen.config import load_config
+import io
+
+from biomegen.explorer.app import compose_frame
+from biomegen.explorer.state import ViewState as ExplorerState
+from biomegen.explorer.state import initial_cursor
+from biomegen.explorer.writer import DiffWriter
 from biomegen.render.detail import detail_sampler
 from biomegen.render.layers import build_grid
 from biomegen.render.state import ViewState
@@ -47,4 +53,37 @@ for scale in ("zoom", "local"):
     old = best_ms(lambda: build_detail_frame(world, config, state, area_w, area_h, cell_w, cell_h))
     new = best_ms(lambda: build_grid(world, config, view, detail_sampler(world, config, scale, area_w, area_h, state.cam_x, state.cam_y)))
     print(f"{scale:>6} {tiles_w * cell_w * tiles_h * cell_h:7d} {old:8.1f} {new:8.1f} {new / old:8.2f}")
+
+# The whole explorer frame: compose (layers, cursor, panel) and diff-write, at the same area plus a 12-row panel.
+from biomegen.world.overlay import Overlay
+
+print()
+print(f"explorer frame on a {area_w}x{area_h + 12} terminal (budget 33 ms), best of {runs}")
+print(f"{'scale':>6} {'compose':>9} {'full write':>11} {'step write':>11} {'frame':>7}")
+for scale, mode in (("map", "fit"), ("map", "onetoone"), ("zoom", "fit"), ("local", "fit")):
+    state = ExplorerState(mode=mode, scale=scale, recenter=True)
+    state.cx, state.cy = initial_cursor(world, config)
+    size = (area_w, area_h + 12)
+    overlay = Overlay()
+    compose = best_ms(lambda: compose_frame(world, config, state, overlay, size))
+    frame = compose_frame(world, config, state, overlay, size)
+    sink = io.StringIO()
+    writer = DiffWriter(sink, "truecolor")
+
+    def full_write():
+        writer.invalidate()
+        writer.draw(frame.screen)
+
+    full = best_ms(full_write)
+    state.cx += 1
+    moved = compose_frame(world, config, state, overlay, size)
+
+    def step_write():
+        writer.invalidate()
+        writer.draw(frame.screen)
+        writer.draw(moved.screen)
+
+    step = best_ms(step_write) - full
+    label = scale if scale != "map" else f"map-{mode}"
+    print(f"{label:>6} {compose:9.1f} {full:11.1f} {step:11.1f} {compose + step:7.1f}")
 PY
