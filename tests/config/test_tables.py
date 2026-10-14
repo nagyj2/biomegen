@@ -37,6 +37,7 @@ def test_shipped_tables_load_and_validate() -> None:
         "detail_relief",
         "geo_names",
         "relief",
+        "sites",
         "styles",
         "tiers",
     ]
@@ -149,13 +150,14 @@ def test_duplicate_tier_rank_is_rejected() -> None:
 
 def test_loader_combines_the_shipped_files() -> None:
     # biomes.toml supplies biomes and relief; detail.toml detail and detail_relief; tiers.toml tiers;
-    # terrain.toml styles; geography.toml geo_names.
+    # terrain.toml styles; geography.toml geo_names; sites.toml sites.
     assert sorted(_load(DATA_DIR, DATA_FILES)) == [
         "biomes",
         "detail",
         "detail_relief",
         "geo_names",
         "relief",
+        "sites",
         "styles",
         "tiers",
     ]
@@ -204,3 +206,29 @@ def test_loader_rejects_a_table_defined_twice(tmp_path: Path) -> None:
     (tmp_path / "b.toml").write_text("[tiers.y]\nrank = 1\n", encoding="utf-8")
     with pytest.raises(ValueError, match="defined twice"):
         _load(tmp_path, ("a.toml", "b.toml"))
+
+
+def test_every_site_row_has_a_layout_and_a_positive_extent() -> None:
+    # sites.toml names a layout and a w x h extent for every kind, so no site can be zero-sized.
+    sites = get_defaults()["tables"]["sites"]
+    assert sites and all(row["layout"] and min(row["extent_tiles"]) > 0 for row in sites.values())
+
+
+def test_site_extent_must_be_two_positive_numbers() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["sites"]["village"]["extent_tiles"] = [1.0, 0.0]
+    with pytest.raises(ConfigError):
+        validate(cfg)
+
+
+def test_site_rows_per_tile_must_be_a_positive_integer() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["sites"]["village"]["rows_per_tile"] = 0
+    with pytest.raises(ConfigError):
+        validate(cfg)
+
+
+def test_every_settlement_tier_has_a_site_row() -> None:
+    # Each tier in tiers.toml needs a site, or its POIs could never be zoomed into.
+    tables = get_defaults()["tables"]
+    assert set(tables["tiers"]) <= set(tables["sites"])

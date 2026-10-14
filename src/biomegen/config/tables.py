@@ -13,10 +13,10 @@ from .validate import _coerce_color
 
 # Value kinds: "text" any string; "char" exactly one character; "char?" zero or one; "color" an
 # [r, g, b] / "#rrggbb" colour; "bool"; "unit" a number in [0, 1]; "cost" a number >= 1;
-# "nonneg" a number >= 0; "positive" a number > 0; "rank" an int >= 0; "range" [min, max] ints >= 0;
-# "forms" a non-empty list of name patterns, each containing "{n}" exactly once; "ascii_char" /
-# "ascii_char?" / "ascii_text" are "char" / "char?" / "text" restricted to 7-bit characters; "factor" one of
-# "none", "moisture", "elevation".
+# "nonneg" a number >= 0; "positive" a number > 0; "rank" an int >= 0; "count" an int >= 1;
+# "range" [min, max] ints >= 0; "pair" a [w, h] of numbers > 0; "forms" a non-empty list of name patterns,
+# each containing "{n}" exactly once; "ascii_char" / "ascii_char?" / "ascii_text" are "char" / "char?" /
+# "text" restricted to 7-bit characters; "factor" one of "none", "moisture", "elevation".
 _BIOME_ROW = {
     "label": "text",
     "glyph": "char",
@@ -62,6 +62,13 @@ _TIER_ROW = {
     "land_per_settlement_km2": "positive",
     "backbone": "bool",
 }
+_SITE_ROW = {
+    "layout": "text",
+    "extent_tiles": "pair",
+    "rows_per_tile": "count",
+    "grows_with_pop": "bool",
+    "plaza_tiles": "positive",
+}
 _STYLE_ROW = {
     "label": "text",
     "weight": "nonneg",
@@ -89,6 +96,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "tiers": (_TIER_ROW, frozenset({"bg"})),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
+    "sites": (_SITE_ROW, frozenset({"plaza_tiles"})),
 }
 
 
@@ -119,6 +127,8 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "nonneg": lambda v: _is_number(v) and v >= 0.0,
         "positive": lambda v: _is_number(v) and v > 0.0,
         "rank": lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 0,
+        "count": lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 1,
+        "pair": lambda v: isinstance(v, list) and len(v) == 2 and all(_is_number(n) and n > 0.0 for n in v),
         "forms": lambda v: (
             isinstance(v, list) and len(v) > 0 and all(isinstance(f, str) and f.count("{n}") == 1 for f in v)
         ),
