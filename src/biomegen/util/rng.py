@@ -68,6 +68,18 @@ LABELS: frozenset[str] = frozenset(
         "roads.meander",  # per-edge road meander noise
         "naming",  # name/lore generation
         "naming.culture",  # per-region culture assignment (mixed-culture naming)
+        "regen",  # perturbed master seed for a regeneration attempt after the land-fraction gate
+        # Stages of the redesigned pipeline (docs/redesign_plan.md 4.1), registered ahead of their
+        # phase so no earlier stage can claim the name. Each stage adds its own suffixes when it lands.
+        "terrain",  # elevation, mountain belts, sea level
+        "climate",  # temperature and rainfall
+        "biomes",  # biome and relief classification
+        "geography",  # landmasses, ranges, seas, lakes and their names
+        "settlements",  # habitability sampling and settlement tiers
+        "realms",  # realm growth from capitals
+        "diplomacy",  # vassalage, relations, fronts, claims
+        "history",  # the derived chronicle (per-event streams are suffixed)
+        "pois",  # config-driven POI kinds placed from chronicle events
     }
 )
 
