@@ -50,16 +50,13 @@ src/biomegen/
     world.py            Immutable World (parallel numpy arrays) + fingerprint()
     overlay.py          Mutable Overlay (runtime edits, composited at read time)
     entities.py         POI / Region / River / Lake / GeoFeature dataclasses
-  interiors/            Lazy, deterministic, LRU-cached POI interior builders
-    grid.py             Shared toolkit: BSP partition, carving, stair shafts, walls/doors/streets,
-                        furnishing scatter, registry + build cache
-    shapes.py           Swappable organic outer-boundary masks (blob/cellular/drunkard/diamond/cross)
-    dungeon.py          Dungeon: stacked descending rooms, aligned stairs, depth-scaled furnishing
-    tower.py            Tower: stacked ascending rooms, lookout top floor, sparse quarters
-    settlement.py       City/town/village: multiple walled buildings + PATH streets + plaza
-    ruin.py             Ruin: a building eroded into rubble and breached walls (single floor)
-    camp.py             Camp: bespoke open-air clearing — campfire, tents, wagon (no walls)
-    boat.py             Boat: bespoke planked hull + deck + cargo, floating on water
+  sites/                Lazy, deterministic, cached site plans: what you see zooming into a POI
+    geometry.py         Extent, window and plan resolution of a POI's site, in world tiles
+    patch.py            The terrain under a site (read through the render sampler) and the road gates
+    plan.py             site_plan(): the per-floor plan, memoised; SitePlan
+    layout.py           SiteContext and the layout registry; structure / settlement / camp / boat layouts
+    carve.py partition.py shapes.py furnish.py circulation.py streets.py   the layout toolkit
+    coverage.py blit.py Which tiles and cells a site covers; scaling a plan into a grid
   pipeline/             Ordered generation stages (see Pipeline section below)
     __init__.py         generate() orchestrator + stats()
     physical/
@@ -74,7 +71,6 @@ src/biomegen/
       settlements.py    Stage 7 — habitability, capital / city / town / village placement
       roads.py          Stage 9 — road network + bridge POIs + per-POI road-entrance recording
     story/
-      poi_interiors.py  Stage 9 — POI interior metadata (footprint/bbox/entrance; no grids)
     naming.py           Stage 10 — names and lore for all entities
   naming/
     cultures.py         Culture profiles + biome-biased culture assignment
@@ -95,7 +91,7 @@ src/biomegen/
     scatter.py          Stable per-cell decoration keyed on tile and sub-cell
     static.py           render_static (framed map + legend) and render_detail (zoom/local grid)
     colortest.py        --color-test swatches
-    layers/             terrain relief tint water clutter roads bridges interiors markers names(labels) compass
+    layers/             terrain relief tint water clutter roads bridges sites markers names(labels) compass
     furniture/          frame, graticule, scale bar, legend for static maps
     backends/           ansi plain html svg png (a grid or document -> text or image)
   explorer/             Interactive terminal app (the only place that reads keys or writes the screen)
@@ -152,7 +148,7 @@ is not hashed).
 The **only** mutable runtime state. Two layers composited over the immutable base at read time:
 
 - `surface`: sparse `(x, y) → attrs dict` for gameplay edits on the map surface.
-- `interior`: sparse `(interior_seed, floor) → {(x, y): Cell}` for POI floor layouts.
+- `interior`: sparse `(interior_seed, floor) → {(x, y): Cell}` edits to a POI's site plan.
 
 JSON-serialisable. The base biome arrays are never mutated after generation.
 
@@ -168,12 +164,11 @@ rank, so the gate only trips when a style's land fraction is configured below th
 
 ```
 terrain → climate → hydrology → biomes → geography → regions → settlements
-         → pois → roads → poi_interiors → naming
+         → pois → roads → naming
 ```
 
-Roads run **before** POI interiors: the road network is laid to each POI anchor first, records the
-direction it arrives from on every POI, and the interiors stage then sites that POI's footprint
-entrance (and biases the interior door) to the road-facing side.
+Roads end at every POI's anchor. A POI's site plan (`sites/`) is built lazily and finds the roads that reach
+it from the world arrays, so no stage records anything for it.
 
 ### Stage 1 — Terrain (`pipeline/physical/terrain.py`)
 
@@ -289,17 +284,16 @@ from Stage 7 and count for spacing and remoteness:
 
 1. **Count**: land km² (sea km² for boats) ÷ the kind's `km2_per_poi`, times `poi.density`.
 2. **Eligibility**: allowed biomes, elevation bounds, land or water, a free tile, and for land kinds at least
-   `poi.min_footprint_land` dry land under the largest footprint (`footprint_land_fraction_mask`, a summed-area
+   `poi.min_footprint_land` dry land under the tiles its site may cover (`footprint_land_fraction_mask`, a summed-area
    table), so a structure can sit on a coast but never mostly over water.
 3. **Score**: 1 + freshwater and coastal closeness (km falloff) + remoteness from settlements + seeded jitter.
 4. **Blue-noise pick**: kinds in `priority` order, best score first, kept when no placed POI is closer than
    `min_spacing_km` (aspect-aware km).
-5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy interior builder (see Stage 9 and the Render layer).
+5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy site plan (see Sites and the Render layer).
 
 ### Stage 9 — Roads (`pipeline/civilization/roads.py`)
 
-Connects POIs with meandering least-cost roads, **before** interiors so the network can shape each
-POI's entrance:
+Connects POIs with meandering least-cost roads:
 
 1. **Landmass grouping**: `water_type != SALT` (land + rivers + lakes, but not ocean) is labelled
    with 8-connected components. Roads are only routed within one component — they cannot cross open
@@ -308,7 +302,7 @@ POI's entrance:
    (`tables.tiers.<tier>.backbone`: capital, city, town; falls back to all POIs if none exist) → probabilistic attachment of
    remaining POIs (villages and other civilized POIs at `civilized_connect_prob`, uncivilized at `uncivilized_connect_prob`)
    → extra loop edges at `extra_edge_prob`. All random draws consume a per-component RNG in a fixed
-   sorted edge order. Roads route to each POI's anchor (interiors set the perimeter entrance later).
+   sorted edge order. Roads route to each POI's anchor.
 3. **Routing**: A* over a per-tile cost surface. Cost factors: `base_cost` × the biome's `move_cost` + the
    relief's `move_cost` (tables `biomes`, `relief`) + `slope_cost_per_km × |Δelevation_m| / 1000` +
    `uphill_surcharge_per_km` (uphill only) + `water_cost` (cross water). A step costs its km length, so on tall
@@ -328,31 +322,6 @@ POI's entrance:
    per-run **overlap guard** (a shared set of already-spanned water tiles) prevents two roads fording
    the same spot from stacking duplicate decks — the first (trunk-phase, usually longest) bridge wins,
    so a wide ford reads as one bridge (connected straight segments), not piled-up overlapping ones.
-5. **Entrance recording**: after routing, each non-bridge POI records the dominant compass direction
-   the network arrives from (`extra['road_entry']`); roads from the same side collapse to one entry.
-   Stage 9 turns that into the perimeter entrance and the road-facing interior door.
-
-### Stage 9 — POI interiors (`pipeline/story/poi_interiors.py`)
-
-Cheap, **render-only metadata** for each POI's detail-view interior — no grids are generated here.
-For every POI with a configured `interiors.footprints.<kind>` it sets the **footprint** (in world
-tiles, centred on the anchor) and the clamped on-map **bbox**. The actual interior **grids** are
-built lazily and deterministically from `interior_seed` on first view (see Render layer → Interiors).
-
-**Entrance + road cleanup**: because roads are already laid, this stage places `poi.entrance` on the
-footprint perimeter facing `extra['road_entry']` (the interior builder biases its door to the same
-side), and clears the **land** road tiles strictly inside the footprint (the 1-tile perimeter ring is
-kept so the road still meets the structure; water tiles keep their flag so a bridge under a footprint
-survives). The biome arrays are untouched, and the road clear is a pure function of the placed POIs,
-so generation stays reproducible. POIs with no road keep `entrance` at the anchor.
-
-**Coastal area restoration**: a footprint that clips water loses interior area to it (the builder forms
-the structure around the coast). To keep coastal structures full-sized, this stage grows the footprint —
-symmetrically, so the anchor stays centred — until its dry-land tile count is back to the nominal
-(size-jittered) area, capped at `interiors.expand_max_factor`. Water never blocks growth (the extra coast
-is carved again by the builder); other POIs do — each POI claims its footprint rectangle and every anchor
-is off-limits, so a grown structure never overlaps a neighbour. POIs grow in placement (priority) order,
-so higher-value settlements claim space first. Boats keep their nominal footprint (they sit on water).
 
 ### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 
@@ -389,9 +358,8 @@ needed). All other families are changed via their config key.
 | Noise backend | `terrain.noise_backend` | `--noise-backend` | `perlin`\* · `value` · `opensimplex` · `noise_lib`† |
 | Flow model | `hydrology.flow_model` | — | `d8` · `dinf` |
 | Pathfinder | `roads.pathfinder` | — | `astar`\* · `tcod` · `dijkstra` |
-| Interior partition | `interiors.partition` | — | `bsp`\* · `tcod_bsp` |
-| Interior shape | `interiors.shape` | — | `mixed`\* · `rectangle` · `blob` · `cellular` · `drunkard` · `diamond` · `cross` |
-| Interior builder | (by POI kind) | — | `dungeon` · `tower` · `city` · `town` · `village` · `ruin` · `camp` · `boat` |
+| Site outline | `sites.shape` | — | `mixed`\* · `rectangle` · `blob` · `cellular` · `drunkard` · `diamond` · `cross` |
+| Site layout | `tables.sites.<kind>.layout` | — | `settlement` · `dungeon` · `tower` · `ruin` · `camp` · `boat` |
 | Spatial compute | `compute.backend` | — | `scipy`\* · `numpy` · `pure` |
 
 \* default   † optional C-extension; unavailable if not installed (no C compiler needed for defaults)
@@ -415,24 +383,25 @@ explorer, `--view`, `--scale` and the SVG/PNG exports all run the same stack, so
 - **Views** (`render.views`) list the layers per scale family: `layers` for the map and `detail_layers` for
   zoom and local, plus an optional tint ramp (elevation, temperature, rainfall). `v` cycles them.
 - **Layers** (`render/layers/`): `terrain`, `relief`, `tint`, `water`, `clutter`, `roads`, `bridges`,
-  `interiors`, `markers`, `labels`, `compass`. Colours and glyphs come from `tables.biomes`, `tables.relief`,
+  `sites`, `markers`, `labels`, `compass`. Colours and glyphs come from `tables.biomes`, `tables.relief`,
   `tables.detail` and `tables.detail_relief` (`data/*.toml`), and the `render.*` config; none are literals.
 - **Back-ends** (`render/backends/`) turn a grid or document into ANSI, plain text, HTML, SVG or PNG.
 - Hot paths are numpy; the only Python loops are over POIs and road links.
 
-**Scales and the cursor.** Three scales share one tile cursor and one camera:
+**Scales and the cursor.** Four scales; the first three share one tile cursor and one camera:
 
 - **Map**: `fit` (the whole world scaled down) or `1:1` (one cell per tile, panned). Toggle with `f`.
 - **Zoom**: each tile is a `zoom_scale x (zoom_scale * cell_aspect)` block of cells.
-- **Local**: the screen shows `local_rows` tiles vertically, each magnified further; furnished interiors
-  appear here.
+- **Local**: the screen shows `local_rows` tiles vertically, each magnified further; furnished plans appear here.
+- **Site**: the highest zoom of a point of interest, and only there (elsewhere it stays local). One plan cell per
+  terminal cell, with a single-cell cursor and its own camera; see Sites.
 
 **Detail scales.** A `DetailSampler` maps each cell of a tile's `cell_w x cell_h` block to a continuous world
 position (tile centres on the integers) and reads the biome, relief and river coverage through the
 biome-blend warp. `terrain` draws the biome's floor glyph on every cell (a rocky floor on mountain relief),
 `relief` only recolours, `clutter` scatters the `tables.detail` glyphs (denser where wetter or higher),
 `water` draws river coverage, `roads` the thin bed, `bridges` the decks, `markers` one cell per tile and
-`interiors` the zoom shell or local furniture. Hillshade is bilinear elevation, the same at every scale.
+`sites` the zoom shell or local furniture. Hillshade is bilinear elevation, the same at every scale.
 
 **Biome blending** at detail scales: each cell looks up its biome at a domain-warped world
 position (`blend_strength`, `blend_scale`). The warp is a pure function of world position + seed, so
@@ -441,7 +410,7 @@ Setting `blend_strength = 0` gives a crisp grid. Water is blended by bilinear co
 (`water_blend_threshold`) so diagonal rivers and lakes join.
 
 **Roads & bridges** at detail scales (the `roads` and `bridges` layers, drawn over terrain but under POI
-markers and interiors): the map keeps its single-cell road glyphs, but at zoom/local roads are not
+markers and sites): the map keeps its single-cell road glyphs, but at zoom/local roads are not
 markers — they render like the rivers do.
 
 - *Roads* are a thin meandering **bed**: a detail cell is road when its (road-warped) world position
@@ -457,55 +426,43 @@ markers — they render like the rivers do.
   either long side is the railing (`detail_colors.deck_*` / `wall_*`). Unlike roads this draws over the
   water it spans.
 
-### Interiors (`interiors/`, drawn by the `interiors` layer)
+### Sites (`sites/`, drawn by the `sites` layer)
 
-POIs with a registered builder get **three forms**: the map marker (with a small wall outline of the
-structure on the overview), a **zoom** shell, and a **local** full interior — all anchored in world space, so panning moves seamlessly
-between outside and inside (the interior is *embedded in the terrain*, not a separate screen).
+A POI's **site** is what you see when you zoom into it: a plan drawn on the terrain around its anchor. Nothing is
+stored in the `World`; a site is a pure function of the POI, the config and the terrain (`sites.site_plan`).
 
-- **One artifact, two samplings.** Each interior is generated once at a *canonical* resolution
-  (`interiors.cells_per_tile` cells per world tile across the footprint) by the per-kind builder,
-  the layer **nearest-neighbour samples** it into the footprint's block of cells (`sample_rect_array`).
-  So zoom and local are coarse/fine views of the same grid, exactly like the biome blend. At **zoom**
-  the building shell is drawn (`ZOOM_VISIBLE`: walls and floor, furniture shown as floor); at **local**
-  every non-`VOID` cell is drawn — the full furnished interior; on the **map** only `STRUCTURAL` cells
-  (walls/doors/stairs) of the top floor, leaving the marker cell clear. `VOID` is transparent, so terrain shows through gaps.
-- **Lazy + cached + deterministic.** `build_interior(poi, floor, config, world=None)` dispatches to
-  the kind's builder, memoised by `functools.lru_cache` on the cheap scalar inputs; the cached base
-  array is read-only. Everything is a pure function of `interior_seed` (+ floor), so a POI regenerates
-  identically every open. Runtime edits compose on top via `Overlay.apply_interior` (copy-on-write).
-- **Terrain-aware (forms around water).** When `world` is supplied (both render paths do), the builder
-  receives a *buildable* cell mask — the footprint's water tiles upsampled to canonical resolution and
-  pulled back by `interiors.coast_margin` cells — packed into the cache key (`InteriorCtx.land_mask_bytes`,
-  so it stays deterministic). Solid builders confine their outline to the largest dry blob
-  (`build_room_structure`); settlements drop only buildings that fit on land; the camp clips its
-  clearing. The eroded margin stays `VOID`, so a strip of bare biome floor reads as a little coast.
-  An inland POI's mask is empty (`b""`) → it builds exactly as before and shares that cache entry.
-  As a hard backstop, the `interiors` layer never draws an interior cell
-  over a water tile — **except `boat`**, which floats on water by design. So no structure is ever
-  stamped over water even if a corridor clips the shore; bridges have no builder and are unaffected.
-- **Signed floors, both directions.** **Floor 0 is always the ground/entry level** (set by
-  `pois._floors`): dungeons descend (`lowest_floor … 0`), towers rise (`0 … top`). Stairs sit
-  on **aligned shafts** fixed across floors (seeded floor-independently) so floors stack vertically;
-  floor 0 gets the exterior DOOR, the far end only the stairs back. `grid.floor_links` /
-  `grid.stamp_circulation` encode this once for every stacked builder. `<` / `>` cycle floors when the
-  cursor is on the footprint (`explorer.state.cycle_floor`); `sync_floor` enters at floor 0.
-- **Colour.** Interior cells are filled with `render.interior_palette` (bridge cells with the deck and wall
-  colours of `render.detail_colors`); the glyph is the same colour lightened by `render.interior_fg_scale`.
+- **Extent and window** (`geometry.py`). Each kind has a row in `tables.sites` (`data/sites.toml`): an `extent_tiles`
+  `[w, h]` in world tiles, centred on the anchor (a tower or camp is under one tile, a village about one, a capital
+  several), and `rows_per_tile`, the plan resolution (columns follow `render.cell_aspect`, so a tile stays square).
+  The extent is scaled by a seeded jitter and, for settlements, by population. The **window** is the whole tiles that
+  hold the extent plus `sites.margin_tiles`: a detail grid whose cells are plan cells.
+- **Terrain patch** (`patch.py`). The terrain under the extent is read through the same `DetailSampler` the renderer
+  uses (`sampling/terrain.py` defines land and river once), so a plan agrees exactly with the water drawn around it.
+  Roads are not stored: each road tile just outside the extent makes a **gate** on its edge, at most `sites.max_gates`,
+  one per direction. A structure's door and a settlement's streets face the gates.
+- **Layouts** (`layout.py`, one per `layout` key). `structure.py` builds dungeon, tower and ruin: a seeded organic
+  outline kept off water, BSP rooms and corridors, stair shafts that line up from floor to floor, rock and walls, an
+  entrance on the wall nearest a gate (floor 0 only) with a street from the gate. `settlement.py` builds walled
+  buildings with a street gap round each, a plaza, and streets (A*, bridging water up to `sites.bridge_max_rows`) from
+  every door and gate; a building no street reaches is pulled down. `camp.py` and `boat.py` are open-air. Furniture
+  comes from the `furniture` set named in the site row (`data/furniture.toml`).
+- **Scales.** One plan, sampled by nearest neighbour into the cells its extent covers (`blit.sample_rect`). The **map**
+  draws the top floor's walls, doors and stairs (`STRUCTURAL`) as a small outline, leaving the marker cell clear.
+  **Zoom** draws the shell (`SHELL`: walls and floor, furniture as floor), a low-poly silhouette. **Local** and **site**
+  draw every cell. Void is transparent. The world's road bed is hidden under a site (`LayerContext.site_mask`), since
+  the plan draws its own streets.
+- **The site view** (explorer). Zooming in on a POI opens its site: the window drawn one plan cell per terminal cell,
+  only the visible cells (a `DetailSampler` with `origin` and `shape`). The cursor is one cell `(px, py)`; the tile
+  cursor follows the tile under it. Moving past the window leaves for local. Zoom steps out.
+- **Floors.** Floor 0 is the ground and entry level: dungeons descend (`lowest_floor … 0`), towers rise (`0 … top`).
+  `<` / `>` cycle floors inside a site or on its tiles; entering starts at floor 0.
+- **Cache and overlay.** Plans are memoised per world and config in a bounded cache (`sites.cache_size`), read-only.
+  Runtime edits compose on top via `Overlay.apply_interior` (copy-on-write), keyed by the site seed and floor.
+- **Colour.** Plan cells are filled with `render.interior_palette` (bridge cells with the deck and wall colours of
+  `render.detail_colors`); the glyph is the same colour lightened by `render.interior_fg_scale`.
 
-**Every archetype except `bridge` has a builder**, all sharing the `grid.py` toolkit:
-
-| Builder | Pattern | Notes |
-|---------|---------|-------|
-| `dungeon` / `tower` | Stacked solid building | descend / ascend from floor 0; aligned stairs; depth-scaled loot vs. sparse quarters + lookout |
-| `city` / `town` / `village` | Multi-building settlement | one builder; BSP plots → walled buildings, PATH streets + plaza, terrain between; a road-connected settlement opens a road-facing door in its edge-most building + a street to the plaza |
-| `ruin` | Eroded single-floor building | `interiors.ruin_erosion` collapses walls to gaps and cracks floor to rubble |
-| `camp` | Bespoke open-air | cleared FLOOR patch + campfire + tents + wagon, no walls (the clearing is what reads at zoom) |
-| `boat` | Bespoke hull on water | planked WALL hull around a FLOOR deck + cabin + cargo; VOID around it shows the water |
-
-A new archetype plugs in the same way: drop `interiors/<kind>.py` with an
-`@register_interior("<kind>")` builder, add a footprint entry, import it in `interiors/__init__.py` —
-no render or pipeline changes (both iterate the registry generically).
+A new kind is a row in `data/sites.toml` and, if it needs a new pattern, a `@layout("name")` function registered in
+`sites/` (render and explorer iterate the sites generically).
 
 ---
 

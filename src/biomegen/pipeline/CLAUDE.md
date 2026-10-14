@@ -11,9 +11,8 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   `random` or `numpy.random` seeded by hand, never builtin `hash()`.
 - Iterate collections in a defined order (`sorted()`); dict and set order is not a contract.
 - Every tunable comes from `config.get(...)`, not a literal (see `config/CLAUDE.md`).
-- Folders say what a stage models: `physical/` (land and water), `civilization/` (settlements, roads), `story/` (POI
-  content). Flat modules still to be reorganised (`regions`, `pois`, `naming`) stay in `pipeline/` until the phase that
-  replaces them.
+- Folders say what a stage models: `physical/` (land and water), `civilization/` (settlements, roads). Flat modules
+  still to be reorganised (`regions`, `pois`, `naming`) stay in `pipeline/` until the phase that replaces them.
 
 ## Physical stages (`physical/`)
 
@@ -34,7 +33,7 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 
 ## Civilization stages (`civilization/`, `pois.py`)
 
-- Order: regions -> settlements -> pois -> roads -> poi_interiors -> naming. Settlements are placed first and
+- Order: regions -> settlements -> pois -> roads -> naming. Settlements are placed first and
   every later stage counts them (spacing, remoteness, road endpoints).
 - Tiers are data (`data/tiers.toml`): placement order is `rank`, count is land km² over `land_per_settlement_km2`,
   separation is `spacing_km`, and `backbone` says whether roads join the tier into the trunk. A new tier is a row,

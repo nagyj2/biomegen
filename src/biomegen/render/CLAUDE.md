@@ -12,8 +12,13 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   it uses `ctx.sampler` (`nearest`, `blended`, `bilinear`, `coverage_mask`, `biome()`). That is what lets one
   layer run on the map, fit, zoom and local scales. A sampler is a pure function of world position.
 - **Layer order** is data: `render.views.<name>.layers` (map) and `.detail_layers` (zoom, local). Default order:
-  terrain, relief, [tint], water, [clutter], roads, [bridges], interiors, markers, labels, compass. A layer
+  terrain, relief, [tint], water, [clutter], roads, [bridges], sites, markers, labels, compass. A layer
   that only makes sense at one scale (`clutter`, `bridges`) returns early on the other.
+- **Sites.** The `sites` layer draws each POI's plan (`biomegen.sites`) into the cells its extent covers: the wall
+  outline at the map scale, the shell at zoom, every cell at local and at the site scale. The site scale is a
+  `DetailSampler` over a site window (optionally just a region of it); the layer reads extents through the sampler's
+  `col0` / `row0`, so a region draws exactly like the whole window. A layer that draws roads must skip
+  `ctx.site_mask`, where the plan draws its own streets.
 - **Numpy-only hot paths.** No per-cell Python loops. Loops over POIs or road links are fine; inside them,
   paint a numpy window (`DetailSampler.cell_window`).
 - **No literals.** Glyphs and colours come from `tables.biomes`, `tables.relief`, `tables.detail`,

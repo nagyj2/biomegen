@@ -31,7 +31,7 @@ All wrap `uv run` and pin fixture seeds and sizes in `scripts/_fixtures.sh`:
 
 ## Layering
 
-Dependency direction: `util -> config -> world -> sampling -> interiors, naming -> pipeline -> render -> explorer -> cli`. A lower
+Dependency direction: `util -> config -> world -> sampling -> sites, naming -> pipeline -> render -> explorer -> cli`. A lower
 layer never imports a higher one; `render/` does no terminal I/O (rules in `src/biomegen/render/CLAUDE.md`).
 
 ## Determinism (do not break)
