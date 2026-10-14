@@ -311,7 +311,7 @@ VALUES: Dict[str, Any] = {
         "barrel": "o",
         "crate": "%",
         "shelf": "=",
-        "rubble": "&",
+        "rubble": ",",
         "tent": "^",
         "campfire": "*",
         "wagon": "W",
@@ -337,6 +337,9 @@ VALUES: Dict[str, Any] = {
     },
     # Interior glyphs are drawn in the cell colour times this factor on top of the plain cell colour fill.
     "interior_fg_scale": 1.45,
+    # Clutter that should not draw the eye: these cells take the floor fill, and a glyph only this factor brighter.
+    "interior_subtle": ["rubble", "rock", "barrel", "crate", "cargo"],
+    "interior_subtle_fg_scale": 1.2,
     # Interior Cell -> RGB base colour, used when a detail cell belongs to a POI interior (the
     # single colour authority for interiors, shared with SVG/PNG export later). ``void`` is never
     # drawn (the surrounding terrain shows through), so it has no colour entry.

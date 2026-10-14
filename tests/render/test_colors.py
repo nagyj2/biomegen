@@ -68,3 +68,14 @@ def test_the_wall_line_table_has_a_glyph_for_every_neighbour_mask() -> None:
 
     config = load_config(None)
     assert len(wall_glyph_table(config, False)) == 16 and all(ord(g) < 128 for g in wall_glyph_table(config, True))
+
+
+def test_subtle_clutter_is_the_floor_colour_with_a_faint_glyph() -> None:
+    # Rubble is filled like the floor and its glyph is only a little brighter than the fill.
+    from biomegen.config import load_config
+    from biomegen.render.colors import interior_style
+    from biomegen.world.tile import Cell
+
+    style = interior_style(load_config(None))
+    rubble, floor = int(Cell.RUBBLE), int(Cell.FLOOR)
+    assert (style.bg[rubble] == style.bg[floor]).all() and (style.fg[rubble] < style.fg[floor]).all()
