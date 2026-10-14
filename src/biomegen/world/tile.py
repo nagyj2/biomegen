@@ -64,6 +64,20 @@ class WaterType(IntEnum):
     FRESH = 2  # inland lake / river
 
 
+class Relief(IntEnum):
+    """Landform roughness of a tile, orthogonal to :class:`Biome` (a forest can be hilly).
+
+    Stored as a ``uint8`` array. Attributes (name, glyphs, colour) live in the relief table of
+    ``data/biomes.toml``, keyed by the lower-case member name.
+    """
+
+    NONE = 0  # flat or rolling land, and all water
+    HILLS = 1
+    MOUNTAIN = 2
+    PEAK = 3  # the highest summits of a range
+    VOLCANO = 4
+
+
 class Cell(IntEnum):
     """Tiles used inside the zoomed-in detail grid (POI interiors and biome-floor clutter).
 
@@ -123,6 +137,7 @@ OVERLAY_COLOR_NAMES: dict[int, str] = {
 # naturally both in TOML (e.g. ``biomes = ["grassland", "forest"]``) and in status text.
 BIOME_BY_NAME: dict[str, Biome] = {b.name.lower(): b for b in Biome}
 BIOME_NAME: dict[int, str] = {int(b): b.name.lower() for b in Biome}
+RELIEF_BY_NAME: dict[str, Relief] = {r.name.lower(): r for r in Relief}
 
 # Biomes that are water surfaces (used by several stages to test "is this a water tile?").
 WATER_BIOMES: frozenset[int] = frozenset({int(Biome.OCEAN), int(Biome.LAKE), int(Biome.RIVER)})
