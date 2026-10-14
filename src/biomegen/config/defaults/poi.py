@@ -6,11 +6,11 @@ from typing import Any, Dict
 
 VALUES: Dict[str, Any] = {
     "sampler": "bluenoise",  # "bluenoise" (default), "random", or "grid"
-    # Falloff scales (tiles) mapping distance fields to [0,1] suitability weights, and the random
+    # Falloff scales (km) mapping distance fields to [0,1] suitability weights, and the random
     # tie-break jitter strength. Smaller scale => the bonus decays faster with distance.
-    "freshwater_scale": 6.0,
-    "coastal_scale": 9.0,
-    "remoteness_scale": 22.0,
+    "freshwater_scale_km": 150.0,
+    "coastal_scale_km": 225.0,
+    "remoteness_scale_km": 550.0,
     "jitter": 0.15,
     # Minimum fraction of a land structure's (max) footprint that must be dry land for an anchor to
     # be eligible. Keeps a coastal structure substantial (most of it on land) while still allowing

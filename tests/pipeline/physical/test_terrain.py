@@ -77,6 +77,13 @@ def test_dist_to_ocean_is_zero_at_sea_and_positive_on_land(world: World) -> None
     assert (world.dist_to_ocean[~land] == 0).all() and (world.dist_to_ocean[land] > 0).all()
 
 
+def test_dist_to_ocean_is_in_km(world: World) -> None:
+    # A land cell beside the sea is one cell away, so the smallest land distance is the shorter cell side in km.
+    land = world.water_type == int(WaterType.NONE)
+    shortest_cell_km = min(world.scale.km_per_col, world.scale.km_per_row)
+    assert float(world.dist_to_ocean[land].min()) == pytest.approx(shortest_cell_km, rel=1e-4)
+
+
 def test_pinned_style_is_used() -> None:
     assert _run(_config(style="islands")).terrain_style == "islands"
 

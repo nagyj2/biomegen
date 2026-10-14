@@ -21,24 +21,24 @@ from ..world.world import World
 
 
 def freshwater_distance(world: World, backend: str) -> np.ndarray:
-    """EDT distance (tiles) from every cell to the nearest freshwater (lake/river) tile."""
+    """EDT distance (km) from every cell to the nearest freshwater (lake/river) tile."""
     fresh = world.water_type == int(WaterType.FRESH)
-    return geo.distance_to(fresh, backend=backend, metric="euclidean").astype(np.float32)
+    return geo.distance_to(fresh, backend=backend, metric="euclidean", sampling=world.scale.sampling).astype(np.float32)
 
 
 def coast_distance(world: World) -> np.ndarray:
-    """Distance to the nearest ocean tile - already computed by the terrain stage as ``dist_to_ocean``."""
+    """Distance (km) to the nearest ocean tile - already computed by the terrain stage as ``dist_to_ocean``."""
     return world.dist_to_ocean.astype(np.float32)
 
 
 def remoteness_distance(world: World, civ_points: list[tuple[int, int]], backend: str) -> np.ndarray:
-    """EDT distance from every cell to the nearest civilized POI anchor (inf if none placed yet)."""
+    """EDT distance (km) from every cell to the nearest civilized POI anchor (inf if none placed yet)."""
     if not civ_points:
         return np.full((world.height, world.width), np.inf, dtype=np.float32)
     mask = np.zeros((world.height, world.width), dtype=bool)
     for x, y in civ_points:
         mask[y, x] = True
-    return geo.distance_to(mask, backend=backend, metric="euclidean").astype(np.float32)
+    return geo.distance_to(mask, backend=backend, metric="euclidean", sampling=world.scale.sampling).astype(np.float32)
 
 
 def closeness_weight(dist: np.ndarray, scale: float) -> np.ndarray:

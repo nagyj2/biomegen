@@ -41,7 +41,7 @@ class World:
     ``water_type``        uint8      a :class:`WaterType` value
     ``road``              uint8      0/1 flag: a road passes through this tile
     ``road_tier``         uint8      0=none, 1=trunk (MST backbone), 2=spur (offshoot to trunk)
-    ``dist_to_ocean``     float32    Euclidean distance (in tiles) to the nearest ocean tile
+    ``dist_to_ocean``     float32    Euclidean distance (km) to the nearest ocean tile
     ``flow_accum``        float64    hydrological flow accumulation (drainage area proxy)
     ``poi_index``         int32      index into ``pois`` (-1 = none)
     ====================  =========  =====================================================

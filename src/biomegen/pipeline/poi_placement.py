@@ -88,9 +88,9 @@ def run(world: World, config: Config, seed: int) -> None:
     sampler = POI_SAMPLERS.get(poi_cfg.get("sampler", "bluenoise"))
     types_cfg = config.get("poi.types")
 
-    fresh_scale = float(poi_cfg.get("freshwater_scale", 6.0))
-    coast_scale = float(poi_cfg.get("coastal_scale", 9.0))
-    remote_scale = float(poi_cfg.get("remoteness_scale", 22.0))
+    fresh_scale = float(poi_cfg.get("freshwater_scale_km", 150.0))
+    coast_scale = float(poi_cfg.get("coastal_scale_km", 225.0))
+    remote_scale = float(poi_cfg.get("remoteness_scale_km", 550.0))
     jitter_strength = float(poi_cfg.get("jitter", 0.15))
     min_land = float(poi_cfg.get("min_footprint_land", 0.5))
 
