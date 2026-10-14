@@ -4,7 +4,7 @@
 stages so there is no backtracking:
 
     terrain -> climate -> hydrology -> biomes -> geography -> regions -> settlements
-    -> poi_placement -> roads -> poi_interiors -> naming
+    -> pois -> roads -> poi_interiors -> naming
 
 Roads run **before** POI interiors so the road network knows where every POI anchor is: each road
 that reaches a POI records its approach direction on the POI, and the interiors stage then sites that
@@ -31,7 +31,7 @@ from ..world.tile import BIOME_NAME, RELIEF_NAME, WATER_BIOMES, WaterType
 from ..world.world import World
 from . import (
     naming,
-    poi_placement,
+    pois,
     regions,
 )
 from .civilization import roads, settlements
@@ -90,7 +90,7 @@ def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = No
         ("geography", geography.run),
         ("regions", regions.run),
         ("settlements", settlements.run),
-        ("poi_placement", poi_placement.run),
+        ("pois", pois.run),
         ("roads", roads.run),
         ("poi_interiors", poi_interiors.run),
         ("naming", naming.run),

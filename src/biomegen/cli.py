@@ -3,7 +3,7 @@
 Run the CLI application with::
 
     uv run biomegen [--seed N] [--config path.toml] [--width W] [--height H]
-                    [--noise-backend {perlin,value,opensimplex}] [--poi-sampler {bluenoise,random,grid}]
+                    [--noise-backend {perlin,value,opensimplex}]
                     [--headless] [--view NAME] [--scale {map,zoom,local}] [--at X,Y] [--labels {all,cities,none}]
                     [--color {auto,truecolor,256,none}] [--ascii] [--no-legend] [--save FILE] [--html FILE]
                     [--color-test]
@@ -31,11 +31,9 @@ from biomegen.util import rng
 
 def _build_parser() -> argparse.ArgumentParser:
     # Import registries now (they populate at module import time) so choices reflect installed backends.
-    from biomegen.pipeline.poi_sampler import POI_SAMPLERS
     from biomegen.util.noise import NOISE_BACKENDS
 
     noise_choices = list(NOISE_BACKENDS.names())
-    sampler_choices = list(POI_SAMPLERS.names())
 
     parser = argparse.ArgumentParser(
         prog="biomegen",
@@ -59,16 +57,6 @@ def _build_parser() -> argparse.ArgumentParser:
             f"Terrain noise algorithm. Overrides config terrain.noise_backend. "
             f"Choices: {', '.join(noise_choices)}. "
             f"Default: perlin (guaranteed deterministic across platforms)."
-        ),
-    )
-    parser.add_argument(
-        "--poi-sampler",
-        choices=sampler_choices,
-        default=None,
-        help=(
-            f"POI placement algorithm. Overrides config poi.sampler. "
-            f"Choices: {', '.join(sampler_choices)}. "
-            f"Default: bluenoise (Poisson-disk spacing for natural spread)."
         ),
     )
     parser.add_argument(
@@ -252,8 +240,6 @@ def _apply_overrides(args: argparse.Namespace, config: Config, parser: argparse.
         config.data["world"]["height"] = args.height
     if args.noise_backend is not None:
         config.data["terrain"]["noise_backend"] = args.noise_backend
-    if args.poi_sampler is not None:
-        config.data["poi"]["sampler"] = args.poi_sampler
     if args.style is not None:
         if args.style != "seed" and args.style not in config.get("tables.styles"):
             parser.error(f"unknown style {args.style!r}; available: seed, {', '.join(config.get('tables.styles'))}")

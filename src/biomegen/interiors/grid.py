@@ -621,7 +621,7 @@ def stamp_circulation(
 
     Called after :func:`build_room_structure` has carved and sealed the floor (the stair cells having
     been force-carved reachable via its ``access_points``). The ground/entry level is **floor 0** by the
-    :func:`biomegen.pipeline.poi_rules.floors_for` convention - dungeons descend to negative floors and
+    pois-stage floor convention - dungeons descend to negative floors and
     towers rise to positive ones, so floor 0 is the level you walk in at either way - and that is where
     the exterior entrance is punched (a door on the now-final outer wall, tunnelled to the nearest
     room). The returned ``(x, y)`` set (stairs + door) is what the furnishing pass must keep clear.

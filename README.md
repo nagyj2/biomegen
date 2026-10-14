@@ -51,8 +51,6 @@ uv run biomegen --config my.toml                       # override any defaults (
 uv run biomegen --width 240 --height 60                # override world dimensions
 uv run biomegen --noise-backend opensimplex            # use OpenSimplex noise instead of default Perlin
 uv run biomegen --noise-backend value                  # use value noise (cheaper, blockier look)
-uv run biomegen --poi-sampler random                   # random POI placement instead of default blue-noise
-uv run biomegen --poi-sampler grid                     # evenly-spaced POI placement
 uv run biomegen --seed 1 --headless                    # generate + print stats, no terminal needed
 uv run biomegen --seed 1 --view terrain --color none    # static map with legend, no UI
 uv run biomegen --seed 1 --scale zoom --at 60,30        # a magnified part of the world (zoom or local)
@@ -60,8 +58,7 @@ uv run biomegen --seed 1 --view terrain --save map.svg  # write a map image (.sv
 ```
 
 Algorithm flags override the TOML config value for that run only — they do not modify any file.
-The `--noise-backend` and `--poi-sampler` flags accept the same strings as their corresponding
-config keys (`terrain.noise_backend` and `poi.sampler`). Run `uv run biomegen --help` for the full
+The `--noise-backend` flag accepts the same strings as its config key (`terrain.noise_backend`). Run `uv run biomegen --help` for the full
 list of registered choices (the optional `noise_lib` backend only appears if the C-extension is
 installed).
 
@@ -179,8 +176,8 @@ Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[ta
 #### `[poi]`
 | Key | Default | Description |
 |-----|---------|-------------|
-| `sampler` | `"bluenoise"` | `"bluenoise"` · `"random"` · `"grid"` |
-| `types.*` | — | Per-kind rules: `count`, `min_spacing`, `biomes`, `elevation_min_m/max_m`, `floors` |
+| `density` | `1.0` | Multiplies every wild kind's count (one per `km2_per_poi`) |
+| `types.*` | — | Per-kind rules: `priority`, `km2_per_poi`, `min_spacing_km`, `biomes`, `elevation_min_m/max_m`, `floors` |
 
 #### `[interiors]`
 | Key | Default | Description |

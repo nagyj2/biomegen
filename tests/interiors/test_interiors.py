@@ -248,7 +248,7 @@ def test_footprint_land_fraction_mask_excludes_window_around_water():
     # required land fraction (here 0.95 - any window touching the lone water tile is 8/9 land, so fails).
     from types import SimpleNamespace
 
-    from biomegen.pipeline.poi_rules import footprint_land_fraction_mask
+    from biomegen.pipeline.pois import footprint_land_fraction_mask
     from biomegen.world.tile import WaterType
 
     water_type = np.full((5, 5), int(WaterType.NONE), dtype=np.int16)
@@ -264,7 +264,7 @@ def test_footprint_land_fraction_mask_allows_partial_water():
     # so structures CAN sit on the shore (the builder forms them around the water).
     from types import SimpleNamespace
 
-    from biomegen.pipeline.poi_rules import footprint_land_fraction_mask
+    from biomegen.pipeline.pois import footprint_land_fraction_mask
     from biomegen.world.tile import WaterType
 
     water_type = np.full((5, 5), int(WaterType.NONE), dtype=np.int16)

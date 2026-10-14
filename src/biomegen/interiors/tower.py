@@ -2,8 +2,8 @@
 
 A tower is the dungeon's structural twin turned upside down: the same shared recipe (an organic outer
 shape filled with rooms + rock, aligned stair shafts that line the floors up vertically, a punched
-exterior entrance) but it **ascends** instead of descending. The :func:`biomegen.pipeline.poi_rules.
-floors_for` convention puts the ground/entry level at floor ``0`` for both kinds - dungeons run
+exterior entrance) but it **ascends** instead of descending. The ``pois`` stage's
+floor convention puts the ground/entry level at floor ``0`` for both kinds - dungeons run
 ``0`` down to negative floors, towers run ``0`` up to ``floor_count - 1`` - so the shared
 :func:`~biomegen.interiors.grid.stamp_circulation` punches the door on floor ``0`` either way and
 nothing about the stair model needs to change for "up".

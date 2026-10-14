@@ -59,7 +59,7 @@ capital_min_landmass_km2 = 400000.0
 max_capitals = 16
 
 [poi]
-sampler = "bluenoise"            # "bluenoise" | "random" | "grid"
+density = 1.0                    # multiplies every wild POI kind's count (one per km2_per_poi)
 min_footprint_land = 0.5        # min dry-land fraction of a land structure's footprint for an eligible
                                 # anchor (1.0 = no footprint water; structures form around any they clip)
 

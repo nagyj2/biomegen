@@ -15,7 +15,7 @@ composited on read. The `render` layer draws the composited world through one la
 terminal I/O; the `explorer` runs it interactively. Every interchangeable
 algorithm is looked up from a `Registry` by a string key read from config, so swapping algorithms is
 normally a config change, not a code change. A subset of algorithm families is also exposed as
-direct CLI flags (`--noise-backend`, `--poi-sampler`) for single-run overrides without touching any
+direct CLI flags (`--noise-backend`) for single-run overrides without touching any
 file. The same layers produce static maps, zoomed views and colour SVG/PNG images, from the UI
 (`e` / `E`) or headlessly (`--view`, `--scale`, `--save`).
 
@@ -69,10 +69,11 @@ src/biomegen/
       biomes.py         Stage 4 — biome from °C / mm / m, relief, volcanoes
       geography.py      Stage 5 — landmass_id; landmass, range, peak, lake, sea, river features
     regions.py          Stage 6 — region segmentation + colour
-    poi_placement.py    Stage 8 — wild POI anchor placement (interim; rewritten as pois.py)
-    poi_fields.py       Shared suitability distance fields for POI scoring
-    poi_rules.py        Per-kind POI rules, eligibility masks, score arrays
-    poi_sampler.py      Blue-noise / random / grid POI samplers
+    pois.py             Stage 8 — wild POI placement (interim until phase 8)
+    poi_placement.py    (superseded by pois.py; removed in the phase 5a Cleanup)
+    poi_fields.py       (superseded)
+    poi_rules.py        (superseded)
+    poi_sampler.py      (superseded)
     civilization/
       settlements.py    Stage 7 — habitability, capital / city / town / village placement
       roads.py          Stage 9 — road network + bridge POIs + per-POI road-entrance recording
@@ -132,7 +133,7 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `landmass_id` | int32 | 0..L-1 largest first, -1=water | geography |
 | `water_type` | uint8 | `WaterType` enum int | terrain, hydrology |
 | `region_id` | int32 | 0..R-1, -1=ocean | regions |
-| `poi_index` | int32 | 0..P-1, -1=none | settlements, poi_placement |
+| `poi_index` | int32 | 0..P-1, -1=none | settlements, pois |
 | `road` | uint8 | 0 / 1 | roads |
 | `road_tier` | uint8 | 0=none, 1=trunk, 2=spur | roads |
 | `dist_to_ocean` | float32 | ≥ 0 km (aspect-aware) | terrain |
@@ -170,7 +171,7 @@ rank, so the gate only trips when a style's land fraction is configured below th
 
 ```
 terrain → climate → hydrology → biomes → geography → regions → settlements
-         → poi_placement → roads → poi_interiors → naming
+         → pois → roads → poi_interiors → naming
 ```
 
 Roads run **before** POI interiors: the road network is laid to each POI anchor first, records the
@@ -284,24 +285,18 @@ Places the four settlement tiers (`capital`, `city`, `town`, `village`; rows in 
    `settlements.capital_min_landmass_km2` (or the biggest); cities and towns need a named-feature landmass.
 3. **Record**: a `POI` of the tier's kind with a population from the tier's range and `port` / `river` / `lake` tags.
 
-### Stage 8 — POI placement (`pipeline/poi_placement.py`, `poi_fields.py`, `poi_rules.py`, `poi_sampler.py`)
+### Stage 8 — Wild POI placement (`pipeline/pois.py`)
 
-Places towers, dungeons, ruins, camps and boats (interim; settlements come from Stage 7 and count for spacing and remoteness):
+Places towers, dungeons, ruins, camps and boats (interim; phase 8 makes POI kinds data-driven). Settlements come
+from Stage 7 and count for spacing and remoteness:
 
-1. **Shared suitability fields**: `freshwater_distance` and `coast_distance` are computed once.
-   A `remoteness` field is updated after each civilized POI lands, so later uncivilized kinds
-   naturally cluster away from settlements.
-2. **Priority order**: `tower → dungeon → ruin → camp → boat`; the shared spacing set prevents stacking.
-3. **Scoring**: each kind defines eligibility (allowed biomes, elevation bounds) and weighting
-   (freshwater affinity, coastal affinity, remoteness weight). Score = product of applicable
-   weights + per-tile jitter noise. Land kinds additionally require their (max) footprint to be at
-   least `poi.min_footprint_land` dry land (`poi_rules.footprint_land_fraction_mask`, a summed-area
-   table over the water mask), so a structure can sit on a coast but never mostly over water; the
-   interior builder then forms it *around* whatever water the footprint clips (see Stage 9 / Interiors).
-   Boats (`on_water`) are exempt — they anchor on water by design.
-4. **Blue-noise sampling** (default): candidate tiles are drawn from the scored distribution and
-   accepted only if they are ≥ `min_spacing` tiles from all previously placed POIs (Poisson-disk
-   style). Alternatives: `random` (unconstrained sampling) and `grid` (evenly spaced).
+1. **Count**: land km² (sea km² for boats) ÷ the kind's `km2_per_poi`, times `poi.density`.
+2. **Eligibility**: allowed biomes, elevation bounds, land or water, a free tile, and for land kinds at least
+   `poi.min_footprint_land` dry land under the largest footprint (`footprint_land_fraction_mask`, a summed-area
+   table), so a structure can sit on a coast but never mostly over water.
+3. **Score**: 1 + freshwater and coastal closeness (km falloff) + remoteness from settlements + seeded jitter.
+4. **Blue-noise pick**: kinds in `priority` order, best score first, kept when no placed POI is closer than
+   `min_spacing_km` (aspect-aware km).
 5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy interior builder (see Stage 9 and the Render layer).
 
 ### Stage 9 — Roads (`pipeline/civilization/roads.py`)
@@ -395,7 +390,6 @@ needed). All other families are changed via their config key.
 |--------|-----------|----------|-----------------|
 | Noise backend | `terrain.noise_backend` | `--noise-backend` | `perlin`\* · `value` · `opensimplex` · `noise_lib`† |
 | Flow model | `hydrology.flow_model` | — | `d8` · `dinf` |
-| POI sampler | `poi.sampler` | `--poi-sampler` | `bluenoise`\* · `random` · `grid` |
 | Pathfinder | `roads.pathfinder` | — | `astar`\* · `tcod` · `dijkstra` |
 | Interior partition | `interiors.partition` | — | `bsp`\* · `tcod_bsp` |
 | Interior shape | `interiors.shape` | — | `mixed`\* · `rectangle` · `blob` · `cellular` · `drunkard` · `diamond` · `cross` |
