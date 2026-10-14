@@ -104,7 +104,7 @@ uv run biomegen --config my.toml
 ```
 
 The authoritative defaults and inline documentation are in
-[`biomegen/config/defaults.py`](biomegen/config/defaults.py).
+[`src/biomegen/config/defaults/`](src/biomegen/config/defaults/).
 
 ### Quick reference — all user-tunable options
 

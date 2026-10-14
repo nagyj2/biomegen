@@ -2,9 +2,9 @@
 
 The procedural names and region lore are produced by a data-driven, **mixed-per-region culture**
 system. This document records the rules; the machine-readable sources are
-[`biomegen/naming/cultures.py`](../biomegen/naming/cultures.py) (cultures + biome bias),
-[`biomegen/naming/grammar_rules.toml`](../biomegen/naming/grammar_rules.toml) (lore sentence
-templates), and [`biomegen/config/defaults.py`](../biomegen/config/defaults.py) (naming config).
+[`src/biomegen/naming/cultures.py`](../src/biomegen/naming/cultures.py) (cultures + biome bias),
+[`src/biomegen/naming/grammar_rules.toml`](../src/biomegen/naming/grammar_rules.toml) (lore sentence
+templates), and [`src/biomegen/config/defaults/naming.py`](../src/biomegen/config/defaults/naming.py) (naming config).
 
 Everything is deterministic and **keyed on stable entity identity** (region id, POI `(x,y)`,
 river/lake canonical cell), so names never depend on processing order and reproduce from the seed.

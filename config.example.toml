@@ -1,8 +1,8 @@
 # biomegen example configuration.
 #
-# This file is a SPARSE OVERLAY: every key has a built-in default (see biomegen/config/defaults.py),
+# This file is a SPARSE OVERLAY: every key has a built-in default (see src/biomegen/config/defaults/),
 # so you only need to include the keys you want to change. Delete anything you are happy to leave at
-# its default. Run with:  python main.py --config config.example.toml
+# its default. Run with:  uv run biomegen --config config.example.toml
 
 [general]
 seed = 0              # 0 = pick a random seed and print it (so the run is still reproducible)
@@ -61,7 +61,7 @@ sampler = "bluenoise"            # "bluenoise" | "random" | "grid"
 min_footprint_land = 0.5        # min dry-land fraction of a land structure's footprint for an eligible
                                 # anchor (1.0 = no footprint water; structures form around any they clip)
 
-# Per-kind rules live under [poi.types.<kind>]; only overrides shown here (see defaults.py for all).
+# Per-kind rules live under [poi.types.<kind>]; only overrides shown here (see src/biomegen/config/defaults/poi.py for all).
 
 [interiors]
 partition = "bsp"               # room layout: "bsp" | "tcod_bsp"
@@ -107,7 +107,7 @@ road_half_width = 0.30          # road-bed half-width in tiles (a thin meanderin
 road_warp = 0.18                # organic wobble (tiles) of the road bed; 0 = dead-straight segments
 road_glyph = ":"                # glyph the road bed is drawn with
 # road/bridge colours and clutter (road_clutter, road_clutter_local, bridge_glyphs) are also tunable;
-# colours live in [render.palette] as road / bridge / bridge_wall. See biomegen/config/defaults.py.
+# colours live in [render.palette] as road / bridge / bridge_wall. See src/biomegen/config/defaults/render.py.
 default_view = "fit"            # "fit" | "onetoone"
 status_height = 12
 try_truecolor = true
