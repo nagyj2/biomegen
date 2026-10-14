@@ -760,7 +760,7 @@ def carve_path_guarded(grid: np.ndarray, a: Tuple[int, int], b: Tuple[int, int])
 
 
 # --------------------------------------------------------------------------- settlement bridge helpers
-def place_settlement_bridges(
+def place_settlement_bridges(  # noqa: C901 - single-pass row/column scan; splitting it risks behaviour changes
     grid: np.ndarray,
     buildable: np.ndarray,
     max_span: int,
