@@ -24,7 +24,9 @@ VALUES: Dict[str, Any] = {
     "size_km": [6000.0, 3000.0],
     # Map centre in degrees (north and east positive). The latitude is clamped so both map edges stay
     # within +-89 degrees; it places the map on the globe for climate and the graticule.
-    "center_lat": 35.0,
+    # "seed" picks a hemisphere and a latitude in center_lat_range_deg per seed; a number pins it.
+    "center_lat": "seed",
+    "center_lat_range_deg": [18.0, 48.0],  # [min, max] absolute latitude for "seed", 0..89
     "center_lon": 0.0,
     # The island-mask sanity gate regenerates with a perturbed seed up to this many times if a
     # seed produces less than ``min_land_fraction`` land (prevents empty-world cascades).

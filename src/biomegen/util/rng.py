@@ -71,7 +71,7 @@ LABELS: frozenset[str] = frozenset(
         "regen",  # perturbed master seed for a regeneration attempt after the land-fraction gate
         # Stages of the redesigned pipeline (docs/redesign_plan.md 4.1), registered ahead of their
         # phase so no earlier stage can claim the name. Each stage adds its own suffixes when it lands.
-        "terrain",  # elevation, mountain belts, sea level
+        "terrain",  # map latitude, elevation, mountain belts, sea level
         "climate",  # temperature and rainfall
         "biomes",  # biome and relief classification
         "geography",  # landmasses, ranges, seas, lakes and their names

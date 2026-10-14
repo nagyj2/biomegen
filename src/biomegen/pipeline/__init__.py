@@ -52,18 +52,18 @@ def generate(config: Config, seed: int) -> World:
     attempts = int(config.get("world.regen_attempts"))
     min_land = float(config.get("world.min_land_fraction"))
     size_km = config.get("world.size_km")
-    scale = grid_scale(
-        width,
-        height,
-        (float(size_km[0]), float(size_km[1])),
-        float(config.get("world.center_lat")),
-        float(config.get("world.center_lon")),
-    )
 
     world: World | None = None
     for attempt in range(max(1, attempts)):
         # Attempt 0 uses the master seed directly; later attempts perturb it deterministically.
         gen_seed = seed if attempt == 0 else rng.derive_int(seed, "regen", attempt)
+        scale = grid_scale(
+            width,
+            height,
+            (float(size_km[0]), float(size_km[1])),
+            center_lat(config, gen_seed),
+            float(config.get("world.center_lon")),
+        )
         world = World(width, height, gen_seed, scale)
         world.master_seed = seed  # original seed (for echoing / naming continuity)
 
@@ -86,6 +86,21 @@ def generate(config: Config, seed: int) -> World:
     poi_interiors.run(world, config, gen_seed)
     naming.run(world, config, gen_seed)
     return world
+
+
+def center_lat(config: Config, seed: int) -> float:
+    """Return the map-centre latitude: ``world.center_lat`` if it is a number, else one drawn for ``seed``.
+
+    For ``"seed"`` the hemisphere and the absolute latitude (uniform in ``world.center_lat_range_deg``)
+    come from the ``terrain.latitude`` stream, so the same seed always sits at the same latitude.
+    """
+    value = config.get("world.center_lat")
+    if value != "seed":
+        return float(value)
+    lo, hi = (float(v) for v in config.get("world.center_lat_range_deg"))
+    stream = rng.derive(seed, "terrain", "latitude")
+    sign = stream.choice((-1.0, 1.0))
+    return sign * stream.uniform(lo, hi)
 
 
 def stats(world: World) -> Dict[str, object]:

@@ -129,7 +129,8 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `island_name`.
 
 Scale metadata: `World.scale` is a `util.units.GridScale` built by `generate()` from `world.size_km`
-and `world.center_lat` / `center_lon`; `km_per_col`, `km_per_row`, `lat_top` and `lon_left` read
+and `world.center_lat` / `center_lon` (`center_lat = "seed"` draws it per generation attempt from the
+`terrain.latitude` stream, `pipeline.center_lat`); `km_per_col`, `km_per_row`, `lat_top` and `lon_left` read
 through to it. Cells are anisotropic (default 31.25 x 40 km at 192x75). Not yet consumed by any stage;
 the phase-3 stages measure in km through it.
 

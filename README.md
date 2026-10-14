@@ -123,7 +123,8 @@ The authoritative defaults and inline documentation are in
 | `scale_x` | `1.0` | Stretch all terrain features along X (> 1 = wider landforms) |
 | `scale_y` | `1.0` | Stretch all terrain features along Y |
 | `size_km` | `[6000.0, 3000.0]` | Physical map extent `[east-west, north-south]` in km |
-| `center_lat` | `35.0` | Map-centre latitude in degrees (north positive) |
+| `center_lat` | `"seed"` | Map-centre latitude in degrees (north positive), or `"seed"` to pick one per seed |
+| `center_lat_range_deg` | `[18.0, 48.0]` | Absolute latitude range used by `center_lat = "seed"` |
 | `center_lon` | `0.0` | Map-centre longitude in degrees (east positive) |
 
 #### `[compute]`

@@ -85,12 +85,9 @@ def _validate_biome_names(cfg: Dict[str, Any], errors: List[str]) -> None:
             check(name, f"poi.types.{kind}.biomes")
 
 
-def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate and coerce ``cfg`` in place, returning it. Raise :class:`ConfigError` on any problem."""
-    errors: List[str] = []
-
+def _validate_world(world: Dict[str, Any], errors: List[str]) -> None:
+    """Check the ``world`` section: dimensions, extent, latitude settings."""
     # --- world dimensions must be positive integers ---
-    world = cfg.get("world", {})
     for dim in ("width", "height"):
         try:
             if int(world.get(dim, 1)) <= 0:
@@ -108,7 +105,23 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
         and all(isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 for v in size_km)
     ):
         errors.append(f"world.size_km must be two positive numbers [east-west, north-south], got {size_km!r}")
-    _clamp(world, "center_lat", -90.0, 90.0, errors, "world")
+    if world.get("center_lat") != "seed":
+        _clamp(world, "center_lat", -90.0, 90.0, errors, "world")
+    lat_range = world.get("center_lat_range_deg")
+    if lat_range is not None and not (
+        isinstance(lat_range, list)
+        and len(lat_range) == 2
+        and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in lat_range)
+        and 0 <= lat_range[0] <= lat_range[1] <= 89
+    ):
+        errors.append(f"world.center_lat_range_deg must be [min, max] with 0 <= min <= max <= 89, got {lat_range!r}")
+
+
+def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and coerce ``cfg`` in place, returning it. Raise :class:`ConfigError` on any problem."""
+    errors: List[str] = []
+
+    _validate_world(cfg.get("world", {}), errors)
 
     # --- probabilities in [0, 1] ---
     roads = cfg.get("roads", {})

@@ -15,7 +15,9 @@ size_mode = "fixed"   # "fixed" (reproducible) or "auto" (fit to current termina
 scale_x = 1.0         # global per-axis generation scale (>1 stretches features along X)
 scale_y = 1.0
 size_km = [6000.0, 3000.0]   # physical map extent [east-west, north-south] in km
-center_lat = 35.0     # map-centre latitude in degrees (north positive; clamped to keep edges within +-89)
+center_lat = "seed"   # map-centre latitude in degrees (north positive; clamped to keep edges within +-89),
+                      # or "seed" to pick one per seed in center_lat_range_deg
+center_lat_range_deg = [18.0, 48.0]   # [min, max] absolute latitude used by center_lat = "seed"
 center_lon = 0.0      # map-centre longitude in degrees (east positive)
 
 [compute]
