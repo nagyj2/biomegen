@@ -72,7 +72,7 @@ src/biomegen/
     pois.py             Stage 8 — wild POI placement (interim until phase 8)
     civilization/
       settlements.py    Stage 7 — habitability, capital / city / town / village placement
-      roads.py          Stage 9 — road network + bridge POIs
+      roads.py          Stage 9 — road network (a road over water is a bridge)
     story/
     naming.py           Stage 10 — names and lore for all entities
   naming/
@@ -94,7 +94,7 @@ src/biomegen/
     scatter.py          Stable per-cell decoration keyed on tile and sub-cell
     static.py           render_static (framed map + legend) and render_detail (zoom/local grid)
     colortest.py        --color-test swatches
-    layers/             terrain relief tint water clutter roads bridges sites markers names(labels) compass
+    layers/             terrain relief tint water clutter roads sites markers names(labels) compass
     furniture/          frame, graticule, scale bar, legend for static maps
     backends/           ansi plain html svg png (a grid or document -> text or image)
   explorer/             Interactive terminal app (the only place that reads keys or writes the screen)
@@ -316,15 +316,9 @@ Connects POIs with meandering least-cost roads:
    - **Trunk phase**: MST + loop edges are routed first.
    - **Spur phase**: isolated POIs connect to the nearest existing road tile (not to a distant POI),
      preventing parallel-road artefacts.
-4. **Bridges**: each contiguous run of water tiles a routed road crosses becomes one `bridge` POI,
-   minted the moment the crossing is found. The bridge joins the two land road pieces flanking the run
-   (`p0`/`p1`, stored on the POI `extra`) and its marker sits on the run tile nearest the **centre of
-   that straight span**. Freshwater runs of any length are bridged; ocean runs exceeding
-   `_MAX_OCEAN_BRIDGE` tiles are skipped. Mixed ocean+river runs are split at the salt/fresh boundary.
-   Bridges are emergent from road×water intersections — they are not independently sampled. A
-   per-run **overlap guard** (a shared set of already-spanned water tiles) prevents two roads fording
-   the same spot from stacking duplicate decks — the first (trunk-phase, usually longest) bridge wins,
-   so a wide ford reads as one bridge (connected straight segments), not piled-up overlapping ones.
+4. **Bridges are not recorded.** A road tile over water is a bridge; the renderer and the site plans draw it from the
+   road alone (`sampling/roads.py`). A diagonal step between two land tiles that passes between two freshwater
+   corners also flags one corner as road, so the crossing is a continuous span.
 
 ### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 
@@ -412,7 +406,7 @@ zoom and local are consistent samplings of the same blend — they look like zoo
 Setting `blend_strength = 0` gives a crisp grid. Water is blended by bilinear coverage
 (`water_blend_threshold`) so diagonal rivers and lakes join.
 
-**Roads & bridges** at detail scales (the `roads` and `bridges` layers, drawn over terrain but under POI
+**Roads & bridges** at detail scales (the `roads` layer, drawn over terrain but under POI
 markers and sites): the map keeps its single-cell road glyphs, but at zoom/local roads are not
 markers — they render like the rivers do.
 
@@ -423,12 +417,9 @@ markers — they render like the rivers do.
   row at zoom, two or three at the site view), but never under `road_min_rows` rows. The bed glyph follows the direction of the link (`road_bed`: `─ │ ╱ ╲`) in the `detail_colors.road_*` colours with small
   clutter scattered along it (`road_clutter`, plus `road_clutter_local` fine detail at the close scale). A
   small `road_warp` gives it an organic wobble; water and river cells are never drawn over (bridges carry those).
-- *Bridges* are a straight **deck flanked by walls**, drawn from each bridge POI's stored span
-  endpoints (`extra['p0']`/`['p1']`) at whatever real angle the crossing has — cells within
-  `bridge_half_width` of the span (at least `road_min_rows` thick; perpendicular, clamped to its length, then extended `bridge_overhang`
-  tiles past each end so the deck overlaps the road bed with no gap) are the deck, a band just beyond on
-  either long side is the railing (`detail_colors.deck_*` / `wall_*`). Unlike roads this draws over the
-  water it spans.
+- *Bridges* are the same bed over water: where a bed cell lies over water it is a **deck**, and the band as wide
+  again beside it is the railing (`detail_colors.deck_*` / `wall_*`). They are not POIs: the road model
+  (`sampling/roads.py: road_bed`) is the one rasterisation, shared by the renderer and the site plans.
 
 ### Sites (`sites/`, drawn by the `sites` layer)
 

@@ -15,12 +15,9 @@ VALUES: Dict[str, Any] = {
     "slope_cost_per_km": 0.92,  # cost per km of height change, up or down
     "water_cost": 14.0,  # cost to cross a water tile: high enough that roads prefer land and
     # never run ALONG a river, but low enough that crossing a narrow river
-    # (a bridge) beats a long detour. Ocean is unroutable regardless.
+    # (a bridge, drawn wherever a road lies over water) beats a long detour. Ocean is unroutable regardless.
     "road_discount": 0.3,  # cost multiplier when reusing an existing road tile (encourages joins)
     "turn_cost": 0.1,  # flat penalty added whenever the path changes direction; values in
     # the 1–3× base_cost range reduce zigzagging without over-straightening
     "meander_strength": 0.30,  # deterministic per-tile noise added to cost so paths curve
-    # Bridges: when a road is forced to cross a river/water tile, a "bridge" POI is placed there
-    # and the crossing tile is flagged as a bridge (implemented with the roads stage in Phase 4).
-    "bridges": True,
 }

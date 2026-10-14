@@ -7,7 +7,7 @@ SVG and PNG), so what the explorer shows is what a static render and an export s
 - ``grid``      : the cell grid IR (:class:`CellGrid`) and the document form used for static output.
 - ``sampler``, ``fit``, ``detail`` : how a grid cell reads the world: one cell per tile, the fit-to-screen
                   block reduction, and the warped zoom and local scales.
-- ``layers/``   : the layers (terrain, relief, tint, water, roads, bridges, clutter, interiors, markers, labels,
+- ``layers/``   : the layers (terrain, relief, tint, water, roads (bridges included), clutter, sites, markers, labels,
                   compass), each a function that paints onto the grid; ``views`` lists them per view.
 - ``colors``, ``scatter`` : colour maths and lookups from the data tables; stable per-cell decoration.
 - ``furniture/``: frame, graticule, scale bar and legend for static maps.

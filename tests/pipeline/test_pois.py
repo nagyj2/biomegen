@@ -53,7 +53,7 @@ def _camp(**overrides: object) -> dict:
 
 # --------------------------------------------------------------------------- generated world
 def test_only_wild_kinds_come_from_the_poi_stage(world: World, cfg: Config) -> None:
-    # Settlements and bridges come from other stages; poi.types lists exactly the wild kinds.
+    # Settlements come from another stage; poi.types lists exactly the wild kinds.
     assert set(cfg.get("poi.types")) == set(WILD)
 
 
@@ -73,7 +73,7 @@ def test_land_pois_on_land_boats_on_water(world: World) -> None:
     for p in world.pois:
         if p.kind == "boat":
             assert world.water_type[p.y, p.x] != int(WaterType.NONE)
-        elif p.kind != "bridge":
+        else:
             assert world.water_type[p.y, p.x] == int(WaterType.NONE)
 
 

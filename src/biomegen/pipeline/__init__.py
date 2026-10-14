@@ -140,7 +140,7 @@ def stats(world: World) -> Dict[str, object]:
         "road_tiles": int((world.road != 0).sum()),
         "pois": len(world.pois),
         "poi_kinds": dict(sorted(Counter(p.kind for p in world.pois).items())),
-        "bridges": sum(1 for p in world.pois if p.kind == "bridge"),
+        "bridge_tiles": int(((world.road != 0) & (world.water_type != int(WaterType.NONE))).sum()),
         "elevation_m": {
             "min": round(float(world.elevation_m.min()), 1),
             "max": round(float(world.elevation_m.max()), 1),

@@ -53,7 +53,6 @@ class POIType(IntEnum):
     DUNGEON = 4
     RUIN = 5
     CAMP = 6
-    BRIDGE = 7
 
 
 class WaterType(IntEnum):

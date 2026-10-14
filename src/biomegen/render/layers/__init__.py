@@ -192,7 +192,6 @@ def build_grid(
 
 
 from . import (  # noqa: E402,F401  (registers the built-in layers)
-    bridges,
     clutter,
     compass,
     markers,

@@ -33,12 +33,8 @@ def test_region_lore_nonempty(world, cfg):
         assert len(r.lore) >= lore_min
 
 
-def test_named_pois_have_names_bridges_unnamed(world):
-    for p in world.pois:
-        if p.kind == "bridge":
-            assert p.name == ""
-        else:
-            assert p.name
+def test_every_poi_has_a_name(world):
+    assert all(p.name for p in world.pois)
 
 
 def test_naming_is_order_invariant(cfg):

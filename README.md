@@ -202,7 +202,6 @@ weights in `furniture.toml`.
 | `civilized_connect_prob` | `0.9` | Probability a civilized POI is road-connected |
 | `uncivilized_connect_prob` | `0.25` | Probability an uncivilized POI is road-connected |
 | `meander_strength` | `0.30` | Noise-field bend added to road paths (0 = straight) |
-| `bridges` | `true` | Place a bridge POI wherever a road must cross a river |
 
 #### `[render]`
 | Key | Default | Description |

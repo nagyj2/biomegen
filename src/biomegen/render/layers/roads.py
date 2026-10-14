@@ -6,7 +6,7 @@ import numpy as np
 
 from ...config.model import Config
 from ...sampling.detail import SCALE_LOCAL, DetailSampler
-from ...sampling.roads import KIND_NAMES, road_bed
+from ...sampling.roads import KIND_NAMES, RoadBed, road_bed
 from ..colors import scale_colors
 from ..grid import CellGrid
 from . import LAYERS, LayerContext
@@ -73,6 +73,22 @@ def road_glyph_table(config: Config, ascii_only: bool) -> np.ndarray:
     return table
 
 
+def _bridges(ctx: LayerContext, grid: CellGrid, found: RoadBed, dry: np.ndarray) -> None:
+    """Draw where the road bed lies over water: a deck, with railings in the band as wide again beside it."""
+    cfg = ctx.config
+    glyphs = cfg.get("render.bridge_glyphs") or {}
+    colors = cfg.get("render.detail_colors")
+    open_water = ctx.sampler.inside & ~dry & ~ctx.site_mask
+    for mask, part in ((found.rail & open_water & ~found.bed, "wall"), (found.bed & open_water, "deck")):
+        if mask.any():
+            grid.put(
+                mask,
+                glyph=str(glyphs.get(part, ":" if part == "deck" else "#")),
+                fg=tuple(colors[f"{part}_fg"]),
+                bg=scale_colors(colors[f"{part}_bg"], ctx.shade),
+            )
+
+
 def _detail_roads(ctx: LayerContext, grid: CellGrid, sampler: DetailSampler) -> None:
     """Draw the road network as a thin meandering bed (see :func:`biomegen.sampling.roads.road_bed`).
 
@@ -84,7 +100,9 @@ def _detail_roads(ctx: LayerContext, grid: CellGrid, sampler: DetailSampler) -> 
     if found is None:
         return
     kind = found.kind
-    bed = found.bed & ctx.land & ~ctx.river & ~ctx.site_mask
+    dry = ctx.land & ~ctx.river
+    _bridges(ctx, grid, found, dry)
+    bed = found.bed & dry & ~ctx.site_mask
     if not bed.any():
         return
     key = "ascii" if ctx.ascii_only else "glyphs"

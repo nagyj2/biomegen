@@ -1,7 +1,7 @@
-"""Stage 9: roads + bridges.
+"""Stage 9: roads.
 
-Connects POIs with meandering least-cost roads, then bridges river crossings. The design has four
-parts:
+Connects POIs with meandering least-cost roads. A road tile over water is a bridge: the renderer and the site
+plans draw it from the road alone, so no bridge is recorded. The design has four parts:
 
 1. **Landmass grouping.** A "landmass" is everything that is not open saltwater (``water_type != SALT``)
    - i.e. land plus the rivers/lakes embedded in it. Components of that mask are the islands. POIs are
@@ -17,13 +17,8 @@ parts:
    meander). Step lengths are km, so a north-south step costs more than an east-west one on a tall cell. The
    search is confined to the component's mask and a padded bounding box and capped, with a straight-line
    fallback, so it stays fast on the non-monotone cost.
-4. **Bridges.** Each maximal run of same-type water tiles a routed road crosses becomes one ``bridge``
-   POI, minted the moment the crossing is identified. The bridge joins the two land road pieces flanking
-   the run (``p0``/``p1``), and its marker sits on the **centre of that straight span** (not a run end);
-   the span endpoints are stored on the POI ``extra`` so the renderer can draw a straight deck at any
-   angle. Freshwater runs of any length and saltwater (ocean) runs of at most ``_MAX_OCEAN_BRIDGE`` tiles
-   are bridged; longer ocean crossings are silently skipped. Mixed ocean+river runs are split at the
-   salt/fresh boundary so each sub-run gets its own correctly positioned bridge.
+4. **Fords.** A diagonal step between two land tiles that passes between two freshwater corners also flags
+   one of those corners as road, so the crossing reads as a continuous bridged span.
 """
 
 from __future__ import annotations
@@ -356,137 +351,26 @@ def _straighten_coastal_detours(world: World, path: List[Coord]) -> List[Coord]:
     return result
 
 
-# Maximum number of consecutive ocean (SALT) tiles a road may bridge in one crossing.
-# Longer ocean runs are skipped to prevent implausible open-sea bridges.
-_MAX_OCEAN_BRIDGE = 2
+def _flag_diagonal_fords(world: World, path: List[Coord], tier: int) -> None:
+    """Flag the water corner of each diagonal land-to-land step that visually crosses a waterway as road.
 
-
-def _emit_bridge(
-    world: World,
-    seed: int,
-    p0: Coord,
-    p1: Coord,
-    marker: Coord,
-    run: List[Coord],
-    tier: int,
-    bridged: set,
-) -> None:
-    """Mint one ``bridge`` POI for a single water crossing and flag its run as road.
-
-    ``p0``/``p1`` are the land road tiles on either shore - the two road pieces the bridge joins. The
-    deck is rendered as a straight span between them (at whatever real angle the line requires), so the
-    bridge's geometry is stored on the POI ``extra`` for the renderer. The marker is placed on the
-    **centre of that span** (``marker``), the moment the crossing is identified, rather than drifting to
-    a run end. ``run`` is the set of water tiles the crossing covers, flagged as road for the overview.
-
-    ``bridged`` tracks the water tiles already spanned by a bridge (the run plus the straight deck line).
-    If this crossing's water overlaps one already bridged - two roads fording the same spot - it is
-    skipped so the bridges do not stack: the earlier (trunk-phase, usually longer) bridge already covers
-    it, and overlapping decks would otherwise pile up. Distinct, non-overlapping crossings still each get
-    their own bridge, so a wide ford reads as connected straight segments.
+    A step ``(x0, y0) -> (x1, y1)`` with ``dx = dy = +-1`` passes between corners ``(x1, y0)`` and ``(x0, y1)``;
+    when both are freshwater the path spans a waterway diagonally without visiting a water tile. Only freshwater
+    triggers this - saltwater never does.
     """
-    # Water tiles this crossing spans: the run plus any water under the straight p0->p1 deck line.
-    crossing = set(run)
-    for cx, cy in _bresenham(p0, p1):
-        if world.in_bounds(cx, cy) and world.water_type[cy, cx] != int(WaterType.NONE):
-            crossing.add((cx, cy))
-    if crossing & bridged:
-        return  # this water is already bridged - don't stack a second deck on it
-    bridged |= crossing
-
-    mx, my = marker
-    region_id = int(world.region_id[my, mx])
-    if world.poi_index[my, mx] < 0:
-        idx = len(world.pois)
-        world.pois.append(
-            POI(
-                kind="bridge",
-                x=mx,
-                y=my,
-                interior_seed=rng.derive_int(seed, "roads", "bridge", mx, my),
-                civilized=False,
-                region_id=region_id,
-                extra={"p0": [int(p0[0]), int(p0[1])], "p1": [int(p1[0]), int(p1[1])]},
-            )
-        )
-        world.poi_index[my, mx] = idx
-        if 0 <= region_id < len(world.regions):
-            world.regions[region_id].poi_indices.append(idx)
-    # Flag the whole crossing as road so it reads as a continuous bridged span on the overview.
-    for cx, cy in run:
-        world.road[cy, cx] = 1
-        if world.road_tier[cy, cx] == 0:
-            world.road_tier[cy, cx] = tier
-
-
-def _place_bridges(world: World, seed: int, path: List[Coord], tier: int, bridged: set) -> None:
-    """Mint one bridge POI per contiguous same-type water run the road crosses; flag the run as road.
-
-    Each run is bounded in the path by a land road tile on either side (``p0``/``p1``); the bridge joins
-    those two road pieces with a straight span and its marker sits on the span centre (see
-    :func:`_emit_bridge`). Runs are split at salt/fresh boundaries so a river-mouth scenario (an ocean
-    tile adjacent to a river tile) yields two separate, correctly positioned bridges. ``bridged`` carries
-    the already-spanned water tiles across edges so overlapping crossings don't stack duplicate decks.
-    """
-    n = len(path)
-    i = 0
-    while i < n:
-        x, y = path[i]
-        wt = world.water_type[y, x]
-        if wt == int(WaterType.NONE):
-            i += 1
-            continue
-        is_salt = wt == int(WaterType.SALT)
-        # Extend the run while the water keeps the same salt-ness (split at salt/fresh boundaries).
-        j = i
-        while j + 1 < n:
-            nx, ny = path[j + 1]
-            nwt = world.water_type[ny, nx]
-            if nwt == int(WaterType.NONE) or (nwt == int(WaterType.SALT)) != is_salt:
-                break
-            j += 1
-        run = path[i : j + 1]
-        length = j - i + 1
-        prev_idx = i - 1  # index in path just before the run start
-        i = j + 1
-        if is_salt and length > _MAX_OCEAN_BRIDGE:
-            continue  # refuse implausibly long open-ocean crossings
-        # Land road tiles flanking the run = the two road pieces the bridge connects.
-        p0 = path[prev_idx] if prev_idx >= 0 else run[0]
-        p1 = path[j + 1] if j + 1 < n else run[-1]
-        _emit_bridge(world, seed, p0, p1, _span_centre(p0, p1, run), run, tier, bridged)
-
-    # Detect diagonal land-to-land steps that visually cross a waterway without visiting a water tile.
-    # A step (x0,y0)→(x1,y1) with dx=±1, dy=±1 passes between corners (x1,y0) and (x0,y1); when both
-    # corners are freshwater the path spans a waterway diagonally. The bridge joins the two step tiles
-    # (p0, p1); its deck is the straight diagonal between them. Only FRESH triggers this - SALT never.
-    for k in range(n - 1):
-        x0, y0 = path[k]
-        x1, y1 = path[k + 1]
+    for (x0, y0), (x1, y1) in zip(path, path[1:], strict=False):
         if abs(x1 - x0) != 1 or abs(y1 - y0) != 1:
             continue
-        c1x, c1y = x1, y0
-        c2x, c2y = x0, y1
-        if not (world.in_bounds(c1x, c1y) and world.in_bounds(c2x, c2y)):
+        if not (world.in_bounds(x1, y0) and world.in_bounds(x0, y1)):
             continue
-        if world.water_type[c1y, c1x] == int(WaterType.FRESH) and world.water_type[c2y, c2x] == int(WaterType.FRESH):
-            _emit_bridge(world, seed, (x0, y0), (x1, y1), (c1x, c1y), [(c1x, c1y)], tier, bridged)
-
-
-def _span_centre(p0: Coord, p1: Coord, run: List[Coord]) -> Coord:
-    """Return the water-run tile nearest the centre of the straight ``p0``->``p1`` span.
-
-    The bridge marker sits on the centre of the deck, but it must land on an actual water tile of the
-    crossing (so it reads as a bridge and is flagged road), so we snap the geometric midpoint of the two
-    flanking road pieces to the closest tile of the run.
-    """
-    cx = (p0[0] + p1[0]) / 2.0
-    cy = (p0[1] + p1[1]) / 2.0
-    return min(run, key=lambda t: (t[0] - cx) ** 2 + (t[1] - cy) ** 2)
+        if world.water_type[y0, x1] == int(WaterType.FRESH) and world.water_type[y1, x0] == int(WaterType.FRESH):
+            world.road[y0, x1] = 1
+            if world.road_tier[y0, x1] == 0:
+                world.road_tier[y0, x1] = tier
 
 
 def run(world: World, config: Config, seed: int) -> None:
-    """Build the road network and bridges, mutating ``world`` in place."""
+    """Build the road network, mutating ``world`` in place."""
     backend = config.get("compute.backend")
     eligible = _road_eligible(world)
     if len(eligible) < 2:
@@ -532,8 +416,6 @@ def run(world: World, config: Config, seed: int) -> None:
         float(config.get("roads.extra_edge_prob")),
     )
     k = int(config.get("roads.k_neighbors"))
-    bridges_on = bool(config.get("roads.bridges"))
-    bridged: set = set()  # water tiles already spanned by a bridge, so overlapping fords don't stack
 
     for comp in sorted(groups):
         group = groups[comp]
@@ -555,8 +437,7 @@ def run(world: World, config: Config, seed: int) -> None:
                 world.road[y, x] = 1
                 if world.road_tier[y, x] == 0:
                     world.road_tier[y, x] = 1
-            if bridges_on:
-                _place_bridges(world, seed, path, tier=1, bridged=bridged)
+            _flag_diagonal_fords(world, path, tier=1)
 
         # Spur phase: connect each isolated POI to the nearest existing road tile.
         # Routing after the trunk means spurs branch off the closest point on the network,
@@ -582,5 +463,4 @@ def run(world: World, config: Config, seed: int) -> None:
                 world.road[y, x] = 1
                 if world.road_tier[y, x] == 0:
                     world.road_tier[y, x] = 2
-            if bridges_on:
-                _place_bridges(world, seed, path, tier=2, bridged=bridged)
+            _flag_diagonal_fords(world, path, tier=2)

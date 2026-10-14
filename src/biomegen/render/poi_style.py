@@ -1,7 +1,7 @@
 """How a point of interest is marked on the map.
 
 Settlement tiers read their glyph, ASCII glyph and colours from their ``tables.tiers`` row; every other kind (the
-wild POIs and bridges) reads ``render.markers`` with the shared ``render.marker_style`` colours.
+wild POIs) reads ``render.markers`` with the shared ``render.marker_style`` colours.
 """
 
 from __future__ import annotations

@@ -58,10 +58,8 @@ def run(world: World, config: Config, seed: int) -> None:
         seed, "island", (dominant.id,), region_culture[dominant.id], generators, naming_cfg
     )
 
-    # 4. Name POIs (bridges stay unnamed - they are infrastructure).
+    # 4. Name POIs.
     for poi in world.pois:
-        if poi.kind == "bridge":
-            continue
         cult = region_culture.get(poi.region_id, "common") if poi.region_id >= 0 else "common"
         poi.name = forge.name_entity(
             seed, "poi", (poi.x, poi.y), cult, generators, naming_cfg, kind=poi.kind, civilized=poi.civilized

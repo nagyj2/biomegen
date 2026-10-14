@@ -14,7 +14,6 @@ from typing import Optional
 import numpy as np
 
 from ..config.model import Config
-from ..world.tile import WaterType
 from ..world.world import World
 from .detail import DetailSampler
 
@@ -31,10 +30,12 @@ class RoadBed:
     Attributes:
         bed: Cells within the bed's half width of a road link.
         kind: Per cell, the direction of the nearest link (an index into ``KIND_NAMES``, or ``KIND_LONE``).
+        rail: Cells in the band as wide again just outside the bed; a bridge draws its railings there.
     """
 
     bed: np.ndarray
     kind: np.ndarray
+    rail: np.ndarray
 
 
 def _mark_segment(
@@ -45,10 +46,10 @@ def _mark_segment(
     start: tuple[int, int],
     end: tuple[int, int],
     reach: float,
-    half: float,
+    limit: float,
     link_kind: int,
 ) -> None:
-    """Claim the cells whose warped position is within ``half`` tiles of the link ``start -> end``.
+    """Claim the cells whose warped position is within ``limit`` tiles of the link ``start -> end``.
 
     ``nearest`` holds each cell's distance to its closest link so far and ``kind`` that link's direction, so a cell
     where links meet takes the nearer one.
@@ -67,7 +68,7 @@ def _mark_segment(
     else:
         t = np.clip(((x - ax) * dx + (y - ay) * dy) / length2, 0.0, 1.0)
         distance = np.hypot(x - (ax + t * dx), y - (ay + t * dy))
-    closer = (distance <= half) & (distance < nearest[window])
+    closer = (distance <= limit) & (distance < nearest[window])
     nearest[window] = np.where(closer, distance, nearest[window])
     kind[window] = np.where(closer, link_kind, kind[window])
 
@@ -85,37 +86,39 @@ def road_bed(sampler: DetailSampler, world: World, config: Config) -> Optional[R
 
     The bed is the cells within ``render.road_half_width`` tiles (at least ``render.road_min_rows`` rows) of a link
     between two neighbouring road tiles (eight directions), measured at the road-warped position
-    (``render.road_warp``). A road tile with no link is a disc at its centre.
+    (``render.road_warp``). A road tile with no link is a disc at its centre. Road tiles over water are road too:
+    where the bed lies over water a caller draws a bridge.
     """
     half = bed_half_width(config, sampler)
     if half <= 0:
         return None
-    land_road = (world.road > 0) & (world.water_type == int(WaterType.NONE))
+    road = world.road > 0
     warp = max(float(config.get("render.road_warp")), 0.0)
-    reach = half + warp
+    rail_half = 2.0 * half
+    reach = rail_half + warp
     x_lo = max(0, int(np.floor(sampler.cam_x - reach)))
     x_hi = min(world.width, int(np.ceil(sampler.cam_x + sampler.tiles_w + reach)))
     y_lo = max(0, int(np.floor(sampler.cam_y - reach)))
     y_hi = min(world.height, int(np.ceil(sampler.cam_y + sampler.tiles_h + reach)))
     if x_hi <= x_lo or y_hi <= y_lo:
         return None
-    tile_rows, tile_cols = np.nonzero(land_road[y_lo:y_hi, x_lo:x_hi])
+    tile_rows, tile_cols = np.nonzero(road[y_lo:y_hi, x_lo:x_hi])
     if len(tile_cols) == 0:
         return None
     warped = sampler.warped(warp)
     nearest = np.full(sampler.fx.shape, np.inf)
     kind = np.full(sampler.fx.shape, KIND_LONE, dtype=np.int8)
-    linked = _linked(land_road)
+    linked = _linked(road)
     for row, col in zip(tile_rows.tolist(), tile_cols.tolist(), strict=True):
         tx, ty = x_lo + col, y_lo + row
         if not linked[ty, tx]:
-            _mark_segment(sampler, nearest, kind, warped, (tx, ty), (tx, ty), reach, half, KIND_LONE)
+            _mark_segment(sampler, nearest, kind, warped, (tx, ty), (tx, ty), reach, rail_half, KIND_LONE)
         for (step_x, step_y), link_kind in _FORWARD:
             nx, ny = tx + step_x, ty + step_y
-            if 0 <= nx < world.width and 0 <= ny < world.height and land_road[ny, nx]:
-                _mark_segment(sampler, nearest, kind, warped, (tx, ty), (nx, ny), reach, half, link_kind)
-    bed = np.isfinite(nearest)
-    return RoadBed(bed, kind) if bed.any() else None
+            if 0 <= nx < world.width and 0 <= ny < world.height and road[ny, nx]:
+                _mark_segment(sampler, nearest, kind, warped, (tx, ty), (nx, ny), reach, rail_half, link_kind)
+    bed = nearest <= half
+    return RoadBed(bed, kind, (nearest > half) & (nearest <= rail_half)) if bed.any() else None
 
 
 def _linked(road: np.ndarray) -> np.ndarray:

@@ -323,7 +323,7 @@ def _print_stats(stats: dict[str, Any]) -> None:
     print(
         f"regions={stats['regions']}  rivers={stats['rivers']} ({stats['river_tiles']} tiles)  "
         f"lakes={stats['lakes']} ({stats['lake_tiles']} tiles)  "
-        f"roads={stats['road_tiles']} tiles  bridges={stats.get('bridges', 0)}"
+        f"roads={stats['road_tiles']} tiles  bridge_tiles={stats.get('bridge_tiles', 0)}"
     )
     print(f"pois={stats['pois']}: {stats.get('poi_kinds', {})}")
     print("biomes:")

@@ -9,13 +9,11 @@ from biomegen.config.model import Config
 from biomegen.render.layers import build_grid
 from biomegen.render.views import View
 from biomegen.sampling.detail import SCALE_LOCAL, DetailSampler
-from biomegen.sampling.sampler import Sampler
-from biomegen.world.entities import POI
 from biomegen.world.tile import Biome
 from tests.render.conftest import make_world
 
 ROADS = View("t", ("terrain", "roads"))
-BRIDGES = View("t", ("terrain", "bridges"))
+BRIDGES = View("t", ("terrain", "water", "roads"))
 
 
 def _crisp_config(**render) -> Config:
@@ -40,7 +38,7 @@ def _bridge_world(lake_column: bool = False):
     if lake_column:
         world.biome[:, 2] = int(Biome.LAKE)
         world.elevation_m[:, 2] = -10.0
-    world.pois.append(POI(kind="bridge", x=2, y=1, interior_seed=0, extra={"p0": [1, 1], "p1": [3, 1]}))
+    world.road[1, 1:4] = 1  # land, the middle column (water in the lake variant), land
     return world
 
 
@@ -130,17 +128,19 @@ def test_local_scale_adds_fine_clutter_to_the_bed() -> None:
     assert (fine & set(np.unique(local.glyph)), fine & set(np.unique(zoom.glyph))) == ({'"', ";"}, set())
 
 
-def test_bridge_deck_runs_between_its_span_ends() -> None:
-    # A bridge from tile (1, 1) to (3, 1) paints three deck rows across the middle column.
-    grid, _, config = _draw(_bridge_world(), BRIDGES, _crisp_config(bridge_half_width=0.25))
-    rows = np.nonzero(_is_color(grid, config.get("render.detail_colors.deck_bg"))[:, 25])[0].tolist()
-    assert rows == [6, 7, 8]
+def test_a_road_over_water_is_a_deck_of_the_roads_own_width() -> None:
+    # The road crosses the lake column on one row, like the road bed beside it.
+    grid, _, config = _draw(_bridge_world(lake_column=True), BRIDGES)
+    rows = np.nonzero(grid.glyph[:, 25] == config.get("render.bridge_glyphs.deck"))[0].tolist()
+    assert rows == [7]
 
 
 def test_bridge_walls_flank_the_deck() -> None:
-    grid, _, config = _draw(_bridge_world(), BRIDGES, _crisp_config(bridge_half_width=0.25))
-    wall = _is_color(grid, config.get("render.detail_colors.wall_bg"))
-    assert wall[5, 25] and wall[9, 25]
+    world = _bridge_world(lake_column=True)
+    config = _crisp_config(road_half_width=0.25)
+    grid, _, config = _draw(world, BRIDGES, config)
+    wall = config.get("render.bridge_glyphs.wall")
+    assert grid.glyph[5, 25] == wall and grid.glyph[9, 25] == wall
 
 
 def test_bridge_is_drawn_over_the_water_it_spans() -> None:
@@ -149,13 +149,9 @@ def test_bridge_is_drawn_over_the_water_it_spans() -> None:
     assert grid.glyph[7, 25] == config.get("render.bridge_glyphs.deck")
 
 
-def test_bridge_layer_draws_nothing_at_map_scale() -> None:
-    # At map scale a bridge is a marker; the detail-only layer must leave the map untouched.
-    world = _bridge_world()
-    config = _crisp_config()
-    with_layer = build_grid(world, config, BRIDGES, Sampler.viewport(world, 3, 5))
-    without = build_grid(world, config, View("t", ("terrain",)), Sampler.viewport(world, 3, 5))
-    assert (with_layer.glyph == without.glyph).all() and (with_layer.bg == without.bg).all()
+def test_a_road_over_land_has_no_deck() -> None:
+    grid, _, config = _draw(_bridge_world(), BRIDGES)
+    assert config.get("render.bridge_glyphs.deck") not in grid.glyph[:, 25]
 
 
 def _bed_glyphs(grid, config) -> set[str]:
@@ -184,9 +180,3 @@ def test_ascii_bed_uses_ascii_glyphs() -> None:
     sampler = DetailSampler(world, config, 10, 5, 0, 0, world.width, world.height, "zoom")
     grid = build_grid(world, config, ROADS, sampler, ascii_only=True)
     assert _bed_glyphs(grid, config) == {"\\"}
-
-
-def test_a_default_bridge_deck_is_one_row_at_zoom() -> None:
-    grid, _, config = _draw(_bridge_world(), BRIDGES)
-    rows = np.nonzero(_is_color(grid, config.get("render.detail_colors.deck_bg"))[:, 25])[0].tolist()
-    assert rows == [7]

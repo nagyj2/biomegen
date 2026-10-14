@@ -49,7 +49,7 @@ GEO_WORDS: Dict[int, List[str]] = {
 }
 
 _CIVIL = (POIType.CITY, POIType.TOWN, POIType.VILLAGE)
-_WILD = (POIType.TOWER, POIType.DUNGEON, POIType.RUIN, POIType.CAMP, POIType.BRIDGE)
+_WILD = (POIType.TOWER, POIType.DUNGEON, POIType.RUIN, POIType.CAMP)
 _NUMBER = {1: "a", 2: "two", 3: "three"}
 
 _SINGULAR = {
@@ -60,7 +60,6 @@ _SINGULAR = {
     POIType.DUNGEON: "dungeon",
     POIType.RUIN: "ruin",
     POIType.CAMP: "camp",
-    POIType.BRIDGE: "bridge",
 }
 _PLURAL = {
     POIType.CITY: "cities",
@@ -70,7 +69,6 @@ _PLURAL = {
     POIType.DUNGEON: "dungeons",
     POIType.RUIN: "ruin",
     POIType.CAMP: "camps",
-    POIType.BRIDGE: "bridges",
 }
 
 
