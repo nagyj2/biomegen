@@ -205,3 +205,33 @@ def detail_sampler(
     return DetailSampler(
         world, config, cell_w, cell_h, cam_x, cam_y, max(1, area_w // cell_w), max(1, area_h // cell_h), scale
     )
+
+
+def centre_camera(tile: int, tiles: int, world_size: int) -> int:
+    """Return the first tile of a ``tiles``-wide window that centres ``tile``, kept inside the world.
+
+    A world smaller than the window is centred in it instead, which gives a negative first tile (the
+    outside cells stay blank).
+    """
+    if world_size <= tiles:
+        return -((tiles - world_size) // 2)
+    return max(0, min(tile - tiles // 2, world_size - tiles))
+
+
+def centred_detail_sampler(
+    world: World, config: Config, scale: str, area_w: int, area_h: int, at: tuple[int, int]
+) -> DetailSampler:
+    """Return the sampler for ``scale`` over an ``area_w x area_h`` cell area centred on tile ``at``."""
+    cell_w, cell_h = detail_cell_size(scale, config, area_w, area_h)
+    tiles_w, tiles_h = max(1, area_w // cell_w), max(1, area_h // cell_h)
+    return DetailSampler(
+        world,
+        config,
+        cell_w,
+        cell_h,
+        centre_camera(at[0], tiles_w, world.width),
+        centre_camera(at[1], tiles_h, world.height),
+        tiles_w,
+        tiles_h,
+        scale,
+    )

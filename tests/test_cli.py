@@ -111,3 +111,62 @@ def test_color_test_prints_swatches_without_generating(capsys):
 
     assert cli.main(["--color-test"]) == 0
     assert "Colour test" in capsys.readouterr().out
+
+
+def test_zoom_prints_the_bare_grid_without_frame_or_legend(capsys):
+    # A zoomed view is just cells: no title, no legend, no escape codes when piped.
+    out = _run_view(capsys, "--scale", "zoom", "--at", "20,10")
+    assert "seed 3" not in out and "LEGEND" not in out and "\x1b" not in out
+
+
+def test_local_view_is_ascii_with_the_flag(capsys):
+    assert _run_view(capsys, "--scale", "local", "--ascii").isascii()
+
+
+def test_zoom_view_is_repeatable(capsys):
+    first = _run_view(capsys, "--scale", "zoom", "--at", "20,10")
+    assert first == _run_view(capsys, "--scale", "zoom", "--at", "20,10")
+
+
+def test_zoom_can_draw_a_data_view(capsys):
+    assert _run_view(capsys, "--scale", "zoom", "--view", "elevation", "--color", "truecolor").count("\x1b[") > 10
+
+
+def test_scale_map_is_the_whole_world_map(capsys):
+    assert "seed 3" in _run_view(capsys, "--scale", "map", "--view", "terrain", "--no-legend")
+
+
+def test_zoom_view_saves_to_the_suffix_back_end(capsys, tmp_path):
+    target = tmp_path / "zoom.svg"
+    _run_view(capsys, "--scale", "zoom", "--save", str(target))
+    assert target.read_text(encoding="utf-8").startswith("<svg")
+
+
+def test_at_without_a_detail_scale_is_an_error(capsys):
+    import pytest
+
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--view", "terrain", "--at", "5,5"])
+    assert "--at needs --scale" in capsys.readouterr().err
+
+
+def test_at_outside_the_world_is_an_error(capsys):
+    import pytest
+
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--seed", "3", "--width", "64", "--height", "32", "--scale", "zoom", "--at", "99,5"])
+    assert "outside the 64x32 world" in capsys.readouterr().err
+
+
+def test_malformed_tile_is_an_error(capsys):
+    import pytest
+
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--scale", "zoom", "--at", "five"])
+    assert "column,row" in capsys.readouterr().err

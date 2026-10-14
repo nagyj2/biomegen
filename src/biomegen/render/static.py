@@ -12,6 +12,7 @@ from typing import Optional
 from ..config.model import Config
 from ..world.overlay import Overlay
 from ..world.world import World
+from .detail import centred_detail_sampler
 from .furniture.frame import build_frame
 from .furniture.legend import build_legend
 from .grid import CellGrid, Document
@@ -25,8 +26,10 @@ class StaticRender:
     """A finished static map.
 
     Attributes:
-        grid: The map body, one cell per world tile (what SVG and PNG draw).
-        document: The framed map followed by the legend (what ANSI, plain and HTML print).
+        grid: The map body, one cell per world tile (what SVG and PNG draw); a detail render has many cells
+            per tile.
+        document: The framed map followed by the legend (what ANSI, plain and HTML print); a detail render
+            is the bare grid.
     """
 
     grid: CellGrid
@@ -64,3 +67,37 @@ def render_static(
         width = int(config.get("render.furniture.margin")) + grid.cols + 2
         document += build_legend(world, config, view, width, ascii_only)
     return StaticRender(grid, document)
+
+
+def render_detail(
+    world: World,
+    config: Config,
+    scale: str,
+    view_name: str = "terrain",
+    *,
+    at: Optional[tuple[int, int]] = None,
+    area: tuple[int, int] = (120, 36),
+    ascii_only: bool = False,
+    color: bool = True,
+    floor: int = 0,
+    overlay: Optional[Overlay] = None,
+) -> StaticRender:
+    """Render a magnified part of the world: the zoom or local scale centred on one tile, with no furniture.
+
+    Args:
+        world: The generated world.
+        config: The merged configuration.
+        scale: ``"zoom"`` or ``"local"``.
+        view_name: A key of ``render.views``; its ``detail_layers`` are drawn.
+        at: The tile to centre on; the middle of the map when ``None``.
+        area: Columns and rows available. The grid holds whole tiles only, so it may be a little smaller.
+        ascii_only: Use only 7-bit glyphs.
+        color: Whether the output is coloured.
+        floor: The floor of multi-floor interiors to draw.
+        overlay: Runtime edits to composite, or ``None``.
+    """
+    view = resolve_view(config, view_name)
+    centre = at if at is not None else (world.width // 2, world.height // 2)
+    sampler = centred_detail_sampler(world, config, scale, area[0], area[1], centre)
+    grid = build_grid(world, config, view, sampler, overlay, ascii_only, color, floor=floor)
+    return StaticRender(grid, grid.to_document())

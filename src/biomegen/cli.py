@@ -4,8 +4,9 @@ Run the CLI application with::
 
     uv run biomegen [--seed N] [--config path.toml] [--width W] [--height H]
                     [--noise-backend {perlin,value,opensimplex}] [--poi-sampler {bluenoise,random,grid}]
-                    [--headless] [--view NAME] [--labels {all,cities,none}] [--color {auto,truecolor,256,none}]
-                    [--ascii] [--no-legend] [--save FILE] [--html FILE] [--color-test]
+                    [--headless] [--view NAME] [--scale {map,zoom,local}] [--at X,Y] [--labels {all,cities,none}]
+                    [--color {auto,truecolor,256,none}] [--ascii] [--no-legend] [--save FILE] [--html FILE]
+                    [--color-test]
 
 This launcher wires together the three top-level concerns and nothing else:
     1. parse CLI arguments,
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Any, Optional, Sequence
@@ -107,6 +109,19 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Print a static map of this render.views entry (terrain, elevation, temperature, rainfall) and exit.",
     )
+    parser.add_argument(
+        "--scale",
+        choices=("map", "zoom", "local"),
+        default=None,
+        help="Draw a magnified part of the world (zoom or local) instead of the whole map; implies --view terrain.",
+    )
+    parser.add_argument(
+        "--at",
+        type=_parse_tile,
+        default=None,
+        metavar="X,Y",
+        help="World tile to centre a zoom or local view on (default: the middle of the map).",
+    )
     parser.add_argument("--labels", choices=("all", "cities", "none"), default="all", help="Which names to draw.")
     parser.add_argument(
         "--color",
@@ -138,6 +153,15 @@ def _parse_size_km(text: str) -> tuple[float, float]:
         raise argparse.ArgumentTypeError("size must look like 6000x3000 (width x height in km)") from None
 
 
+def _parse_tile(text: str) -> tuple[int, int]:
+    """Parse ``X,Y`` (world tile column and row) for ``--at``."""
+    try:
+        x, y = text.split(",")
+        return int(x), int(y)
+    except ValueError:
+        raise argparse.ArgumentTypeError("tile must look like 40,12 (column,row)") from None
+
+
 def _detect_color() -> str:
     """Return the colour mode this terminal supports: ``truecolor``, ``256`` or ``none`` (piped or NO_COLOR)."""
     if not sys.stdout.isatty() or os.environ.get("NO_COLOR"):
@@ -165,22 +189,35 @@ def _print_color_test(color: str) -> None:
 
 
 def _run_static(world: Any, config: Config, args: argparse.Namespace) -> None:
-    """Print (and optionally save) a static map of the whole world."""
+    """Print (and optionally save) a static map of the whole world, or of a zoom or local part of it."""
     from biomegen.render.backends.ansi import to_ansi
     from biomegen.render.backends.html import to_html
     from biomegen.render.backends.plain import to_plain
-    from biomegen.render.static import render_static
+    from biomegen.render.static import render_detail, render_static
 
     mode = _detect_color() if args.color == "auto" else args.color
-    static = render_static(
-        world,
-        config,
-        args.view or "terrain",
-        labels=args.labels,
-        ascii_only=args.ascii,
-        color=mode != "none",
-        legend=not args.no_legend,
-    )
+    if args.scale in ("zoom", "local"):
+        size = shutil.get_terminal_size(fallback=(120, 37))
+        static = render_detail(
+            world,
+            config,
+            args.scale,
+            args.view or "terrain",
+            at=args.at,
+            area=(size.columns, max(1, size.lines - 1)),
+            ascii_only=args.ascii,
+            color=mode != "none",
+        )
+    else:
+        static = render_static(
+            world,
+            config,
+            args.view or "terrain",
+            labels=args.labels,
+            ascii_only=args.ascii,
+            color=mode != "none",
+            legend=not args.no_legend,
+        )
     print(to_plain(static.document) if mode == "none" else to_ansi(static.document, mode))
     title = f"The World of {world.island_name}"
     if args.html:
@@ -241,6 +278,8 @@ def _apply_overrides(args: argparse.Namespace, config: Config, parser: argparse.
         config.data["terrain"]["style"] = args.style
     if args.view is not None and args.view not in config.get("render.views"):
         parser.error(f"unknown view {args.view!r}; available: {', '.join(config.get('render.views'))}")
+    if args.at is not None and args.scale in (None, "map"):
+        parser.error("--at needs --scale zoom or --scale local")
     if args.size_km is not None:
         config.data["world"]["size_km"] = list(args.size_km)
     if args.lat is not None:
@@ -278,7 +317,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _print_stats(pipeline.stats(world))
         return 0
 
-    if args.view or args.save or args.html:
+    if args.at is not None and not (0 <= args.at[0] < world.width and 0 <= args.at[1] < world.height):
+        parser.error(f"--at {args.at[0]},{args.at[1]} is outside the {world.width}x{world.height} world")
+
+    if args.view or args.scale or args.save or args.html:
         _run_static(world, config, args)
         return 0
 

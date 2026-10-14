@@ -7,7 +7,14 @@ import pytest
 
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.render.detail import SCALE_LOCAL, SCALE_ZOOM, DetailSampler, detail_cell_size, detail_sampler
+from biomegen.render.detail import (
+    SCALE_LOCAL,
+    SCALE_ZOOM,
+    DetailSampler,
+    centre_camera,
+    detail_cell_size,
+    detail_sampler,
+)
 from biomegen.world.tile import Biome
 from tests.render.conftest import make_world
 
@@ -115,3 +122,12 @@ def test_biome_is_deterministic(config: Config, scale: str) -> None:
     first = detail_sampler(world, config, scale, 60, 20, 0, 0).biome()
     second = detail_sampler(world, config, scale, 60, 20, 0, 0).biome()
     assert (first == second).all()
+
+
+@pytest.mark.parametrize(
+    ("tile", "tiles", "world_size", "first"),
+    [(30, 12, 64, 24), (0, 12, 64, 0), (63, 12, 64, 52), (2, 12, 6, -3)],
+)
+def test_camera_centres_the_tile_and_stays_in_the_world(tile: int, tiles: int, world_size: int, first: int) -> None:
+    # Centred in the middle, clamped at either edge, and a small world is centred in the window.
+    assert centre_camera(tile, tiles, world_size) == first

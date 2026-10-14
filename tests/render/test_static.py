@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from biomegen.render.backends.plain import to_plain
 from biomegen.render.colortest import color_test
-from biomegen.render.static import render_static
+from biomegen.render.static import render_detail, render_static
 from biomegen.world.tile import Biome
 from tests.render.conftest import make_world
 
@@ -61,3 +61,37 @@ def test_color_test_reports_the_detected_mode() -> None:
 
 def test_color_test_lists_the_environment() -> None:
     assert "COLORTERM=truecolor" in to_plain(color_test("truecolor", {"COLORTERM": "truecolor"}))
+
+
+def test_detail_render_fills_whole_tiles_of_the_area(config) -> None:
+    # A 120 x 36 area with 10 x 5 zoom cells holds 12 x 7 tiles: 120 columns by 35 rows.
+    static = render_detail(_world(), config, "zoom", area=(120, 36))
+    assert (static.grid.rows, static.grid.cols) == (35, 120)
+
+
+def test_detail_render_is_the_bare_grid(config) -> None:
+    # No frame, title or legend: the document has one line per grid row.
+    static = render_detail(_world(), config, "local", area=(80, 24))
+    assert len(static.document) == static.grid.rows
+
+
+def test_detail_render_is_repeatable(config) -> None:
+    first = to_plain(render_detail(_world(), config, "zoom", at=(30, 12), color=False).document)
+    assert first == to_plain(render_detail(_world(), config, "zoom", at=(30, 12), color=False).document)
+
+
+def test_detail_render_follows_the_chosen_tile(config) -> None:
+    # Centring on the grassland or on the open sea gives different pictures.
+    land = render_detail(_world(), config, "zoom", at=(32, 12), area=(60, 20)).grid
+    sea = render_detail(_world(), config, "zoom", at=(2, 2), area=(60, 20)).grid
+    assert not (land.glyph == sea.glyph).all()
+
+
+def test_ascii_detail_render_is_pure_ascii(config) -> None:
+    assert to_plain(render_detail(_world(), config, "local", ascii_only=True, color=False).document).isascii()
+
+
+def test_data_view_works_at_detail_scale(config) -> None:
+    # The elevation ramp tints a zoomed view of a coast; land and sea get different fills.
+    grid = render_detail(_world(), config, "zoom", "elevation", at=(20, 12), area=(60, 20)).grid
+    assert len({tuple(rgb) for rgb in grid.bg.reshape(-1, 3).tolist()}) > 3
