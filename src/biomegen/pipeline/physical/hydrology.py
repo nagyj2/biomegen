@@ -25,11 +25,11 @@ import heapq
 
 import numpy as np
 
-from ..config.model import Config
-from ..util import geometry as geo
-from ..world.entities import Lake, River
-from ..world.tile import Biome, WaterType
-from ..world.world import World
+from ...config.model import Config
+from ...util import geometry as geo
+from ...world.entities import Lake, River
+from ...world.tile import Biome, WaterType
+from ...world.world import World
 
 # Direction offsets indexed by the small ints stored in the receiver-direction array.
 _OFFSETS8 = ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1))

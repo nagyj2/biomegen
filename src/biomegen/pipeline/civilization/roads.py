@@ -35,12 +35,12 @@ from typing import Dict, List, Tuple, cast
 
 import numpy as np
 
-from ..config.model import Config
-from ..util import geometry as geo
-from ..util import noise, rng
-from ..world.entities import POI
-from ..world.tile import Biome, WaterType
-from ..world.world import World
+from ...config.model import Config
+from ...util import geometry as geo
+from ...util import noise, rng
+from ...world.entities import POI
+from ...world.tile import Biome, WaterType
+from ...world.world import World
 
 Coord = Tuple[int, int]
 _MOUNTAINISH = frozenset({int(Biome.MOUNTAIN), int(Biome.SNOW)})

@@ -30,14 +30,14 @@ from . import (
     biomes,
     climate,
     heightmap,
-    hydrology,
     island_mask,
     naming,
-    poi_interiors,
     poi_placement,
     regions,
-    roads,
 )
+from .civilization import roads
+from .physical import hydrology
+from .story import poi_interiors
 
 
 def generate(config: Config, seed: int) -> World:

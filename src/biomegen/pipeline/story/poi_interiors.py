@@ -31,11 +31,11 @@ from typing import Tuple
 
 import numpy as np
 
-from ..config.model import Config
-from ..interiors import INTERIOR_BUILDERS
-from ..util import rng
-from ..world.tile import WaterType
-from ..world.world import World
+from ...config.model import Config
+from ...interiors import INTERIOR_BUILDERS
+from ...util import rng
+from ...world.tile import WaterType
+from ...world.world import World
 
 _MIN_FOOTPRINT = 3  # tiles per side - keeps the canonical grid big enough for at least a room or two
 
