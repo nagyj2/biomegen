@@ -79,6 +79,8 @@ class DetailSampler(Sampler):
         tiles_h: Whole tiles down the grid.
     """
 
+    detailed = True
+
     def __init__(
         self,
         world: World,

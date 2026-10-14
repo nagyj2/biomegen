@@ -1,4 +1,4 @@
-"""Views: an ordered layer list plus an optional tint ramp, read from ``render.views``."""
+"""Views: ordered layer lists (one per scale family) plus an optional tint ramp, read from ``render.views``."""
 
 from __future__ import annotations
 
@@ -13,13 +13,20 @@ class View:
 
     Attributes:
         name: The view's key in ``render.views``.
-        layers: Layer names, bottom to top (each must be registered in ``render.layers.LAYERS``).
+        layers: Layer names for the map scale, bottom to top (each must be registered in
+            ``render.layers.LAYERS``).
         tint: The ``render.ramps`` entry the ``tint`` layer applies, or ``""`` for none.
+        detail_layers: Layer names for the zoom and local scales; empty means the map list is used there too.
     """
 
     name: str
     layers: tuple[str, ...]
     tint: str = ""
+    detail_layers: tuple[str, ...] = ()
+
+    def layers_for(self, detailed: bool) -> tuple[str, ...]:
+        """Return the layer list for a detail scale (``detailed``) or the map scale."""
+        return self.detail_layers if detailed and self.detail_layers else self.layers
 
 
 def view_names(config: Config) -> list[str]:
@@ -33,4 +40,4 @@ def resolve_view(config: Config, name: str) -> View:
     if name not in views:
         raise KeyError(f"unknown view {name!r}; available: {', '.join(views)}")
     row = views[name]
-    return View(name, tuple(row["layers"]), row.get("tint", ""))
+    return View(name, tuple(row["layers"]), row.get("tint", ""), tuple(row.get("detail_layers", ())))

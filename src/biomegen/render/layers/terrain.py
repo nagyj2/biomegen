@@ -1,4 +1,7 @@
-"""The terrain layer: biome colours and glyphs, sea depth, hillshade and sparse-glyph scatter."""
+"""The terrain layer: biome colours and glyphs, sea depth, hillshade and sparse-glyph scatter.
+
+At the detail scales the glyph is the biome's floor (a rocky floor on mountain relief) on every cell.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +18,8 @@ def terrain_layer(ctx: LayerContext, grid: CellGrid) -> None:
     """Fill every cell inside the world from its biome row; shade land, deepen the sea, thin sparse glyphs."""
     style = ctx.biome_style
     biome = ctx.biome
-    glyph = style.glyph[biome]
+    detailed = ctx.sampler.detailed
+    glyph = ctx.detail_floor if detailed else style.glyph[biome]
     fg = style.fg[biome]
     bg = style.bg[biome]
 
@@ -25,7 +29,7 @@ def terrain_layer(ctx: LayerContext, grid: CellGrid) -> None:
     bg = np.where(sea[..., np.newaxis], sea_bg, bg)
     bg = np.where(ctx.land[..., np.newaxis], scale_colors(bg, ctx.shade), bg)
 
-    if ctx.color:
+    if ctx.color and not detailed:  # detail floors are drawn on every cell: clutter does the scattering
         sparkle_cfg = ctx.config.get("render.sea_sparkle")
         sparkle = ctx.biome_is(Biome.DEEP) & (ctx.scatter("sparkle") < float(sparkle_cfg["density"]))
         glyph = np.where(sparkle, sparkle_cfg["ascii" if ctx.ascii_only else "glyph"], glyph)

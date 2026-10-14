@@ -155,6 +155,9 @@ def _validate_render_views(render: Dict[str, Any], errors: List[str]) -> None:
         layers = view.get("layers") if isinstance(view, dict) else None
         if not isinstance(layers, list) or not all(isinstance(layer, str) for layer in layers):
             errors.append(f"{where}.layers must be a list of layer names")
+        detail_layers = view.get("detail_layers", []) if isinstance(view, dict) else []
+        if not isinstance(detail_layers, list) or not all(isinstance(layer, str) for layer in detail_layers):
+            errors.append(f"{where}.detail_layers must be a list of layer names")
         tint = view.get("tint", "") if isinstance(view, dict) else ""
         if tint and tint not in ramps:
             errors.append(f"{where}.tint {tint!r} is not a render.ramps entry")

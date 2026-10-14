@@ -37,9 +37,12 @@ class Sampler:
     tile and layers leave those cells blank.
 
     Attributes:
+        detailed: True for the magnified zoom and local samplers, where a tile is a block of cells.
         sub_x: Index of the cell inside its tile's block of cells (zeros when a cell is a whole tile), so
             decoration can differ cell to cell within one tile. ``sub_y`` is the row equivalent.
     """
+
+    detailed = False
 
     def __init__(self, world: World, fx: np.ndarray, fy: np.ndarray) -> None:
         self._origin: tuple[float, float, float, float] | None = None  # (x0, y0, step_x, step_y) of a viewport

@@ -107,3 +107,65 @@ def relief_style(config: Config, ascii_only: bool = False) -> ReliefStyle:
         glyph[index] = _glyph(row, ascii_only)
         fg[index] = row["fg"]
     return ReliefStyle(glyph, fg)
+
+
+FACTOR_CODE = {"none": 0, "moisture": 1, "elevation": 2}
+
+
+@dataclass(frozen=True)
+class DetailStyle:
+    """Detail-scale floor and clutter lookups (``tables.detail`` and ``tables.detail_relief``).
+
+    Clutter rows are indexed by a *row*: a biome's integer, or ``biome_count + relief`` for a relief class whose
+    rocky floor replaces the biome's whole row.
+
+    Attributes:
+        floor: Floor glyph per biome (U1 ``[biomes]``).
+        relief_floor: Rocky floor glyph per relief class (U1 ``[reliefs]``), blank where there is none.
+        relief_rocky: Whether the relief class replaces the biome's detail row (bool ``[reliefs]``).
+        clutter_chars: Clutter glyphs per row, padded with blanks (U1 ``[rows, longest]``).
+        clutter_len: How many glyphs of ``clutter_chars`` each row uses (int ``[rows]``).
+        density: Share of cells carrying clutter per row, before the factor (float ``[rows]``).
+        factor: Code of what scales the density per row, see :data:`FACTOR_CODE` (int ``[rows]``).
+        biome_count: Number of biomes, the offset of the relief rows.
+    """
+
+    floor: np.ndarray
+    relief_floor: np.ndarray
+    relief_rocky: np.ndarray
+    clutter_chars: np.ndarray
+    clutter_len: np.ndarray
+    density: np.ndarray
+    factor: np.ndarray
+    biome_count: int
+
+
+def detail_style(config: Config, ascii_only: bool = False) -> DetailStyle:
+    """Build the detail lookup arrays from ``tables.detail`` and ``tables.detail_relief``."""
+    suffix = "_ascii" if ascii_only else ""
+    biome_rows = config.get("tables.detail")
+    relief_rows = config.get("tables.detail_relief")
+    biome_count = max(int(b) for b in Biome) + 1
+    rows = [biome_rows[BIOME_NAME[int(b)]] for b in sorted(Biome)] + [
+        relief_rows[r.name.lower()] for r in sorted(Relief)
+    ]
+    longest = max(1, max(len(row["clutter" + suffix]) for row in rows))
+    clutter_chars = np.full((len(rows), longest), " ", dtype="U1")
+    clutter_len = np.zeros(len(rows), dtype=np.int64)
+    for index, row in enumerate(rows):
+        text = row["clutter" + suffix]
+        clutter_chars[index, : len(text)] = list(text)
+        clutter_len[index] = len(text)
+    floor = np.array([row["floor" + suffix] for row in rows[:biome_count]], dtype="U1")
+    relief_floor = np.array([row["floor" + suffix] or " " for row in rows[biome_count:]], dtype="U1")
+    relief_rocky = np.array([bool(row["floor" + suffix]) for row in rows[biome_count:]], dtype=bool)
+    return DetailStyle(
+        floor,
+        relief_floor,
+        relief_rocky,
+        clutter_chars,
+        clutter_len,
+        np.array([float(row["density"]) for row in rows], dtype=np.float64),
+        np.array([FACTOR_CODE[row["factor"]] for row in rows], dtype=np.int64),
+        biome_count,
+    )

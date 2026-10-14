@@ -84,22 +84,37 @@ VALUES: Dict[str, Any] = {
         "swamp": "w",
         "snow": "*",
     },
-    # Layered renderer (phase 4). A view is an ordered list of layer names (see render.layers) and the
+    # Layered renderer (phase 4). A view is an ordered list of layer names (see render.layers) for the map
+    # scale, an optional ``detail_layers`` list for the zoom and local scales (empty = the map list), and the
     # name of the colour ramp its ``tint`` layer applies ("" = no tint). Drop or reorder layers freely.
     "views": {
-        "terrain": {"layers": ["terrain", "relief", "water", "roads", "markers", "labels", "compass"], "tint": ""},
+        "terrain": {
+            "layers": ["terrain", "relief", "water", "roads", "markers", "labels", "compass"],
+            "detail_layers": ["terrain", "relief", "clutter"],
+            "tint": "",
+        },
         "elevation": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
+            "detail_layers": ["terrain", "relief", "tint"],
             "tint": "elevation",
         },
         "temperature": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
+            "detail_layers": ["terrain", "relief", "tint"],
             "tint": "temperature",
         },
         "rainfall": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
+            "detail_layers": ["terrain", "relief", "tint"],
             "tint": "rainfall",
         },
+    },
+    # Clutter layer (zoom and local). A detail row's ``factor`` scales its density per cell: moisture (0..1)
+    # or relative elevation (0..1, over the world's highest point) is mapped to ``base + slope * value`` and
+    # clamped to [min, max]. The rows themselves are ``tables.detail`` / ``tables.detail_relief``.
+    "clutter_factors": {
+        "moisture": {"base": 0.4, "slope": 1.4, "min": 0.25, "max": 1.8},
+        "elevation": {"base": 0.4, "slope": 1.3, "min": 0.25, "max": 1.8},
     },
     # Data-view colour ramps, named by the ``tint`` of a view. ``field`` is the World array coloured;
     # ``stops`` are ``[value, [r, g, b]]`` in ascending value order, blended linearly. elevation is in

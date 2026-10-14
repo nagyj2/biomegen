@@ -12,7 +12,11 @@ from . import LAYERS, LayerContext
 
 @LAYERS.register("relief")
 def relief_layer(ctx: LayerContext, grid: CellGrid) -> None:
-    """Draw the relief glyph on land cells that have relief and recolour their fill (``render.relief_tints``)."""
+    """Draw the relief glyph on land cells that have relief and recolour their fill (``render.relief_tints``).
+
+    At the detail scales a tile is many cells, so the glyph is not repeated across the block: the terrain layer's
+    rocky floor stands in for it and this layer only recolours.
+    """
     relief = ctx.relief
     raised = ctx.land & (relief != int(Relief.NONE))
     if not raised.any():
@@ -41,4 +45,7 @@ def relief_layer(ctx: LayerContext, grid: CellGrid) -> None:
         if "fg" in row:
             fg = np.where(cell[..., np.newaxis], np.asarray(row["fg"], dtype=np.uint8), fg)
 
+    if ctx.sampler.detailed:  # the rocky floor from the terrain layer stays; only the colours change
+        grid.put(raised, fg=fg, bg=bg, bold=False)
+        return
     grid.put(raised, glyph=style.glyph[relief], fg=fg, bg=bg, bold=False)

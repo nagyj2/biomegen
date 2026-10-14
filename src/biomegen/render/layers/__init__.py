@@ -19,7 +19,7 @@ from ...util import rng
 from ...world.overlay import Overlay
 from ...world.tile import Biome
 from ...world.world import World
-from ..colors import BiomeStyle, ReliefStyle, biome_style, relief_style
+from ..colors import BiomeStyle, DetailStyle, ReliefStyle, biome_style, detail_style, relief_style
 from ..grid import CellGrid
 from ..sampler import Sampler
 from ..scatter import scatter01
@@ -60,6 +60,10 @@ class LayerContext:
         return relief_style(self.config, self.ascii_only)
 
     @cached_property
+    def detail_style(self) -> DetailStyle:
+        return detail_style(self.config, self.ascii_only)
+
+    @cached_property
     def biome(self) -> np.ndarray:
         """Biome integer per cell."""
         return self.sampler.biome()
@@ -71,8 +75,24 @@ class LayerContext:
 
     @cached_property
     def relief(self) -> np.ndarray:
-        """Relief integer per cell."""
-        return self.sampler.nearest(self.world.relief)
+        """Relief integer per cell (read where the biome is, so mountain edges wobble with biome edges)."""
+        return self.sampler.blended(self.world.relief)
+
+    @cached_property
+    def rocky(self) -> np.ndarray:
+        """Detail-scale land cells whose relief replaces the biome's floor (mountains, peaks, volcanoes)."""
+        return self.land & self.detail_style.relief_rocky[self.relief]
+
+    @cached_property
+    def detail_row(self) -> np.ndarray:
+        """Row of the detail style per cell: the biome, or ``biome_count + relief`` on a rocky cell."""
+        return np.where(self.rocky, self.detail_style.biome_count + self.relief, self.biome)
+
+    @cached_property
+    def detail_floor(self) -> np.ndarray:
+        """Floor glyph per cell for the detail scales."""
+        style = self.detail_style
+        return np.where(self.rocky, style.relief_floor[self.relief], style.floor[self.biome])
 
     @cached_property
     def elevation_m(self) -> np.ndarray:
@@ -88,9 +108,9 @@ class LayerContext:
         return np.clip(1.0 + rise / float(cfg["relief_m"]) * float(cfg["strength"]), cfg["min"], cfg["max"])
 
     def scatter(self, *labels: object) -> np.ndarray:
-        """Return a stable uniform value in [0, 1) per cell, keyed on the world tile and ``labels``."""
+        """Return a stable uniform value in [0, 1) per cell, keyed on the world tile, the cell in it and ``labels``."""
         salt = rng.derive_int(self.world.seed, "render", *labels)
-        return scatter01(salt, self.sampler.tile_x, self.sampler.tile_y)
+        return scatter01(salt, self.sampler.tile_x, self.sampler.tile_y, self.sampler.sub_x, self.sampler.sub_y)
 
     def biome_is(self, *biomes: Biome) -> np.ndarray:
         """Return a mask of the cells whose biome is any of ``biomes``."""
@@ -113,7 +133,8 @@ def build_grid(
     labels: str = "all",
 ) -> CellGrid:
     """Draw ``view`` of ``world`` through ``sampler`` and return the finished grid."""
-    layers = [LAYERS.get(name) for name in view.layers]  # resolve first so a typo fails before any work
+    # resolve first so a typo fails before any work
+    layers = [LAYERS.get(name) for name in view.layers_for(sampler.detailed)]
     context = LayerContext(world, config, view, sampler, overlay, ascii_only, color, labels)
     grid = CellGrid(sampler.rows, sampler.cols)
     for layer in layers:
@@ -121,4 +142,14 @@ def build_grid(
     return grid
 
 
-from . import compass, markers, names, relief, roads, terrain, tint, water  # noqa: E402,F401  (registers the built-in layers)
+from . import (  # noqa: E402,F401  (registers the built-in layers)
+    clutter,
+    compass,
+    markers,
+    names,
+    relief,
+    roads,
+    terrain,
+    tint,
+    water,
+)
