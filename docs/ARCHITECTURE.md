@@ -70,10 +70,6 @@ src/biomegen/
       geography.py      Stage 5 — landmass_id; landmass, range, peak, lake, sea, river features
     regions.py          Stage 6 — region segmentation + colour
     pois.py             Stage 8 — wild POI placement (interim until phase 8)
-    poi_placement.py    (superseded by pois.py; removed in the phase 5a Cleanup)
-    poi_fields.py       (superseded)
-    poi_rules.py        (superseded)
-    poi_sampler.py      (superseded)
     civilization/
       settlements.py    Stage 7 — habitability, capital / city / town / village placement
       roads.py          Stage 9 — road network + bridge POIs + per-POI road-entrance recording
@@ -488,7 +484,7 @@ between outside and inside (the interior is *embedded in the terrain*, not a sep
   over a water tile — **except `boat`**, which floats on water by design. So no structure is ever
   stamped over water even if a corridor clips the shore; bridges have no builder and are unaffected.
 - **Signed floors, both directions.** **Floor 0 is always the ground/entry level** (set by
-  `poi_rules.floors_for`): dungeons descend (`lowest_floor … 0`), towers rise (`0 … top`). Stairs sit
+  `pois._floors`): dungeons descend (`lowest_floor … 0`), towers rise (`0 … top`). Stairs sit
   on **aligned shafts** fixed across floors (seeded floor-independently) so floors stack vertically;
   floor 0 gets the exterior DOOR, the far end only the stairs back. `grid.floor_links` /
   `grid.stamp_circulation` encode this once for every stacked builder. `<` / `>` cycle floors when the

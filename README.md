@@ -2,7 +2,7 @@
 
 A seed-reproducible **procedural island generator and explorer** that runs in your terminal. It
 builds a realistic island — terrain, climate, rivers and lakes, natural biomes grouped into named
-regions with generated lore, points of interest (villages, towns, cities, towers, dungeons, ruin,
+regions with generated lore, points of interest (villages, towns, cities, capitals, towers, dungeons, ruin,
 camps, boats) connected by meandering roads — and lets you explore it in a colour terminal UI,
 zoom in to see structure detail, and export the view to SVG/PNG.
 
@@ -260,8 +260,8 @@ config, e.g. `[tables.biomes.desert]` with `goods = "glass"`; each file document
 The world is built by an ordered, fully seed-reproducible pipeline:
 
 ```
-terrain → climate → hydrology → biomes → geography → regions
-         → poi_placement → roads → poi_interiors → naming
+terrain → climate → hydrology → biomes → geography → regions → settlements
+         → pois → roads → poi_interiors → naming
 ```
 
 All algorithms are industry-standard and most are swappable via config (see `docs/ARCHITECTURE.md`).

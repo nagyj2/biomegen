@@ -11,8 +11,9 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   `random` or `numpy.random` seeded by hand, never builtin `hash()`.
 - Iterate collections in a defined order (`sorted()`); dict and set order is not a contract.
 - Every tunable comes from `config.get(...)`, not a literal (see `config/CLAUDE.md`).
-- Folders say what a stage models: `physical/` (land and water), `civilization/` (roads), `story/` (POI
-  content). Flat modules still to be reorganised stay in `pipeline/` until the phase that replaces them.
+- Folders say what a stage models: `physical/` (land and water), `civilization/` (settlements, roads), `story/` (POI
+  content). Flat modules still to be reorganised (`regions`, `pois`, `naming`) stay in `pipeline/` until the phase that
+  replaces them.
 
 ## Physical stages (`physical/`)
 
@@ -30,6 +31,23 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   an earlier stage's field.
 - Per-name rows (styles, relief heights, geo name forms) are data tables; classifier numbers stay in
   `config/defaults/`. Time stages with `scripts/bench.sh` when a change could slow them.
+
+## Civilization stages (`civilization/`, `pois.py`)
+
+- Order: regions -> settlements -> pois -> roads -> poi_interiors -> naming. Settlements are placed first and
+  every later stage counts them (spacing, remoteness, road endpoints).
+- Tiers are data (`data/tiers.toml`): placement order is `rank`, count is land km² over `land_per_settlement_km2`,
+  separation is `spacing_km`, and `backbone` says whether roads join the tier into the trunk. A new tier is a row,
+  not a code branch; the settlement interior builder and the render markers still need the kind registered.
+- Distances are km on the anisotropic grid: use `world.scale` (`km_per_col`, `km_per_row`, `cell_area_km2`), never a
+  tile count. A placement test compares km, not tiles.
+- Candidates sort by score then row-major order (`argsort(kind="stable")` or `lexsort`), so equal scores never
+  depend on iteration order.
+- Roads route per landmass (a connected `water_type != SALT` component), so they never cross open ocean. The trunk is
+  a minimum spanning tree over *every pair* of backbone settlements in km (a k-nearest graph can leave a backbone town
+  out); villages and wild POIs branch off as spurs to the nearest road tile. A step costs its km length, over the
+  biome and relief `move_cost` rows.
+- Wild POIs (`pois.py`) are interim: counts are area over `km2_per_poi`, and phase 8 replaces them with data rows.
 
 ## Adding a stage
 

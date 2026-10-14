@@ -25,5 +25,5 @@ Run with `scripts/test.sh [pytest args]` (or `uv run pytest -q`). `scripts/check
 - None expected on Linux or macOS. The explorer's pseudo-terminal tests (`tests/explorer/test_input.py`,
   `tests/test_cli.py`) are skipped on Windows, where the Windows key reader and VT handling are untested.
 - Non-strict xfails (user decision, phase 3): `test_interior_door_faces_road` (river can split a settlement
-  footprint; phase 5) and two tower-stair tests (the entrance corridor can overwrite a stair). They xpass
+  footprint; a phase 5b target) and two tower-stair tests (the entrance corridor can overwrite a stair). They xpass
   on the current default world; they guard seed-dependent edge cases.

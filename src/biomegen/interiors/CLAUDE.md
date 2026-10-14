@@ -11,6 +11,13 @@ Lazy views built from a POI; interiors are never stored in the `World`.
 - Interiors are schematic (cells per tile from config), not km-true.
 - Everything random comes from `interior_seed` (`rng.derive*`); no wall-clock or global state.
 
+## Footprints by tier
+
+- `interiors.footprints` gives each kind a footprint in world tiles; the four settlement tiers (`capital`, `city`,
+  `town`, `village`) grow with their tier and share one builder (`settlement.py`, plaza radius per tier).
+- The footprint is a tile rectangle centred on the anchor and the interiors stage claims it, so POIs never overlap.
+  Phase 5b replaces tile rectangles with site plans (extent in fractional tiles, plan resolution per kind).
+
 ## Adding an archetype
 
 1. Add `<kind>.py` with a builder decorated `@register_interior("<kind>")`, built on `grid.py`.
