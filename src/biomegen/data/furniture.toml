@@ -1,0 +1,56 @@
+# Furniture sets, keyed by set name. Loaded into the config tree as `tables.furniture`; a site layout names the set it
+# dresses its floors from (`furniture` in sites.toml). Each key is a furniture cell (a lower-case `Cell` name in
+# world/tile.py) and each value its relative weight: weights need not sum to anything. A user override can reweight one
+# item, e.g. `[tables.furniture.dungeon]` + `chest = 10.0`.
+#
+# Dungeons add depth-scaled chest weight on top of `chest` (sites.furnish.chest_depth_gain).
+
+[furniture.home]
+bed = 16.0
+table = 15.0
+chair = 14.0
+hearth = 12.0
+shelf = 11.0
+chest = 9.0
+barrel = 8.0
+crate = 7.0
+
+[furniture.dungeon]
+rubble = 20.0
+barrel = 14.0
+crate = 12.0
+table = 12.0
+chair = 11.0
+shelf = 9.0
+bed = 7.0
+hearth = 5.0
+chest = 4.0
+
+[furniture.tower]
+shelf = 16.0
+table = 14.0
+chair = 13.0
+bed = 12.0
+hearth = 8.0
+chest = 7.0
+barrel = 6.0
+crate = 6.0
+
+[furniture.ruin]
+rubble = 40.0
+chest = 8.0
+barrel = 7.0
+crate = 6.0
+table = 5.0
+shelf = 4.0
+bed = 3.0
+
+[furniture.boat]
+cargo = 10.0
+barrel = 6.0
+crate = 5.0
+
+[furniture.supplies]
+barrel = 5.0
+crate = 4.0
+rock = 2.0

@@ -6,6 +6,7 @@
 #
 # Keys:
 #   layout           which layout builds the plan: settlement, dungeon, tower, ruin, camp or boat
+#   furniture        the furniture set (data/furniture.toml) its floors are dressed from
 #   extent_tiles     [width, height] of the site in world tiles, centred on the anchor; below 1 is a site smaller
 #                    than one tile, above 1 spans several tiles
 #   rows_per_tile    plan cells per tile, vertically; columns per tile are this times render.cell_aspect, so a
@@ -14,6 +15,7 @@
 #   plaza_tiles      (optional) radius of a settlement's central plaza in tiles
 
 [sites.capital]
+furniture = "home"
 layout = "settlement"
 extent_tiles = [3.0, 2.0]
 rows_per_tile = 14
@@ -21,6 +23,7 @@ grows_with_pop = true
 plaza_tiles = 0.5
 
 [sites.city]
+furniture = "home"
 layout = "settlement"
 extent_tiles = [2.0, 1.5]
 rows_per_tile = 14
@@ -28,6 +31,7 @@ grows_with_pop = true
 plaza_tiles = 0.4
 
 [sites.town]
+furniture = "home"
 layout = "settlement"
 extent_tiles = [1.5, 1.0]
 rows_per_tile = 14
@@ -35,6 +39,7 @@ grows_with_pop = true
 plaza_tiles = 0.3
 
 [sites.village]
+furniture = "home"
 layout = "settlement"
 extent_tiles = [1.0, 0.75]
 rows_per_tile = 16
@@ -42,30 +47,35 @@ grows_with_pop = true
 plaza_tiles = 0.2
 
 [sites.tower]
+furniture = "tower"
 layout = "tower"
 extent_tiles = [0.5, 0.5]
 rows_per_tile = 24
 grows_with_pop = false
 
 [sites.dungeon]
+furniture = "dungeon"
 layout = "dungeon"
 extent_tiles = [1.5, 1.0]
 rows_per_tile = 18
 grows_with_pop = false
 
 [sites.ruin]
+furniture = "ruin"
 layout = "ruin"
 extent_tiles = [1.0, 0.75]
 rows_per_tile = 16
 grows_with_pop = false
 
 [sites.camp]
+furniture = "supplies"
 layout = "camp"
 extent_tiles = [0.5, 0.5]
 rows_per_tile = 24
 grows_with_pop = false
 
 [sites.boat]
+furniture = "boat"
 layout = "boat"
 extent_tiles = [0.4, 0.2]
 rows_per_tile = 40

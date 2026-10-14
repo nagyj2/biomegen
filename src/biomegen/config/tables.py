@@ -64,6 +64,7 @@ _TIER_ROW = {
 }
 _SITE_ROW = {
     "layout": "text",
+    "furniture": "text",
     "extent_tiles": "pair",
     "rows_per_tile": "count",
     "grows_with_pop": "bool",
@@ -143,32 +144,40 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         errors.append(f"{where}.{key}: expected {kind}, got {value!r}")
 
 
-def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
-    """Validate every row of every table under ``cfg["tables"]``, appending problems to ``errors``."""
-    from ..world.tile import BIOME_BY_NAME, RELIEF_BY_NAME  # local import, as in validate._validate_biome_names
+def _validate_furniture(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check the furniture sets: every key a furniture cell, every weight a number >= 0, each set not all zero; and
+    that every site row names a set that exists."""
+    from ..world.tile import Cell
 
-    tables = cfg.get("tables", {})
-    for table_name in sorted(tables):
-        rows = tables[table_name]
-        if table_name not in SCHEMAS:
-            errors.append(f"tables.{table_name}: unknown table (valid: {', '.join(sorted(SCHEMAS))})")
+    furniture = tables.get("furniture", {})
+    if not isinstance(furniture, dict):
+        errors.append("tables.furniture must be a table of sets")
+        return
+    names = {cell.name.lower() for cell in Cell}
+    for set_name in sorted(furniture):
+        weights = furniture[set_name]
+        where = f"tables.furniture.{set_name}"
+        if not isinstance(weights, dict):
+            errors.append(f"{where} must be a table of cell weights")
             continue
-        if not isinstance(rows, dict):
-            errors.append(f"tables.{table_name} must be a table of rows")
-            continue
-        fields, optional = SCHEMAS[table_name]
-        for row_name in sorted(rows):
-            row = rows[row_name]
-            where = f"tables.{table_name}.{row_name}"
-            if not isinstance(row, dict):
-                errors.append(f"{where} must be a table")
-                continue
-            for key in sorted(set(row) - set(fields)):
-                errors.append(f"{where}: unknown key {key!r}")
-            for key in sorted(set(fields) - set(row) - optional):
-                errors.append(f"{where}: missing key {key!r}")
-            for key in sorted(set(fields) & set(row)):
-                _check_value(row, key, fields[key], where, errors)
+        for key in sorted(weights):
+            if key not in names:
+                errors.append(f"{where}: unknown cell {key!r}")
+            elif not _is_number(weights[key]) or weights[key] < 0:
+                errors.append(f"{where}.{key}: expected a weight >= 0, got {weights[key]!r}")
+        if weights and all(_is_number(w) and w == 0 for w in weights.values()):
+            errors.append(f"{where}: needs at least one weight above 0")
+    sites = tables.get("sites", {})
+    if isinstance(sites, dict):
+        for kind in sorted(sites):
+            row = sites[kind]
+            if isinstance(row, dict) and row.get("furniture") not in furniture:
+                errors.append(f"tables.sites.{kind}.furniture: no furniture set named {row.get('furniture')!r}")
+
+
+def _validate_member_tables(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check that the tables keyed by an enum have exactly one row per member, and that tier ranks are unique."""
+    from ..world.tile import BIOME_BY_NAME, RELIEF_BY_NAME
 
     biomes = tables.get("biomes", {})
     if isinstance(biomes, dict) and set(biomes) != set(BIOME_BY_NAME):
@@ -193,6 +202,38 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
         ranks = [row["rank"] for row in tiers.values() if isinstance(row, dict) and isinstance(row.get("rank"), int)]
         if len(ranks) != len(set(ranks)):
             errors.append("tables.tiers: every tier needs a unique rank")
+
+
+def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
+    """Validate every row of every table under ``cfg["tables"]``, appending problems to ``errors``."""
+
+    tables = cfg.get("tables", {})
+    for table_name in sorted(tables):
+        rows = tables[table_name]
+        if table_name == "furniture":
+            continue  # free-form weights, checked by _validate_furniture
+        if table_name not in SCHEMAS:
+            errors.append(f"tables.{table_name}: unknown table (valid: {', '.join(sorted(SCHEMAS))})")
+            continue
+        if not isinstance(rows, dict):
+            errors.append(f"tables.{table_name} must be a table of rows")
+            continue
+        fields, optional = SCHEMAS[table_name]
+        for row_name in sorted(rows):
+            row = rows[row_name]
+            where = f"tables.{table_name}.{row_name}"
+            if not isinstance(row, dict):
+                errors.append(f"{where} must be a table")
+                continue
+            for key in sorted(set(row) - set(fields)):
+                errors.append(f"{where}: unknown key {key!r}")
+            for key in sorted(set(fields) - set(row) - optional):
+                errors.append(f"{where}: missing key {key!r}")
+            for key in sorted(set(fields) & set(row)):
+                _check_value(row, key, fields[key], where, errors)
+
+    _validate_member_tables(tables, errors)
+    _validate_furniture(tables, errors)
 
     styles = tables.get("styles", {})
     style = cfg.get("terrain", {}).get("style")

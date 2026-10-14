@@ -12,6 +12,8 @@ from biomegen.sites.carve import (
     connect_floor_components,
     fill_enclosed,
     largest_component,
+    nearest_true,
+    rect_in_mask,
     wall_ring,
 )
 from biomegen.world.tile import Cell
@@ -93,3 +95,21 @@ def test_connect_floor_components_joins_two_rooms() -> None:
     from scipy import ndimage
 
     assert ndimage.label(grid == FLOOR)[1] == 1
+
+
+def test_rect_in_mask_needs_every_cell() -> None:
+    mask = np.ones((6, 10), dtype=bool)
+    mask[2, 3] = False
+    assert rect_in_mask((5, 1, 3, 3), mask) and not rect_in_mask((2, 1, 3, 3), mask)
+
+
+def test_nearest_true_finds_the_closest_cell_on_screen() -> None:
+    # A cell two rows up is as far on screen as one four columns across at an aspect of two.
+    mask = np.zeros((9, 15), dtype=bool)
+    mask[2, 7] = True
+    mask[4, 11] = True
+    assert nearest_true(mask, (7, 4), aspect=2.0) == (7, 2)
+
+
+def test_nearest_true_of_an_empty_mask_is_none() -> None:
+    assert nearest_true(np.zeros((3, 3), dtype=bool), (1, 1)) is None

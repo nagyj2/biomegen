@@ -7,6 +7,8 @@ wider than one running across (``vertical_width``) to look the same thickness on
 
 from __future__ import annotations
 
+from typing import Optional
+
 import numpy as np
 from scipy import ndimage
 
@@ -95,3 +97,20 @@ def connect_floor_components(grid: np.ndarray, vertical_width: int = 2) -> None:
         ny, nx = main[int(np.argmin(distance))]
         carve_corridor(grid, (int(cx), int(cy)), (int(nx), int(ny)), vertical_width)
         main = np.vstack([main, cells])
+
+
+def rect_in_mask(rect: Rect, mask: np.ndarray) -> bool:
+    """Return whether the whole rectangle lies inside ``mask``."""
+    x, y, w, h = rect
+    return bool(mask[y : y + h, x : x + w].all())
+
+
+def nearest_true(mask: np.ndarray, point: Point, aspect: float = 2.0) -> Optional[Point]:
+    """Return the True cell of ``mask`` nearest ``point``, measured on screen (a row is ``aspect`` columns), or None."""
+    cells = np.argwhere(mask)
+    if len(cells) == 0:
+        return None
+    px, py = point
+    distance = ((cells[:, 1] - px) / aspect) ** 2 + (cells[:, 0] - py) ** 2
+    y, x = cells[int(np.argmin(distance))]
+    return int(x), int(y)

@@ -1,9 +1,9 @@
 """Defaults for the ``tables`` section: per-name attribute tables read from ``biomegen/data/*.toml``.
 
-Each data file contributes its top-level tables (``biomes`` and ``relief`` from ``biomes.toml``,
-``detail`` and ``detail_relief`` from ``detail.toml``, ``tiers`` from ``tiers.toml``, ``styles`` from
-``terrain.toml``, ``geo_names`` from ``geography.toml``, ``sites`` from ``sites.toml``) as sub-sections, so a user
-config overrides one attribute of one row with the ordinary deep-merge, e.g. ``[tables.biomes.desert]`` +
+Each data file contributes its top-level tables (``biomes`` and ``relief`` from ``biomes.toml``, ``detail`` and
+``detail_relief`` from ``detail.toml``, ``tiers`` from ``tiers.toml``, ``styles`` from ``terrain.toml``, ``geo_names``
+from ``geography.toml``, ``sites`` from ``sites.toml``, ``furniture`` from ``furniture.toml``) as sub-sections, so a
+user config overrides one attribute of one row with the ordinary deep-merge, e.g. ``[tables.biomes.desert]`` +
 ``goods = "glass"``. The schema is checked by :func:`biomegen.config.tables.validate_tables`.
 """
 
@@ -23,6 +23,7 @@ DATA_FILES: tuple[str, ...] = (
     "terrain.toml",
     "geography.toml",
     "sites.toml",
+    "furniture.toml",
 )
 
 

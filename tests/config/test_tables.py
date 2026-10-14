@@ -35,6 +35,7 @@ def test_shipped_tables_load_and_validate() -> None:
         "biomes",
         "detail",
         "detail_relief",
+        "furniture",
         "geo_names",
         "relief",
         "sites",
@@ -150,11 +151,12 @@ def test_duplicate_tier_rank_is_rejected() -> None:
 
 def test_loader_combines_the_shipped_files() -> None:
     # biomes.toml supplies biomes and relief; detail.toml detail and detail_relief; tiers.toml tiers;
-    # terrain.toml styles; geography.toml geo_names; sites.toml sites.
+    # terrain.toml styles; geography.toml geo_names; sites.toml sites; furniture.toml furniture.
     assert sorted(_load(DATA_DIR, DATA_FILES)) == [
         "biomes",
         "detail",
         "detail_relief",
+        "furniture",
         "geo_names",
         "relief",
         "sites",
@@ -232,3 +234,29 @@ def test_every_settlement_tier_has_a_site_row() -> None:
     # Each tier in tiers.toml needs a site, or its POIs could never be zoomed into.
     tables = get_defaults()["tables"]
     assert set(tables["tiers"]) <= set(tables["sites"])
+
+
+def test_every_furniture_set_names_real_cells_and_positive_weights() -> None:
+    # furniture.toml validates: each key is a Cell name, each weight a non-negative number.
+    validate(get_defaults())
+
+
+def test_an_unknown_furniture_cell_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["furniture"]["home"]["sofa"] = 3.0
+    with pytest.raises(ConfigError):
+        validate(cfg)
+
+
+def test_a_negative_furniture_weight_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["furniture"]["home"]["bed"] = -1.0
+    with pytest.raises(ConfigError):
+        validate(cfg)
+
+
+def test_a_site_row_must_name_an_existing_furniture_set() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["sites"]["village"]["furniture"] = "palace"
+    with pytest.raises(ConfigError):
+        validate(cfg)
