@@ -87,17 +87,17 @@ VALUES: Dict[str, Any] = {
     # Layered renderer (phase 4). A view is an ordered list of layer names (see render.layers) and the
     # name of the colour ramp its ``tint`` layer applies ("" = no tint). Drop or reorder layers freely.
     "views": {
-        "terrain": {"layers": ["terrain", "relief", "water", "roads", "markers", "labels"], "tint": ""},
+        "terrain": {"layers": ["terrain", "relief", "water", "roads", "markers", "labels", "compass"], "tint": ""},
         "elevation": {
-            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
             "tint": "elevation",
         },
         "temperature": {
-            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
             "tint": "temperature",
         },
         "rainfall": {
-            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels"],
+            "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
             "tint": "rainfall",
         },
     },
@@ -197,6 +197,29 @@ VALUES: Dict[str, Any] = {
     },
     # Markers layer: points of interest draw their ``markers`` glyph (below) in bold with this colour pair.
     "marker_style": {"fg": [255, 130, 255], "bg": [70, 20, 70]},
+    # Frame furniture around a static map. ``margin`` is the width of the latitude gutter. Graticule ticks
+    # use the first step in ``lat_steps`` / ``lon_steps`` (degrees) that leaves at least ``lat_tick_rows``
+    # rows / ``lon_tick_cols`` columns between ticks. The scale bar picks the ``scale_km`` length nearest
+    # to 1/``scale_fraction`` of the map width. ``frame_unicode`` / ``frame_ascii`` list, in order: horizontal,
+    # vertical, four corners (tl tr bl br), left tick, right tick, bottom tick. The compass rose is drawn
+    # in the first corner of the map that is open sea.
+    "furniture": {
+        "margin": 6,
+        "frame_fg": [150, 140, 120],
+        "dim_fg": [130, 125, 115],
+        "frame_unicode": "═║╔╗╚╝╟╢╧",
+        "frame_ascii": "-|+++++++",
+        "title": " The World of {name}{sep}seed {seed}{sep}{style}{sep}{km_w} x {km_h} km ",
+        "title_sep": {"unicode": " · ", "ascii": " - "},
+        "lat_steps": [1, 2, 5, 10, 15, 30],
+        "lat_tick_rows": 4,
+        "lon_steps": [1, 2, 5, 10, 15, 20, 30, 45],
+        "lon_tick_cols": 12,
+        "scale_km": [100, 200, 250, 500, 1000, 1500, 2000, 3000],
+        "scale_fraction": 6,
+        "compass_fg": [240, 230, 200],
+        "compass": {"unicode": ["  N  ", "W─┼─E", "  S  "], "ascii": ["  N  ", "W-+-E", "  S  "]},
+    },
     # Overlay glyphs drawn on top of biome cells.
     "markers": {
         "road": "+",
