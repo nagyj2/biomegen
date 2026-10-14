@@ -18,10 +18,18 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
 - Floor 0 is the ground and entry level: dungeons descend, towers rise. Everything random comes from the site seed
   (`rng.derive*` with the `site.*` labels); no wall-clock or global state.
 
+## Plans
+
+- A `SitePlan` has `cells` (inside, drawn at the site scale) and `outside` (the sky view for map, zoom and local:
+  `ROOF`, `STONE`, streets). A layout returns both as `(cells, outside)`.
+- Walls are one cell thick (`WALL`); the renderer joins them into line glyphs, so never draw a wall twice as thick.
+  A door is a `DOOR` cell in a wall line. Buildings come from `building.build_building`.
+- Use `cells.OUTSIDE_PRIORITY` when scaling down, so thin walls survive.
+
 ## Adding a kind
 
 1. Add a row to `data/sites.toml` (layout, furniture set, extent, resolution) and, for a settlement, a tier row.
-2. If it needs a new pattern, add a `@layout("name")` function in `sites/` (built on `carve`, `partition`, `furnish`,
-   `circulation`, `streets`) and import it in `plan.py` so the registration runs.
-3. Add its furniture set to `data/furniture.toml` if it has one of its own.
+2. If it needs a new pattern, add a `@layout("name")` function in `sites/` (built on `building`, `carve`, `furnish`,
+   `streets`, ...) and import it in `plan.py` so the registration runs.
+3. Add its furniture family (`[<family>.<role>]` weights) to `data/furniture.toml` if it has one of its own.
 4. Add tests in `tests/sites/` covering determinism and what the kind does on water.

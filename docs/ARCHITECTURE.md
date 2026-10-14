@@ -54,9 +54,12 @@ src/biomegen/
     geometry.py         Extent, window and plan resolution of a POI's site, in world tiles
     patch.py            The terrain under a site (read through the render sampler) and the road gates
     plan.py             site_plan(): the per-floor plan, memoised; SitePlan
-    layout.py           SiteContext and the layout registry; structure / settlement / camp / boat layouts
+    layout.py           SiteContext and the layout registry
+    building.py         Thin-walled building model: footprint, subdivided rooms, doors, roles, furniture
+    settlement.py structure.py camp.py boat.py   The layouts (structure = dungeon, tower, ruin)
     carve.py partition.py shapes.py furnish.py circulation.py streets.py   the layout toolkit
-    coverage.py blit.py Which tiles and cells a site covers; scaling a plan into a grid
+    cells.py            Cell groups, outside priority, wall autotile index
+    coverage.py blit.py Which tiles and cells a site covers; scaling a plan into a grid (priority-aware)
   pipeline/             Ordered generation stages (see Pipeline section below)
     __init__.py         generate() orchestrator + stats()
     physical/
@@ -441,17 +444,21 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   uses (`sampling/terrain.py` defines land and river once), so a plan agrees exactly with the water drawn around it.
   Roads are not stored: each road tile just outside the extent makes a **gate** on its edge, at most `sites.max_gates`,
   one per direction. A structure's door and a settlement's streets face the gates.
-- **Layouts** (`layout.py`, one per `layout` key). `structure.py` builds dungeon, tower and ruin: a seeded organic
-  outline kept off water, BSP rooms and corridors, stair shafts that line up from floor to floor, rock and walls, an
-  entrance on the wall nearest a gate (floor 0 only) with a street from the gate. `settlement.py` builds walled
-  buildings with a street gap round each, a plaza, and streets (A*, bridging water up to `sites.bridge_max_rows`) from
-  every door and gate; a building no street reaches is pulled down. `camp.py` and `boat.py` are open-air. Furniture
-  comes from the `furniture` set named in the site row (`data/furniture.toml`).
-- **Scales.** One plan, sampled by nearest neighbour into the cells its extent covers (`blit.sample_rect`). The **map**
-  draws the top floor's walls, doors and stairs (`STRUCTURAL`) as a small outline, leaving the marker cell clear.
-  **Zoom** draws the shell (`SHELL`: walls and floor, furniture as floor), a low-poly silhouette. **Local** and **site**
-  draw every cell. Void is transparent. The world's road bed is hidden under a site (`LayerContext.site_mask`), since
-  the plan draws its own streets.
+- **Plan faces.** `SitePlan.cells` is the **inside** (one cell per terminal cell, drawn at the site scale);
+  `SitePlan.outside` is the **sky view** (map, zoom, local): roofs (`ROOF`), solid walls (`STONE`), streets, trees.
+  Outside views ignore floor and overlay. Walls in the inside are one cell thick (`WALL`) and joined into box-drawing
+  lines at draw time by the 4-neighbour mask (`cells.wall_index`, `render.interior_walls`); doors are gaps.
+- **Layouts** (`layout.py`, one per `layout` key; each returns `(cells, outside)`). `building.py` makes a rect, L or T
+  footprint, subdivides it recursively with shared one-cell walls, joins rooms by a door spanning tree plus loops, adds a
+  street door, assigns roles by size and furnishes them from `tables.furniture.<family>.<role>`. `settlement.py` lays a
+  plaza, main streets from the gates, axes and a loose parallel grid (A*, bridging water up to `sites.bridge_max_rows`),
+  packs building lots along them (courtyards between), joins each front to a street, and rings walled tiers with a wall
+  and gates (`walled`). `structure.py` builds dungeon (a surface gatehouse plus underground rock floors of rooms and
+  corridors or caves), tower (tapering single-room floors, aligned stairs, a lookout) and ruin (a building with breaches,
+  rubble, trees and partial roofs); the entrance faces a gate. `camp.py` and `boat.py` are open-air (tents, hull).
+- **Scales.** One plan per face, scaled into the cells its extent covers by `blit.sample_rect`. Where a view is coarser
+  than the plan, the cell of highest `OUTSIDE_PRIORITY` wins, so a one-cell wall survives. Void is transparent. The
+  world's road bed is hidden under a site (`LayerContext.site_mask`), since the plan draws its own streets.
 - **The site view** (explorer). Zooming in on a POI opens its site: the window drawn one plan cell per terminal cell,
   only the visible cells (a `DetailSampler` with `origin` and `shape`). The cursor is one cell `(px, py)`; the tile
   cursor follows the tile under it. Moving past the window leaves for local. Zoom steps out.
@@ -459,8 +466,8 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   `<` / `>` cycle floors inside a site or on its tiles; entering starts at floor 0.
 - **Cache and overlay.** Plans are memoised per world and config in a bounded cache (`sites.cache_size`), read-only.
   Runtime edits compose on top via `Overlay.apply_interior` (copy-on-write), keyed by the site seed and floor.
-- **Colour.** Plan cells are filled with `render.interior_palette` (bridge cells with the deck and wall colours of
-  `render.detail_colors`); the glyph is the same colour lightened by `render.interior_fg_scale`.
+- **Colour.** Plan cells take glyphs from `render.interior_glyphs` (`interior_glyphs_ascii` for ASCII) and colours from
+  `render.interior_palette`; bridge cells use the deck and wall colours of `render.detail_colors`.
 
 A new kind is a row in `data/sites.toml` and, if it needs a new pattern, a `@layout("name")` function registered in
 `sites/` (render and explorer iterate the sites generically).

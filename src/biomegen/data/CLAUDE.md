@@ -32,10 +32,11 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 ## Sites and furniture
 
 - `sites.toml` has one row per POI kind: its `layout`, the `furniture` set, `extent_tiles` (w, h in world tiles, below 1
-  for a site smaller than a tile), `rows_per_tile` (plan resolution) and, for settlements, `grows_with_pop` and
-  `plaza_tiles`. Every settlement tier in `tiers.toml` and every `poi.types` kind needs a site row to be zoomable.
-- `furniture.toml` has free-form weight sets (`[furniture.dungeon]` + `chest = 4.0`): each key a lower-case `Cell` name,
-  each value a weight. `validate_tables` checks the keys and that each site row names a set that exists.
+  for a site smaller than a tile), `rows_per_tile` (plan resolution) and, for settlements, `grows_with_pop`,
+  `plaza_tiles` and the optional `walled` (a wall with a gate where each road arrives). Every settlement tier in `tiers.toml` and every `poi.types` kind needs a site row to be zoomable.
+- `furniture.toml` has weight sets nested by family then room role (`[furniture.dungeon.vault]` + `chest = 4.0`): each
+  key a lower-case `Cell` name, each value a weight. A layout asks for a role per room; a missing role leaves it bare.
+  `validate_tables` checks the keys and that each site row names a family that exists.
 
 ## Adding a table or column
 
