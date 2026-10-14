@@ -18,8 +18,9 @@ when a style's land fraction is configured below ``world.min_land_fraction``.
 
 from __future__ import annotations
 
+import time
 from collections import Counter
-from typing import Dict
+from typing import Callable, Dict, Optional
 
 import numpy as np
 
@@ -38,12 +39,21 @@ from .physical import biomes, climate, geography, hydrology, terrain
 from .story import poi_interiors
 
 
-def generate(config: Config, seed: int) -> World:
+def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = None) -> World:
     """Generate and return a fully-populated :class:`World` for ``seed``.
 
     ``config`` is a :class:`~biomegen.config.model.Config`; ``seed`` is the (already normalised)
-    master seed. The returned world is treated as immutable by all downstream consumers.
+    master seed. The returned world is treated as immutable by all downstream consumers. If ``timings``
+    is given, each stage's wall-clock seconds are added to it under the stage name (for
+    ``scripts/bench.sh``; timing never affects the world).
     """
+    clock: Dict[str, float] = timings if timings is not None else {}
+
+    def timed(name: str, stage: Callable[[World, Config, int], None], world: World, stage_seed: int) -> None:
+        start = time.perf_counter()
+        stage(world, config, stage_seed)
+        clock[name] = clock.get(name, 0.0) + time.perf_counter() - start
+
     width = int(config.get("world.width"))
     height = int(config.get("world.height"))
     attempts = int(config.get("world.regen_attempts"))
@@ -65,7 +75,7 @@ def generate(config: Config, seed: int) -> World:
         world.master_seed = seed  # original seed (for echoing / naming continuity)
 
         # The leading stage forms the gate: cheap, and it decides how much land exists.
-        terrain.run(world, config, gen_seed)
+        timed("terrain", terrain.run, world, gen_seed)
         if terrain.land_fraction(world) >= min_land:
             break
 
@@ -73,15 +83,18 @@ def generate(config: Config, seed: int) -> World:
     gen_seed = world.seed
 
     # Downstream stages (only reached once a land-bearing world is in hand).
-    climate.run(world, config, gen_seed)
-    hydrology.run(world, config, gen_seed)
-    biomes.run(world, config, gen_seed)
-    geography.run(world, config, gen_seed)
-    regions.run(world, config, gen_seed)
-    poi_placement.run(world, config, gen_seed)
-    roads.run(world, config, gen_seed)
-    poi_interiors.run(world, config, gen_seed)
-    naming.run(world, config, gen_seed)
+    for name, stage in (
+        ("climate", climate.run),
+        ("hydrology", hydrology.run),
+        ("biomes", biomes.run),
+        ("geography", geography.run),
+        ("regions", regions.run),
+        ("poi_placement", poi_placement.run),
+        ("roads", roads.run),
+        ("poi_interiors", poi_interiors.run),
+        ("naming", naming.run),
+    ):
+        timed(name, stage, world, gen_seed)
     return world
 
 

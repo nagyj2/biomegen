@@ -190,3 +190,14 @@ def test_center_lat_seed_stays_in_range(cfg: Config) -> None:
 def test_center_lat_seed_uses_both_hemispheres(cfg: Config) -> None:
     signs = {pipeline.center_lat(cfg, s) > 0 for s in range(50)}
     assert signs == {True, False}
+
+
+def test_timings_cover_every_stage_without_changing_the_world() -> None:
+    # scripts/bench.sh reads per-stage seconds from generate(timings=...); timing never alters the world.
+    small = load_config(None)
+    small.data["world"].update({"width": 48, "height": 24})
+    timings: dict[str, float] = {}
+    timed = pipeline.generate(small, 3, timings)
+    stages = {"terrain", "climate", "hydrology", "biomes", "geography", "regions"}
+    assert stages <= set(timings) and all(v >= 0 for v in timings.values())
+    assert timed.fingerprint() == pipeline.generate(small, 3).fingerprint()
