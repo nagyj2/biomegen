@@ -112,6 +112,7 @@ class DetailSampler(Sampler):
         super().__init__(world, grid_x, grid_y)
         self.sub_x = np.broadcast_to(col_index % cell_w, (rows, cols)).astype(np.int64)
         self.sub_y = np.broadcast_to((row_index % cell_h)[:, np.newaxis], (rows, cols)).astype(np.int64)
+        self.anchor = (self.sub_x == cell_w // 2) & (self.sub_y == cell_h // 2)
 
     @cached_property
     def warp_noise(self) -> tuple[np.ndarray, np.ndarray]:

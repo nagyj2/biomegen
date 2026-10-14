@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from biomegen.render.detail import DetailSampler
 from biomegen.render.layers import build_grid
 from biomegen.render.sampler import Sampler
 from biomegen.render.views import View
@@ -53,3 +54,27 @@ def test_overlay_glyph_edit_wins_over_the_terrain(config) -> None:
 def test_world_without_pois_draws_nothing(config) -> None:
     world = make_world(3, 3, Biome.GRASS)
     assert not bool(_draw(world, config).bold.any())
+
+
+def _draw_detail(world, config, overlay=None):
+    sampler = DetailSampler(world, config, 10, 5, 0, 0, world.width, world.height)
+    return build_grid(world, config, VIEW, sampler, overlay)
+
+
+def test_detail_marker_is_one_cell_in_the_tile_block(config) -> None:
+    # A POI covers a 10 x 5 block of cells at zoom; only one glyph is drawn, not fifty.
+    grid = _draw_detail(_world_with_tower(), config)
+    assert int((grid.glyph == config.get("render.markers.tower")).sum()) == 1
+
+
+def test_detail_marker_sits_at_the_centre_of_the_block(config) -> None:
+    # Tile (1, 1) spans columns 10-19 and rows 5-9; its centre cell is column 15, row 7.
+    grid = _draw_detail(_world_with_tower(), config)
+    assert grid.glyph[7, 15] == config.get("render.markers.tower")
+
+
+def test_detail_overlay_glyph_is_one_cell_in_the_tile_block(config) -> None:
+    world = make_world(3, 3, Biome.GRASS)
+    overlay = Overlay()
+    overlay.set_surface(2, 0, glyph="X")
+    assert int((_draw_detail(world, config, overlay).glyph == "X").sum()) == 1

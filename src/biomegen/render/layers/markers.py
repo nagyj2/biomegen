@@ -10,13 +10,16 @@ from . import LAYERS, LayerContext
 
 @LAYERS.register("markers")
 def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
-    """Draw each POI anchor with its ``render.markers`` glyph, then apply overlay glyph edits on top."""
+    """Draw each POI anchor with its ``render.markers`` glyph, then apply overlay glyph edits on top.
+
+    A tile is drawn once: at a detail scale only the centre cell of its block carries the glyph.
+    """
     world = ctx.world
     markers = ctx.config.get("render.markers")
     poi_index = ctx.sampler.nearest(world.poi_index)
     if world.pois:
         glyphs = np.array([markers.get(poi.kind, "?") for poi in world.pois], dtype="U1")
-        anchored = ctx.sampler.inside & (poi_index >= 0)
+        anchored = ctx.sampler.inside & ctx.sampler.anchor & (poi_index >= 0)
         style = ctx.config.get("render.marker_style")
         grid.put(
             anchored,
@@ -28,5 +31,7 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
     if ctx.overlay is not None:
         for (x, y), attrs in ctx.overlay.surface_edits():
             if "glyph" in attrs:
-                at_tile = ctx.sampler.inside & (ctx.sampler.tile_x == x) & (ctx.sampler.tile_y == y)
+                at_tile = (
+                    ctx.sampler.inside & ctx.sampler.anchor & (ctx.sampler.tile_x == x) & (ctx.sampler.tile_y == y)
+                )
                 grid.put(at_tile, glyph=attrs["glyph"])

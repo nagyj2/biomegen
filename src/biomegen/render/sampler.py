@@ -37,6 +37,8 @@ class Sampler:
     tile and layers leave those cells blank.
 
     Attributes:
+        anchor: The one cell of each tile that stands for it when something is drawn once per tile, such as a
+            marker: every cell at the map scale, the centre cell of the block at the detail scales.
         detailed: True for the magnified zoom and local samplers, where a tile is a block of cells.
         sub_x: Index of the cell inside its tile's block of cells (zeros when a cell is a whole tile), so
             decoration can differ cell to cell within one tile. ``sub_y`` is the row equivalent.
@@ -58,6 +60,7 @@ class Sampler:
         self.tile_y = np.clip(raw_y, 0, world.height - 1)
         self.sub_x = np.zeros(fx.shape, dtype=np.int64)
         self.sub_y = np.zeros(fx.shape, dtype=np.int64)
+        self.anchor = np.ones(fx.shape, dtype=bool)
 
     @classmethod
     def viewport(

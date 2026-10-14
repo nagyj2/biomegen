@@ -100,22 +100,22 @@ VALUES: Dict[str, Any] = {
     "views": {
         "terrain": {
             "layers": ["terrain", "relief", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "bridges"],
+            "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "bridges", "markers"],
             "tint": "",
         },
         "elevation": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges"],
+            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges", "markers"],
             "tint": "elevation",
         },
         "temperature": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges"],
+            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges", "markers"],
             "tint": "temperature",
         },
         "rainfall": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges"],
+            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "bridges", "markers"],
             "tint": "rainfall",
         },
     },
