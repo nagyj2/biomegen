@@ -76,3 +76,10 @@ def test_view_reads_physical_fields() -> None:
 def test_physical_field_shapes_match_grid() -> None:
     world = World(8, 4, seed=1)
     assert all(np.shape(getattr(world, name)) == (4, 8) for name in PHYSICAL_FIELDS)
+
+
+def test_normalised_legacy_fields_are_gone() -> None:
+    # Phase 3 replaced the normalised elevation / temperature with metres and °C.
+    world = World(8, 4, seed=1)
+    assert not {"elevation", "temperature"} & set(World.FIELDS)
+    assert not hasattr(world, "elevation") and not hasattr(world, "temperature")

@@ -65,3 +65,30 @@ def test_placement_deterministic(cfg):
     a = [(p.kind, p.x, p.y) for p in pipeline.generate(cfg, 4242).pois]
     b = [(p.kind, p.x, p.y) for p in pipeline.generate(cfg, 4242).pois]
     assert a == b
+
+
+# --------------------------------------------------------------------------- elevation limits in metres
+def test_pois_respect_their_metre_elevation_limits(world, cfg):
+    # Every placed POI anchor sits within its kind's elevation_min_m / elevation_max_m band.
+    for p in world.pois:
+        rule = cfg.get(f"poi.types.{p.kind}", {})
+        height = float(world.elevation_m[p.y, p.x])
+        assert height >= rule.get("elevation_min_m", float("-inf"))
+        assert height <= rule.get("elevation_max_m", float("inf"))
+
+
+def test_eligibility_mask_applies_elevation_m():
+    # A rule capped at 500 m rejects the cells above it on an east-rising slope.
+    import numpy as np
+
+    from biomegen.pipeline.poi_rules import eligibility_mask, parse_rule
+    from biomegen.world.tile import Biome
+    from biomegen.world.world import World
+
+    world = World(10, 3, 1)
+    world.water_type[:] = int(WaterType.NONE)
+    world.biome[:] = int(Biome.GRASS)
+    world.elevation_m[:] = 100.0 * np.arange(10)[None, :]
+    rule = parse_rule("village", {"count": 1, "biomes": ["grass"], "elevation_max_m": 500.0})
+    mask = eligibility_mask(rule, world)
+    assert mask[:, :6].all() and not mask[:, 6:].any()
