@@ -13,6 +13,8 @@ VALUES: Dict[str, Any] = {
     "export_view": "e",  # export the current view to ./images
     "export_world": "E",  # export the whole island map to ./images
     "toggle_scale": "f",  # toggle fit-to-screen <-> 1:1 panning
-    "refresh": "r",  # regenerate the world with a fresh random seed
+    "cycle_view": "v",  # cycle the render.views (terrain, elevation, ...)
+    "help": "?",  # show the key help and legend
+    "refresh": "r",  # regenerate the world with a fresh random seed (unbound until phase 9 brings it back)
     "quit": "q",
 }
