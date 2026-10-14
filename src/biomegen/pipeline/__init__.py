@@ -30,13 +30,12 @@ from ..world.tile import BIOME_NAME, Biome, WaterType
 from ..world.world import World
 from . import (
     biomes,
-    climate,
     naming,
     poi_placement,
     regions,
 )
 from .civilization import roads
-from .physical import hydrology, terrain
+from .physical import climate, hydrology, terrain
 from .story import poi_interiors
 
 

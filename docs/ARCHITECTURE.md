@@ -61,9 +61,10 @@ src/biomegen/
     __init__.py         generate() orchestrator + stats()
     heightmap.py        Unused since phase 3 (replaced by physical/terrain.py; deleted in phase-3 cleanup)
     island_mask.py      Unused since phase 3 (replaced by physical/terrain.py; deleted in phase-3 cleanup)
-    climate.py          Stage 2 — temperature + moisture fields
+    climate.py          Unused since phase 3 (replaced by physical/climate.py; deleted in phase-3 cleanup)
     physical/
       terrain.py        Stage 1 — style, mountain belts, rank sea level, elevation_m, ocean, dist_to_ocean
+      climate.py        Stage 2 — °C (latitude, lapse), wind moisture + rain shadow, rain_mm
       hydrology.py      Stage 3 — rivers, lakes, flow accumulation
     biomes.py           Stage 5 — Whittaker biome classification
     regions.py          Stage 6 — region segmentation + colour
