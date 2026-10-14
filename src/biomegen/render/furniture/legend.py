@@ -12,6 +12,7 @@ from ...world.tile import BIOME_NAME, WaterType
 from ...world.world import World
 from ..colors import biome_style, mix_colors
 from ..grid import RGB, Document, Span
+from ..poi_style import poi_marker
 from ..views import View
 
 _Swatch = tuple[str, Optional[RGB], Optional[RGB], str]  # glyph, fg, bg, label
@@ -97,10 +98,9 @@ def _swatches(world: World, config: Config, view: View, ascii_only: bool) -> lis
     if world.road.any():
         roads = config.get("render.roads")
         items.append((roads["ascii" if ascii_only else "glyphs"][10], _color(roads["fg"]), None, "Road"))
-    markers = config.get("render.markers")
-    style = config.get("render.marker_style")
     for kind in sorted({poi.kind for poi in world.pois}):
-        items.append((markers.get(kind, "?"), _color(style["fg"]), _color(style["bg"]), kind.title()))
+        glyph, fg, bg = poi_marker(config, kind, ascii_only)
+        items.append((glyph, fg, bg, kind.title()))
     return items
 
 

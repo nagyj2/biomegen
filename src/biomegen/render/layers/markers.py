@@ -5,29 +5,29 @@ from __future__ import annotations
 import numpy as np
 
 from ..grid import CellGrid
+from ..poi_style import poi_marker
 from . import LAYERS, LayerContext
 
 
 @LAYERS.register("markers")
 def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
-    """Draw each POI anchor with its ``render.markers`` glyph, then apply overlay glyph edits on top.
+    """Draw each POI anchor with its marker (:func:`~biomegen.render.poi_style.poi_marker`), then apply overlay edits.
 
-    A tile is drawn once: at a detail scale only the centre cell of its block carries the glyph.
+    A tile is drawn once: at a detail scale only the centre cell of its block carries the glyph. A marker with no
+    background colour keeps the terrain's.
     """
     world = ctx.world
-    markers = ctx.config.get("render.markers")
     poi_index = ctx.sampler.nearest(world.poi_index)
     if world.pois:
-        glyphs = np.array([markers.get(poi.kind, "?") for poi in world.pois], dtype="U1")
+        styles = [poi_marker(ctx.config, poi.kind, ctx.ascii_only) for poi in world.pois]
+        glyphs = np.array([glyph for glyph, _fg, _bg in styles], dtype="U1")
+        fgs = np.array([fg for _glyph, fg, _bg in styles], dtype=np.uint8)
+        bgs = np.array([bg if bg is not None else (0, 0, 0) for _glyph, _fg, bg in styles], dtype=np.uint8)
+        has_bg = np.array([bg is not None for _glyph, _fg, bg in styles])
+        at = np.clip(poi_index, 0, len(world.pois) - 1)
         anchored = ctx.sampler.inside & ctx.sampler.anchor & (poi_index >= 0)
-        style = ctx.config.get("render.marker_style")
-        grid.put(
-            anchored,
-            glyph=glyphs[np.clip(poi_index, 0, len(world.pois) - 1)],
-            fg=tuple(style["fg"]),
-            bg=tuple(style["bg"]),
-            bold=True,
-        )
+        grid.put(anchored, glyph=glyphs[at], fg=fgs[at], bold=True)
+        grid.put(anchored & has_bg[at], bg=bgs[at])
     if ctx.overlay is not None:
         for (x, y), attrs in ctx.overlay.surface_edits():
             if "glyph" in attrs:

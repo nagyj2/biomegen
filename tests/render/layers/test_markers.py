@@ -78,3 +78,35 @@ def test_detail_overlay_glyph_is_one_cell_in_the_tile_block(config) -> None:
     overlay = Overlay()
     overlay.set_surface(2, 0, glyph="X")
     assert int((_draw_detail(world, config, overlay).glyph == "X").sum()) == 1
+
+
+def _world_with_town(kind: str = "town"):
+    world = make_world(3, 3, Biome.GRASS)
+    world.pois.append(POI(kind=kind, x=1, y=1, interior_seed=5, civilized=True))
+    world.poi_index[1, 1] = 0
+    return world
+
+
+def test_settlement_marker_comes_from_its_tier_row(config) -> None:
+    assert _draw(_world_with_town("capital"), config).glyph[1, 1] == config.get("tables.tiers.capital.glyph")
+
+
+def test_settlement_marker_uses_the_tier_colours(config) -> None:
+    grid = _draw(_world_with_town("capital"), config)
+    assert grid.fg[1, 1].tolist() == config.get("tables.tiers.capital.fg")
+
+
+def test_tier_without_a_background_keeps_the_terrain_background(config) -> None:
+    # Towns have no bg in tiers.toml, so the cell keeps the grass fill.
+    marked = _draw(_world_with_town("town"), config)
+    bare = build_grid(
+        _world_with_town("town"), config, View("t", ("terrain",)), Sampler.viewport(_world_with_town(), 3, 3)
+    )
+    assert marked.bg[1, 1].tolist() == bare.bg[1, 1].tolist()
+
+
+def test_ascii_settlement_marker_uses_the_ascii_column(config) -> None:
+    grid = build_grid(
+        _world_with_town("city"), config, VIEW, Sampler.viewport(_world_with_town(), 3, 3), ascii_only=True
+    )
+    assert grid.glyph[1, 1] == config.get("tables.tiers.city.ascii")

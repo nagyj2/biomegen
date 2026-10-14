@@ -281,12 +281,9 @@ VALUES: Dict[str, Any] = {
         "compass_fg": [240, 230, 200],
         "compass": {"unicode": ["  N  ", "W─┼─E", "  S  "], "ascii": ["  N  ", "W-+-E", "  S  "]},
     },
-    # Overlay glyphs drawn on top of biome cells.
+    # Overlay glyphs drawn on top of biome cells for the kinds that are not settlement tiers (a tier's marker comes
+    # from its tables.tiers row).
     "markers": {
-        "capital": "K",
-        "city": "C",
-        "town": "T",
-        "village": "v",
         "tower": "I",
         "dungeon": "D",
         "ruin": "r",
