@@ -8,7 +8,8 @@ geographic feature kind. Numbers that apply to the whole world (counts, budgets,
 
 - `config/defaults/tables.py` reads every file in `DATA_FILES` with `tomllib` and puts each top-level
   table under the `tables` config section (`tables.biomes`, `tables.relief` from `biomes.toml`;
-  `tables.tiers`; `tables.styles` from `terrain.toml`; `tables.geo_names` from `geography.toml`).
+  `tables.detail`, `tables.detail_relief` from `detail.toml`; `tables.tiers`; `tables.styles` from `terrain.toml`;
+  `tables.geo_names` from `geography.toml`).
 - A user config overrides with the ordinary deep-merge: `[tables.biomes.desert]` + `goods = "glass"`
   changes one attribute and keeps the rest of the row.
 - `config/tables.py` validates every row against its table's schema (`SCHEMAS`): unknown keys, missing

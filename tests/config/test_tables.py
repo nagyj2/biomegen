@@ -10,7 +10,7 @@ from biomegen.config import load_config
 from biomegen.config.defaults import get_defaults
 from biomegen.config.defaults.tables import DATA_DIR, DATA_FILES, _load
 from biomegen.config.validate import ConfigError, validate
-from biomegen.world.tile import RELIEF_BY_NAME
+from biomegen.world.tile import BIOME_BY_NAME, RELIEF_BY_NAME
 
 
 def _new_biome_row() -> dict:
@@ -30,7 +30,15 @@ def _new_biome_row() -> dict:
 
 def test_shipped_tables_load_and_validate() -> None:
     # The packaged data files give their tables and pass their own schema.
-    assert sorted(load_config(None).get("tables")) == ["biomes", "geo_names", "relief", "styles", "tiers"]
+    assert sorted(load_config(None).get("tables")) == [
+        "biomes",
+        "detail",
+        "detail_relief",
+        "geo_names",
+        "relief",
+        "styles",
+        "tiers",
+    ]
 
 
 def test_relief_table_covers_every_relief_member() -> None:
@@ -139,8 +147,54 @@ def test_duplicate_tier_rank_is_rejected() -> None:
 
 
 def test_loader_combines_the_shipped_files() -> None:
-    # biomes.toml supplies biomes and relief; tiers.toml tiers; terrain.toml styles; geography.toml geo_names.
-    assert sorted(_load(DATA_DIR, DATA_FILES)) == ["biomes", "geo_names", "relief", "styles", "tiers"]
+    # biomes.toml supplies biomes and relief; detail.toml detail and detail_relief; tiers.toml tiers;
+    # terrain.toml styles; geography.toml geo_names.
+    assert sorted(_load(DATA_DIR, DATA_FILES)) == [
+        "biomes",
+        "detail",
+        "detail_relief",
+        "geo_names",
+        "relief",
+        "styles",
+        "tiers",
+    ]
+
+
+def test_detail_table_covers_every_biome_member() -> None:
+    # One detail row per Biome member, keyed by lower-case name.
+    assert set(get_defaults()["tables"]["detail"]) == set(BIOME_BY_NAME)
+
+
+def test_detail_relief_table_covers_every_relief_member() -> None:
+    # One detail_relief row per Relief member, keyed by lower-case name.
+    assert set(get_defaults()["tables"]["detail_relief"]) == set(RELIEF_BY_NAME)
+
+
+def test_detail_row_for_unknown_biome_is_rejected() -> None:
+    # Detail rows are tied to the Biome enum: an extra name has no member to describe.
+    cfg = get_defaults()
+    cfg["tables"]["detail"]["steppe"] = dict(cfg["tables"]["detail"]["grass"])
+    with pytest.raises(ConfigError, match="tables.detail must have exactly one row per Biome member"):
+        validate(cfg)
+
+
+@pytest.mark.parametrize(
+    ("table", "row", "key", "value"),
+    [
+        ("detail", "forest", "factor", "wetness"),
+        ("detail", "forest", "density", 1.5),
+        ("detail", "forest", "floor_ascii", "·"),
+        ("detail", "forest", "clutter_ascii", "♣"),
+        ("detail_relief", "mountain", "floor_ascii", "▲"),
+        ("detail_relief", "mountain", "floor", "^^"),
+    ],
+)
+def test_detail_value_of_the_wrong_kind_is_rejected(table: str, row: str, key: str, value: object) -> None:
+    # Detail columns are checked for kind: ASCII columns stay 7-bit, factor is one of the known names.
+    cfg = get_defaults()
+    cfg["tables"][table][row][key] = value
+    with pytest.raises(ConfigError, match=rf"tables\.{table}\.{row}\.{key}: expected"):
+        validate(cfg)
 
 
 def test_loader_rejects_a_table_defined_twice(tmp_path: Path) -> None:

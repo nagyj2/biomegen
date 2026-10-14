@@ -14,7 +14,9 @@ from .validate import _coerce_color
 # Value kinds: "text" any string; "char" exactly one character; "char?" zero or one; "color" an
 # [r, g, b] / "#rrggbb" colour; "bool"; "unit" a number in [0, 1]; "cost" a number >= 1;
 # "nonneg" a number >= 0; "positive" a number > 0; "rank" an int >= 0; "range" [min, max] ints >= 0;
-# "forms" a non-empty list of name patterns, each containing "{n}" exactly once.
+# "forms" a non-empty list of name patterns, each containing "{n}" exactly once; "ascii_char" /
+# "ascii_char?" / "ascii_text" are "char" / "char?" / "text" restricted to 7-bit characters; "factor" one of
+# "none", "moisture", "elevation".
 _BIOME_ROW = {
     "label": "text",
     "glyph": "char",
@@ -37,6 +39,15 @@ _RELIEF_ROW = {
     "goods": "text",
     "min_elevation_m": "nonneg",
 }
+_DETAIL_ROW = {
+    "floor": "char",
+    "floor_ascii": "ascii_char",
+    "clutter": "text",
+    "clutter_ascii": "ascii_text",
+    "density": "unit",
+    "factor": "factor",
+}
+_DETAIL_RELIEF_ROW = {**_DETAIL_ROW, "floor": "char?", "floor_ascii": "ascii_char?"}
 _TIER_ROW = {
     "label": "text",
     "rank": "rank",
@@ -64,10 +75,14 @@ _GEO_NAME_ROW = {
     "syllables": "range",
 }
 
+DETAIL_FACTORS = ("none", "moisture", "elevation")
+
 # Table name -> (row schema, keys a row may omit).
 SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "biomes": (_BIOME_ROW, frozenset()),
     "relief": (_RELIEF_ROW, frozenset({"min_elevation_m"})),
+    "detail": (_DETAIL_ROW, frozenset()),
+    "detail_relief": (_DETAIL_RELIEF_ROW, frozenset()),
     "tiers": (_TIER_ROW, frozenset({"bg"})),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
@@ -91,6 +106,10 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "text": lambda v: isinstance(v, str),
         "char": lambda v: isinstance(v, str) and len(v) == 1,
         "char?": lambda v: isinstance(v, str) and len(v) <= 1,
+        "ascii_char": lambda v: isinstance(v, str) and len(v) == 1 and v.isascii(),
+        "ascii_char?": lambda v: isinstance(v, str) and len(v) <= 1 and v.isascii(),
+        "ascii_text": lambda v: isinstance(v, str) and v.isascii(),
+        "factor": lambda v: v in DETAIL_FACTORS,
         "bool": lambda v: isinstance(v, bool),
         "unit": lambda v: _is_number(v) and 0.0 <= v <= 1.0,
         "cost": lambda v: _is_number(v) and v >= 1.0,
@@ -145,6 +164,16 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     relief = tables.get("relief", {})
     if isinstance(relief, dict) and set(relief) != set(RELIEF_BY_NAME):
         errors.append(f"tables.relief must have exactly one row per Relief member: {', '.join(sorted(RELIEF_BY_NAME))}")
+
+    detail = tables.get("detail", {})
+    if isinstance(detail, dict) and set(detail) != set(BIOME_BY_NAME):
+        errors.append(f"tables.detail must have exactly one row per Biome member: {', '.join(sorted(BIOME_BY_NAME))}")
+
+    detail_relief = tables.get("detail_relief", {})
+    if isinstance(detail_relief, dict) and set(detail_relief) != set(RELIEF_BY_NAME):
+        errors.append(
+            f"tables.detail_relief must have exactly one row per Relief member: {', '.join(sorted(RELIEF_BY_NAME))}"
+        )
 
     tiers = tables.get("tiers", {})
     if isinstance(tiers, dict):

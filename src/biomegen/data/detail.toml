@@ -1,0 +1,169 @@
+# Detail-scale terrain tables: what the zoom and local views draw inside a tile.
+#
+# Loaded into the config tree as `tables.detail` (one row per biome) and `tables.detail_relief` (one row
+# per relief class); a user config overrides one attribute with e.g. `[tables.detail.forest]` +
+# `density = 0.3`. Colours are not repeated here: floor and clutter use the biome's `fg` / `bg` from
+# `biomes.toml`. Placement is deterministic per world tile and sub-cell, so it holds still while panning.
+#
+# Detail keys (`detail` rows are keyed by biome name):
+#   floor, floor_ascii     glyph that fills the tile's cells (unicode and 7-bit ASCII)
+#   clutter, clutter_ascii string of glyphs scattered over the floor, one is picked per cell ("" for none)
+#   density                share of cells (0..1) that carry clutter, before `factor`
+#   factor                 what scales `density` per cell: "none", "moisture" (wetter is denser) or
+#                          "elevation" (higher is denser)
+#
+# `detail_relief` rows are keyed by relief name and take the same keys. A relief row whose `floor` is
+# non-empty replaces the biome's whole detail row on those cells (a rocky floor on mountains and
+# peaks); an empty `floor` leaves the biome's row alone.
+
+[detail.deep]
+floor = "~"
+floor_ascii = "~"
+clutter = ""
+clutter_ascii = ""
+density = 0.0
+factor = "none"
+
+[detail.shallow]
+floor = "~"
+floor_ascii = "~"
+clutter = ""
+clutter_ascii = ""
+density = 0.0
+factor = "none"
+
+[detail.seaice]
+floor = "~"
+floor_ascii = "~"
+clutter = ""
+clutter_ascii = ""
+density = 0.0
+factor = "none"
+
+[detail.lake]
+floor = "~"
+floor_ascii = "~"
+clutter = ""
+clutter_ascii = ""
+density = 0.0
+factor = "none"
+
+[detail.beach]
+floor = "."
+floor_ascii = "."
+clutter = ",."
+clutter_ascii = ",."
+density = 0.06
+factor = "none"
+
+[detail.desert]
+floor = "."
+floor_ascii = "."
+clutter = ".o"
+clutter_ascii = ".o"
+density = 0.06
+factor = "none"
+
+[detail.savanna]
+floor = "."
+floor_ascii = "."
+clutter = '".t'
+clutter_ascii = '".t'
+density = 0.10
+factor = "moisture"
+
+[detail.grass]
+floor = "."
+floor_ascii = "."
+clutter = '",'
+clutter_ascii = '",'
+density = 0.12
+factor = "moisture"
+
+[detail.forest]
+floor = "."
+floor_ascii = "."
+clutter = "tTt"
+clutter_ascii = "tTt"
+density = 0.22
+factor = "moisture"
+
+[detail.jungle]
+floor = "."
+floor_ascii = "."
+clutter = "Tt%"
+clutter_ascii = "Tt%"
+density = 0.30
+factor = "moisture"
+
+[detail.swamp]
+floor = "."
+floor_ascii = "."
+clutter = ';"w'
+clutter_ascii = ';"w'
+density = 0.25
+factor = "moisture"
+
+[detail.taiga]
+floor = "."
+floor_ascii = "."
+clutter = "t^"
+clutter_ascii = "t^"
+density = 0.18
+factor = "moisture"
+
+[detail.tundra]
+floor = "."
+floor_ascii = "."
+clutter = ",."
+clutter_ascii = ",."
+density = 0.08
+factor = "none"
+
+[detail.snow]
+floor = "^"
+floor_ascii = "^"
+clutter = "."
+clutter_ascii = "."
+density = 0.14
+factor = "elevation"
+
+[detail_relief.none]
+floor = ""
+floor_ascii = ""
+clutter = ""
+clutter_ascii = ""
+density = 0.0
+factor = "none"
+
+[detail_relief.hills]
+floor = ""
+floor_ascii = ""
+clutter = ""
+clutter_ascii = ""
+density = 0.0
+factor = "none"
+
+[detail_relief.mountain]
+floor = "^"
+floor_ascii = "^"
+clutter = "."
+clutter_ascii = "."
+density = 0.14
+factor = "elevation"
+
+[detail_relief.peak]
+floor = "^"
+floor_ascii = "^"
+clutter = "."
+clutter_ascii = "."
+density = 0.14
+factor = "elevation"
+
+[detail_relief.volcano]
+floor = "^"
+floor_ascii = "^"
+clutter = "."
+clutter_ascii = "."
+density = 0.14
+factor = "elevation"
