@@ -151,7 +151,7 @@ The authoritative defaults and inline documentation are in
 | `river_land_share` | `0.035` | Share of land cells (largest catchments first) that become river channel |
 | `river_min_drainage_km2` | `5000.0` | Minimum wetness-weighted catchment (km²) for a river channel |
 | `min_lake_area_km2` | `3000.0` | Depressions smaller than this are not lakes |
-| `lake_min_depth_m` | `25.0` | Minimum standing-water depth (m) for a lake cell |
+| `lake_min_depth_m` | `15.0` | Minimum standing-water depth (m) for a lake cell |
 | `river_width_scale` | `0.5` | How fast rivers widen with drainage area |
 | `river_max_width` | `5` | Maximum river width in tiles |
 
@@ -159,7 +159,7 @@ The authoritative defaults and inline documentation are in
 | Key | Default | Description |
 |-----|---------|-------------|
 | `bands` | 5 bands | Temperature bands (°C), each with rainfall rules (mm) and a default biome |
-| `swamp_min_rain_mm` | `2600.0` | Rain above which wet lowland becomes swamp |
+| `swamp_min_rain_mm` | `3000.0` | Rain above which wet lowland becomes swamp |
 | `swamp_max_elevation_m` | `300.0` | Swamp only below this height |
 | `beach_max_elevation_m` | `150.0` | Warm land touching the sea below this height is beach |
 | `shallow_km` | `75.0` | Sea within this distance of land is shallows |

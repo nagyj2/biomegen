@@ -24,7 +24,7 @@ VALUES: Dict[str, Any] = {
             "swamp": True,
         },
     ],
-    "swamp_min_rain_mm": 2600.0,  # swamp needs more rain than this...
+    "swamp_min_rain_mm": 3000.0,  # swamp needs more rain than this (reference 2600; tuned at 240x60)...
     "swamp_max_elevation_m": 300.0,  # ...on land lower than this
     # Beach: land touching the sea, below this height, warmer than this, not swamp and not a river.
     "beach_max_elevation_m": 150.0,

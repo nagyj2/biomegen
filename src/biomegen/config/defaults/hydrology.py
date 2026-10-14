@@ -15,7 +15,7 @@ VALUES: Dict[str, Any] = {
     "max_rivers": 24,  # cap on traced rivers (largest-catchment sources first)
     # A depression becomes a lake where its filled surface stands at least lake_min_depth_m above the
     # ground, over at least min_lake_area_km2. The lake surface is flattened to its spill level.
-    "lake_min_depth_m": 25.0,
+    "lake_min_depth_m": 15.0,  # tuned at 240x60: low land is flat, so basins are shallow
     "min_lake_area_km2": 3000.0,
     # River width grows with drainage area: a channel carrying ``ratio`` x the channel threshold widens by
     # ``(ratio-1) * river_width_scale`` tiles, capped at ``river_max_width`` tiles. A display effect for the
