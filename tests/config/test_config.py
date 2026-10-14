@@ -63,3 +63,20 @@ def test_whittaker_matrix_shape_matches_bands() -> None:
     cols = len(cfg["biomes"]["moisture_bands"]) + 1
     assert len(cfg["biomes"]["matrix"]) == rows
     assert all(len(row) == cols for row in cfg["biomes"]["matrix"])
+
+
+@pytest.mark.parametrize("size_km", [[6000.0], [6000.0, 0.0], ["6000", 3000.0], 6000.0])
+def test_validate_rejects_malformed_size_km(size_km: object) -> None:
+    # world.size_km must be exactly two positive numbers.
+    cfg = get_defaults()
+    cfg["world"]["size_km"] = size_km
+    with pytest.raises(ConfigError, match="world.size_km"):
+        validate(cfg)
+
+
+def test_validate_clamps_center_lat() -> None:
+    # An out-of-range latitude is clamped, not fatal.
+    cfg = get_defaults()
+    cfg["world"]["center_lat"] = 120.0
+    validate(cfg)
+    assert cfg["world"]["center_lat"] == 90.0
