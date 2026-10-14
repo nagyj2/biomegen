@@ -114,10 +114,15 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 
 | Field | dtype | Range | Set by |
 |-------|-------|-------|--------|
-| `elevation` | float64 | [0, 1] | heightmap |
-| `temperature` | float64 | [0, 1] | climate |
+| `elevation` | float64 | [0, 1] | heightmap (legacy, removed in phase 3) |
+| `elevation_m` | float64 | metres, < 0 = sea depth | terrain (phase 3; zeros until then) |
+| `temperature` | float64 | [0, 1] | climate (legacy, removed in phase 3) |
+| `temperature_c` | float64 | °C | climate (phase 3; zeros until then) |
+| `rain_mm` | float64 | mm / year | climate (phase 3; zeros until then) |
 | `moisture` | float64 | [0, 1] | climate + hydrology |
 | `biome` | uint8 | `Biome` enum int | island_mask, hydrology, biomes |
+| `relief` | uint8 | `Relief` enum int | biomes (phase 3; NONE until then) |
+| `landmass_id` | int32 | 0..L-1, -1=water | geography (phase 3; -1 until then) |
 | `water_type` | uint8 | `WaterType` enum int | island_mask, hydrology |
 | `region_id` | int32 | 0..R-1, -1=ocean | regions |
 | `poi_index` | int32 | 0..P-1, -1=none | poi_placement |

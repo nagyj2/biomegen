@@ -19,7 +19,7 @@ import numpy as np
 
 from ..util.units import GridScale, grid_scale
 from .entities import POI, Lake, Region, River
-from .tile import Biome, TileView, WaterType
+from .tile import Biome, Relief, TileView, WaterType
 
 
 class World:
@@ -30,10 +30,15 @@ class World:
     ====================  =========  =====================================================
     field                 dtype      meaning
     ====================  =========  =====================================================
-    ``elevation``         float64    normalised height in [0, 1] (after falloff)
-    ``temperature``       float64    normalised temperature in [0, 1] (warm=1)
+    ``elevation``         float64    normalised height in [0, 1] (legacy; removed in phase 3)
+    ``elevation_m``       float64    height above sea level in metres (negative = sea depth)
+    ``temperature``       float64    normalised temperature in [0, 1] (legacy; removed in phase 3)
+    ``temperature_c``     float64    mean annual temperature in °C
+    ``rain_mm``           float64    annual rainfall in mm
     ``moisture``          float64    normalised moisture in [0, 1] (wet=1)
     ``biome``             uint8      a :class:`Biome` value
+    ``relief``            uint8      a :class:`Relief` value (orthogonal to the biome)
+    ``landmass_id``       int32      connected landmass index (-1 = water or unassigned)
     ``region_id``         int32      index into ``regions`` (-1 = unassigned / ocean)
     ``water_type``        uint8      a :class:`WaterType` value
     ``road``              uint8      0/1 flag: a road passes through this tile
@@ -52,9 +57,14 @@ class World:
     #: hashes every field deterministically, and by any code that wants to iterate fields generically.
     FIELDS: tuple[str, ...] = (
         "elevation",
+        "elevation_m",
         "temperature",
+        "temperature_c",
+        "rain_mm",
         "moisture",
         "biome",
+        "relief",
+        "landmass_id",
         "region_id",
         "water_type",
         "road",
@@ -77,11 +87,16 @@ class World:
 
         # Continuous scalar fields.
         self.elevation = np.zeros(shape, dtype=np.float64)
+        self.elevation_m = np.zeros(shape, dtype=np.float64)
         self.temperature = np.zeros(shape, dtype=np.float64)
+        self.temperature_c = np.zeros(shape, dtype=np.float64)
+        self.rain_mm = np.zeros(shape, dtype=np.float64)
         self.moisture = np.zeros(shape, dtype=np.float64)
 
         # Discrete / classified fields.
         self.biome = np.full(shape, int(Biome.OCEAN), dtype=np.uint8)
+        self.relief = np.full(shape, int(Relief.NONE), dtype=np.uint8)
+        self.landmass_id = np.full(shape, -1, dtype=np.int32)
         self.region_id = np.full(shape, -1, dtype=np.int32)
         self.water_type = np.full(shape, int(WaterType.NONE), dtype=np.uint8)
         self.road = np.zeros(shape, dtype=np.uint8)
@@ -136,9 +151,14 @@ class World:
             x=x,
             y=y,
             elevation=float(self.elevation[y, x]),
+            elevation_m=float(self.elevation_m[y, x]),
             temperature=float(self.temperature[y, x]),
+            temperature_c=float(self.temperature_c[y, x]),
+            rain_mm=float(self.rain_mm[y, x]),
             moisture=float(self.moisture[y, x]),
             biome=Biome(int(self.biome[y, x])),
+            relief=Relief(int(self.relief[y, x])),
+            landmass_id=int(self.landmass_id[y, x]),
             water_type=WaterType(int(self.water_type[y, x])),
             region_id=int(self.region_id[y, x]),
             road=bool(self.road[y, x]),
