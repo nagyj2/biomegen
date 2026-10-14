@@ -1,19 +1,19 @@
-"""Rasterise an export *grid* to a PNG via Pillow (an optional dependency).
+"""Rasterise a cell grid to a PNG via Pillow.
 
 PNG output is a convenience on top of the always-available SVG: Pillow is imported lazily inside
 :func:`grid_to_png` so the package imports cleanly without it, and the function returns ``False``
 (rather than raising) when Pillow is absent so the caller can fall back to SVG-only with a friendly
-notice. The grid is the same :data:`~biomegen.export.svg.Cell` intermediate the SVG renderer uses, so
-the two outputs are pixel-faithful to one another: a filled rectangle per cell with the glyph centred
-on top.
+notice. :func:`render_png` takes a :class:`~biomegen.render.grid.CellGrid` and draws it through the same
+cell tuples the SVG writer uses, so the two outputs are pixel-faithful to one another: a filled
+rectangle per cell with the glyph centred on top.
 """
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import List
 
-RGB = Tuple[int, int, int]
-Cell = Tuple[Optional[RGB], str, RGB, bool]
+from ..grid import CellGrid
+from . import RGB, Cell, cells_from_grid
 
 
 def pillow_available() -> bool:
@@ -70,3 +70,8 @@ def grid_to_png(grid: List[List[Cell]], cell_px: int, background: RGB, path: str
 
     img.save(path)
     return True
+
+
+def render_png(grid: CellGrid, cell_px: int, background: RGB, path: str) -> bool:
+    """Render a :class:`~biomegen.render.grid.CellGrid` to ``path``; ``False`` if Pillow is absent."""
+    return grid_to_png(cells_from_grid(grid), cell_px, background, path)

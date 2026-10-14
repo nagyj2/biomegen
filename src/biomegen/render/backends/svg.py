@@ -1,22 +1,21 @@
-"""Render an export *grid* to a standalone SVG document (no third-party dependency).
+"""Render a cell grid to a standalone SVG document (no third-party dependency).
 
-The grid is the renderer-agnostic intermediate the export facade produces from a view :class:`Frame`
-(see :mod:`biomegen.export`): a 2-D list of :data:`Cell` tuples ``(fill_rgb, glyph, glyph_rgb,
-bold)``. Each cell becomes a filled ``<rect>`` (the map colour) with the glyph centred on top as
-``<text>`` - so the export reads as a coloured cartographic map whose glyphs (terrain, POI markers,
-interior walls) stay legible. ``fill_rgb`` of ``None`` is transparent (the page background shows
-through, e.g. out-of-bounds cells). The output is deterministic for a given grid: cells are emitted
-in fixed row-major order with fixed numeric formatting, so a fixed seed always yields byte-identical
-SVG (the golden-export test relies on this).
+:func:`render_svg` takes a :class:`~biomegen.render.grid.CellGrid`; :func:`grid_to_svg` draws the
+flattened form, a 2-D list of :data:`Cell` tuples ``(fill_rgb, glyph, glyph_rgb, bold)``. Each cell
+becomes a filled ``<rect>`` (the map colour) with the glyph centred on top as ``<text>``, so the export
+reads as a coloured cartographic map whose glyphs (terrain, POI markers, interior walls) stay legible.
+``fill_rgb`` of ``None`` is transparent (the page background shows through, e.g. out-of-bounds cells).
+The output is deterministic for a given grid: cells are emitted in fixed row-major order with fixed
+numeric formatting, so a fixed seed always yields byte-identical SVG (the golden-export test relies on
+this).
 """
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import List
 
-RGB = Tuple[int, int, int]
-# (fill colour or None=transparent, glyph, glyph colour, bold). A space glyph draws no text.
-Cell = Tuple[Optional[RGB], str, RGB, bool]
+from ..grid import CellGrid
+from . import RGB, Cell, cells_from_grid
 
 # Monospace stack; the glyph is centred in its cell so any available mono face lines up on the grid.
 _FONT_FAMILY = "'DejaVu Sans Mono','Consolas','Courier New',monospace"
@@ -87,3 +86,8 @@ def grid_to_svg(grid: List[List[Cell]], cell_px: int, background: RGB) -> str:
 
     out.append("</svg>")
     return "\n".join(out)
+
+
+def render_svg(grid: CellGrid, cell_px: int, background: RGB) -> str:
+    """Return a complete SVG document for a :class:`~biomegen.render.grid.CellGrid`."""
+    return grid_to_svg(cells_from_grid(grid), cell_px, background)

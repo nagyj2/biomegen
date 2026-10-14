@@ -24,6 +24,7 @@ import os
 from typing import List, Optional, Tuple
 
 from ..config.model import Config
+from ..render.backends import png, svg
 from ..render.glyphs import Glyphs
 from ..render.map_view import Frame, build_biome_frame
 from ..render.state import ViewState
@@ -31,7 +32,6 @@ from ..render.surface import display_biome_at
 from ..render.zoom_view import ZoomFrame, build_detail_frame, detail_cell_size
 from ..world.overlay import Overlay
 from ..world.world import World
-from . import png, svg
 from .colors import BACKGROUND, ExportPalette, contrast_rgb
 
 RGB = Tuple[int, int, int]
