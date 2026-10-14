@@ -17,6 +17,7 @@ from typing import Optional
 
 import numpy as np
 
+from ..util.units import GridScale, grid_scale
 from .entities import POI, Lake, Region, River
 from .tile import Biome, TileView, WaterType
 
@@ -41,6 +42,10 @@ class World:
     ``flow_accum``        float64    hydrological flow accumulation (drainage area proxy)
     ``poi_index``         int32      index into ``pois`` (-1 = none)
     ====================  =========  =====================================================
+
+    Scale metadata (not per-tile, so not part of :meth:`fingerprint`): ``scale`` is the
+    :class:`~biomegen.util.units.GridScale` that places the grid in km and on the globe;
+    ``km_per_col``, ``km_per_row``, ``lat_top`` and ``lon_left`` read through to it.
     """
 
     #: Names of the per-tile arrays, in a fixed order. Used by :meth:`fingerprint` so the golden test
@@ -59,12 +64,14 @@ class World:
         "poi_index",
     )
 
-    def __init__(self, width: int, height: int, seed: int) -> None:
+    def __init__(self, width: int, height: int, seed: int, scale: Optional[GridScale] = None) -> None:
         if width <= 0 or height <= 0:
             raise ValueError(f"world dimensions must be positive, got {width}x{height}")
         self.width = int(width)
         self.height = int(height)
         self.seed = int(seed)
+        # Without an explicit scale a bare World has 1 km square cells centred on 0N 0E.
+        self.scale: GridScale = scale or grid_scale(self.width, self.height, (self.width, self.height), 0.0, 0.0)
         self.master_seed: int = int(seed)  # original (pre-regen) master seed, for echoing / naming continuity
         shape = (self.height, self.width)
 
@@ -93,6 +100,27 @@ class World:
 
         # Names (filled by the naming stage).
         self.island_name: str = ""
+
+    # ------------------------------------------------------------------ scale metadata
+    @property
+    def km_per_col(self) -> float:
+        """Width of one cell in km."""
+        return self.scale.km_per_col
+
+    @property
+    def km_per_row(self) -> float:
+        """Height of one cell in km."""
+        return self.scale.km_per_row
+
+    @property
+    def lat_top(self) -> float:
+        """Latitude of the map's top edge in degrees."""
+        return self.scale.lat_top
+
+    @property
+    def lon_left(self) -> float:
+        """Longitude of the map's left edge in degrees."""
+        return self.scale.lon_left
 
     # ------------------------------------------------------------------ access helpers
     def in_bounds(self, x: int, y: int) -> bool:

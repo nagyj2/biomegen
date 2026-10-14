@@ -173,6 +173,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 def _print_stats(stats: dict[str, Any]) -> None:
     """Pretty-print the headless generation statistics."""
     print(f"world: {stats['size'][0]}x{stats['size'][1]}  land={stats['land_fraction']:.0%}")
+    print(f"cell: {stats['cell_km'][0]} x {stats['cell_km'][1]} km  top-left: {stats['lat_top']}, {stats['lon_left']}")
     print(f"elevation: {stats['elevation']}")
     print(
         f"regions={stats['regions']}  rivers={stats['rivers']} ({stats['river_tiles']} tiles)  "

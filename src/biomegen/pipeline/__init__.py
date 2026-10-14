@@ -24,6 +24,7 @@ import numpy as np
 
 from ..config.model import Config
 from ..util import rng
+from ..util.units import grid_scale
 from ..world.tile import BIOME_NAME, Biome, WaterType
 from ..world.world import World
 from . import (
@@ -50,12 +51,20 @@ def generate(config: Config, seed: int) -> World:
     height = int(config.get("world.height"))
     attempts = int(config.get("world.regen_attempts"))
     min_land = float(config.get("world.min_land_fraction"))
+    size_km = config.get("world.size_km")
+    scale = grid_scale(
+        width,
+        height,
+        (float(size_km[0]), float(size_km[1])),
+        float(config.get("world.center_lat")),
+        float(config.get("world.center_lon")),
+    )
 
     world: World | None = None
     for attempt in range(max(1, attempts)):
         # Attempt 0 uses the master seed directly; later attempts perturb it deterministically.
         gen_seed = seed if attempt == 0 else rng.derive_int(seed, "regen", attempt)
-        world = World(width, height, gen_seed)
+        world = World(width, height, gen_seed, scale)
         world.master_seed = seed  # original seed (for echoing / naming continuity)
 
         # The two leading stages form the gate: cheap, and they decide how much land exists.
@@ -87,6 +96,9 @@ def stats(world: World) -> Dict[str, object]:
     land = world.water_type == int(WaterType.NONE)
     return {
         "size": (world.width, world.height),
+        "cell_km": (round(world.km_per_col, 2), round(world.km_per_row, 2)),
+        "lat_top": round(world.lat_top, 2),
+        "lon_left": round(world.lon_left, 2),
         "seed": world.seed,
         "land_fraction": round(float(land.mean()), 4),
         "biomes": dict(sorted(biome_counts.items())),
