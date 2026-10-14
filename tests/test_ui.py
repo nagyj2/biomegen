@@ -11,6 +11,7 @@ from __future__ import annotations
 import curses
 
 import pytest
+
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.render import app
@@ -116,6 +117,7 @@ def test_initial_cursor_is_on_land(world):
 def test_interesting_cursor_picks_top_land_feature(world):
     """The new-world cursor lands on a top-priority land feature (never on open water)."""
     import numpy as np
+
     from biomegen.render import map_view
     from biomegen.world.tile import WaterType
 

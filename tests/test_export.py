@@ -6,6 +6,7 @@ import xml.etree.ElementTree as ET
 
 import numpy as np
 import pytest
+
 from biomegen import export, pipeline
 from biomegen.config import load_config
 from biomegen.export import png, svg

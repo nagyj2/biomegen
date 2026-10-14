@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+
 from biomegen.world.overlay import Overlay
 from biomegen.world.tile import Biome, Cell, WaterType
 from biomegen.world.world import World

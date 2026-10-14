@@ -14,6 +14,7 @@ import sys
 
 import numpy as np
 import pytest
+
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
@@ -104,8 +105,9 @@ def test_stats_reports_expected_keys(cfg: Config) -> None:
 
 
 def _count_islands(world: World) -> int:
-    from biomegen.world.tile import WaterType
     from scipy import ndimage
+
+    from biomegen.world.tile import WaterType
 
     land = world.water_type == int(WaterType.NONE)
     labels, _ = ndimage.label(land, structure=np.ones((3, 3)))  # type: ignore[misc]

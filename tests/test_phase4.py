@@ -6,6 +6,7 @@ import random
 
 import numpy as np
 import pytest
+
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.pipeline import naming

@@ -76,6 +76,7 @@ def test_build_zoom_frame_magnifies_and_marks_cursor(small_world, cfg):
 def test_blend_lookup_is_world_position_function(small_world):
     """The biome blend is a deterministic function of world position (so zoom & local agree)."""
     import numpy as np
+
     from biomegen.config import load_config
     from biomegen.render.zoom_view import _blended_lookup
 
@@ -99,6 +100,7 @@ def test_blend_lookup_is_world_position_function(small_world):
 def test_water_blend_bridges_diagonal_tiles():
     """Two diagonally-adjacent water tiles connect through the shared corner (no checkerboard)."""
     import numpy as np
+
     from biomegen.render.zoom_view import _water_blend
     from biomegen.world.tile import Biome
     from biomegen.world.world import World

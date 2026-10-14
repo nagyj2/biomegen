@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+
 from biomegen.config import load_config
 from biomegen.config.defaults import get_defaults
 from biomegen.config.loader import _deep_merge
