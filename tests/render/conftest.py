@@ -21,3 +21,12 @@ def make_world(width: int = 6, height: int = 3, biome: Biome = Biome.GRASS, elev
     world.biome[:] = int(biome)
     world.elevation_m[:] = elevation_m
     return world
+
+
+def add_feature(world: World, kind: str, name: str, anchor: tuple[int, int], cells=None, **fields):
+    """Append a named GeoFeature to ``world`` and return it."""
+    from biomegen.world.entities import GeoFeature
+
+    feature = GeoFeature(id=len(world.features), kind=kind, anchor=anchor, name=name, cells=cells or [], **fields)
+    world.features.append(feature)
+    return feature

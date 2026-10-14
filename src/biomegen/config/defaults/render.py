@@ -103,12 +103,15 @@ VALUES: Dict[str, Any] = {
     },
     # Data-view colour ramps, named by the ``tint`` of a view. ``field`` is the World array coloured;
     # ``stops`` are ``[value, [r, g, b]]`` in ascending value order, blended linearly. elevation is in
-    # metres, temperature in degrees C, rainfall in mm per year. Optional keys: ``shade`` (hillshade the
+    # metres, temperature in degrees C, rainfall in mm per year; ``label`` and ``unit`` (``unit_ascii`` for
+    # ascii output) title the legend bar. Optional keys: ``shade`` (hillshade the
     # land), ``keep_relief`` (keep relief glyphs; otherwise glyphs are blanked), ``water_scale`` (dim
     # water cells by this factor) and ``water_color`` (paint water cells this colour).
     "ramps": {
         "elevation": {
             "field": "elevation_m",
+            "label": "Elevation",
+            "unit": "m",
             "shade": True,
             "keep_relief": True,
             "stops": [
@@ -128,6 +131,9 @@ VALUES: Dict[str, Any] = {
         },
         "temperature": {
             "field": "temperature_c",
+            "label": "Temperature, mean annual",
+            "unit": "°C",
+            "unit_ascii": "degC",
             "water_scale": 0.6,
             "stops": [
                 [-25, [120, 60, 170]],
@@ -141,6 +147,8 @@ VALUES: Dict[str, Any] = {
         },
         "rainfall": {
             "field": "rain_mm",
+            "label": "Rainfall, mean annual",
+            "unit": "mm/yr",
             "water_color": [16, 30, 60],
             "stops": [
                 [0, [200, 160, 100]],
@@ -197,6 +205,34 @@ VALUES: Dict[str, Any] = {
     },
     # Markers layer: points of interest draw their ``markers`` glyph (below) in bold with this colour pair.
     "marker_style": {"fg": [255, 130, 255], "bg": [70, 20, 70]},
+    # Geography labels. ``mode`` of a draw is set by the caller ("all" or "none"). Landmass names are drawn
+    # in capitals, letter-spaced unless that would exceed a third of the map width. ``candidates`` is how many
+    # positions near a feature's centre (or deepest inland cells) are tried before the label is dropped.
+    "labels": {
+        "landmass_fg": [255, 236, 180],
+        "range_fg": [235, 222, 205],
+        "sea_fg": [170, 210, 255],
+        "lake_fg": [190, 225, 255],
+        "max_landmasses": 6,
+        "max_ranges": 6,
+        "max_lakes": 3,
+        "landmass_candidates": 80,
+        "range_candidates": 40,
+        "lake_candidates": 10,
+        "fill_scale": 0.5,  # label cells use the terrain fill darkened by this factor
+    },
+    # Legend and gazetteer text for a static map: colours, the swatch column width, and how many features
+    # of each kind are listed. ``continent_km2`` is the area above which a landmass is called a continent.
+    "legend": {
+        "header_fg": [255, 225, 150],
+        "text_fg": [220, 215, 200],
+        "dim_fg": [160, 155, 145],
+        "column_width": 24,
+        "max_landmasses": 6,
+        "max_ranges": 5,
+        "max_lakes": 3,
+        "continent_km2": 1500000.0,
+    },
     # Frame furniture around a static map. ``margin`` is the width of the latitude gutter. Graticule ticks
     # use the first step in ``lat_steps`` / ``lon_steps`` (degrees) that leaves at least ``lat_tick_rows``
     # rows / ``lon_tick_cols`` columns between ticks. The scale bar picks the ``scale_km`` length nearest

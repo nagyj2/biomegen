@@ -22,6 +22,7 @@ class Sampler:
     """
 
     def __init__(self, world: World, fx: np.ndarray, fy: np.ndarray) -> None:
+        self._origin: tuple[float, float, float, float] | None = None  # (x0, y0, step_x, step_y) of a viewport
         self.world = world
         self.fx = fx
         self.fy = fy
@@ -51,7 +52,21 @@ class Sampler:
         fx = x0 + np.arange(cols, dtype=np.float64) * step_x
         fy = y0 + np.arange(rows, dtype=np.float64) * step_y
         grid_x, grid_y = np.meshgrid(fx, fy)
-        return cls(world, grid_x, grid_y)
+        sampler = cls(world, grid_x, grid_y)
+        sampler._origin = (x0, y0, step_x, step_y)
+        return sampler
+
+    def cell_of(self, x: float, y: float) -> tuple[int, int] | None:
+        """Return the ``(col, row)`` of the grid cell that shows tile ``(x, y)``, or ``None`` if it is off the grid.
+
+        Only viewport samplers can invert their mapping; the warped detail samplers return ``None``.
+        """
+        if self._origin is None:
+            return None
+        x0, y0, step_x, step_y = self._origin
+        col = round((x - x0) / step_x)
+        row = round((y - y0) / step_y)
+        return (col, row) if 0 <= col < self.cols and 0 <= row < self.rows else None
 
     def nearest(self, field: np.ndarray) -> np.ndarray:
         """Return ``field`` read at the nearest tile under each cell."""

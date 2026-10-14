@@ -37,6 +37,7 @@ class LayerContext:
         sampler: Maps grid cells to world positions.
         overlay: Runtime edits composited over the world, or ``None``.
         ascii_only: Use the ``ascii`` glyph columns of the tables.
+        labels: ``"all"`` draws feature names, ``"none"`` leaves them off.
         color: Whether the output is coloured. Without colour the glyphs must carry the information, so
             sparse biomes show their glyph on every cell and the sea sparkle is off.
     """
@@ -48,6 +49,7 @@ class LayerContext:
     overlay: Optional[Overlay] = None
     ascii_only: bool = False
     color: bool = True
+    labels: str = "all"
 
     @cached_property
     def biome_style(self) -> BiomeStyle:
@@ -108,14 +110,15 @@ def build_grid(
     overlay: Optional[Overlay] = None,
     ascii_only: bool = False,
     color: bool = True,
+    labels: str = "all",
 ) -> CellGrid:
     """Draw ``view`` of ``world`` through ``sampler`` and return the finished grid."""
     layers = [LAYERS.get(name) for name in view.layers]  # resolve first so a typo fails before any work
-    context = LayerContext(world, config, view, sampler, overlay, ascii_only, color)
+    context = LayerContext(world, config, view, sampler, overlay, ascii_only, color, labels)
     grid = CellGrid(sampler.rows, sampler.cols)
     for layer in layers:
         layer(context, grid)
     return grid
 
 
-from . import compass, markers, relief, roads, terrain, tint, water  # noqa: E402,F401  (registers the built-in layers)
+from . import compass, markers, names, relief, roads, terrain, tint, water  # noqa: E402,F401  (registers the built-in layers)
