@@ -254,3 +254,32 @@ def test_explorer_runs_in_a_pseudo_terminal(tmp_path):
             process.kill()
         os.close(master)
     assert (code, sent_quit, b"\x1b[?1049l" in seen) == (0, True, True)
+
+
+def test_site_scale_needs_a_tile(capsys):
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--seed", "3", "--width", "64", "--height", "32", "--scale", "site"])
+    assert "--scale site needs --at" in capsys.readouterr().err
+
+
+def test_site_scale_on_a_tile_without_a_poi_is_an_error(capsys):
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--seed", "3", "--width", "64", "--height", "32", "--scale", "site", "--at", "0,0"])
+    assert "no site at tile 0,0" in capsys.readouterr().err
+
+
+def test_site_scale_draws_a_poi(capsys):
+    from biomegen import cli
+
+    config = load_config(None)
+    config.data["world"]["width"], config.data["world"]["height"] = 64, 32
+    world = pipeline.generate(config, 3)
+    poi = next(p for p in world.pois if p.kind in ("village", "town", "city", "capital"))
+    assert (
+        cli.main(["--seed", "3", "--width", "64", "--height", "32", "--scale", "site", "--at", f"{poi.x},{poi.y}"]) == 0
+    )
+    assert "#" in capsys.readouterr().out

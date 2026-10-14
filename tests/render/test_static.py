@@ -95,3 +95,22 @@ def test_data_view_works_at_detail_scale(config) -> None:
     # The elevation ramp tints a zoomed view of a coast; land and sea get different fills.
     grid = render_detail(_world(), config, "zoom", "elevation", at=(20, 12), area=(60, 20)).grid
     assert len({tuple(rgb) for rgb in grid.bg.reshape(-1, 3).tolist()}) > 3
+
+
+def test_site_render_draws_the_whole_window_of_a_poi(config) -> None:
+    from biomegen.sites import site_geometry
+    from biomegen.world.entities import POI
+
+    world = make_world(12, 8)
+    poi = POI(kind="village", x=6, y=4, interior_seed=3, pop=500)
+    world.pois.append(poi)
+    static = render_detail(world, config, "site", at=(6, 4), color=False)
+    geometry = site_geometry(poi, config)
+    assert geometry is not None and static.grid.glyph.shape == (geometry.rows, geometry.cols)
+
+
+def test_site_render_without_a_poi_is_an_error(config) -> None:
+    import pytest
+
+    with pytest.raises(ValueError):
+        render_detail(make_world(12, 8), config, "site", at=(6, 4))

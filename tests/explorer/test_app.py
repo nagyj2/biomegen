@@ -12,8 +12,9 @@ import numpy as np
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.explorer.app import compose_frame, run
-from biomegen.explorer.state import ViewState
-from biomegen.sampling.detail import SCALE_ZOOM
+from biomegen.explorer.state import ViewState, move_cursor, step_in
+from biomegen.sampling.detail import SCALE_LOCAL, SCALE_SITE, SCALE_ZOOM
+from biomegen.sites import site_geometry
 from biomegen.world.entities import POI
 from biomegen.world.overlay import Overlay
 from biomegen.world.tile import Biome
@@ -48,6 +49,21 @@ def _world(tower: bool = False):
         world.pois.append(POI(kind="tower", x=20, y=10, interior_seed=3, floor_count=2))
         world.poi_index[10, 20] = 0
     return world
+
+
+def _village_world():
+    """A 40 x 20 world with one village (pop 800) at (20, 10), where the explorer's cursor starts."""
+    world = make_world(40, 20, Biome.GRASS)
+    world.island_name = "Testland"
+    world.pois.append(POI(kind="village", x=20, y=10, interior_seed=3, pop=800, name="Dunmere", tags=("river",)))
+    world.poi_index[10, 20] = 0
+    return world
+
+
+def _site_state(world, config: Config) -> ViewState:
+    state = ViewState(scale=SCALE_ZOOM, cx=20, cy=10, recenter=True)
+    step_in(world, config, state)
+    return state
 
 
 def _run(world, config: Config, *tokens: str, color: str = "none", get_size=None) -> RecordingOut:
@@ -223,3 +239,75 @@ def test_default_config_is_untouched_by_the_loop() -> None:
     before = repr(config.data)
     _run(_world(), config, " ", "v", "f")
     assert repr(config.data) == before
+
+
+def test_zooming_in_twice_on_a_poi_opens_its_site(config: Config) -> None:
+    assert "view SITE" in _screen(_run(_village_world(), config, "z", "z"))
+
+
+def test_the_panel_describes_the_poi_in_a_site(config: Config) -> None:
+    assert "Dunmere (village, pop 800, river)" in _screen(_run(_village_world(), config, "z", "z"))
+
+
+def test_the_site_cursor_is_one_cell(config: Config) -> None:
+    world = _village_world()
+    frame = _frame(world, config, _site_state(world, config))
+    rows, cols = frame.map_grid.rows, frame.map_grid.cols
+    differs = (frame.screen.bg[:rows, :cols] != frame.map_grid.bg).any(axis=-1)
+    assert int(differs.sum()) == 1
+
+
+def test_the_site_cursor_moves_one_cell(config: Config) -> None:
+    world = _village_world()
+    state = _site_state(world, config)
+    before = _frame(world, config, state).screen
+    move_cursor(world, config, state, 1, 0)
+    after = _frame(world, config, state).screen
+    assert not np.array_equal(before.bg, after.bg)
+
+
+def test_the_site_camera_follows_the_cursor(config: Config) -> None:
+    # Walking far enough east scrolls the camera instead of running the cursor off screen.
+    world = _village_world()
+    state = _site_state(world, config)
+    geometry = site_geometry(world.pois[0], config)
+    assert geometry is not None
+    start = state.site_cam_x
+    for _ in range(60):
+        move_cursor(world, config, state, 1, 0)
+        _frame(world, config, state)
+        if state.scale != SCALE_SITE:
+            break
+    assert state.site_cam_x > start or state.scale == SCALE_LOCAL
+
+
+def test_the_zoom_key_leaves_a_site(config: Config) -> None:
+    assert "view ZOOM" in _screen(_run(_village_world(), config, "z", "z", " "))
+
+
+def test_walking_off_the_site_leaves_for_local(config: Config) -> None:
+    world = _village_world()
+    state = _site_state(world, config)
+    geometry = site_geometry(world.pois[0], config)
+    assert geometry is not None
+    state.px = geometry.cols - 1
+    move_cursor(world, config, state, 1, 0)
+    screen = "".join("".join(row) for row in _frame(world, config, state).screen.glyph)
+    assert state.scale == SCALE_LOCAL and "view LOCAL" in screen
+
+
+def test_a_site_smaller_than_the_screen_is_centred_with_blank_margins(config: Config) -> None:
+    world = _village_world()
+    state = _site_state(world, config)
+    geometry = site_geometry(world.pois[0], config)
+    assert geometry is not None
+    frame = _frame(world, config, state, size=(geometry.cols + 60, 40))
+    assert state.site_cam_x < 0 and frame.map_grid.glyph[0, 0] == " "
+
+
+def test_the_site_frame_is_repeatable(config: Config) -> None:
+    world = _village_world()
+    state = _site_state(world, config)
+    first = _frame(world, config, state).screen
+    second = _frame(world, config, state).screen
+    assert np.array_equal(first.glyph, second.glyph) and np.array_equal(first.bg, second.bg)

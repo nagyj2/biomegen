@@ -128,23 +128,12 @@ def _site_view(
     color: bool,
     ascii_only: bool,
 ) -> tuple[CellGrid, CellGrid]:
-    """Draw the open site's window and crop it to ``area`` around the cursor; return ``(map grid, shown grid)``.
+    """Draw the part of the open site's window that fits ``area``; return ``(map grid, shown grid)``.
 
-    The window is drawn once per frame (a few thousand cells) and the camera, in cells, scrolls over it as the cursor
-    nears an edge. A window smaller than the area is centred, the outside left blank. The cursor is one cell.
+    The camera, in cells, scrolls over the window as the cursor nears an edge; only the visible cells are drawn. A
+    window smaller than the area is centred, the outside left blank. The cursor is one cell.
     """
     cols, rows = area
-    window = build_grid(
-        world,
-        config,
-        resolve_view(config, view_name),
-        window_sampler(world, config, geometry),
-        overlay,
-        ascii_only,
-        color,
-        floor=state.floor,
-        seen=seen,
-    )
     margin = int(config.get("controls.site_margin"))
     if state.recenter:
         state.site_cam_x = centre_camera(state.px, cols, geometry.cols)
@@ -158,8 +147,28 @@ def _site_view(
     src_cols = slice(max(0, state.site_cam_x), min(geometry.cols, state.site_cam_x + cols))
     dst_rows = slice(src_rows.start - state.site_cam_y, src_rows.stop - state.site_cam_y)
     dst_cols = slice(src_cols.start - state.site_cam_x, src_cols.stop - state.site_cam_x)
-    for name in ("glyph", "fg", "bg", "bold"):
-        getattr(view, name)[dst_rows, dst_cols] = getattr(window, name)[src_rows, src_cols]
+    if src_rows.stop > src_rows.start and src_cols.stop > src_cols.start:
+        # Only the cells on screen are drawn; they match the whole window's cells exactly.
+        sampler = window_sampler(
+            world,
+            config,
+            geometry,
+            (src_cols.start, src_rows.start),
+            (src_rows.stop - src_rows.start, src_cols.stop - src_cols.start),
+        )
+        part = build_grid(
+            world,
+            config,
+            resolve_view(config, view_name),
+            sampler,
+            overlay,
+            ascii_only,
+            color,
+            floor=state.floor,
+            seen=seen,
+        )
+        for name in ("glyph", "fg", "bg", "bold"):
+            getattr(view, name)[dst_rows, dst_cols] = getattr(part, name)
     shown = CellGrid(rows, cols)
     for name in ("glyph", "fg", "bg", "bold"):
         getattr(shown, name)[...] = getattr(view, name)

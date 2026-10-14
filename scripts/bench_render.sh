@@ -82,4 +82,39 @@ for scale, mode in (("map", "fit"), ("map", "onetoone"), ("zoom", "fit"), ("loca
     step = best_ms(step_write) - full
     label = scale if scale != "map" else f"map-{mode}"
     print(f"{label:>6} {compose:9.1f} {full:11.1f} {step:11.1f} {compose + step:7.1f}")
+
+# The site view of the largest settlement (the biggest window the explorer draws).
+from biomegen.explorer.state import step_in
+from biomegen.sites import site_geometry
+
+settlements = [poi for poi in world.pois if poi.kind in ("capital", "city")]
+biggest = max(settlements, key=lambda poi: site_geometry(poi, config).box_cols * site_geometry(poi, config).box_rows)
+state = ExplorerState(scale="zoom", cx=biggest.x, cy=biggest.y, recenter=True)
+step_in(world, config, state)
+size = (area_w, area_h + 12)
+overlay = Overlay()
+compose = best_ms(lambda: compose_frame(world, config, state, overlay, size))
+frame = compose_frame(world, config, state, overlay, size)
+sink = io.StringIO()
+writer = DiffWriter(sink, "truecolor")
+
+
+def site_full_write():
+    writer.invalidate()
+    writer.draw(frame.screen)
+
+
+full = best_ms(site_full_write)
+state.px += 1
+moved = compose_frame(world, config, state, overlay, size)
+
+
+def site_step_write():
+    writer.invalidate()
+    writer.draw(frame.screen)
+    writer.draw(moved.screen)
+
+
+step = best_ms(site_step_write) - full
+print(f"{'site':>6} {compose:9.1f} {full:11.1f} {step:11.1f} {compose + step:7.1f}   ({biggest.kind} at {biggest.x},{biggest.y})")
 PY

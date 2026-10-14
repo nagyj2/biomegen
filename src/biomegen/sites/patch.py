@@ -67,8 +67,17 @@ class SitePatch:
         return int(self.dry.shape[1])
 
 
-def window_sampler(world: World, config: Config, geometry: SiteGeometry) -> DetailSampler:
-    """Return the detail sampler over ``geometry``'s whole window (one sampler cell per plan cell)."""
+def window_sampler(
+    world: World,
+    config: Config,
+    geometry: SiteGeometry,
+    origin: tuple[int, int] = (0, 0),
+    shape: tuple[int, int] | None = None,
+) -> DetailSampler:
+    """Return the detail sampler over ``geometry``'s window (one sampler cell per plan cell).
+
+    ``origin`` and ``shape`` (``(col, row)`` and ``(rows, cols)``) restrict it to a rectangle of the window's cells.
+    """
     return DetailSampler(
         world,
         config,
@@ -79,6 +88,8 @@ def window_sampler(world: World, config: Config, geometry: SiteGeometry) -> Deta
         geometry.tiles_w,
         geometry.tiles_h,
         SCALE_SITE,
+        origin,
+        shape,
     )
 
 

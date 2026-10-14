@@ -79,6 +79,12 @@ class DetailSampler(Sampler):
         cam_y: Tile row at the top edge of the grid.
         tiles_w: Whole tiles across the grid.
         tiles_h: Whole tiles down the grid.
+        col0: Column of the grid's first cell within the whole tile-aligned window (0 unless a region is drawn).
+        row0: Row of the grid's first cell within the window.
+
+    A sampler normally covers the whole ``tiles_w x tiles_h`` window. Give ``origin`` and ``shape`` to cover only a
+    rectangle of its cells (a screenful of a larger window); positions, and so every drawn cell, are identical to the
+    whole-window sampler's.
     """
 
     detailed = True
@@ -94,6 +100,8 @@ class DetailSampler(Sampler):
         tiles_w: int,
         tiles_h: int,
         scale: str = SCALE_ZOOM,
+        origin: tuple[int, int] = (0, 0),
+        shape: tuple[int, int] | None = None,
     ) -> None:
         self.scale = scale
         self.cell_w = cell_w
@@ -103,10 +111,10 @@ class DetailSampler(Sampler):
         self.tiles_w = tiles_w
         self.tiles_h = tiles_h
         self.config = config
-        cols = tiles_w * cell_w
-        rows = tiles_h * cell_h
-        col_index = np.arange(cols)
-        row_index = np.arange(rows)
+        self.col0, self.row0 = origin
+        rows, cols = shape if shape is not None else (tiles_h * cell_h, tiles_w * cell_w)
+        col_index = np.arange(cols) + self.col0
+        row_index = np.arange(rows) + self.row0
         fx = cam_x + (col_index + 0.5) / cell_w - 0.5
         fy = cam_y + (row_index + 0.5) / cell_h - 0.5
         grid_x, grid_y = np.meshgrid(fx, fy)
@@ -180,18 +188,18 @@ class DetailSampler(Sampler):
 
         The box is in tile coordinates; ``None`` means it misses the grid entirely.
         """
-        col_lo = max(0, int(np.floor((x_min - self.cam_x + 0.5) * self.cell_w - 0.5)))
-        col_hi = min(self.cols - 1, int(np.ceil((x_max - self.cam_x + 0.5) * self.cell_w - 0.5)))
-        row_lo = max(0, int(np.floor((y_min - self.cam_y + 0.5) * self.cell_h - 0.5)))
-        row_hi = min(self.rows - 1, int(np.ceil((y_max - self.cam_y + 0.5) * self.cell_h - 0.5)))
+        col_lo = max(0, int(np.floor((x_min - self.cam_x + 0.5) * self.cell_w - 0.5)) - self.col0)
+        col_hi = min(self.cols - 1, int(np.ceil((x_max - self.cam_x + 0.5) * self.cell_w - 0.5)) - self.col0)
+        row_lo = max(0, int(np.floor((y_min - self.cam_y + 0.5) * self.cell_h - 0.5)) - self.row0)
+        row_hi = min(self.rows - 1, int(np.ceil((y_max - self.cam_y + 0.5) * self.cell_h - 0.5)) - self.row0)
         if col_hi < col_lo or row_hi < row_lo:
             return None
         return slice(row_lo, row_hi + 1), slice(col_lo, col_hi + 1)
 
     def cell_coords(self, x: float, y: float) -> tuple[int, int] | None:
         """Return the ``(col, row)`` of the centre cell of tile ``(x, y)``'s block (off the grid is allowed)."""
-        col = (round(x) - self.cam_x) * self.cell_w + self.cell_w // 2
-        row = (round(y) - self.cam_y) * self.cell_h + self.cell_h // 2
+        col = (round(x) - self.cam_x) * self.cell_w + self.cell_w // 2 - self.col0
+        row = (round(y) - self.cam_y) * self.cell_h + self.cell_h // 2 - self.row0
         return col, row
 
 

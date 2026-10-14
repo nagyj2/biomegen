@@ -66,14 +66,15 @@ def clear_cache() -> None:
 
 def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[SitePlan]:
     """Return the plan of ``poi``'s ``floor`` (clamped to its floors), or None if its kind has no site or no room."""
-    geometry = site_geometry(poi, config)
-    if geometry is None:
-        return None
     floor = max(poi.lowest_floor, min(int(floor), poi.lowest_floor + poi.floor_count - 1))
     cache = _cache(world, config)
     key = (poi.kind, poi.x, poi.y, poi.interior_seed, poi.pop, poi.floor_count, poi.lowest_floor, floor)
     if key in cache:
         return cache[key]
+    geometry = site_geometry(poi, config)
+    if geometry is None:
+        cache[key] = None
+        return None
     row = config.get(f"tables.sites.{poi.kind}")
     context = SiteContext(
         kind=poi.kind,

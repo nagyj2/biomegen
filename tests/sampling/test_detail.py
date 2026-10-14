@@ -131,3 +131,43 @@ def test_biome_is_deterministic(config: Config, scale: str) -> None:
 def test_camera_centres_the_tile_and_stays_in_the_world(tile: int, tiles: int, world_size: int, first: int) -> None:
     # Centred in the middle, clamped at either edge, and a small world is centred in the window.
     assert centre_camera(tile, tiles, world_size) == first
+
+
+def test_a_region_sampler_reads_the_same_positions_as_the_whole_window(config: Config) -> None:
+    world = _patchwork_world(8, 6)
+    whole = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM)
+    region = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM, (7, 4), (6, 15))
+    assert np.array_equal(region.fx, whole.fx[4:10, 7:22]) and np.array_equal(region.fy, whole.fy[4:10, 7:22])
+
+
+def test_a_region_sampler_draws_the_same_biomes(config: Config) -> None:
+    world = _patchwork_world(8, 6)
+    whole = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM)
+    region = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM, (7, 4), (6, 15))
+    assert np.array_equal(region.biome(), whole.biome()[4:10, 7:22])
+
+
+def test_a_region_sampler_keeps_the_cell_index_within_its_tile(config: Config) -> None:
+    # Decoration is keyed on the cell's place in its tile, so it must not shift when only part of the window is drawn.
+    world = _patchwork_world(8, 6)
+    whole = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM)
+    region = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM, (7, 4), (6, 15))
+    assert np.array_equal(region.sub_x, whole.sub_x[4:10, 7:22]) and np.array_equal(
+        region.sub_y, whole.sub_y[4:10, 7:22]
+    )
+
+
+def test_a_region_sampler_offsets_cell_coordinates(config: Config) -> None:
+    world = _patchwork_world(8, 6)
+    whole = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM)
+    region = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM, (7, 4), (6, 15))
+    assert region.cell_coords(3, 2) == (whole.cell_coords(3, 2)[0] - 7, whole.cell_coords(3, 2)[1] - 4)  # type: ignore[index]
+
+
+def test_a_region_sampler_offsets_cell_windows(config: Config) -> None:
+    world = _patchwork_world(8, 6)
+    whole = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM)
+    region = DetailSampler(world, config, 10, 5, 2, 1, 4, 3, SCALE_ZOOM, (7, 4), (6, 15))
+    full_rows, full_cols = whole.cell_window(3.0, 3.0, 2.0, 2.0)  # type: ignore[misc]
+    rows, cols = region.cell_window(3.0, 3.0, 2.0, 2.0)  # type: ignore[misc]
+    assert (rows.start, cols.start) == (max(0, full_rows.start - 4), max(0, full_cols.start - 7))

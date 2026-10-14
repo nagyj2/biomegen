@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 from ..config.model import Config
-from ..sampling.detail import centred_detail_sampler
+from ..sampling.detail import SCALE_SITE, centred_detail_sampler
 from ..sampling.sampler import Sampler
+from ..sites import site_at, site_geometry, window_sampler
 from ..world.overlay import Overlay
 from ..world.world import World
 from .furniture.frame import build_frame
@@ -82,12 +83,12 @@ def render_detail(
     floor: int = 0,
     overlay: Optional[Overlay] = None,
 ) -> StaticRender:
-    """Render a magnified part of the world: the zoom or local scale centred on one tile, with no furniture.
+    """Render a magnified part of the world: the zoom or local scale centred on one tile, or one POI's whole site.
 
     Args:
         world: The generated world.
         config: The merged configuration.
-        scale: ``"zoom"`` or ``"local"``.
+        scale: ``"zoom"``, ``"local"`` or ``"site"`` (the whole window of the site covering ``at``, ignoring ``area``).
         view_name: A key of ``render.views``; its ``detail_layers`` are drawn.
         at: The tile to centre on; the middle of the map when ``None``.
         area: Columns and rows available. The grid holds whole tiles only, so it may be a little smaller.
@@ -98,6 +99,14 @@ def render_detail(
     """
     view = resolve_view(config, view_name)
     centre = at if at is not None else (world.width // 2, world.height // 2)
-    sampler = centred_detail_sampler(world, config, scale, area[0], area[1], centre)
+    if scale == SCALE_SITE:
+        poi = site_at(world, config, centre[0], centre[1])
+        geometry = site_geometry(poi, config) if poi is not None else None
+        if geometry is None:
+            raise ValueError(f"no site at tile {centre[0]},{centre[1]}")
+        sampler = window_sampler(world, config, geometry)
+        floor = max(poi.lowest_floor, min(floor, poi.lowest_floor + poi.floor_count - 1)) if poi is not None else floor
+    else:
+        sampler = centred_detail_sampler(world, config, scale, area[0], area[1], centre)
     grid = build_grid(world, config, view, sampler, overlay, ascii_only, color, floor=floor)
     return StaticRender(grid, grid.to_document())

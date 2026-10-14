@@ -4,7 +4,8 @@ Run the CLI application with::
 
     uv run biomegen [--seed N] [--config path.toml] [--width W] [--height H]
                     [--noise-backend {perlin,value,opensimplex}]
-                    [--headless] [--view NAME] [--scale {map,zoom,local}] [--at X,Y] [--labels {all,cities,none}]
+                    [--headless] [--view NAME] [--scale {map,zoom,local,site}] [--at X,Y] [--floor N]
+                    [--labels {all,cities,none}]
                     [--color {auto,truecolor,256,none}] [--ascii] [--no-legend] [--save FILE] [--html FILE]
                     [--color-test]
 
@@ -81,16 +82,22 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--scale",
-        choices=("map", "zoom", "local"),
+        choices=("map", "zoom", "local", "site"),
         default=None,
-        help="Draw a magnified part of the world (zoom or local) instead of the whole map; implies --view terrain.",
+        help=(
+            "Draw a magnified part of the world (zoom or local), or with --at the whole site of a point of interest "
+            "(site), instead of the whole map; implies --view terrain."
+        ),
     )
     parser.add_argument(
         "--at",
         type=_parse_tile,
         default=None,
         metavar="X,Y",
-        help="World tile to centre a zoom or local view on (default: the middle of the map).",
+        help="World tile to centre a zoom or local view on, or that holds the site to draw (default: map middle).",
+    )
+    parser.add_argument(
+        "--floor", type=int, default=0, help="Floor of a multi-floor structure to draw (0 is the ground)."
     )
     parser.add_argument("--labels", choices=("all", "cities", "none"), default="all", help="Which names to draw.")
     parser.add_argument(
@@ -159,14 +166,14 @@ def _print_color_test(color: str) -> None:
 
 
 def _run_static(world: Any, config: Config, args: argparse.Namespace) -> None:
-    """Print (and optionally save) a static map of the whole world, or of a zoom or local part of it."""
+    """Print (and optionally save) a static map of the whole world, a zoom or local part of it, or one site."""
     from biomegen.render.backends.ansi import to_ansi
     from biomegen.render.backends.html import to_html
     from biomegen.render.backends.plain import to_plain
     from biomegen.render.static import render_detail, render_static
 
     mode = _detect_color() if args.color == "auto" else args.color
-    if args.scale in ("zoom", "local"):
+    if args.scale in ("zoom", "local", "site"):
         size = shutil.get_terminal_size(fallback=(120, 37))
         static = render_detail(
             world,
@@ -177,6 +184,7 @@ def _run_static(world: Any, config: Config, args: argparse.Namespace) -> None:
             area=(size.columns, max(1, size.lines - 1)),
             ascii_only=args.ascii,
             color=mode != "none",
+            floor=args.floor,
         )
     else:
         static = render_static(
@@ -247,7 +255,9 @@ def _apply_overrides(args: argparse.Namespace, config: Config, parser: argparse.
     if args.view is not None and args.view not in config.get("render.views"):
         parser.error(f"unknown view {args.view!r}; available: {', '.join(config.get('render.views'))}")
     if args.at is not None and args.scale in (None, "map"):
-        parser.error("--at needs --scale zoom or --scale local")
+        parser.error("--at needs --scale zoom, local or site")
+    if args.scale == "site" and args.at is None:
+        parser.error("--scale site needs --at X,Y on a point of interest")
     if args.size_km is not None:
         config.data["world"]["size_km"] = list(args.size_km)
     if args.lat is not None:
@@ -289,7 +299,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error(f"--at {args.at[0]},{args.at[1]} is outside the {world.width}x{world.height} world")
 
     if args.view or args.scale or args.save or args.html:
-        _run_static(world, config, args)
+        try:
+            _run_static(world, config, args)
+        except ValueError as error:  # e.g. --scale site on a tile with no point of interest
+            parser.error(str(error))
         return 0
 
     if not sys.stdout.isatty() or not sys.stdin.isatty():

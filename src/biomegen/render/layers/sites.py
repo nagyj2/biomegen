@@ -23,13 +23,24 @@ from . import LAYERS, LayerContext
 
 _VOID = int(Cell.VOID)
 _FLOOR = int(Cell.FLOOR)
-_SHELL = np.array(sorted(SHELL))
-_STRUCTURAL = np.array(sorted(STRUCTURAL))
+_CELLS = max(int(cell) for cell in Cell) + 1
+
+
+def _lookup(members: frozenset[int]) -> np.ndarray:
+    table = np.zeros(_CELLS, dtype=bool)
+    table[sorted(members)] = True
+    return table
+
+
+_SHELL = _lookup(SHELL)
+_STRUCTURAL = _lookup(STRUCTURAL)
 
 
 def _record(ctx: LayerContext, grid: CellGrid, rows: slice, cols: slice, cells: np.ndarray, draw: np.ndarray) -> None:
     """Note which plan cells were drawn: the set, and the cell under each grid cell."""
-    ctx.seen.cells.update(np.unique(cells[draw]).tolist())
+    if not draw.any():
+        return
+    ctx.seen.cells.update(np.flatnonzero(np.bincount(cells[draw], minlength=_CELLS)).tolist())
     if ctx.seen.cell_map is None:
         ctx.seen.cell_map = np.full(grid.glyph.shape, -1, dtype=np.int16)
     ctx.seen.cell_map[rows, cols][draw] = cells[draw]
@@ -76,7 +87,7 @@ def _map_outlines(ctx: LayerContext, grid: CellGrid) -> None:
         if sampled is None:
             continue
         rows, cols, values = sampled
-        draw = np.isin(values, _STRUCTURAL)
+        draw = _STRUCTURAL[values]
         marker = sampler.cell_coords(poi.x, poi.y)
         if marker is not None and rows.start <= marker[1] < rows.stop and cols.start <= marker[0] < cols.stop:
             draw[marker[1] - rows.start, marker[0] - cols.start] = False
@@ -90,7 +101,7 @@ def _extent_cells(sampler: DetailSampler, geometry: SiteGeometry) -> tuple[int, 
     col1 = round((right - (sampler.cam_x - 0.5)) * sampler.cell_w)
     row0 = round((top - (sampler.cam_y - 0.5)) * sampler.cell_h)
     row1 = round((bottom - (sampler.cam_y - 0.5)) * sampler.cell_h)
-    return row0, col0, row1 - row0, col1 - col0
+    return row0 - sampler.row0, col0 - sampler.col0, row1 - row0, col1 - col0
 
 
 @LAYERS.register("sites")
@@ -115,5 +126,5 @@ def sites_layer(ctx: LayerContext, grid: CellGrid) -> None:
         rows, cols, values = sampled
         draw = (values != _VOID) & sampler.inside[rows, cols]
         if shell_only:  # furniture stands on a floor: draw that floor, not the terrain under it
-            values = np.where(np.isin(values, _SHELL), values, _FLOOR)
+            values = np.where(_SHELL[values], values, _FLOOR)
         _stamp(ctx, grid, rows, cols, values, draw)
