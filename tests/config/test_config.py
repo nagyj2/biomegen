@@ -12,7 +12,7 @@ from biomegen.config.validate import ConfigError, validate
 
 def test_defaults_load_without_a_file() -> None:
     cfg = load_config(None)
-    assert cfg.get("world.width") == 192
+    assert cfg.get("world.width") == 240
     assert cfg.get("terrain.noise_backend") == "perlin"
 
 

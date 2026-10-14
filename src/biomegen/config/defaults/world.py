@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import Any, Dict
 
 VALUES: Dict[str, Any] = {
-    # Width fits a ~209-column terminal at 1:1. Height is taller than a 58-line terminal leaves
-    # room for (58 - status_height), so the "fit" view downsamples vertically.
-    "width": 192,
-    "height": 75,
+    # 240 x 60 over size_km 6000 x 3000 gives 25 x 50 km cells: 2:1 like a terminal cell, so the map is
+    # undistorted on screen (the reference generator's rule, height = width * km_h / km_w / 2). Chosen by
+    # scripts/bench.sh in phase 3 (about 0.5 s per world).
+    "width": 240,
+    "height": 60,
     # "fixed" keeps the dimensions above (reproducible across terminals). "auto" fits the world to
     # the current terminal at launch (nicer fit, but the same seed yields different worlds on
     # differently sized terminals - documented trade-off).

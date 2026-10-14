@@ -116,8 +116,8 @@ The authoritative defaults and inline documentation are in
 #### `[world]`
 | Key | Default | Description |
 |-----|---------|-------------|
-| `width` | `192` | Map width in tiles |
-| `height` | `75` | Map height in tiles |
+| `width` | `240` | Map width in tiles |
+| `height` | `60` | Map height in tiles (keep `width × size_km[1] / size_km[0] / 2` for 2:1 cells) |
 | `size_mode` | `"fixed"` | `"fixed"` (reproducible) or `"auto"` (fit to current terminal) |
 | `size_km` | `[6000.0, 3000.0]` | Physical map extent `[east-west, north-south]` in km |
 | `center_lat` | `"seed"` | Map-centre latitude in degrees (north positive), or `"seed"` to pick one per seed |
