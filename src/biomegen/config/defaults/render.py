@@ -54,8 +54,8 @@ VALUES: Dict[str, Any] = {
     "default_view": "fit",  # "fit" (whole map downsampled) or "onetoone" (1:1 panning)
     "status_height": 12,  # rows reserved below the map for the status/legend panel
     "show_legend": True,
-    "try_truecolor": True,  # attempt per-region RGB via init_color where the terminal allows
-    # Biome -> RGB base colour (0-255). The single source of truth for both curses and SVG/PNG.
+    # Biome -> RGB base colour (0-255), read by the region stage for each region's base colour (until realms
+    # replace regions in phase 6). The renderer's colours come from tables.biomes, not from here.
     "palette": {
         "deep": [28, 70, 140],
         "shallow": [52, 104, 172],
@@ -71,28 +71,6 @@ VALUES: Dict[str, Any] = {
         "tundra": [176, 184, 174],
         "swamp": [82, 110, 84],
         "snow": [244, 246, 250],
-        # Surface overlays drawn at the detail scales (see road/bridge keys below).
-        "road": [122, 102, 70],  # packed-earth road bed
-        "bridge": [150, 96, 50],  # bridge deck (brown walkway)
-        "bridge_wall": [104, 66, 34],  # bridge railing / wall (darker brown)
-    },
-    # Biome -> single display glyph. ASCII by default for maximum windows-curses compatibility;
-    # override with unicode in your own config if your terminal handles it.
-    "glyphs": {
-        "deep": "~",
-        "shallow": "~",
-        "seaice": "#",
-        "lake": "~",
-        "beach": ".",
-        "grass": ",",
-        "savanna": '"',
-        "forest": "f",
-        "jungle": "F",
-        "taiga": "t",
-        "desert": ":",
-        "tundra": "u",
-        "swamp": "w",
-        "snow": "*",
     },
     # Layered renderer (phase 4). A view is an ordered list of layer names (see render.layers) for the map
     # scale, an optional ``detail_layers`` list for the zoom and local scales (empty = the map list), and the
@@ -297,7 +275,6 @@ VALUES: Dict[str, Any] = {
     },
     # Overlay glyphs drawn on top of biome cells.
     "markers": {
-        "road": "+",
         "city": "C",
         "town": "T",
         "village": "v",
@@ -307,9 +284,8 @@ VALUES: Dict[str, Any] = {
         "camp": "a",
         "boat": "b",
         "bridge": "=",
-        "cursor": "X",
     },
-    # Glyphs for interior Cell values (used by the zoom view from Phase 5).
+    # Glyphs for interior Cell values (drawn by the interiors layer).
     "interior_glyphs": {
         "floor": ".",
         "wall": "#",

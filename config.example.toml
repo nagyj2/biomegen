@@ -103,11 +103,10 @@ blend_scale = 2.5               # feature size (tiles) of the boundary-blend war
 road_half_width = 0.30          # road-bed half-width in tiles (a thin meandering path, not a full tile)
 road_warp = 0.18                # organic wobble (tiles) of the road bed; 0 = dead-straight segments
 road_glyph = ":"                # glyph the road bed is drawn with
-# road/bridge colours and clutter (road_clutter, road_clutter_local, bridge_glyphs) are also tunable;
-# colours live in [render.palette] as road / bridge / bridge_wall. See src/biomegen/config/defaults/render.py.
+# road clutter (road_clutter, road_clutter_local), bridge_glyphs and the detail colours (detail_colors) are also
+# tunable. See src/biomegen/config/defaults/render.py.
 default_view = "fit"            # "fit" | "onetoone"
 status_height = 12
-try_truecolor = true
 
 [export]
 dir = "./images"
@@ -121,7 +120,9 @@ local = "z"               # step IN a zoom level (biome->zoom->local). Set to " 
 toggle_scale = "f"
 floor_up = "<"             # cycle up a floor when standing on a multi-floor structure (e.g. dungeon)
 floor_down = ">"           # cycle down a floor
-refresh = "r"              # regenerate the world with a fresh random seed
+refresh = "r"              # regenerate the world with a fresh random seed (unbound until phase 9)
+cycle_view = "v"          # next view: terrain, elevation, temperature, rainfall
+help = "?"                # show the key help
 export_view = "e"
 export_world = "E"
 quit = "q"

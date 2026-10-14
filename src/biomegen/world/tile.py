@@ -115,24 +115,6 @@ class Cell(IntEnum):
     BRIDGE_WALL = 26  # interior bridge railing / wall
 
 
-# Detail-view cells carry their colour as an integer "colour id". Biome floor colours use the biome
-# int directly (0.._MAX_BIOME); interior :class:`Cell` colours are encoded as ``INTERIOR_COLOR_BASE +
-# cell_int`` so a single id space can address both without a wider tuple. The palette decodes the id.
-INTERIOR_COLOR_BASE: int = 1000
-
-# Overlay colour ids for surface features drawn over terrain at the detail scales (the road bed and the
-# bridge deck/wall). They live above the interior range so the one id space stays unambiguous. RGB comes
-# from ``render.palette`` (road / bridge / bridge_wall); the palette decodes ids >= this base.
-OVERLAY_COLOR_BASE: int = 2000
-COLOR_ROAD: int = OVERLAY_COLOR_BASE + 0  # road bed
-COLOR_BRIDGE_DECK: int = OVERLAY_COLOR_BASE + 1  # bridge walkway (brown)
-COLOR_BRIDGE_WALL: int = OVERLAY_COLOR_BASE + 2  # bridge railing/wall
-OVERLAY_COLOR_NAMES: dict[int, str] = {
-    COLOR_ROAD: "road",
-    COLOR_BRIDGE_DECK: "bridge",
-    COLOR_BRIDGE_WALL: "bridge_wall",
-}
-
 # Convenient lookup tables for config parsing and HUD display. Names are lower-case so they read
 # naturally both in TOML (e.g. ``biomes = ["grass", "forest"]``) and in status text.
 BIOME_BY_NAME: dict[str, Biome] = {b.name.lower(): b for b in Biome}

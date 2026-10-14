@@ -5,7 +5,7 @@ build-backend = "uv_build"
 [project]
 name = "biomegen"
 version = "0.1.0"
-description = "A seed-reproducible procedural island generator and curses explorer (CLI application)."
+description = "A seed-reproducible procedural island generator and terminal explorer (CLI application)."
 requires-python = ">=3.14"
 
 # Runtime dependencies.
@@ -14,14 +14,12 @@ requires-python = ">=3.14"
 #   opensimplex - an optional, selectable noise backend (the default backend is our own numpy perlin).
 #   tcod    - optional accelerated A* / BSP backends (in-house versions remain the defaults).
 #   Pillow  - PNG export alongside SVG.
-#   windows-curses - provides the `curses` module on Windows (stdlib on Linux/macOS).
 dependencies = [
     "numpy>=2.4.6",
     "scipy>=1.17.1",
     "opensimplex>=0.4.5.1",
     "tcod>=21.2.1",
     "Pillow>=12.2.0",
-    "windows-curses>=2.4.2; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
