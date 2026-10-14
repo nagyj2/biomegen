@@ -119,6 +119,34 @@ def _validate_world(world: Dict[str, Any], errors: List[str]) -> None:
         errors.append(f"world.center_lat_range_deg must be [min, max] with 0 <= min <= max <= 89, got {lat_range!r}")
 
 
+def _validate_render_views(render: Dict[str, Any], errors: List[str]) -> None:
+    """Check ``render.ramps`` (ascending numeric stops, colours coerced) and ``render.views`` (tints name a ramp)."""
+    ramps = render.get("ramps", {}) or {}
+    for name, stops in ramps.items():
+        where = f"render.ramps.{name}"
+        if not isinstance(stops, list) or len(stops) < 2:
+            errors.append(f"{where} needs at least two [value, colour] stops")
+            continue
+        values: List[float] = []
+        for index, stop in enumerate(stops):
+            try:
+                value, colour = stop
+                values.append(float(value))
+                stops[index] = [value, list(_coerce_color(colour))]
+            except (TypeError, ValueError) as exc:
+                errors.append(f"{where}[{index}]: {exc}")
+        if values != sorted(values):
+            errors.append(f"{where} stops must be in ascending value order")
+    for name, view in (render.get("views", {}) or {}).items():
+        where = f"render.views.{name}"
+        layers = view.get("layers") if isinstance(view, dict) else None
+        if not isinstance(layers, list) or not all(isinstance(layer, str) for layer in layers):
+            errors.append(f"{where}.layers must be a list of layer names")
+        tint = view.get("tint", "") if isinstance(view, dict) else ""
+        if tint and tint not in ramps:
+            errors.append(f"{where}.tint {tint!r} is not a render.ramps entry")
+
+
 def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Validate and coerce ``cfg`` in place, returning it. Raise :class:`ConfigError` on any problem."""
     errors: List[str] = []
@@ -138,6 +166,8 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
             palette[name] = list(_coerce_color(value))
         except ValueError as exc:
             errors.append(f"render.palette.{name}: {exc}")
+
+    _validate_render_views(render, errors)
 
     # --- every biome name referenced anywhere in config must be a real Biome enum member ---
     _validate_biome_names(cfg, errors)
