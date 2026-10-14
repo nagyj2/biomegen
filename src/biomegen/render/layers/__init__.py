@@ -16,9 +16,10 @@ import numpy as np
 from ...config.model import Config
 from ...registry import Registry
 from ...sampling.sampler import Sampler
+from ...sampling.terrain import land_mask, river_mask
 from ...util import rng
 from ...world.overlay import Overlay
-from ...world.tile import Biome, WaterType
+from ...world.tile import Biome
 from ...world.world import World
 from ..colors import (
     BiomeStyle,
@@ -104,13 +105,12 @@ class LayerContext:
     @cached_property
     def land(self) -> np.ndarray:
         """Cells inside the world whose biome is not water."""
-        return self.sampler.inside & ~self.biome_style.water[self.biome]
+        return land_mask(self.sampler, self.biome, self.biome_style.water)
 
     @cached_property
     def river(self) -> np.ndarray:
         """Land cells covered by a river: fresh water over a land biome (smoothed at the detail scales)."""
-        tiles = (self.world.water_type == int(WaterType.FRESH)) & ~self.biome_style.water[self.world.biome]
-        return self.land & self.sampler.coverage_mask(tiles)
+        return river_mask(self.sampler, self.world, self.land, self.biome_style.water)
 
     @cached_property
     def relief(self) -> np.ndarray:

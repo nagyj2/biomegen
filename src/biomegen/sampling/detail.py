@@ -25,6 +25,7 @@ from .sampler import Sampler, bilinear_at
 SCALE_MAP = "map"
 SCALE_ZOOM = "zoom"
 SCALE_LOCAL = "local"
+SCALE_SITE = "site"  # the explorer's view into one POI: its own cell size, set by the site (see biomegen.sites)
 SCALES = (SCALE_MAP, SCALE_ZOOM, SCALE_LOCAL)
 
 _WATER = np.array(sorted(WATER_BIOMES), dtype=np.int64)
