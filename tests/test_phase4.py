@@ -77,7 +77,7 @@ def test_placement_deterministic(cfg):
 # --------------------------------------------------------------------------- roads + bridges
 def test_roads_never_cross_long_ocean_spans(cfg):
     # Short coastal hops (≤ _MAX_OCEAN_BRIDGE tiles) are allowed; longer open-ocean crossings are not.
-    from biomegen.pipeline.roads import _MAX_OCEAN_BRIDGE
+    from biomegen.pipeline.civilization.roads import _MAX_OCEAN_BRIDGE
 
     for s in (1, 9999, 2024, 55):
         w = pipeline.generate(cfg, s)
@@ -195,7 +195,7 @@ def test_bridges_have_span_geometry(world):
 def test_bridges_do_not_overlap():
     # Two roads fording the same water must not stack overlapping bridge decks: every bridge's spanned
     # water tiles (run + straight deck line) are disjoint from every other bridge's.
-    from biomegen.pipeline.roads import _bresenham
+    from biomegen.pipeline.civilization.roads import _bresenham
 
     cfg = load_config(None)
     w = pipeline.generate(cfg, 12636298121517995018)  # the seed that exhibited stacked bridges

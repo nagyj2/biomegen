@@ -8,7 +8,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.interiors import STRUCTURAL, ZOOM_VISIBLE, build_interior, footprint_cells, footprint_origin
-from biomegen.pipeline import poi_interiors
+from biomegen.pipeline.story import poi_interiors
 from biomegen.render.state import ViewState, edge_pan
 from biomegen.render.zoom_view import build_detail_frame, detail_cell_size
 from biomegen.world.overlay import Overlay
