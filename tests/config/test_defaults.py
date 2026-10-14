@@ -44,3 +44,31 @@ def test_example_config_sections_exist_in_defaults():
 def test_example_config_loads_and_validates():
     # The shipped example is a valid sparse overlay on the defaults.
     assert load_config(str(EXAMPLE_PATH)).get("world.width") is not None
+
+
+def _leaves(tree: dict, prefix: str = "") -> dict:
+    """Flatten a nested table into ``{"section.key": value}``; lists and scalars are leaves."""
+    flat = {}
+    for key, value in tree.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            flat.update(_leaves(value, path))
+        else:
+            flat[path] = value
+    return flat
+
+
+def test_example_config_keys_exist_in_defaults():
+    # Every key the example names is a real tunable (catches typos and removed keys).
+    example = _leaves(tomllib.loads(EXAMPLE_PATH.read_text(encoding="utf-8")))
+    assert set(example) - set(_leaves(DEFAULTS)) == set()
+
+
+def test_example_config_values_equal_defaults():
+    # The example documents the defaults: a value that differs is config drift.
+    example = _leaves(tomllib.loads(EXAMPLE_PATH.read_text(encoding="utf-8")))
+    defaults_flat = _leaves(DEFAULTS)
+    drift = {
+        path: (value, defaults_flat.get(path)) for path, value in example.items() if value != defaults_flat.get(path)
+    }
+    assert drift == {}
