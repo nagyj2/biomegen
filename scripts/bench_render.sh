@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Frame time (milliseconds) of the zoom and local detail frames, the old builder against the new layers,
-# best of N runs on a seed's world.
+# Frame time (milliseconds) of the zoom and local detail frames and of the whole explorer frame, best of N runs on a
+# seed's world.
 # Usage: scripts/bench_render.sh [runs] [seed] [COLSxROWS]   (default: 5 runs, fixture seed, 120x36)
 source "$(dirname "${BASH_SOURCE[0]}")/_fixtures.sh"
 
@@ -22,9 +22,7 @@ from biomegen.explorer.state import initial_cursor
 from biomegen.explorer.writer import DiffWriter
 from biomegen.render.detail import detail_sampler
 from biomegen.render.layers import build_grid
-from biomegen.render.state import ViewState
 from biomegen.render.views import resolve_view
-from biomegen.render.zoom_view import build_detail_frame, detail_cell_size
 
 seed, runs = int(sys.argv[1]), int(sys.argv[2])
 area_w, area_h = (int(v) for v in sys.argv[3].split("x"))
@@ -43,16 +41,14 @@ def best_ms(call) -> float:
 
 print(f"seed {seed}, world {world.width}x{world.height}, viewport {area_w}x{area_h} cells, best of {runs}")
 view = resolve_view(config, "terrain")
-print(f"{'scale':>6} {'cells':>7} {'old ms':>8} {'new ms':>8} {'new/old':>8}")
+print(f"{'scale':>6} {'cells':>7} {'layers ms':>10}")
 for scale in ("zoom", "local"):
-    cell_w, cell_h = detail_cell_size(scale, config, area_w, area_h)
-    tiles_w, tiles_h = max(1, area_w // cell_w), max(1, area_h // cell_h)
-    state = ViewState(scale=scale, cx=world.width // 2, cy=world.height // 2)
-    state.cam_x = max(0, state.cx - tiles_w // 2)
-    state.cam_y = max(0, state.cy - tiles_h // 2)
-    old = best_ms(lambda: build_detail_frame(world, config, state, area_w, area_h, cell_w, cell_h))
-    new = best_ms(lambda: build_grid(world, config, view, detail_sampler(world, config, scale, area_w, area_h, state.cam_x, state.cam_y)))
-    print(f"{scale:>6} {tiles_w * cell_w * tiles_h * cell_h:7d} {old:8.1f} {new:8.1f} {new / old:8.2f}")
+    probe = detail_sampler(world, config, scale, area_w, area_h, 0, 0)
+    cam_x = max(0, world.width // 2 - probe.tiles_w // 2)
+    cam_y = max(0, world.height // 2 - probe.tiles_h // 2)
+    sampler = detail_sampler(world, config, scale, area_w, area_h, cam_x, cam_y)
+    layers = best_ms(lambda: build_grid(world, config, view, detail_sampler(world, config, scale, area_w, area_h, cam_x, cam_y)))
+    print(f"{scale:>6} {probe.tiles_w * probe.cell_w * probe.tiles_h * probe.cell_h:7d} {layers:10.1f}")
 
 # The whole explorer frame: compose (layers, cursor, panel) and diff-write, at the same area plus a 12-row panel.
 from biomegen.world.overlay import Overlay
