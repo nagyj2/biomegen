@@ -283,7 +283,7 @@ DEFAULTS: Dict[str, Any] = {
         # of the same kind spawn a bit larger or smaller. 0 disables (every footprint stays nominal).
         "size_jitter": 0.4,
         # Outer-boundary SHAPE algorithm for the solid-building archetypes (dungeon/tower/ruin; see
-        # biomegen.world.interiors.shapes / SHAPES registry): "rectangle" (boxy), "blob", "cellular",
+        # biomegen.interiors.shapes / SHAPES registry): "rectangle" (boxy), "blob", "cellular",
         # "drunkard", "diamond", "cross", or "mixed" (default) to pick a different organic shape per
         # structure so none is square. The shape is filled solid with rooms+rock; terrain shows around
         # its organic outline. (Settlements, camps and boats use their own layout, not this shape.)

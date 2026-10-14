@@ -26,8 +26,8 @@ from typing import List, Tuple
 
 import numpy as np
 
-from ...util import rng
-from ..tile import Cell
+from ..util import rng
+from ..world.tile import Cell
 from .grid import (
     InteriorCtx,
     Rect,

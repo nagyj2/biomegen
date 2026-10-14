@@ -29,8 +29,8 @@ from typing import List, Optional, Tuple
 import numpy as np
 
 from ..config.model import Config
+from ..interiors import INTERIOR_BUILDERS, ZOOM_VISIBLE, build_interior, footprint_origin, sample_rect
 from ..util import noise, rng
-from ..world.interiors import INTERIOR_BUILDERS, ZOOM_VISIBLE, build_interior, footprint_origin, sample_rect
 from ..world.overlay import Overlay
 from ..world.tile import (
     COLOR_BRIDGE_DECK,
@@ -440,7 +440,7 @@ def _stamp_interiors(
     The interior is a single canonical-resolution artifact (built lazily, LRU-cached); here it is
     **nearest-neighbour sampled** into the footprint's detail-cell block, so the ``zoom`` and
     ``local`` scales are coarse vs fine views of the same grid. At ``zoom`` the building shell is drawn
-    - walls *and* floor (see :data:`~biomegen.world.interiors.ZOOM_VISIBLE`) so it reads as filled-in -
+    - walls *and* floor (see :data:`~biomegen.interiors.ZOOM_VISIBLE`) so it reads as filled-in -
     but furniture is suppressed; at ``local`` every non-void cell is drawn (the full furnished
     interior). ``VOID`` cells are skipped so the surrounding terrain shows through the gaps.
 

@@ -5,7 +5,7 @@ shape filled with rooms + rock, aligned stair shafts that line the floors up ver
 exterior entrance) but it **ascends** instead of descending. The :func:`biomegen.pipeline.poi_rules.
 floors_for` convention puts the ground/entry level at floor ``0`` for both kinds - dungeons run
 ``0`` down to negative floors, towers run ``0`` up to ``floor_count - 1`` - so the shared
-:func:`~biomegen.world.interiors.grid.stamp_circulation` punches the door on floor ``0`` either way and
+:func:`~biomegen.interiors.grid.stamp_circulation` punches the door on floor ``0`` either way and
 nothing about the stair model needs to change for "up".
 
 Towers are small (a room or two per floor) and sparsely furnished living/working quarters rather than
@@ -19,8 +19,8 @@ from typing import List, Tuple
 
 import numpy as np
 
-from ...util import rng
-from ..tile import Cell
+from ..util import rng
+from ..world.tile import Cell
 from .grid import (
     InteriorCtx,
     build_room_structure,

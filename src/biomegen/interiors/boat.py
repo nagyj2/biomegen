@@ -1,7 +1,7 @@
 """Boat interior builder - a planked hull floating on the water, no organic terrain outline.
 
 The one structure placed *on water* rather than on land. It is built as a tapered **hull**: a pointed
-lens of deck (FLOOR) ringed by planking (WALL via the shared :func:`~biomegen.world.interiors.grid.
+lens of deck (FLOOR) ringed by planking (WALL via the shared :func:`~biomegen.interiors.grid.
 add_walls`), with a small stern **cabin** (a walled deckhouse with a door) and a deck strewn with CARGO,
 barrels and crates. Everything outside the hull is left VOID, so the surrounding water tile shows
 through and the boat reads as floating on the sea/lake rather than sitting in a box.
@@ -15,8 +15,8 @@ from typing import List, Tuple
 
 import numpy as np
 
-from ...util import rng
-from ..tile import Cell
+from ..util import rng
+from ..world.tile import Cell
 from .grid import (
     InteriorCtx,
     add_walls,

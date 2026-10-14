@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional, Tuple
 
 from ..config.model import Config
-from ..world.interiors import INTERIOR_BUILDERS, STRUCTURAL, build_interior, footprint_origin, sample_rect
+from ..interiors import INTERIOR_BUILDERS, STRUCTURAL, build_interior, footprint_origin, sample_rect
 from ..world.overlay import Overlay
 from ..world.tile import INTERIOR_COLOR_BASE, Biome
 from ..world.world import World
@@ -115,7 +115,7 @@ def _stamp_map_interiors(
     The interior is the same canonical artifact the detail views sample - here it is nearest-neighbour
     sampled down to however many *screen cells* the footprint occupies (often ~one cell per world tile
     on the overview), so the biome map shows a recognisable scaled image of the dungeon's wall plan
-    rather than the terrain underneath. Only :data:`~biomegen.world.interiors.STRUCTURAL` cells (walls,
+    rather than the terrain underneath. Only :data:`~biomegen.interiors.STRUCTURAL` cells (walls,
     doors, stairs) are stamped; everything else is left as None so terrain still shows through the gaps.
     The entry (top) floor is used - the overview is the surface-level view of the structure.
     """

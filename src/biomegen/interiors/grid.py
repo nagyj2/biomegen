@@ -28,14 +28,14 @@ from typing import TYPE_CHECKING, Callable, Iterable, List, Optional, Tuple
 import numpy as np
 from scipy import ndimage
 
-from ...config.model import Config
-from ...registry import Registry
-from ...util import rng
-from ..entities import POI
-from ..tile import Cell, WaterType
+from ..config.model import Config
+from ..registry import Registry
+from ..util import rng
+from ..world.entities import POI
+from ..world.tile import Cell, WaterType
 
 if TYPE_CHECKING:  # avoid a runtime import cycle (world.py never imports the interiors layer)
-    from ..world import World
+    from ..world.world import World
 
 # A rectangle ``(x, y, w, h)`` in interior-grid cells.
 Rect = Tuple[int, int, int, int]
@@ -51,7 +51,7 @@ PARTITIONS: Registry = Registry("interior_partition")
 # Swappable OUTER-BOUNDARY shapes (selected by ``interiors.shape``). A shape is a function
 # ``(rgen, grid_w, grid_h) -> np.ndarray[bool]`` returning the cells *inside* the structure, so the
 # dungeon's footprint can be an organic blob / cave / diamond / ... instead of the full rectangle.
-# See :mod:`biomegen.world.interiors.shapes`. The special selector ``"mixed"`` is resolved by the
+# See :mod:`biomegen.interiors.shapes`. The special selector ``"mixed"`` is resolved by the
 # builder to a per-dungeon random pick (so no two dungeons share a shape and none is square).
 SHAPES: Registry = Registry("interior_shape")
 MIXED_SHAPE = "mixed"  # config value meaning "pick a concrete shape per dungeon"

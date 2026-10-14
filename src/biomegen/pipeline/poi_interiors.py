@@ -3,7 +3,7 @@
 Runs after placement **and roads**. Fills the cheap, render-only metadata each POI needs for its
 detail-view interior - the **footprint** in world tiles (centred on the anchor) and its clamped
 bounding box - WITHOUT generating any interior grids. The grids are built lazily from each POI's
-``interior_seed`` (see :mod:`biomegen.world.interiors`) only when a detail view samples them.
+``interior_seed`` (see :mod:`biomegen.interiors`) only when a detail view samples them.
 
 Because roads are already laid by now, this stage also turns each POI's recorded road approach
 (``extra['road_entry']``) into a concrete **entrance** on the footprint perimeter and clears the road
@@ -32,8 +32,8 @@ from typing import Tuple
 import numpy as np
 
 from ..config.model import Config
+from ..interiors import INTERIOR_BUILDERS
 from ..util import rng
-from ..world.interiors import INTERIOR_BUILDERS
 from ..world.tile import WaterType
 from ..world.world import World
 

@@ -16,9 +16,9 @@ from typing import Callable, Optional
 import numpy as np
 
 from ..config.model import Config
+from ..interiors import INTERIOR_BUILDERS, footprint_origin
 from ..util import rng
 from ..world.entities import POI
-from ..world.interiors import INTERIOR_BUILDERS, footprint_origin
 from ..world.overlay import Overlay
 from ..world.tile import INTERIOR_COLOR_BASE, OVERLAY_COLOR_BASE, WaterType
 from ..world.world import World

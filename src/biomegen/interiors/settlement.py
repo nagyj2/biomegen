@@ -7,7 +7,7 @@ shows around a dungeon's organic outline). The three kinds share one builder and
 a village's smaller footprint admits a few huts, a city's larger one many buildings around a plaza.
 
 Recipe: partition the footprint into plots (the shared BSP partitioner), drop one capped building rect
-in each, wall each building individually (:func:`~biomegen.world.interiors.grid.wall_ring`) and punch a
+in each, wall each building individually (:func:`~biomegen.interiors.grid.wall_ring`) and punch a
 DOOR facing the centre, clear a central PATH plaza, then lay PATH streets from every door to the plaza
 (and along a chain through the doors) - carved only over open ground so they never tunnel through a
 building. Finally each building's interior is dressed with domestic furniture. Single floor, so there
@@ -20,8 +20,8 @@ from typing import List, Tuple
 
 import numpy as np
 
-from ...util import rng
-from ..tile import Cell
+from ..util import rng
+from ..world.tile import Cell
 from .grid import (
     PARTITIONS,
     InteriorCtx,

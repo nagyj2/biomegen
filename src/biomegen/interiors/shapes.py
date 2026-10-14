@@ -3,7 +3,7 @@
 Each shape is a function ``(rgen, grid_w, grid_h) -> np.ndarray[bool]`` returning the cells that lie
 *inside* the structure's footprint (the builder fills that region with rooms + rock and lets terrain
 show through everywhere else, so the dungeon reads as an organic mass rather than a square block).
-They register themselves in :data:`~biomegen.world.interiors.grid.SHAPES` and are selected by
+They register themselves in :data:`~biomegen.interiors.grid.SHAPES` and are selected by
 ``interiors.shape`` - or, with the default ``"mixed"``, the builder picks one per dungeon so no two
 dungeons share a shape and none is square.
 

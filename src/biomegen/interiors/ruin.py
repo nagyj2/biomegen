@@ -7,8 +7,8 @@ straight through the breaches) and a fraction of its floor cracks into rubble. W
 rubble-dominated, with the occasional chest still worth looting. The erosion fraction is the config knob
 ``interiors.ruin_erosion``.
 
-There is only one floor (ruin do not descend), so :func:`~biomegen.world.interiors.grid.floor_links`
-yields no stairs and :func:`~biomegen.world.interiors.grid.stamp_circulation` simply punches the ground-
+There is only one floor (ruin do not descend), so :func:`~biomegen.interiors.grid.floor_links`
+yields no stairs and :func:`~biomegen.interiors.grid.stamp_circulation` simply punches the ground-
 floor entrance. Everything is a pure function of ``interior_seed``, so a ruin regenerates identically.
 """
 
@@ -18,8 +18,8 @@ from typing import List, Tuple
 
 import numpy as np
 
-from ...util import rng
-from ..tile import Cell
+from ..util import rng
+from ..world.tile import Cell
 from .grid import (
     InteriorCtx,
     build_room_structure,
