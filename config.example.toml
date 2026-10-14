@@ -45,6 +45,11 @@ swamp_min_rain_mm = 2600.0       # very wet lowland below swamp_max_elevation_m 
 beach_max_elevation_m = 150.0    # warm land touching the sea below this height is beach
 shallow_km = 75.0                # sea within this distance of land is shallows
 
+[geography]
+min_landmass_km2 = 140000.0      # smaller islands get a landmass_id but no landmass feature
+max_named_rivers = 5             # the largest rivers (at least min_river_km long) become features
+min_river_km = 150.0
+
 [regions]
 min_region_size = 22
 color_jitter = 28

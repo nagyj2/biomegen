@@ -3,7 +3,7 @@
 :func:`generate` runs the stages in a fixed order, each consuming only fields produced by earlier
 stages so there is no backtracking:
 
-    terrain -> climate -> hydrology -> biomes -> regions
+    terrain -> climate -> hydrology -> biomes -> geography -> regions
     -> poi_placement -> roads -> poi_interiors -> naming
 
 Roads run **before** POI interiors so the road network knows where every POI anchor is: each road
@@ -34,7 +34,7 @@ from . import (
     regions,
 )
 from .civilization import roads
-from .physical import biomes, climate, hydrology, terrain
+from .physical import biomes, climate, geography, hydrology, terrain
 from .story import poi_interiors
 
 
@@ -76,6 +76,7 @@ def generate(config: Config, seed: int) -> World:
     climate.run(world, config, gen_seed)
     hydrology.run(world, config, gen_seed)
     biomes.run(world, config, gen_seed)
+    geography.run(world, config, gen_seed)
     regions.run(world, config, gen_seed)
     poi_placement.run(world, config, gen_seed)
     roads.run(world, config, gen_seed)
@@ -117,6 +118,7 @@ def stats(world: World) -> Dict[str, object]:
         "regions": len(world.regions),
         "rivers": len(world.rivers),
         "lakes": len(world.lakes),
+        "features": dict(sorted(Counter(f.kind for f in world.features).items())),
         "river_tiles": int(
             ((world.water_type == int(WaterType.FRESH)) & ~np.isin(world.biome, list(WATER_BIOMES))).sum()
         ),

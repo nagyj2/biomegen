@@ -260,7 +260,7 @@ config, e.g. `[tables.biomes.desert]` with `goods = "glass"`; each file document
 The world is built by an ordered, fully seed-reproducible pipeline:
 
 ```
-terrain → climate → hydrology → biomes → regions
+terrain → climate → hydrology → biomes → geography → regions
          → poi_placement → roads → poi_interiors → naming
 ```
 

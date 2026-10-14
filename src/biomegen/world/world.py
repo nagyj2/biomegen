@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 
 from ..util.units import GridScale, grid_scale
-from .entities import POI, Lake, Region, River
+from .entities import POI, GeoFeature, Lake, Region, River
 from .tile import Biome, Relief, TileView, WaterType
 
 
@@ -112,6 +112,7 @@ class World:
         self.regions: list[Region] = []
         self.rivers: list[River] = []
         self.lakes: list[Lake] = []
+        self.features: list[GeoFeature] = []  # filled by the geography stage
 
         # Terrain style row name (filled by the terrain stage; metadata, not hashed).
         self.terrain_style: str = ""

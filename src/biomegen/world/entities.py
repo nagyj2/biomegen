@@ -1,6 +1,6 @@
 """Sparse world objects that do not belong in a per-tile array.
 
-POIs, regions, rivers and lakes are few in number but rich in attributes, so they live in plain
+POIs, regions, rivers, lakes and geographic features are few in number but rich in attributes, so they live in plain
 dataclasses held in lists on the :class:`~biomegen.world.world.World`. Tiles reference them by index
 (e.g. ``world.poi_index[y, x]`` -> ``world.pois[i]``; ``world.region_id[y, x]`` -> ``world.regions[i]``)
 and the objects reference back via coordinates. Keeping the heavy attributes here keeps the per-tile
@@ -80,3 +80,25 @@ class Lake:
     salt: bool = False
     area_km2: float = 0.0
     surface_m: float = 0.0  # height of the flat water surface (the depression's spill level)
+
+
+@dataclass
+class GeoFeature:
+    """A named physical feature: a landmass, mountain range, sea, lake, river or peak.
+
+    ``ref`` points into the matching per-kind data: the ``landmass_id`` value for a landmass, the index
+    into ``World.lakes`` / ``World.rivers`` for a lake or river, and -1 otherwise. ``anchor`` is the
+    cell a label or gazetteer entry refers to (a summit, a sea's centre, a river's mouth).
+    """
+
+    id: int  # index into World.features
+    kind: str  # "landmass" | "range" | "sea" | "lake" | "river" | "peak"
+    anchor: Tuple[int, int]
+    ref: int = -1
+    name: str = ""
+    cells: List[Tuple[int, int]] = field(default_factory=list)  # area features only (landmass, range, lake)
+    area_km2: float = 0.0
+    length_km: float = 0.0  # rivers
+    elevation_m: float = 0.0  # summit height (peak, range, landmass) or greatest depth below sea (sea, < 0)
+    summit: int = -1  # feature id of the highest peak (landmass, range)
+    into: int = -1  # rivers: feature id of the lake or sea at the mouth (-1 if none)

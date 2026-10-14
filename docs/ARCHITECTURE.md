@@ -64,6 +64,7 @@ src/biomegen/
       climate.py        Stage 2 — °C (latitude, lapse), wind moisture + rain shadow, rain_mm
       hydrology.py      Stage 3 — rivers, lakes, flow accumulation
       biomes.py         Stage 4 — biome from °C / mm / m, relief, volcanoes
+      geography.py      Stage 5 — landmass_id; landmass, range, peak, lake, sea, river features
     regions.py          Stage 6 — region segmentation + colour
     poi_placement.py    Stage 7 — POI anchor placement
     poi_fields.py       Shared suitability distance fields for POI scoring
@@ -121,7 +122,7 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `moisture` | float64 | [0, 1] | climate + hydrology |
 | `biome` | uint8 | `Biome` enum int | terrain, hydrology, biomes |
 | `relief` | uint8 | `Relief` enum int | biomes |
-| `landmass_id` | int32 | 0..L-1, -1=water | geography (phase 3; -1 until then) |
+| `landmass_id` | int32 | 0..L-1 largest first, -1=water | geography |
 | `water_type` | uint8 | `WaterType` enum int | terrain, hydrology |
 | `region_id` | int32 | 0..R-1, -1=ocean | regions |
 | `poi_index` | int32 | 0..P-1, -1=none | poi_placement |
@@ -130,7 +131,7 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `dist_to_ocean` | float32 | ≥ 0 tiles | terrain |
 | `flow_accum` | float64 | km², wetness-weighted catchment | hydrology |
 
-Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `island_name`.
+Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `features` (`GeoFeature`), `island_name`.
 
 Scale metadata: `World.scale` is a `util.units.GridScale` built by `generate()` from `world.size_km`
 and `world.center_lat` / `center_lon` (`center_lat = "seed"` draws it per generation attempt from the
@@ -161,7 +162,7 @@ backtracking. A **land-exists gate** wraps the cheap terrain stage: if a seed yi
 rank, so the gate only trips when a style's land fraction is configured below the minimum.
 
 ```
-terrain → climate → hydrology → biomes → regions
+terrain → climate → hydrology → biomes → geography → regions
          → poi_placement → roads → poi_interiors → naming
 ```
 
@@ -238,6 +239,13 @@ forest, jungle, swamp, taiga, tundra, snow) and `relief`. Ported from the refere
 
 The old curses views and exporters read the cover through `render/surface.py`, which draws river cells
 as lake water until the phase-4 renderer adds a river layer.
+
+### Stage 5 — Geography (`pipeline/physical/geography.py`)
+
+Writes `landmass_id` (every 8-connected component of solid land, largest first) and `World.features`, a
+list of `GeoFeature` (`landmass`, `range`, `peak`, `lake`, `sea`, `river`), ported from the reference
+`_regions` with km / km² thresholds (`geography.*`). Peaks are the distinct summits of ranges and
+landmasses; rivers record the lake or nearest sea they flow `into`. Names are filled by the naming stage.
 
 ### Stage 6 — Regions (`pipeline/regions.py`)
 
