@@ -16,7 +16,7 @@ from ..config.model import Config
 from .patch import SitePatch
 from .streets import StreetRules
 
-Layout = Callable[["SiteContext"], Optional[np.ndarray]]
+Layout = Callable[["SiteContext"], Optional[np.ndarray | tuple[np.ndarray, np.ndarray]]]
 LAYOUTS: dict[str, Layout] = {}
 
 

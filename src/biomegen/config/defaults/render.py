@@ -322,6 +322,18 @@ VALUES: Dict[str, Any] = {
         "void": " ",
         "bridge": ":",
         "bridge_wall": "#",
+        "solid": " ",
+        "roof": "░",
+        "stone": "▓",
+        "hull": "=",
+    },
+    # ASCII output replaces any interior glyph that is not 7-bit with the entry here.
+    "interior_glyphs_ascii": {"roof": "^", "stone": "#"},
+    # Thin walls: a wall cell draws the line glyph for which of its four neighbours (north 1, east 2, south 4, west 8)
+    # are also wall or door, so adjoining walls join into box-drawing lines.
+    "interior_walls": {
+        "glyphs": ["+", "│", "─", "└", "│", "│", "┌", "├", "─", "┘", "─", "┴", "┐", "┤", "┬", "┼"],
+        "ascii": ["+", "|", "-", "+", "|", "|", "+", "+", "-", "+", "-", "+", "+", "+", "+", "+"],
     },
     # Interior glyphs are drawn in the cell colour times this factor on top of the plain cell colour fill.
     "interior_fg_scale": 1.45,
@@ -330,7 +342,7 @@ VALUES: Dict[str, Any] = {
     # drawn (the surrounding terrain shows through), so it has no colour entry.
     "interior_palette": {
         "floor": [78, 66, 55],
-        "wall": [128, 118, 105],
+        "wall": [96, 88, 80],
         "door": [186, 150, 84],
         "stairs_up": [214, 214, 168],
         "stairs_down": [150, 156, 214],
@@ -353,5 +365,9 @@ VALUES: Dict[str, Any] = {
         "bush": [110, 150, 90],
         "cargo": [200, 170, 90],
         "reserved": [128, 128, 128],
+        "solid": [30, 27, 26],
+        "roof": [120, 74, 58],
+        "stone": [118, 112, 104],
+        "hull": [128, 92, 58],
     },
 }

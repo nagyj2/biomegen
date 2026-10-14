@@ -282,4 +282,4 @@ def test_site_scale_draws_a_poi(capsys):
     assert (
         cli.main(["--seed", "3", "--width", "64", "--height", "32", "--scale", "site", "--at", f"{poi.x},{poi.y}"]) == 0
     )
-    assert "#" in capsys.readouterr().out
+    assert "│" in capsys.readouterr().out

@@ -46,6 +46,14 @@ def _draw(world, view=WITH, scale=SCALE_LOCAL, config=None, **kwargs):
     return build_grid(world, config, view, sampler, **kwargs), sampler, config
 
 
+def _draw_inside(world, config=None, **kwargs):
+    """Draw the whole site window of the first POI at the site scale (floors and overlay edits show here)."""
+    config = config or _crisp_config()
+    geometry = site_geometry(world.pois[0], config)
+    sampler = window_sampler(world, config, geometry)
+    return build_grid(world, config, WITH, sampler, **kwargs), sampler, config
+
+
 def _extent(sampler, world, config):
     """The (rows, cols) slices of the grid under the first POI's extent."""
     left, top, right, bottom = site_geometry(world.pois[0], config).extent
@@ -92,16 +100,23 @@ def test_zoom_hides_furniture_that_local_shows() -> None:
 
 def test_floor_selects_which_level_of_a_dungeon_is_drawn() -> None:
     world = _world()
-    ground, _, _ = _draw(world, floor=0)
-    below, _, _ = _draw(world, floor=-1)
+    ground, _, _ = _draw_inside(world, floor=0)
+    below, _, _ = _draw_inside(world, floor=-1)
     assert not (ground.glyph == below.glyph).all()
 
 
 def test_floor_is_clamped_to_the_dungeons_floors() -> None:
     world = _world()
-    bottom, _, _ = _draw(world, floor=-1)
-    beyond, _, _ = _draw(world, floor=-9)
+    bottom, _, _ = _draw_inside(world, floor=-1)
+    beyond, _, _ = _draw_inside(world, floor=-9)
     assert (bottom.glyph == beyond.glyph).all()
+
+
+def test_outside_views_show_the_surface_whatever_the_floor() -> None:
+    world = _world()
+    ground, _, _ = _draw(world, floor=0)
+    below, _, _ = _draw(world, floor=-1)
+    assert (ground.glyph == below.glyph).all()
 
 
 def test_a_structure_is_not_laid_over_water() -> None:
@@ -133,8 +148,8 @@ def test_an_overlay_edit_shows_in_the_drawing() -> None:
     for y, x in np.argwhere(plan.cells == int(Cell.FLOOR)).tolist():
         overlay.set_interior(11, 0, x, y, int(Cell.CHEST))
     chest = config.get("render.interior_glyphs.chest")
-    edited, _, _ = _draw(world, config=config, overlay=overlay)
-    plain, _, _ = _draw(world, config=config)
+    edited, _, _ = _draw_inside(world, config=config, overlay=overlay)
+    plain, _, _ = _draw_inside(world, config=config)
     assert (chest in edited.glyph, chest in plain.glyph) == (True, False)
 
 
@@ -176,7 +191,7 @@ def test_map_outline_leaves_the_marker_cell_clear() -> None:
 
 
 def test_the_site_scale_draws_the_whole_window_one_plan_cell_per_cell() -> None:
-    # At the site scale a sampler over the window shows the plan cell for cell.
+    # At the site scale a sampler over the window shows the plan cell for cell; thin walls join into line glyphs.
     world = _world()
     config = _crisp_config()
     geometry = site_geometry(world.pois[0], config)
@@ -184,10 +199,22 @@ def test_the_site_scale_draws_the_whole_window_one_plan_cell_per_cell() -> None:
     assert geometry is not None and plan is not None
     sampler = window_sampler(world, config, geometry)
     grid = build_grid(world, config, WITH, sampler)
-    window = plan.window_cells()
-    glyphs = config.get("render.interior_glyphs")
-    walls = window == int(Cell.WALL)
-    assert sampler.scale == SCALE_SITE and (grid.glyph[walls] == glyphs["wall"]).all()
+    walls = plan.window_cells() == int(Cell.WALL)
+    lines = set(config.get("render.interior_walls.glyphs"))
+    assert sampler.scale == SCALE_SITE and walls.any() and set(np.unique(grid.glyph[walls])) <= lines
+
+
+def test_a_horizontal_wall_run_draws_as_a_line() -> None:
+    world = _world("camp")
+    config = _crisp_config()
+    plan = site_plan(world.pois[0], 0, config, world)
+    assert plan is not None
+    cells = np.zeros((5, 9), dtype=np.uint8)
+    cells[2, 2:7] = int(Cell.WALL)
+    from biomegen.sites import wall_index
+
+    index = wall_index(cells)
+    assert int(index[2, 4]) == 10 and int(index[2, 2]) == 2 and int(index[0, 0]) == 255
 
 
 def test_a_site_replaces_the_road_bed_under_it() -> None:

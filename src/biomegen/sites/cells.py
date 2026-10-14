@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import numpy as np
+
 from ..world.tile import Cell
 
 VOID = int(Cell.VOID)  # not part of the site: the terrain shows through
@@ -26,3 +28,35 @@ PASSABLE: frozenset[int] = frozenset(
         int(Cell.BRIDGE),
     }
 )
+
+_CELLS = max(int(cell) for cell in Cell) + 1
+_WALLISH = (int(Cell.WALL), int(Cell.DOOR))
+
+# What wins when a plan is drawn smaller and several cells share one: the highest number. A roof or a solid wall beats
+# a street, which beats anything else drawn, which beats bare terrain (void).
+OUTSIDE_PRIORITY = np.zeros(256, dtype=np.uint8)
+OUTSIDE_PRIORITY[:_CELLS] = 1
+OUTSIDE_PRIORITY[VOID] = 0
+for _cell in (Cell.PATH, Cell.BRIDGE, Cell.BRIDGE_WALL, Cell.DOOR):
+    OUTSIDE_PRIORITY[int(_cell)] = 2
+for _cell in (Cell.ROOF, Cell.STONE, Cell.WALL, Cell.HULL, Cell.TENT):
+    OUTSIDE_PRIORITY[int(_cell)] = 3
+
+NO_WALL = 255  # ``wall_index`` of a cell that is not a wall
+
+
+def wall_index(cells: np.ndarray) -> np.ndarray:
+    """Return, per cell, which of the 16 line glyphs a wall draws, or ``NO_WALL`` for a cell that is not a wall.
+
+    The index is a bit mask of which neighbours (north 1, east 2, south 4, west 8) are also wall or door, so adjoining
+    walls join into box-drawing lines.
+    """
+    wallish = np.isin(cells, _WALLISH)
+    padded = np.pad(wallish, 1)
+    index = (
+        padded[:-2, 1:-1].astype(np.uint8)
+        | (padded[1:-1, 2:].astype(np.uint8) << 1)
+        | (padded[2:, 1:-1].astype(np.uint8) << 2)
+        | (padded[1:-1, :-2].astype(np.uint8) << 3)
+    )
+    return np.where(cells == int(Cell.WALL), index, NO_WALL).astype(np.uint8)

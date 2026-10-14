@@ -113,6 +113,10 @@ class Cell(IntEnum):
     RESERVED = 24  # reserved marker slot for future use
     BRIDGE = 25  # interior bridge deck (settlement bridge over water)
     BRIDGE_WALL = 26  # interior bridge railing / wall
+    SOLID = 27  # solid rock round the rooms of an underground floor
+    ROOF = 28  # the top of a building seen from outside
+    STONE = 29  # a wall seen from outside (a city wall, a ruin's stub), drawn solid
+    HULL = 30  # a boat's planked side
 
 
 # Convenient lookup tables for config parsing and HUD display. Names are lower-case so they read

@@ -1,10 +1,10 @@
 """The sites layer: each POI's plan drawn over the terrain where its site lies.
 
-A plan is one grid of cells, sampled by nearest neighbour into the block of cells its extent covers, so every scale
-shows the same plan at its own resolution. At the map scale only the structural outline (walls, doors, stairs) is
-drawn, as a small image of the wall plan. At zoom the building shell is drawn (furniture shows as bare floor), a
-low-poly silhouette that need not line up with the finer scales. At the local and site scales every cell is drawn.
-Void cells are skipped, so the terrain shows round an organic outline. Runtime edits come from the overlay.
+A plan has two faces. Seen from **outside** (the map, zoom and local scales) buildings are roofs, walls are solid and
+streets show; the plan is scaled to the block of cells its extent covers, and where it is finer than the view the cell
+of highest priority wins, so a one-cell wall survives. Seen from **inside** (the site scale) every cell is drawn one for
+one, and thin walls join into box-drawing lines. Void cells are skipped, so the terrain shows round an organic outline.
+Outside views show the surface; the inside view shows the chosen floor, with runtime edits from the overlay.
 """
 
 from __future__ import annotations
@@ -13,27 +13,17 @@ import math
 
 import numpy as np
 
-from ...sampling.detail import SCALE_ZOOM, DetailSampler
-from ...sites import SHELL, STRUCTURAL, SiteGeometry, site_plan, site_pois
+from ...sampling.detail import SCALE_SITE, DetailSampler
+from ...sites import NO_WALL, OUTSIDE_PRIORITY, SiteGeometry, site_plan, site_pois, wall_index
 from ...sites.blit import sample_rect
 from ...world.entities import POI
 from ...world.tile import Cell
+from ..colors import wall_glyph_table
 from ..grid import CellGrid
 from . import LAYERS, LayerContext
 
 _VOID = int(Cell.VOID)
-_FLOOR = int(Cell.FLOOR)
 _CELLS = max(int(cell) for cell in Cell) + 1
-
-
-def _lookup(members: frozenset[int]) -> np.ndarray:
-    table = np.zeros(_CELLS, dtype=bool)
-    table[sorted(members)] = True
-    return table
-
-
-_SHELL = _lookup(SHELL)
-_STRUCTURAL = _lookup(STRUCTURAL)
 
 
 def _record(ctx: LayerContext, grid: CellGrid, rows: slice, cols: slice, cells: np.ndarray, draw: np.ndarray) -> None:
@@ -46,48 +36,72 @@ def _record(ctx: LayerContext, grid: CellGrid, rows: slice, cols: slice, cells: 
     ctx.seen.cell_map[rows, cols][draw] = cells[draw]
 
 
-def _cells_of(ctx: LayerContext, poi: POI, floor: int) -> np.ndarray | None:
-    """Return ``poi``'s plan cells for ``floor`` with the overlay's edits applied, or None if it has no plan."""
+def _plan_of(ctx: LayerContext, poi: POI, floor: int, inside: bool) -> tuple[np.ndarray, np.ndarray | None] | None:
+    """Return ``poi``'s plan cells (and, inside, the wall line index of each) for ``floor``, or None if it has no plan.
+
+    Inside, the overlay's edits are applied; outside is the surface and ignores both the floor and the overlay.
+    """
     plan = site_plan(poi, floor, ctx.config, ctx.world)
     if plan is None:
         return None
+    if not inside:
+        return plan.outside, None
+    cells = plan.cells
     if ctx.overlay is not None:
-        return ctx.overlay.apply_interior(plan.cells, poi.interior_seed, plan.floor)
-    return plan.cells
+        cells = ctx.overlay.apply_interior(cells, poi.interior_seed, plan.floor)
+    return cells, wall_index(cells)
 
 
-def _stamp(ctx: LayerContext, grid: CellGrid, rows: slice, cols: slice, cells: np.ndarray, draw: np.ndarray) -> None:
+def _stamp(
+    ctx: LayerContext,
+    grid: CellGrid,
+    rows: slice,
+    cols: slice,
+    cells: np.ndarray,
+    draw: np.ndarray,
+    walls: np.ndarray | None = None,
+) -> None:
     style = ctx.interior_style
     _record(ctx, grid, rows, cols, cells, draw)
-    grid.glyph[rows, cols][draw] = style.glyph[cells][draw]
+    glyph = style.glyph[cells]
+    if walls is not None:
+        lines = wall_glyph_table(ctx.config, ctx.ascii_only)
+        glyph = np.where(walls != NO_WALL, lines[np.minimum(walls, 15)], glyph)
+    grid.glyph[rows, cols][draw] = glyph[draw]
     grid.fg[rows, cols][draw] = style.fg[cells][draw]
     grid.bg[rows, cols][draw] = style.bg[cells][draw]
     grid.bold[rows, cols][draw] = False
 
 
 def _map_outlines(ctx: LayerContext, grid: CellGrid) -> None:
-    """Stamp the structural outline of each site's top floor onto the map cells its tiles cover.
-
-    Everything that is not structural is left alone so terrain shows through the gaps, and the cell holding the POI's
-    marker stays clear so the marker always wins.
-    """
+    """Draw each site's outside view onto the map cells its tiles cover, leaving the POI's marker cell clear."""
     sampler = ctx.sampler
+    rows_total, cols_total = grid.glyph.shape
     for poi, geometry in site_pois(ctx.world, ctx.config):
         left, top, right, bottom = geometry.extent
         first = sampler.cell_coords(math.floor(left - 0.5) + 1, math.floor(top - 0.5) + 1)
         last = sampler.cell_coords(math.ceil(right + 0.5) - 1, math.ceil(bottom + 0.5) - 1)
         if first is None or last is None:
             continue
-        cells = _cells_of(ctx, poi, poi.lowest_floor + poi.floor_count - 1)
-        if cells is None:
+        if first[1] >= rows_total or first[0] >= cols_total or last[1] < 0 or last[0] < 0:
+            continue
+        found = _plan_of(ctx, poi, 0, False)
+        if found is None:
             continue
         sampled = sample_rect(
-            cells, first[1], first[0], last[1] - first[1] + 1, last[0] - first[0] + 1, *grid.glyph.shape
+            found[0],
+            first[1],
+            first[0],
+            last[1] - first[1] + 1,
+            last[0] - first[0] + 1,
+            rows_total,
+            cols_total,
+            OUTSIDE_PRIORITY,
         )
         if sampled is None:
             continue
         rows, cols, values = sampled
-        draw = _STRUCTURAL[values]
+        draw = values != _VOID
         marker = sampler.cell_coords(poi.x, poi.y)
         if marker is not None and rows.start <= marker[1] < rows.stop and cols.start <= marker[0] < cols.stop:
             draw[marker[1] - rows.start, marker[0] - cols.start] = False
@@ -106,25 +120,28 @@ def _extent_cells(sampler: DetailSampler, geometry: SiteGeometry) -> tuple[int, 
 
 @LAYERS.register("sites")
 def sites_layer(ctx: LayerContext, grid: CellGrid) -> None:
-    """Draw every site's plan for ``ctx.floor`` (clamped to its floors); at the map scale, its outline."""
+    """Draw every site: its outside at the map, zoom and local scales, its inside (``ctx.floor``) at the site scale."""
     sampler = ctx.sampler
     if not isinstance(sampler, DetailSampler):
         _map_outlines(ctx, grid)
         return
-    shell_only = sampler.scale == SCALE_ZOOM
+    inside = sampler.scale == SCALE_SITE
     for poi, geometry in site_pois(ctx.world, ctx.config):
         row0, col0, span_rows, span_cols = _extent_cells(sampler, geometry)
         if row0 >= sampler.rows or col0 >= sampler.cols or row0 + span_rows <= 0 or col0 + span_cols <= 0:
             continue
-        floor = max(poi.lowest_floor, min(int(ctx.floor), poi.lowest_floor + poi.floor_count - 1))
-        cells = _cells_of(ctx, poi, floor)
-        if cells is None:
+        floor = max(poi.lowest_floor, min(int(ctx.floor), poi.lowest_floor + poi.floor_count - 1)) if inside else 0
+        found = _plan_of(ctx, poi, floor, inside)
+        if found is None:
             continue
-        sampled = sample_rect(cells, row0, col0, span_rows, span_cols, sampler.rows, sampler.cols)
+        cells, walls = found
+        priority = None if inside else OUTSIDE_PRIORITY
+        sampled = sample_rect(cells, row0, col0, span_rows, span_cols, sampler.rows, sampler.cols, priority)
         if sampled is None:
             continue
         rows, cols, values = sampled
+        sampled_walls = None
+        if walls is not None:
+            *_, sampled_walls = sample_rect(walls, row0, col0, span_rows, span_cols, sampler.rows, sampler.cols)  # type: ignore[misc]
         draw = (values != _VOID) & sampler.inside[rows, cols]
-        if shell_only:  # furniture stands on a floor: draw that floor, not the terrain under it
-            values = np.where(_SHELL[values], values, _FLOOR)
-        _stamp(ctx, grid, rows, cols, values, draw)
+        _stamp(ctx, grid, rows, cols, values, draw, sampled_walls)

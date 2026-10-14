@@ -187,9 +187,20 @@ class InteriorStyle:
     bg: np.ndarray
 
 
-def interior_style(config: Config) -> InteriorStyle:
-    """Build the interior lookup arrays from ``render.interior_glyphs`` and ``render.interior_palette``."""
-    glyphs = config.get("render.interior_glyphs")
+def wall_glyph_table(config: Config, ascii_only: bool) -> np.ndarray:
+    """Return the 16 line glyphs a thin wall draws, indexed by its wall-neighbour mask (``render.interior_walls``)."""
+    table = config.get("render.interior_walls")
+    return np.array(table["ascii" if ascii_only else "glyphs"], dtype="U1")
+
+
+def interior_style(config: Config, ascii_only: bool = False) -> InteriorStyle:
+    """Build the interior lookup arrays from ``render.interior_glyphs`` and ``render.interior_palette``.
+
+    With ``ascii_only``, ``render.interior_glyphs_ascii`` replaces the glyphs that are not 7-bit.
+    """
+    glyphs = dict(config.get("render.interior_glyphs"))
+    if ascii_only:
+        glyphs.update(config.get("render.interior_glyphs_ascii"))
     palette = config.get("render.interior_palette")
     detail = config.get("render.detail_colors")
     count = max(int(c) for c in Cell) + 1

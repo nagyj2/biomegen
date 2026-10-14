@@ -92,7 +92,7 @@ class LayerContext:
 
     @cached_property
     def interior_style(self) -> InteriorStyle:
-        return interior_style(self.config)
+        return interior_style(self.config, self.ascii_only)
 
     @cached_property
     def detail_style(self) -> DetailStyle:

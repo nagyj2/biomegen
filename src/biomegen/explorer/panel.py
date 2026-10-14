@@ -102,7 +102,7 @@ def _legend(canvas: _Canvas, config: Config, seen: Seen, top: int, bottom: int, 
         column += len(entry)
     items = [cell for cell in sorted(seen.cells) if cell != int(Cell.VOID)]
     if items and row + 1 < bottom:
-        interior = interior_style(config)
+        interior = interior_style(config, ascii_only)
         row, column = row + 1, _LEGEND_INDENT
         canvas.text(row, 0, " items: ", canvas.fg)
         for cell in items:

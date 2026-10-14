@@ -31,12 +31,15 @@ class SitePlan:
     Attributes:
         geometry: The site's extent, window and resolution.
         floor: The floor this plan shows.
-        cells: ``Cell`` values over the extent box (``box_rows x box_cols``, read-only); void shows the terrain.
+        cells: ``Cell`` values over the extent box (``box_rows x box_cols``, read-only), seen from inside; void shows
+            the terrain.
+        outside: The same box seen from outside (the map, zoom and local scales): buildings as roofs, walls solid.
     """
 
     geometry: SiteGeometry
     floor: int
     cells: np.ndarray
+    outside: np.ndarray
 
     def window_cells(self, cells: Optional[np.ndarray] = None) -> np.ndarray:
         """Return ``cells`` (default: this plan's) embedded in a window-sized grid, void outside the extent box."""
@@ -87,11 +90,13 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         plaza_rows=round(float(row.get("plaza_tiles", 0.0)) * int(row["rows_per_tile"])),
         config=config,
     )
-    cells = LAYOUTS[row["layout"]](context)
+    built = LAYOUTS[row["layout"]](context)
     plan = None
-    if cells is not None:
+    if built is not None:
+        cells, outside = built if isinstance(built, tuple) else (built, built)
         cells.setflags(write=False)
-        plan = SitePlan(geometry, floor, cells)
+        outside.setflags(write=False)
+        plan = SitePlan(geometry, floor, cells, outside)
     if len(cache) >= int(config.get("sites.cache_size")):
         cache.pop(next(iter(cache)))
     cache[key] = plan
