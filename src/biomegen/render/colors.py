@@ -1,0 +1,109 @@
+"""Colour maths and the per-biome / per-relief lookup arrays the layers index with.
+
+Everything here is vectorised: colours are ``[..., 3]`` arrays and the lookups are indexed by the
+:class:`~biomegen.world.tile.Biome` / :class:`~biomegen.world.tile.Relief` integer, so a layer styles a
+whole grid with one fancy-index. Glyphs, colours and the ``sparse`` flag come from the ``tables.biomes``
+and ``tables.relief`` rows (``data/biomes.toml``), never from literals here.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+
+from ..config.model import Config
+from ..world.tile import BIOME_NAME, Biome, Relief
+
+RGB = tuple[int, int, int]
+
+
+def as_colors(value: np.ndarray | RGB) -> np.ndarray:
+    """Return ``value`` as a float array (``[..., 3]``) ready for arithmetic."""
+    return np.asarray(value, dtype=np.float64)
+
+
+def to_uint8(colors: np.ndarray) -> np.ndarray:
+    """Round and clamp a float colour array into ``uint8``."""
+    return np.clip(np.rint(colors), 0, 255).astype(np.uint8)
+
+
+def scale_colors(colors: np.ndarray | RGB, factor: np.ndarray | float) -> np.ndarray:
+    """Multiply colours by ``factor`` (one value per cell or a scalar); returns ``uint8``."""
+    factor_array = np.asarray(factor, dtype=np.float64)
+    return to_uint8(as_colors(colors) * factor_array[..., np.newaxis])
+
+
+def mix_colors(a: np.ndarray | RGB, b: np.ndarray | RGB, t: np.ndarray | float) -> np.ndarray:
+    """Blend ``a`` toward ``b`` by ``t`` in [0, 1] (per cell or scalar); returns ``uint8``."""
+    t_array = np.asarray(t, dtype=np.float64)[..., np.newaxis]
+    return to_uint8(as_colors(a) * (1.0 - t_array) + as_colors(b) * t_array)
+
+
+def ramp_colors(stops: list, values: np.ndarray) -> np.ndarray:
+    """Map ``values`` through ``[[value, [r, g, b]], ...]`` stops (ascending), blending linearly.
+
+    Values outside the stops take the first or last colour. Returns ``uint8`` ``[..., 3]``.
+    """
+    positions = np.array([stop[0] for stop in stops], dtype=np.float64)
+    colors = np.array([stop[1] for stop in stops], dtype=np.float64)
+    channels = [np.interp(values, positions, colors[:, channel]) for channel in range(3)]
+    return to_uint8(np.stack(channels, axis=-1))
+
+
+@dataclass(frozen=True)
+class BiomeStyle:
+    """Per-biome arrays indexed by the biome integer."""
+
+    glyph: np.ndarray  # U1 [n]
+    fg: np.ndarray  # uint8 [n, 3]
+    bg: np.ndarray  # uint8 [n, 3]
+    sparse: np.ndarray  # bool [n]: draw the glyph on only some cells
+    water: np.ndarray  # bool [n]
+
+
+@dataclass(frozen=True)
+class ReliefStyle:
+    """Per-relief arrays indexed by the relief integer (``NONE`` has a blank glyph)."""
+
+    glyph: np.ndarray  # U1 [n]
+    fg: np.ndarray  # uint8 [n, 3]
+
+
+def _glyph(row: dict, ascii_only: bool) -> str:
+    text = row["ascii" if ascii_only else "glyph"]
+    return text if text else " "
+
+
+def biome_style(config: Config, ascii_only: bool = False) -> BiomeStyle:
+    """Build the biome lookup arrays from ``tables.biomes``."""
+    rows = config.get("tables.biomes")
+    count = max(int(b) for b in Biome) + 1
+    glyph = np.full(count, " ", dtype="U1")
+    fg = np.zeros((count, 3), dtype=np.uint8)
+    bg = np.zeros((count, 3), dtype=np.uint8)
+    sparse = np.zeros(count, dtype=bool)
+    water = np.zeros(count, dtype=bool)
+    for biome in Biome:
+        row = rows[BIOME_NAME[int(biome)]]
+        index = int(biome)
+        glyph[index] = _glyph(row, ascii_only)
+        fg[index] = row["fg"]
+        bg[index] = row["bg"]
+        sparse[index] = bool(row["sparse"])
+        water[index] = bool(row["water"])
+    return BiomeStyle(glyph, fg, bg, sparse, water)
+
+
+def relief_style(config: Config, ascii_only: bool = False) -> ReliefStyle:
+    """Build the relief lookup arrays from ``tables.relief``."""
+    rows = config.get("tables.relief")
+    count = max(int(r) for r in Relief) + 1
+    glyph = np.full(count, " ", dtype="U1")
+    fg = np.zeros((count, 3), dtype=np.uint8)
+    for relief in Relief:
+        row = rows[relief.name.lower()]
+        index = int(relief)
+        glyph[index] = _glyph(row, ascii_only)
+        fg[index] = row["fg"]
+    return ReliefStyle(glyph, fg)
