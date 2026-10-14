@@ -60,6 +60,7 @@ def _map_outlines(ctx: LayerContext, grid: CellGrid) -> None:
         marker = sampler.cell_coords(poi.x, poi.y)
         if marker is not None and rows.start <= marker[1] < rows.stop and cols.start <= marker[0] < cols.stop:
             draw[marker[1] - rows.start, marker[0] - cols.start] = False
+        ctx.seen.cells.update(np.unique(cells[draw]).tolist())
         grid.glyph[rows, cols][draw] = style.glyph[cells][draw]
         grid.fg[rows, cols][draw] = style.fg[cells][draw]
         grid.bg[rows, cols][draw] = style.bg[cells][draw]
@@ -122,6 +123,7 @@ def interiors_layer(ctx: LayerContext, grid: CellGrid) -> None:
             draw &= ~(wet & ~np.isin(cells, _BRIDGE_CELLS))
         if shell_only:  # furniture stands on a floor: draw that floor, not the terrain under it
             cells = np.where(np.isin(cells, _ZOOM_VISIBLE), cells, _FLOOR)
+        ctx.seen.cells.update(np.unique(cells[draw]).tolist())
         grid.glyph[rows, cols][draw] = style.glyph[cells][draw]
         grid.fg[rows, cols][draw] = style.fg[cells][draw]
         grid.bg[rows, cols][draw] = style.bg[cells][draw]

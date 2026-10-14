@@ -189,6 +189,16 @@ VALUES: Dict[str, Any] = {
             ],
         },
     },
+    # Explorer info panel under the map: ``fg`` is the text colour, ``head`` the island line, ``dim`` the controls and
+    # divider, ``bg`` the fill (the panel paints its own background). ``help_*`` colour the ``?`` overlay.
+    "panel": {
+        "fg": [220, 215, 200],
+        "head": [255, 225, 150],
+        "dim": [150, 145, 135],
+        "bg": [18, 18, 22],
+        "help_fg": [235, 230, 215],
+        "help_bg": [34, 34, 44],
+    },
     "tint_relief_fg": 0.55,  # relief glyphs on a data-ramp fill are the fill darkened by this factor
     # Terrain layer. Hillshade lights each land cell from the north-west: the height difference between
     # its south-east and north-west neighbours, over ``relief_m`` metres, times ``strength``, is added

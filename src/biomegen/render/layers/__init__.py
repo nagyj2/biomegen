@@ -7,7 +7,7 @@ Importing this package registers the built-in layers in :data:`LAYERS`.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Callable, Optional
 
@@ -36,6 +36,19 @@ from ..views import View
 
 
 @dataclass
+class Seen:
+    """What a draw put on screen, for legends: the biome and interior-cell integers that appear.
+
+    Attributes:
+        biomes: Biome integers under the cells inside the world.
+        cells: Interior ``Cell`` integers drawn by the interiors layer.
+    """
+
+    biomes: set[int] = field(default_factory=set)
+    cells: set[int] = field(default_factory=set)
+
+
+@dataclass
 class LayerContext:
     """Everything a layer reads, with the per-cell fields every layer needs computed once.
 
@@ -48,6 +61,7 @@ class LayerContext:
         ascii_only: Use the ``ascii`` glyph columns of the tables.
         labels: ``"all"`` draws feature names, ``"none"`` leaves them off.
         floor: The floor of a multi-floor interior to draw (clamped to each POI's own floors).
+        seen: Filled by the layers with the biomes and interior cells drawn.
         color: Whether the output is coloured. Without colour the glyphs must carry the information, so
             sparse biomes show their glyph on every cell and the sea sparkle is off.
     """
@@ -61,6 +75,7 @@ class LayerContext:
     color: bool = True
     labels: str = "all"
     floor: int = 0
+    seen: Seen = field(default_factory=Seen)
 
     @cached_property
     def biome_style(self) -> BiomeStyle:
@@ -153,11 +168,14 @@ def build_grid(
     color: bool = True,
     labels: str = "all",
     floor: int = 0,
+    seen: Optional[Seen] = None,
 ) -> CellGrid:
     """Draw ``view`` of ``world`` through ``sampler`` and return the finished grid."""
     # resolve first so a typo fails before any work
     layers = [LAYERS.get(name) for name in view.layers_for(sampler.detailed)]
-    context = LayerContext(world, config, view, sampler, overlay, ascii_only, color, labels, floor)
+    context = LayerContext(
+        world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen if seen is not None else Seen()
+    )
     grid = CellGrid(sampler.rows, sampler.cols)
     for layer in layers:
         layer(context, grid)

@@ -19,6 +19,7 @@ def terrain_layer(ctx: LayerContext, grid: CellGrid) -> None:
     style = ctx.biome_style
     biome = ctx.biome
     detailed = ctx.sampler.detailed
+    ctx.seen.biomes.update(np.unique(biome[ctx.sampler.inside]).tolist())
     glyph = ctx.detail_floor if detailed else style.glyph[biome]
     fg = style.fg[biome]
     bg = style.bg[biome]
