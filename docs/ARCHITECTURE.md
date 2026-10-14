@@ -59,11 +59,12 @@ src/biomegen/
     boat.py             Boat: bespoke planked hull + deck + cargo, floating on water
   pipeline/             Ordered generation stages (see Pipeline section below)
     __init__.py         generate() orchestrator + stats()
-    heightmap.py        Stage 1 — elevation
-    island_mask.py      Stage 2 — ocean/land classification + dist_to_ocean
-    climate.py          Stage 3 — temperature + moisture fields
+    heightmap.py        Unused since phase 3 (replaced by physical/terrain.py; deleted in phase-3 cleanup)
+    island_mask.py      Unused since phase 3 (replaced by physical/terrain.py; deleted in phase-3 cleanup)
+    climate.py          Stage 2 — temperature + moisture fields
     physical/
-      hydrology.py      Stage 4 — rivers, lakes, flow accumulation
+      terrain.py        Stage 1 — style, mountain belts, rank sea level, elevation_m, ocean, dist_to_ocean
+      hydrology.py      Stage 3 — rivers, lakes, flow accumulation
     biomes.py           Stage 5 — Whittaker biome classification
     regions.py          Stage 6 — region segmentation + colour
     poi_placement.py    Stage 7 — POI anchor placement

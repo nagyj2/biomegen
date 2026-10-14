@@ -1,9 +1,9 @@
 """Defaults for the ``tables`` section: per-name attribute tables read from ``biomegen/data/*.toml``.
 
 Each data file contributes its top-level tables (``biomes`` and ``relief`` from ``biomes.toml``,
-``tiers`` from ``tiers.toml``) as sub-sections, so a user config overrides one attribute of one row
-with the ordinary deep-merge, e.g. ``[tables.biomes.desert]`` + ``goods = "glass"``. The schema is
-checked by :func:`biomegen.config.tables.validate_tables`.
+``tiers`` from ``tiers.toml``, ``styles`` from ``terrain.toml``) as sub-sections, so a user config
+overrides one attribute of one row with the ordinary deep-merge, e.g. ``[tables.biomes.desert]`` +
+``goods = "glass"``. The schema is checked by :func:`biomegen.config.tables.validate_tables`.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Any, Dict
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 # Loaded in this order; two files may not define the same table.
-DATA_FILES: tuple[str, ...] = ("biomes.toml", "tiers.toml")
+DATA_FILES: tuple[str, ...] = ("biomes.toml", "tiers.toml", "terrain.toml")
 
 
 def _load(data_dir: Path, files: tuple[str, ...]) -> Dict[str, Any]:

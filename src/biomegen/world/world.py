@@ -113,6 +113,9 @@ class World:
         self.rivers: list[River] = []
         self.lakes: list[Lake] = []
 
+        # Terrain style row name (filled by the terrain stage; metadata, not hashed).
+        self.terrain_style: str = ""
+
         # Names (filled by the naming stage).
         self.island_name: str = ""
 

@@ -3,16 +3,17 @@
 :func:`generate` runs the stages in a fixed order, each consuming only fields produced by earlier
 stages so there is no backtracking:
 
-    heightmap -> island_mask -> climate -> hydrology -> biomes -> regions
-    (-> poi_placement -> roads -> poi_interiors -> naming, added in later phases)
+    terrain -> climate -> hydrology -> biomes -> regions
+    -> poi_placement -> roads -> poi_interiors -> naming
 
 Roads run **before** POI interiors so the road network knows where every POI anchor is: each road
 that reaches a POI records its approach direction on the POI, and the interiors stage then sites that
 POI's footprint entrance (and the interior door) on the side the road arrives from.
 
-A **land-exists sanity gate** wraps the two cheap leading stages: if a seed yields too little land,
-the seed is deterministically perturbed and those stages re-run, preventing empty-world cascades from
-reaching the expensive downstream stages.
+A **land-exists sanity gate** wraps the cheap leading terrain stage: if a seed yields too little land,
+the seed is deterministically perturbed and the stage re-runs, preventing empty-world cascades from
+reaching the expensive downstream stages. Terrain sets its sea level by rank, so the gate only trips
+when a style's land fraction is configured below ``world.min_land_fraction``.
 """
 
 from __future__ import annotations
@@ -30,14 +31,12 @@ from ..world.world import World
 from . import (
     biomes,
     climate,
-    heightmap,
-    island_mask,
     naming,
     poi_placement,
     regions,
 )
 from .civilization import roads
-from .physical import hydrology
+from .physical import hydrology, terrain
 from .story import poi_interiors
 
 
@@ -67,10 +66,9 @@ def generate(config: Config, seed: int) -> World:
         world = World(width, height, gen_seed, scale)
         world.master_seed = seed  # original seed (for echoing / naming continuity)
 
-        # The two leading stages form the gate: cheap, and they decide how much land exists.
-        heightmap.run(world, config, gen_seed)
-        island_mask.run(world, config, gen_seed)
-        if island_mask.land_fraction(world) >= min_land:
+        # The leading stage forms the gate: cheap, and it decides how much land exists.
+        terrain.run(world, config, gen_seed)
+        if terrain.land_fraction(world) >= min_land:
             break
 
     assert world is not None
@@ -115,6 +113,7 @@ def stats(world: World) -> Dict[str, object]:
         "lat_top": round(world.lat_top, 2),
         "lon_left": round(world.lon_left, 2),
         "seed": world.seed,
+        "terrain_style": world.terrain_style,
         "land_fraction": round(float(land.mean()), 4),
         "biomes": dict(sorted(biome_counts.items())),
         "regions": len(world.regions),
@@ -126,6 +125,10 @@ def stats(world: World) -> Dict[str, object]:
         "pois": len(world.pois),
         "poi_kinds": dict(sorted(Counter(p.kind for p in world.pois).items())),
         "bridges": sum(1 for p in world.pois if p.kind == "bridge"),
+        "elevation_m": {
+            "min": round(float(world.elevation_m.min()), 1),
+            "max": round(float(world.elevation_m.max()), 1),
+        },
         "elevation": {
             "min": round(float(world.elevation.min()), 3),
             "max": round(float(world.elevation.max()), 3),

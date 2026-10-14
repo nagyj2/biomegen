@@ -24,16 +24,19 @@ def world(cfg):
 def test_detail_view_stamps_poi_marker(world, cfg):
     # A marker-only POI (a bridge has no interior builder) still shows its glyph at the detail scale.
     # Interior-bearing POIs (settlements, dungeons, ...) intentionally replace their marker with the
-    # rendered interior at this scale - that is covered in test_interiors, not here.
-    poi = next(p for p in world.pois if p.kind == "bridge")
+    # rendered interior at this scale - that is covered in test_interiors, not here. A bridge inside a
+    # neighbouring settlement's footprint is drawn by that interior, so any bridge showing it suffices.
     aw, ah = 80, 24
     cw, ch = detail_cell_size("local", cfg, aw, ah)
-    vs = ViewState(cx=poi.x, cy=poi.y, scale="local")
-    vs.cam_x = edge_pan(0, vs.cx, max(1, aw // cw), world.width)
-    vs.cam_y = edge_pan(0, vs.cy, max(1, ah // ch), world.height)
-    frame = build_detail_frame(world, cfg, vs, aw, ah, cw, ch)
-    glyphs_drawn = {g for row in frame.cells for (g, _b) in row}
-    assert cfg.get("render.markers")[poi.kind] in glyphs_drawn
+
+    def marker_drawn(poi) -> bool:
+        vs = ViewState(cx=poi.x, cy=poi.y, scale="local")
+        vs.cam_x = edge_pan(0, vs.cx, max(1, aw // cw), world.width)
+        vs.cam_y = edge_pan(0, vs.cy, max(1, ah // ch), world.height)
+        frame = build_detail_frame(world, cfg, vs, aw, ah, cw, ch)
+        return cfg.get("render.markers")[poi.kind] in {g for row in frame.cells for (g, _b) in row}
+
+    assert any(marker_drawn(p) for p in world.pois if p.kind == "bridge")
 
 
 # --------------------------------------------------------------------------- road / bridge rendering
@@ -67,9 +70,11 @@ def test_road_and_bridge_overlay_colours_render():
     from biomegen.world.tile import COLOR_BRIDGE_DECK, COLOR_ROAD
 
     cfg = load_config(None)
-    w = pipeline.generate(cfg, 1)  # seed 1 reliably has road-connected bridges
-    bridge = next(p for p in w.pois if p.kind == "bridge")
-    frame, _cw, _ch, _vs = _detail_frame_at(w, cfg, bridge.x, bridge.y, scale="local")
-    ids = {cid for row in frame.cells for (_g, cid) in row}
-    assert COLOR_ROAD in ids  # road bed leading to the bridge
-    assert COLOR_BRIDGE_DECK in ids  # brown deck
+    w = pipeline.generate(cfg, 1)  # seed 1 has road-connected bridges
+
+    def colour_ids(bridge) -> set:
+        frame, _cw, _ch, _vs = _detail_frame_at(w, cfg, bridge.x, bridge.y, scale="local")
+        return {cid for row in frame.cells for (_g, cid) in row}
+
+    # Some bridge view shows both the road bed leading to it and the brown deck.
+    assert any({COLOR_ROAD, COLOR_BRIDGE_DECK} <= colour_ids(p) for p in w.pois if p.kind == "bridge")

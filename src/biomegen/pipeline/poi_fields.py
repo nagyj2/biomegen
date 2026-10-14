@@ -27,7 +27,7 @@ def freshwater_distance(world: World, backend: str) -> np.ndarray:
 
 
 def coast_distance(world: World) -> np.ndarray:
-    """Distance to the nearest ocean tile - already computed by island_mask as ``dist_to_ocean``."""
+    """Distance to the nearest ocean tile - already computed by the terrain stage as ``dist_to_ocean``."""
     return world.dist_to_ocean.astype(np.float32)
 
 

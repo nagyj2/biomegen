@@ -46,12 +46,23 @@ _TIER_ROW = {
     "spacing_km": "positive",
     "land_per_settlement_km2": "positive",
 }
+_STYLE_ROW = {
+    "label": "text",
+    "weight": "nonneg",
+    "land_fraction": "unit",
+    "base_feature_km": "positive",
+    "base_weight": "nonneg",
+    "continent_weight": "nonneg",
+    "centre_weight": "nonneg",
+    "blob_weight": "nonneg",
+}
 
 # Table name -> (row schema, keys a row may omit).
 SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "biomes": (_BIOME_ROW, frozenset()),
     "relief": (_RELIEF_ROW, frozenset()),
     "tiers": (_TIER_ROW, frozenset({"bg"})),
+    "styles": (_STYLE_ROW, frozenset()),
 }
 
 
@@ -125,3 +136,12 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
         ranks = [row["rank"] for row in tiers.values() if isinstance(row, dict) and isinstance(row.get("rank"), int)]
         if len(ranks) != len(set(ranks)):
             errors.append("tables.tiers: every tier needs a unique rank")
+
+    styles = tables.get("styles", {})
+    style = cfg.get("terrain", {}).get("style")
+    if isinstance(styles, dict) and style is not None and style != "seed" and style not in styles:
+        errors.append(f"terrain.style must be 'seed' or a style name ({', '.join(sorted(styles))}), got {style!r}")
+    if isinstance(styles, dict) and style == "seed":
+        weights = [row.get("weight") for row in styles.values() if isinstance(row, dict)]
+        if not any(isinstance(w, (int, float)) and w > 0 for w in weights):
+            errors.append("tables.styles: terrain.style = 'seed' needs at least one style with weight > 0")

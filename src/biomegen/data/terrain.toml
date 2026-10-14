@@ -1,0 +1,58 @@
+# Terrain style table, keyed by style name. Loaded into the config tree as `tables.styles`; override
+# with e.g. `[tables.styles.pangaea]` + `land_fraction = 0.5` in a user config. `terrain.style` picks
+# a row by name, or "seed" draws one per seed weighted by `weight`.
+#
+# A style shapes the raw height field before the sea level is set:
+#   height = base_weight * base + continent_weight * continent
+#          + centre_weight * (terrain.centre_radius - d) + blob_weight * max(blob, terrain.blob_floor)
+# where `base` is fine fBm, `continent` coarse fBm, `d` the normalised distance from the map centre and
+# `blob` the nearest island blob (1 at its centre, 0 at its radius). Mountain belts are added on top.
+# Values follow the reference generator (docs/reference/worldgen.py STYLE_PARAMS and `_elevation`);
+# its map-relative frequencies are converted at its 6000 km width.
+#
+# Keys:
+#   label             display name
+#   weight            relative chance of this style under terrain.style = "seed" (0 = never drawn)
+#   land_fraction     share of cells above sea level, before terrain.land_fraction_jitter
+#   base_feature_km   wavelength of the base fBm (smaller = more, smaller landmasses)
+#   base_weight, continent_weight, centre_weight, blob_weight   blend weights (formula above)
+
+[styles.continents]
+label = "Continents"
+weight = 1.0
+land_fraction = 0.38
+base_feature_km = 2000.0
+base_weight = 0.5
+continent_weight = 0.8
+centre_weight = 0.0
+blob_weight = 0.0
+
+[styles.pangaea]
+label = "Pangaea"
+weight = 1.0
+land_fraction = 0.42
+base_feature_km = 2000.0
+base_weight = 0.5
+continent_weight = 0.25
+centre_weight = 0.9
+blob_weight = 0.0
+
+[styles.archipelago]
+label = "Archipelago"
+weight = 1.0
+land_fraction = 0.27
+base_feature_km = 1090.0
+base_weight = 0.75
+continent_weight = 0.35
+centre_weight = 0.0
+blob_weight = 0.0
+
+[styles.islands]
+label = "Islands"
+weight = 1.0
+land_fraction = 0.30
+base_feature_km = 1500.0
+base_weight = 0.45
+continent_weight = 0.0
+centre_weight = 0.0
+blob_weight = 0.9
