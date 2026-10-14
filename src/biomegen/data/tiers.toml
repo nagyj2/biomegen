@@ -12,7 +12,7 @@
 #   bg            optional marker background colour (omit to keep the terrain background)
 #   pop           [min, max] population
 #   spacing_km    minimum distance to any already-placed settlement
-#   land_km2_per  one settlement of this tier per this much land area
+#   land_per_settlement_km2  one settlement of this tier per this much land area (km²)
 
 [tiers.capital]
 label = "Capital"
@@ -23,7 +23,7 @@ fg = [255, 215, 40]
 bg = [110, 20, 20]
 pop = [40000, 160000]
 spacing_km = 480.0
-land_km2_per = 750000.0
+land_per_settlement_km2 = 750000.0
 
 [tiers.city]
 label = "City"
@@ -34,7 +34,7 @@ fg = [255, 245, 200]
 bg = [60, 40, 30]
 pop = [9000, 40000]
 spacing_km = 390.0
-land_km2_per = 800000.0
+land_per_settlement_km2 = 800000.0
 
 [tiers.town]
 label = "Town"
@@ -44,7 +44,7 @@ ascii = "o"
 fg = [250, 240, 220]
 pop = [1500, 8000]
 spacing_km = 240.0
-land_km2_per = 400000.0
+land_per_settlement_km2 = 400000.0
 
 [tiers.village]
 label = "Village"
@@ -54,4 +54,4 @@ ascii = "+"
 fg = [245, 235, 215]
 pop = [80, 1200]
 spacing_km = 150.0
-land_km2_per = 200000.0
+land_per_settlement_km2 = 200000.0

@@ -7,6 +7,7 @@ Redesign plan and phases: `docs/redesign_plan.md`. Nested `CLAUDE.md` files hold
 
 - **Data driven.** New features are customizable through the config file: tunables live in
   `src/biomegen/config/defaults/`, never as literals in stage code (see `src/biomegen/config/CLAUDE.md`).
+  Per-name attribute rows (biomes, relief, tiers) live in `src/biomegen/data/*.toml`; distances are km.
 - **uv only.** `uv sync --extra dev`, `uv run ...`; never call `python`, `pip` or `pytest` directly.
 - **Named environment.** Runs use the uv environment `biome`, selected with `UV_PROJECT_ENVIRONMENT`
   (set under `env` in `.claude/settings.local.json`, not stored in the repo). Scripts fail fast without it.

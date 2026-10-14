@@ -44,7 +44,7 @@ _TIER_ROW = {
     "bg": "color",
     "pop": "range",
     "spacing_km": "positive",
-    "land_km2_per": "positive",
+    "land_per_settlement_km2": "positive",
 }
 
 # Table name -> (row schema, keys a row may omit).

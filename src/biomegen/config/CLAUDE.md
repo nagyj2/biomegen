@@ -13,6 +13,21 @@ Every tunable lives here. The program must run correctly with no config file at 
 4. Touch `validate.py` only when the value needs coercion (colours) or a clamp that would otherwise crash a
    stage. Validation collects every problem before raising; keep it light.
 
+## Units
+
+- New distances are km and areas km² (name them `*_km`, `*_km2`), never tiles or cells, so a different
+  grid resolution keeps their meaning. Convert at the call site with `world.scale` (`util/units.py`).
+- Existing tile-based keys convert when their stage is rewritten (phases 3-5), not before.
+- Physical constants (`KM_PER_DEGREE`) are not tunables; they stay in code.
+
+## Tables
+
+- Per-name attribute rows (biomes, relief, tiers, later polity and POI kinds) live in `../data/*.toml`,
+  not in `defaults/`. `defaults/tables.py` loads them as the `tables` section; one file may not repeat
+  another's table. Global numbers (counts, budgets) stay in `defaults/`.
+- Each table has a row schema in `tables.py` (`SCHEMAS`); a new table or column needs an entry there.
+  See `../data/CLAUDE.md` for adding a row.
+
 ## Rules
 
 - Read values through `Config.get("section.key")` at the call site; never import `DEFAULTS` outside `config/`.

@@ -29,15 +29,21 @@ src/biomegen/
   registry.py           Generic name→implementation registry (the swappability mechanism)
   config/
     defaults/           Authoritative defaults, one module per section — every tunable key lives here
+                        (tables.py loads data/*.toml as the `tables` section)
     loader.py           TOML deep-merge onto defaults
     model.py            Frozen Config, dotted-path get(), section() sub-view
     validate.py         Coerce/clamp values on load
+    tables.py           Row schemas and validation for the `tables` section
+  data/                 User-overridable attribute tables, keyed by name (see data/CLAUDE.md)
+    biomes.toml         Biome rows (reference set, used from phase 3) + one row per Relief member
+    tiers.toml          Settlement tiers: marker, population, spacing and density in km
   util/
     rng.py              DETERMINISM ANCHOR — blake2b sub-stream derivation; never builtin hash()
     noise.py            Noise backends (Perlin, Value, OpenSimplex, noise_lib) + fBm + domain warp
-    geometry.py         Neighbours, connected-components, distance transforms, A*
+    geometry.py         Neighbours, connected-components, distance transforms, A* (aspect-aware options)
+    units.py            Km-true scale model: GridScale (cell km size, aspect, km/cell, lat/lon)
   world/
-    tile.py             Biome / WaterType / Cell enums + TileView accessor
+    tile.py             Biome / Relief / WaterType / Cell enums + TileView accessor
     world.py            Immutable World (parallel numpy arrays) + fingerprint()
     overlay.py          Mutable Overlay (runtime edits, composited at read time)
     entities.py         POI / Region / River / Lake dataclasses
@@ -122,7 +128,13 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 
 Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `island_name`.
 
-`World.fingerprint()` hashes all fields via blake2b for the golden-world test.
+Scale metadata: `World.scale` is a `util.units.GridScale` built by `generate()` from `world.size_km`
+and `world.center_lat` / `center_lon`; `km_per_col`, `km_per_row`, `lat_top` and `lon_left` read
+through to it. Cells are anisotropic (default 31.25 x 40 km at 192x75). Not yet consumed by any stage;
+the phase-3 stages measure in km through it.
+
+`World.fingerprint()` hashes all per-tile fields via blake2b for the golden-world test (scale metadata
+is not hashed).
 
 ### Overlay (`world/overlay.py`)
 
