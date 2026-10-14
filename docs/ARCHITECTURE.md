@@ -35,8 +35,10 @@ src/biomegen/
     validate.py         Coerce/clamp values on load
     tables.py           Row schemas and validation for the `tables` section
   data/                 User-overridable attribute tables, keyed by name (see data/CLAUDE.md)
-    biomes.toml         Biome rows (reference set, used from phase 3) + one row per Relief member
+    biomes.toml         One row per Biome member + one per Relief member (relief has min_elevation_m)
     tiers.toml          Settlement tiers: marker, population, spacing and density in km
+    terrain.toml        Terrain styles (continents, pangaea, archipelago, islands)
+    geography.toml      Name patterns per geographic feature kind
   util/
     rng.py              DETERMINISM ANCHOR — blake2b sub-stream derivation; never builtin hash()
     noise.py            Noise backends (Perlin, Value, OpenSimplex, noise_lib) + fBm + domain warp
@@ -46,7 +48,7 @@ src/biomegen/
     tile.py             Biome / Relief / WaterType / Cell enums + TileView accessor
     world.py            Immutable World (parallel numpy arrays) + fingerprint()
     overlay.py          Mutable Overlay (runtime edits, composited at read time)
-    entities.py         POI / Region / River / Lake dataclasses
+    entities.py         POI / Region / River / Lake / GeoFeature dataclasses
   interiors/            Lazy, deterministic, LRU-cached POI interior builders
     grid.py             Shared toolkit: BSP partition, carving, stair shafts, walls/doors/streets,
                         furnishing scatter, registry + build cache
@@ -115,7 +117,7 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | Field | dtype | Range | Set by |
 |-------|-------|-------|--------|
 | `elevation_m` | float64 | metres, < 0 = sea depth | terrain; hydrology flattens lake surfaces |
-| `temperature_c` | float64 | °C | climate (phase 3; zeros until then) |
+| `temperature_c` | float64 | °C | climate |
 | `rain_mm` | float64 | mm / year | climate; recomputed by hydrology after its moisture bonus |
 | `moisture` | float64 | [0, 1] | climate + hydrology |
 | `biome` | uint8 | `Biome` enum int | terrain, hydrology, biomes |
@@ -134,8 +136,8 @@ Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `features` (`GeoFeatu
 Scale metadata: `World.scale` is a `util.units.GridScale` built by `generate()` from `world.size_km`
 and `world.center_lat` / `center_lon` (`center_lat = "seed"` draws it per generation attempt from the
 `terrain.latitude` stream, `pipeline.center_lat`); `km_per_col`, `km_per_row`, `lat_top` and `lon_left` read
-through to it. Cells are anisotropic (default 31.25 x 40 km at 192x75). Not yet consumed by any stage;
-the phase-3 stages measure in km through it.
+through to it. Cells are anisotropic: 25 x 50 km at the default 240x60, the 2:1 shape of a terminal cell.
+The physical stages sample noise and measure distances in km through it.
 
 `World.fingerprint()` hashes all per-tile fields via blake2b for the golden-world test (scale metadata
 is not hashed).
@@ -198,27 +200,25 @@ Ported from the reference `_climate`:
 
 ### Stage 3 — Hydrology (`pipeline/physical/hydrology.py`)
 
-Standard GIS surface-hydrology pipeline (RichDEM / GRASS GIS family):
+Standard GIS surface-hydrology pipeline (RichDEM / GRASS GIS family), in metres and km:
 
-1. **Priority-flood** (Barnes, Lehman & Soille 2014): flood inward from the ocean boundary, raising
-   each pit to its spill level. A monotonic counter breaks ties deterministically. O(n log n), uses a
-   min-heap. Yields the depression-free `filled` surface and a `order` array (processing rank, used
-   as a flat tie-breaker on flats).
+1. **Priority-flood** (Barnes, Lehman & Soille 2014) on `elevation_m`: flood inward from the ocean,
+   raising each pit to its spill level. A monotonic counter breaks ties deterministically. O(n log n).
+   Yields the depression-free `filled` surface and an `order` array (a tie-breaker on flats).
 2. **D8 flow directions**: each cell drains to its lowest 8-connected neighbour on the filled surface
    (key = `filled + order × 1e-9`). Vectorised via padded array shifts.
-3. **Flow accumulation**: process cells high-to-low (a topological sweep guaranteed by the fill
-   order), pushing unit drainage area to each cell's receiver. The result approximates upstream
-   catchment area.
-4. **Lake extraction**: cells where `filled - elevation` exceeds `lake_min_depth` are standing water.
-   4-connected components of sufficient size (`min_lake_size`) become `Lake` entities.
-5. **River extraction**: cells with `flow_accum ≥ accumulation_threshold` on land become channel
-   thalwegs. Sources (cells with no upstream channel neighbours) are sorted by accumulation and
-   traced downstream, yielding `River` paths.
-6. **River widening**: each thalweg cell gets a radius `= f(accum / threshold)`, capped at
-   `river_max_width`. Land neighbours within that radius are converted to river tiles — headwaters
-   stay 1 tile wide; great rivers near the sea span several tiles.
-7. **Freshwater moisture bonus**: land near fresh water gets an exponential moisture boost
-   (`moisture_strength × exp(-dist / moisture_radius)`), making river valleys biome-greener.
+3. **Flow accumulation**: cells high-to-low push their drainage downstream. Each land cell adds its
+   area × (`runoff_base` + moisture), so `flow_accum` is a wetness-weighted catchment in km².
+4. **Lakes**: connected cells under at least `lake_min_depth_m` of standing water, at least
+   `min_lake_area_km2` in area, become `Lake` entities; their surface in `elevation_m` is flattened to
+   the spill level.
+5. **Rivers**: land cells in the top `river_land_share` of catchments (and above
+   `river_min_drainage_km2`) become fresh-water channels over their land biome, traced source -> mouth
+   into `River` paths with `length_km`.
+6. **River widening**: a display effect in tiles (`river_width_scale`, `river_max_width`) until the
+   phase-4 renderer: great rivers near the sea span several tiles.
+7. **Fresh-water moisture bonus**: `moisture_strength × exp(-km / moisture_radius_km)`, then `rain_mm` is
+   recomputed from the new moisture.
 
 ### Stage 4 — Biomes (`pipeline/physical/biomes.py`)
 
