@@ -62,7 +62,15 @@ max-complexity = 18
 
 [tool.mypy]
 python_version = "3.14"
-files = ["src/biomegen/config", "src/biomegen/util", "src/biomegen/world", "src/biomegen/render", "src/biomegen/explorer"]
+files = [
+    "src/biomegen/config",
+    "src/biomegen/util",
+    "src/biomegen/world",
+    "src/biomegen/sampling",
+    "src/biomegen/sites",
+    "src/biomegen/render",
+    "src/biomegen/explorer",
+]
 ignore_missing_imports = true
 warn_unused_ignores = true
 warn_redundant_casts = true
