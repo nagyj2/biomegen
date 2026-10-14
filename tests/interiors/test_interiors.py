@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import pytest
 
@@ -9,10 +11,12 @@ from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.interiors import STRUCTURAL, ZOOM_VISIBLE, build_interior, footprint_cells, footprint_origin
 from biomegen.pipeline.story import poi_interiors
-from biomegen.render.state import ViewState, edge_pan
-from biomegen.render.zoom_view import build_detail_frame, detail_cell_size
+from biomegen.render.detail import centred_detail_sampler
+from biomegen.render.layers import Seen, build_grid
+from biomegen.render.sampler import Sampler
+from biomegen.render.views import View
 from biomegen.world.overlay import Overlay
-from biomegen.world.tile import INTERIOR_COLOR_BASE, OVERLAY_COLOR_BASE, Cell
+from biomegen.world.tile import Cell, WaterType
 
 
 @pytest.fixture(scope="module")
@@ -31,27 +35,40 @@ def dungeon(world):
     return next(p for p in world.pois if p.kind == "dungeon" and p.floor_count >= 3)
 
 
-def _interior_color_ids(frame):
-    """Collect the interior Cell ints that appear in a rendered detail frame.
+@dataclass
+class _Render:
+    """A rendered detail or map view: the grid, what the layers drew, and the sampler that placed it."""
 
-    Only the interior colour-id range counts; road/bridge overlay ids (>= OVERLAY_COLOR_BASE) are
-    surface features, not interior cells, and are excluded so they don't decode as bogus Cell values.
-    """
-    return [
-        cid - INTERIOR_COLOR_BASE
-        for row in frame.cells
-        for (_g, cid) in row
-        if INTERIOR_COLOR_BASE <= cid < OVERLAY_COLOR_BASE
-    ]
+    grid: object
+    seen: Seen
+    sampler: Sampler
 
 
-def _detail_frame(world, cfg, poi, scale, floor, overlay=None, aw=120, ah=40):
-    """Build a detail frame centred on ``poi`` at ``scale``/``floor`` (mirrors the app's camera math)."""
-    cw, ch = detail_cell_size(scale, cfg, aw, ah)
-    vs = ViewState(cx=poi.x, cy=poi.y, scale=scale, floor=floor)
-    vs.cam_x = edge_pan(0, vs.cx, max(1, aw // cw), world.width)
-    vs.cam_y = edge_pan(0, vs.cy, max(1, ah // ch), world.height)
-    return build_detail_frame(world, cfg, vs, aw, ah, cw, ch, overlay)
+_DRAW = View("t", ("terrain", "interiors"))
+_TERRAIN_ONLY = View("t", ("terrain",))
+
+
+def _interior_cell_ids(render):
+    """Collect the interior Cell ints that appear in a render (one per drawn grid cell)."""
+    cell_map = render.seen.cell_map
+    return [] if cell_map is None else [c for c in cell_map.ravel().tolist() if c >= 0]
+
+
+def _detail_render(world, cfg, poi, scale, floor, overlay=None, aw=120, ah=40):
+    """Render the interiors layer at ``scale``/``floor`` centred on ``poi`` (as the explorer would)."""
+    sampler = centred_detail_sampler(world, cfg, scale, aw, ah, (poi.x, poi.y))
+    seen = Seen()
+    grid = build_grid(world, cfg, _DRAW, sampler, overlay, floor=floor, seen=seen)
+    return _Render(grid, seen, sampler)
+
+
+def _map_render(world, cfg, poi, view=_DRAW, aw=50, ah=30):
+    """Render the 1:1 map around ``poi`` (one cell per tile), returning the render and the poi's cell."""
+    x0, y0 = max(0, min(poi.x - aw // 2, world.width - aw)), max(0, min(poi.y - ah // 2, world.height - ah))
+    sampler = Sampler.viewport(world, ah, aw, x0=float(x0), y0=float(y0))
+    seen = Seen()
+    grid = build_grid(world, cfg, view, sampler, seen=seen)
+    return _Render(grid, seen, sampler), (poi.x - x0, poi.y - y0)
 
 
 # --------------------------------------------------------------------------- builder determinism
@@ -195,24 +212,15 @@ def test_dungeons_have_two_to_five_floors(world):
 # --------------------------------------------------------------------------- water avoidance
 def _interior_cells_over_water(world, cfg, poi):
     """Return the water tiles under any interior cell rendered for ``poi`` at its detail (local) view."""
-    from biomegen.world.tile import WaterType
-
-    aw, ah = 120, 40
-    cw, ch = detail_cell_size("local", cfg, aw, ah)
-    vs = ViewState(cx=poi.x, cy=poi.y, scale="local", floor=poi.lowest_floor + poi.floor_count - 1)
-    vs.cam_x = edge_pan(0, vs.cx, max(1, aw // cw), world.width)
-    vs.cam_y = edge_pan(0, vs.cy, max(1, ah // ch), world.height)
-    frame = build_detail_frame(world, cfg, vs, aw, ah, cw, ch)
-    wet = []
-    for r in range(frame.rows):
-        ty = vs.cam_y + r // ch
-        for c in range(frame.cols):
-            if not (INTERIOR_COLOR_BASE <= frame.cells[r][c][1] < OVERLAY_COLOR_BASE):
-                continue  # terrain or road/bridge-overlay cell, not an interior structure cell
-            tx = vs.cam_x + c // cw
-            if 0 <= ty < world.height and 0 <= tx < world.width and world.water_type[ty, tx] != int(WaterType.NONE):
-                wet.append((tx, ty))
-    return wet
+    render = _detail_render(world, cfg, poi, "local", poi.lowest_floor + poi.floor_count - 1)
+    cell_map = render.seen.cell_map
+    if cell_map is None:
+        return []
+    sampler = render.sampler
+    drawn = (cell_map >= 0) & ~np.isin(cell_map, [int(Cell.BRIDGE), int(Cell.BRIDGE_WALL)])
+    wet = drawn & (world.water_type[sampler.tile_y, sampler.tile_x] != int(WaterType.NONE))
+    ys, xs = np.nonzero(wet)
+    return sorted({(int(sampler.tile_x[y, x]), int(sampler.tile_y[y, x])) for y, x in zip(ys, xs, strict=True)})
 
 
 @pytest.mark.parametrize("seed", [1, 2, 3, 7, 42, 100])
@@ -342,16 +350,14 @@ def test_footprint_geometry(dungeon, cfg):
 # --------------------------------------------------------------------------- detail-view rendering
 def test_local_renders_full_interior_with_furniture(world, cfg, dungeon):
     # Verifies the local scale draws floors, walls AND furniture (the full interior).
-    frame = _detail_frame(world, cfg, dungeon, "local", floor=0)
-    drawn = {Cell(c).name for c in _interior_color_ids(frame)}
+    drawn = {Cell(c).name for c in _interior_cell_ids(_detail_render(world, cfg, dungeon, "local", floor=0))}
     assert {"WALL", "FLOOR"} <= drawn
     assert drawn & {"RUBBLE", "BARREL", "CHEST"}  # at least some furniture
 
 
 def test_zoom_draws_filled_shell_without_furniture(world, cfg, dungeon):
     # Verifies the zoom scale fills the dungeon in (walls AND floor) but suppresses furniture/clutter.
-    frame = _detail_frame(world, cfg, dungeon, "zoom", floor=0)
-    drawn_ints = set(_interior_color_ids(frame))
+    drawn_ints = set(_interior_cell_ids(_detail_render(world, cfg, dungeon, "zoom", floor=0)))
     assert {int(Cell.WALL), int(Cell.FLOOR)} <= drawn_ints  # filled-in shell, not just an outline
     assert drawn_ints <= ZOOM_VISIBLE  # but nothing outside the shell set (no furniture)
     furniture = {int(Cell.RUBBLE), int(Cell.CHEST), int(Cell.BARREL), int(Cell.TABLE), int(Cell.SHELF)}
@@ -363,64 +369,53 @@ def test_zoom_dungeon_shows_no_terrain_inside_the_shape(world, cfg, dungeon):
     # so no biome clutter leaks onto the floorplan. VOID cells outside the organic shape still show
     # terrain (the world around the dungeon), so we only check the structure's own cells.
     floor = 0  # entry floor carries furniture in its rooms
-    aw, ah = 120, 40
-    cw, ch = detail_cell_size("zoom", cfg, aw, ah)
-    vs = ViewState(cx=dungeon.x, cy=dungeon.y, scale="zoom", floor=floor)
-    vs.cam_x = edge_pan(0, vs.cx, max(1, aw // cw), world.width)
-    vs.cam_y = edge_pan(0, vs.cy, max(1, ah // ch), world.height)
-    frame = build_detail_frame(world, cfg, vs, aw, ah, cw, ch)
-
-    from biomegen.world.tile import WaterType
-
+    render = _detail_render(world, cfg, dungeon, "zoom", floor=floor)
+    sampler, cell_map = render.sampler, render.seen.cell_map
+    assert cell_map is not None
     grid = build_interior(dungeon, floor, cfg, world)  # terrain-aware grid (matches what was rendered)
     gh, gw = grid.shape
     fw, fh = dungeon.footprint
     tx0, ty0 = footprint_origin(dungeon)
-    base_row, base_col = (ty0 - vs.cam_y) * ch, (tx0 - vs.cam_x) * cw
+    cw, ch = sampler.cell_w, sampler.cell_h
+    base_row, base_col = (ty0 - sampler.cam_y) * ch, (tx0 - sampler.cam_x) * cw
     leaks = []
     for dr in range(fh * ch):
         r = base_row + dr
-        if not (0 <= r < frame.rows):
+        if not (0 <= r < sampler.rows):
             continue
         sy = min(dr * gh // (fh * ch), gh - 1)
-        ty = vs.cam_y + r // ch
+        ty = sampler.cam_y + r // ch
         for dc in range(fw * cw):
             c = base_col + dc
-            if not (0 <= c < frame.cols):
+            if not (0 <= c < sampler.cols):
                 continue
             sx = min(dc * gw // (fw * cw), gw - 1)
-            tx = vs.cam_x + c // cw
+            tx = sampler.cam_x + c // cw
             if int(grid[sy, sx]) == int(Cell.VOID):
                 continue  # VOID is allowed to show terrain (it's outside the structure)
             if 0 <= ty < world.height and 0 <= tx < world.width and world.water_type[ty, tx] != int(WaterType.NONE):
                 continue  # a cell over water legitimately shows the water (the backstop forms around it)
-            if frame.cells[r][c][1] < INTERIOR_COLOR_BASE:
+            if cell_map[r, c] < 0:
                 leaks.append((sy, sx))
-    assert not leaks  # no non-void interior cell (on land) fell back to a terrain (biome) colour
+    assert not leaks  # no non-void interior cell (on land) fell back to terrain
 
 
 def test_biome_map_marker_is_not_overwritten_by_outline(world, cfg, dungeon):
     # Verifies the dungeon's anchor cell is left un-stamped on the overview so its POI marker wins.
-    from biomegen.render.map_view import build_biome_frame
-
-    aw, ah = 50, 30
-    vs = ViewState(cx=dungeon.x, cy=dungeon.y, mode="onetoone")
-    vs.cam_x = edge_pan(0, vs.cx, aw, world.width)
-    vs.cam_y = edge_pan(0, vs.cy, ah, world.height)
-    frame = build_biome_frame(world, vs, aw, ah, cfg)
-    assert frame.overrides is not None
-    acol, arow = dungeon.x - vs.cam_x, dungeon.y - vs.cam_y
-    assert 0 <= acol < aw and 0 <= arow < ah
-    assert frame.overrides[arow][acol] is None  # marker cell clear -> POI glyph takes precedence
-    assert any(s is not None for row in frame.overrides for s in row)  # outline still stamped elsewhere
+    render, (acol, arow) = _map_render(world, cfg, dungeon)
+    cell_map = render.seen.cell_map
+    assert cell_map is not None
+    assert 0 <= acol < 50 and 0 <= arow < 30
+    assert cell_map[arow, acol] == -1  # marker cell clear -> POI glyph takes precedence
+    assert (cell_map >= 0).any()  # outline still stamped elsewhere
 
 
 def test_dungeon_marker_is_replaced_by_interior_at_local(world, cfg, dungeon):
     # Verifies a dungeon shows its interior (not its 'D' map marker) at the detail scale.
-    frame = _detail_frame(world, cfg, dungeon, "local", floor=0)
+    render = _detail_render(world, cfg, dungeon, "local", floor=0)
     marker = cfg.get("render.markers")["dungeon"]
-    glyphs_on_footprint = {g for row in frame.cells for (g, cid) in row if cid >= INTERIOR_COLOR_BASE}
-    assert marker not in glyphs_on_footprint
+    drawn = render.seen.cell_map >= 0
+    assert marker not in set(render.grid.glyph[drawn].tolist())
 
 
 def test_overlay_edit_is_composited_into_render(world, cfg, dungeon):
@@ -432,10 +427,10 @@ def test_overlay_edit_is_composited_into_render(world, cfg, dungeon):
     for yy in range(gh // 2 - 1, gh // 2 + 2):
         for xx in range(gw // 2 - 1, gw // 2 + 2):
             overlay.set_interior(dungeon.interior_seed, 0, xx, yy, int(Cell.CHEST))
-    plain = _detail_frame(world, cfg, dungeon, "local", floor=0, overlay=None)
-    edited = _detail_frame(world, cfg, dungeon, "local", floor=0, overlay=overlay)
-    n_plain = sum(1 for c in _interior_color_ids(plain) if c == int(Cell.CHEST))
-    n_edited = sum(1 for c in _interior_color_ids(edited) if c == int(Cell.CHEST))
+    plain = _detail_render(world, cfg, dungeon, "local", floor=0, overlay=None)
+    edited = _detail_render(world, cfg, dungeon, "local", floor=0, overlay=overlay)
+    n_plain = sum(1 for c in _interior_cell_ids(plain) if c == int(Cell.CHEST))
+    n_edited = sum(1 for c in _interior_cell_ids(edited) if c == int(Cell.CHEST))
     assert n_edited > n_plain
 
 
@@ -520,27 +515,16 @@ def test_furniture_has_variety(dungeon, cfg):
 
 def test_biome_map_stamps_dungeon_outline(world, cfg, dungeon):
     # Verifies the overview map draws a scaled structural outline of the dungeon (not just terrain).
-    from biomegen.render.map_view import build_biome_frame
-    from biomegen.render.state import ViewState, edge_pan
-
-    aw, ah = 50, 30
-    vs = ViewState(cx=dungeon.x, cy=dungeon.y, mode="onetoone")
-    vs.cam_x = edge_pan(0, vs.cx, aw, world.width)
-    vs.cam_y = edge_pan(0, vs.cy, ah, world.height)
-    frame = build_biome_frame(world, vs, aw, ah, cfg)
-    assert frame.overrides is not None
-    stamped = {s[1] - INTERIOR_COLOR_BASE for row in frame.overrides for s in row if s is not None}
+    render, _ = _map_render(world, cfg, dungeon)
+    stamped = set(_interior_cell_ids(render))
     assert stamped  # at least one interior cell was stamped onto the map
     assert stamped <= STRUCTURAL  # the overview shows only the structural outline (walls/doors/stairs)
 
 
-def test_biome_map_without_config_has_no_overrides(world):
-    # Verifies the terrain-only frame path (no config) is unchanged - no interior stamping.
-    from biomegen.render.map_view import build_biome_frame
-    from biomegen.render.state import ViewState
-
-    vs = ViewState(cx=world.width // 2, cy=world.height // 2, mode="fit")
-    assert build_biome_frame(world, vs, 60, 30).overrides is None
+def test_map_without_the_interiors_layer_has_no_outline(world, cfg, dungeon):
+    # Verifies a view that leaves the interiors layer out draws no interior cells.
+    render, _ = _map_render(world, cfg, dungeon, view=_TERRAIN_ONLY)
+    assert render.seen.cell_map is None
 
 
 def test_overlay_does_not_mutate_cached_base(dungeon, cfg):

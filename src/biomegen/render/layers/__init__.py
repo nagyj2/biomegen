@@ -42,10 +42,13 @@ class Seen:
     Attributes:
         biomes: Biome integers under the cells inside the world.
         cells: Interior ``Cell`` integers drawn by the interiors layer.
+        cell_map: The interior ``Cell`` integer under each grid cell (``-1`` where none was drawn), or ``None``
+            until an interiors layer has drawn.
     """
 
     biomes: set[int] = field(default_factory=set)
     cells: set[int] = field(default_factory=set)
+    cell_map: Optional[np.ndarray] = None
 
 
 @dataclass

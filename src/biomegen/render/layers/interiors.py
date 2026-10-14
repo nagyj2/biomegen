@@ -24,6 +24,14 @@ _ZOOM_VISIBLE = np.array(sorted(ZOOM_VISIBLE))
 _STRUCTURAL = np.array(sorted(STRUCTURAL))
 
 
+def _record(ctx: LayerContext, grid: CellGrid, rows: slice, cols: slice, cells: np.ndarray, draw: np.ndarray) -> None:
+    """Note which interior cells were drawn: the set, and the cell under each grid cell."""
+    ctx.seen.cells.update(np.unique(cells[draw]).tolist())
+    if ctx.seen.cell_map is None:
+        ctx.seen.cell_map = np.full(grid.glyph.shape, -1, dtype=np.int16)
+    ctx.seen.cell_map[rows, cols][draw] = cells[draw]
+
+
 def _map_outlines(ctx: LayerContext, grid: CellGrid) -> None:
     """Stamp the structural outline (walls, doors, stairs) of each POI's top floor, scaled to the map cells.
 
@@ -60,7 +68,7 @@ def _map_outlines(ctx: LayerContext, grid: CellGrid) -> None:
         marker = sampler.cell_coords(poi.x, poi.y)
         if marker is not None and rows.start <= marker[1] < rows.stop and cols.start <= marker[0] < cols.stop:
             draw[marker[1] - rows.start, marker[0] - cols.start] = False
-        ctx.seen.cells.update(np.unique(cells[draw]).tolist())
+        _record(ctx, grid, rows, cols, cells, draw)
         grid.glyph[rows, cols][draw] = style.glyph[cells][draw]
         grid.fg[rows, cols][draw] = style.fg[cells][draw]
         grid.bg[rows, cols][draw] = style.bg[cells][draw]
@@ -123,7 +131,7 @@ def interiors_layer(ctx: LayerContext, grid: CellGrid) -> None:
             draw &= ~(wet & ~np.isin(cells, _BRIDGE_CELLS))
         if shell_only:  # furniture stands on a floor: draw that floor, not the terrain under it
             cells = np.where(np.isin(cells, _ZOOM_VISIBLE), cells, _FLOOR)
-        ctx.seen.cells.update(np.unique(cells[draw]).tolist())
+        _record(ctx, grid, rows, cols, cells, draw)
         grid.glyph[rows, cols][draw] = style.glyph[cells][draw]
         grid.fg[rows, cols][draw] = style.fg[cells][draw]
         grid.bg[rows, cols][draw] = style.bg[cells][draw]

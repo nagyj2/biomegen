@@ -18,9 +18,8 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.render.surface import river_mask
 from biomegen.util.units import KM_PER_DEGREE
-from biomegen.world.tile import Biome, WaterType
+from biomegen.world.tile import WATER_BIOMES, Biome, WaterType
 from biomegen.world.world import World
 
 
@@ -129,7 +128,7 @@ def test_deserts_appear_for_some_seeds(cfg: Config) -> None:
 
 def _max_river_run(world: World) -> int:
     """Return the widest contiguous run of river tiles along any row (a width proxy)."""
-    river = river_mask(world)
+    river = (world.water_type == int(WaterType.FRESH)) & ~np.isin(world.biome, sorted(WATER_BIOMES))
     best = 0
     for row in river:
         run = 0
