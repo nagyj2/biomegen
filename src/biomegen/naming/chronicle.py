@@ -37,6 +37,15 @@ def name_fallen_realms(world: World, config: Config, seed: int) -> None:
         fallen.name = stand_in.name
 
 
+def _ruler(world: World, realm: Realm, year: int) -> tuple[str, tuple[str, int] | None]:
+    """Return the name of ``realm``'s ruler in ``year`` and what it refers to (``None``: the realm has no ruler records,
+    so its ``ruler`` string stands and names no one in particular)."""
+    ruler = world.ruler_at(realm.id, year)
+    if ruler is None:
+        return realm.ruler, None
+    return ruler.name, (REF_RULER, ruler.id)
+
+
 def _tokens(
     world: World, config: Config, event: ChronicleEvent, relations: dict[tuple[int, int], Relation]
 ) -> tuple[dict[str, object], Where]:
@@ -58,23 +67,37 @@ def _tokens(
         where["town"] = (REF_POI, event.poi_ids[0])
     elif event.kind == "succession" and realms:
         realm = realms[0]
-        styles = dict(tag.split(":") for tag in event.tags)
+        styles = dict(tag.split(":") for tag in event.tags if tag.partition(":")[0] in ("from", "to"))
         label = {key: str(config.get(f"tables.ruling_styles.{name}.label")) for key, name in styles.items()}
         tokens.update(realm=realm.name, short=realm.short, style=label["to"], old_style=label["from"])
         where.update(realm=(REF_REALM, realm.id), short=(REF_REALM, realm.id))
+        for token, year in (("ruler", event.year), ("old_ruler", event.year - 1)):  # the new reign and the one it ends
+            tokens[token], ref = _ruler(world, realm, year)
+            if ref:
+                where[token] = ref
     elif event.kind in ("founding", "settling", "conquest") and realms:
         realm = realms[0]
         seat = world.pois[realm.seat_poi].name if realm.seat_poi >= 0 else realm.short
-        tokens.update(realm=realm.name, short=realm.short, ruler=realm.ruler, seat=seat)
-        where.update(realm=(REF_REALM, realm.id), short=(REF_REALM, realm.id), ruler=(REF_RULER, realm.id))
+        tokens.update(realm=realm.name, short=realm.short, seat=seat)
+        where.update(realm=(REF_REALM, realm.id), short=(REF_REALM, realm.id))
+        tokens["ruler"], ref = _ruler(world, realm, event.year)  # a founding's ruler is the founder
+        if ref:
+            where["ruler"] = ref
         where["seat"] = (REF_POI, realm.seat_poi) if realm.seat_poi >= 0 else (REF_REALM, realm.id)
         if event.kind == "settling":
             tokens["town"] = world.pois[event.poi_ids[0]].name
             where["town"] = (REF_POI, event.poi_ids[0])
         if event.kind == "conquest":
             liege = realms[1]
-            tokens.update(liege=liege.name, liege_short=liege.short, ruler=liege.ruler)
-            where.update(liege=(REF_REALM, liege.id), liege_short=(REF_REALM, liege.id), ruler=(REF_RULER, liege.id))
+            tokens.update(liege=liege.name, liege_short=liege.short)
+            where.update(liege=(REF_REALM, liege.id), liege_short=(REF_REALM, liege.id))
+            tokens["ruler"], ref = _ruler(
+                world, liege, event.year
+            )  # the overlord's ruler when the vassal bent the knee
+            if ref:
+                where["ruler"] = ref
+            else:
+                where.pop("ruler", None)
     elif fallen is not None and realms:
         realm = realms[0]
         tokens.update(victor=realm.name, victor_short=realm.short)

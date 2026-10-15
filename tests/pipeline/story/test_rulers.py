@@ -264,3 +264,24 @@ def test_rulers_of_a_dawn_world_are_none() -> None:
     config = load_config(None)
     config.data["history"]["start"] = "dawn"
     assert pipeline.generate(config, 42).rulers == []
+
+
+def test_a_founding_text_that_names_a_ruler_names_the_founder(world: World) -> None:
+    # The year-10 founding is not ruled by the ruler of year 1200: a ruler named in it is the realm's first.
+    founded = [e for e in world.chronicle if e.kind == "founding" and e.realm_ids and "{ruler}" in e.template]
+    assert founded
+    for event in founded:
+        founder = _rulers_of(world, event.realm_ids[0])[0]
+        assert founder.name.lower() in event.text.lower()
+
+
+def test_a_succession_text_that_names_a_ruler_names_that_reign(world: World) -> None:
+    # A title may open the sentence capitalised ("The Synod of ..."), so names are compared in lower case.
+    for event in _successions(world):
+        reigns = _rulers_of(world, event.realm_ids[0])
+        new = next(r for r in reigns if r.from_year == event.year)
+        old = next(r for r in reigns if r.to_year == event.year)
+        text = event.text.lower()
+        assert ("{ruler}" not in event.template or new.name.lower() in text) and (
+            "{old_ruler}" not in event.template or old.name.lower() in text
+        )

@@ -27,8 +27,10 @@ def chronicle_document(world: World, config: Config) -> Document:
     named: set[int] = set()  # settlements the chronicle has already named
 
     def name_color(kind: str, ref: int) -> RGB:
-        if kind in (REF_REALM, REF_RULER):
+        if kind == REF_REALM:
             return world.realms[ref].color
+        if kind == REF_RULER:  # a ruler is coloured as their realm
+            return world.realms[world.rulers[ref].realm_id].color
         if kind == REF_FALLEN:
             return world.fallen_realms[ref].color
         if kind == REF_FEATURE:

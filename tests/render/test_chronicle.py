@@ -10,7 +10,7 @@ from biomegen.config.model import Config
 from biomegen.render.backends.plain import to_plain
 from biomegen.render.chronicle import chronicle_document
 from biomegen.world.chronicle import chronicle_text
-from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, Realm
+from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, Realm, Ruler
 from biomegen.world.world import World
 
 
@@ -64,6 +64,7 @@ def test_text_outside_a_name_is_uncoloured(cfg: Config) -> None:
 
 def test_a_ruler_takes_the_colour_of_their_realm(cfg: Config) -> None:
     world = _tiny()
+    world.rulers = [Ruler(id=0, realm_id=0, from_year=1, to_year=None, style="martial")]
     world.chronicle[0].refs = [(0, 12, "ruler", 0)]
     assert _name(world, cfg, "Kingdom of A").fg == (200, 20, 20)
 

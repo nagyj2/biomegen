@@ -20,7 +20,8 @@
 #   treaty_trade      {a} {a_short} {b} {b_short} {reason}
 #   battle            {winner} {winner_short} {loser} {loser_short} {reason}
 #   fall              {fallen} {founded}                          the fallen realm's name and its founding year
-#   succession        {realm} {short} {style} {old_style}         the realm and its new and old ruling styles
+#   succession        {realm} {short} {style} {old_style} {ruler} {old_ruler}   the realm, its new and old ruling styles
+#                                                                 and the rulers of the new and the old reign
 #   founding_fallen   {fallen}
 #   war_ended         {attacker} {attacker_short} {defender} {defender_short}   an older war, over by now
 #   war_fallen        {attacker} {attacker_short} {defender} {defender_short} {fallen}   a war with a fallen realm
@@ -73,9 +74,9 @@ templates = [
 
 [chronicle.succession]
 templates = [
-  "The throne of {short} passes to a {style} ruler, after a {old_style} reign.",
-  "A {style} ruler succeeds to the rule of {realm}; the {old_style} days are over.",
-  "{short} changes with its ruler: a {old_style} reign gives way to a {style} one.",
+  "The throne of {short} passes to {ruler}, a {style} ruler, after {old_ruler}'s {old_style} reign.",
+  "{ruler}, a {style} ruler, succeeds {old_ruler} to the rule of {realm}; the {old_style} days are over.",
+  "{short} changes with its ruler: {old_ruler}'s {old_style} reign gives way to {ruler}'s {style} one.",
 ]
 
 [chronicle.war]

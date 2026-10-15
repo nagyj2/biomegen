@@ -270,7 +270,7 @@ _CHRONICLE_TOKENS = {
     "treaty_trade": frozenset({"a", "a_short", "b", "b_short", "reason"}),
     "battle": frozenset({"winner", "winner_short", "loser", "loser_short", "reason"}),
     "fall": frozenset({"fallen", "founded"}),
-    "succession": frozenset({"realm", "short", "style", "old_style"}),
+    "succession": frozenset({"realm", "short", "style", "old_style", "ruler", "old_ruler"}),
     "founding_fallen": frozenset({"fallen"}),
     "war_ended": frozenset({"attacker", "attacker_short", "defender", "defender_short"}),
     "war_fallen": frozenset({"attacker", "attacker_short", "defender", "defender_short", "fallen"}),

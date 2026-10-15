@@ -11,7 +11,7 @@ from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.naming import chronicle, polity
 from biomegen.util.units import grid_scale
-from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Realm, Relation
+from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Realm, Relation, Ruler
 from biomegen.world.tile import Biome
 from biomegen.world.world import World
 
@@ -42,6 +42,11 @@ def _small_world() -> World:
     ]
     world.relations = [Relation(a=0, b=1, kind="war", why="a broken pact", attacker=1, claim_poi=1)]
     world.fallen_realms = [FallenRealm(id=0, location=(3, 2), founded=100, fell=300)]
+    world.rulers = [  # realm 0 has two reigns, the second from year 200; realm 1 one
+        Ruler(id=0, realm_id=0, from_year=50, to_year=200, style="martial", name="King Bran"),
+        Ruler(id=1, realm_id=0, from_year=200, to_year=None, style="gentle", name="Queen Ede"),
+        Ruler(id=2, realm_id=1, from_year=50, to_year=None, style="pious", name="Duke Cal"),
+    ]
     return world
 
 
@@ -250,7 +255,7 @@ def test_the_capitalised_first_letter_does_not_move_a_span(cfg: Config) -> None:
 
 
 def test_every_span_in_a_generated_world_covers_a_name(world: World) -> None:
-    names = {r.name for r in world.realms} | {r.short for r in world.realms} | {r.ruler for r in world.realms}
+    names = {r.name for r in world.realms} | {r.short for r in world.realms} | {r.name for r in world.rulers}
     names |= {p.name for p in world.pois} | {f.name for f in world.fallen_realms}
     names |= {f.name.removeprefix("The ") for f in world.features}  # a river, range or sea named in a reason
     spans = [(e.text[a:b], kind) for e in world.chronicle for a, b, kind, _ in e.refs]
@@ -284,3 +289,53 @@ def test_a_town_named_in_a_reason_is_marked_as_a_settlement(world: World) -> Non
         for start, end, kind, ident in relation.why_refs:
             if kind == "poi":
                 assert relation.why[start:end] == world.pois[ident].name
+
+
+# --- rulers in the texts ---------------------------------------------------------------------------------------------
+
+
+def test_a_founding_names_the_founder_of_that_year(cfg: Config) -> None:
+    # Realm 0 has had two rulers; a founding in year 60 names the first, not the present one.
+    event = ChronicleEvent(0, 60, "founding", [0], template="{realm} under {ruler}.")
+    assert _render(_small_world(), event, cfg) == "Kingdom of Aldor under King Bran."
+
+
+def test_a_conquest_names_the_lieges_ruler_in_the_year_of_the_conquest(cfg: Config) -> None:
+    later = ChronicleEvent(0, 250, "conquest", [1, 0], template="{liege} under {ruler} takes {realm}.")
+    earlier = ChronicleEvent(0, 150, "conquest", [1, 0], template="{liege} under {ruler} takes {realm}.")
+    assert _render(_small_world(), later, cfg).split(" under ")[1].startswith("Queen Ede")
+    assert _render(_small_world(), earlier, cfg).split(" under ")[1].startswith("King Bran")
+
+
+def _succession(year: int = 200) -> ChronicleEvent:
+    return ChronicleEvent(
+        0,
+        year,
+        "succession",
+        [0],
+        template="{old_ruler} gives way to {ruler}: {old_style} to {style}.",
+        tags=("from:martial", "to:gentle"),
+    )
+
+
+def test_a_succession_names_the_new_ruler_and_the_one_before(cfg: Config) -> None:
+    assert _render(_small_world(), _succession(), cfg) == "King Bran gives way to Queen Ede: warlike to gentle."
+
+
+def test_a_succession_marks_both_rulers_as_rulers(cfg: Config) -> None:
+    event = _succession()
+    _render(_small_world(), event, cfg)
+    assert _names(event) == [("King Bran", "ruler"), ("Queen Ede", "ruler")]
+
+
+def test_a_ruler_ref_is_the_rulers_id(cfg: Config) -> None:
+    event = _succession()
+    _render(_small_world(), event, cfg)
+    assert [ident for *_, kind, ident in event.refs if kind == "ruler"] == [0, 1]
+
+
+def test_a_realm_with_no_ruler_records_falls_back_to_its_ruler_string(cfg: Config) -> None:
+    world = _small_world()
+    world.rulers = []
+    event = ChronicleEvent(0, 100, "founding", [0], [0], template="{realm} under {ruler}.")
+    assert _render(world, event, cfg) == "Kingdom of Aldor under King Bran."
