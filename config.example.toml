@@ -114,7 +114,7 @@ road_meander_scale = 5.0        # tiles across a meander feature
 # including the diagonal and junction glyphs) are also tunable.
 # road clutter (road_clutter, road_clutter_local), bridge_glyphs and the detail colours (detail_colors) are also
 # tunable. See src/biomegen/config/defaults/render.py.
-default_view = "fit"            # "fit" | "onetoone"
+default_view = "onetoone"       # "fit" | "onetoone"
 status_height = 12
 
 [render.cache]

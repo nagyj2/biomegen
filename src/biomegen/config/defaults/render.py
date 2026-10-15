@@ -69,7 +69,7 @@ VALUES: Dict[str, Any] = {
         "wall_bg": [104, 66, 34],
         "wall_fg": [70, 44, 22],
     },
-    "default_view": "fit",  # "fit" (whole map downsampled) or "onetoone" (1:1 panning)
+    "default_view": "onetoone",  # "fit" (whole map downsampled) or "onetoone" (1:1 panning)
     "status_height": 12,  # rows reserved below the map for the status/legend panel
     # The explorer's render cache (render/cache.py). At the zoom, local and site scales the terrain layers are drawn
     # once into chunks of chunk_cols x chunk_rows cells and reused while panning; at most max_cells cells are kept

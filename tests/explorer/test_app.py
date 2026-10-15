@@ -186,8 +186,8 @@ def test_view_key_goes_on_to_the_data_views(config: Config) -> None:
     assert "view: elevation" in _screen(_run(_world(), config, "v", "v"))
 
 
-def test_fit_key_toggles_to_one_to_one(config: Config) -> None:
-    assert "view 1:1" in _screen(_run(_world(), config, "f"))
+def test_fit_key_toggles_to_fit(config: Config) -> None:
+    assert "view FIT" in _screen(_run(_world(), config, "f"))
 
 
 def test_arrow_keys_move_the_cursor(config: Config) -> None:
