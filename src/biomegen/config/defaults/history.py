@@ -25,9 +25,9 @@ VALUES: Dict[str, Any] = {
     # Relations. A pair sharing a border may have had an older war first (``past_war_chance``, lasting
     # ``past_war_years``) that ended in peace; the relation itself then begins at any later year. A war's front sees
     # ``battles_per_100km_front`` battles per 100 km of border (at least one for an older war).
-    "past_war_chance": 0.4,
+    "past_war_chance": 0.15,
     "past_war_years": [5, 60],
-    "battles_per_100km_front": 0.25,
+    "battles_per_100km_front": 0.1,
     # Strength of a faction (the odds of a battle): a realm starts at its area over the mean realm area, within
     # ``start_strength_range``; a fallen realm draws from ``fallen_strength``. A victory multiplies it by
     # ``1 + victory_gain``, a defeat by ``1 - defeat_loss``, never below ``min_strength``.
@@ -46,7 +46,7 @@ VALUES: Dict[str, Any] = {
     # Each fallen realm fights ``fallen_wars`` wars (a [min, max] count) against its ``fallen_neighbours`` nearest
     # living realms; after a lost battle that leaves its strength under ``fall_strength`` it is conquered
     # ``fall_delay_years`` on.
-    "fallen_wars": [0, 4],
+    "fallen_wars": [0, 2],
     "fallen_neighbours": 3,
     "fall_strength": 0.3,
     "fall_delay_years": [2, 25],

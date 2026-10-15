@@ -28,6 +28,14 @@ def world(request: pytest.FixtureRequest, cfg: Config) -> World:
     return pipeline.generate(cfg, request.param)
 
 
+@pytest.fixture(scope="module", params=SEEDS)
+def busy(request: pytest.FixtureRequest) -> World:
+    """A world with many older wars and hard-pressed fallen realms, so those events are always there to check."""
+    config = load_config(None)
+    config.data["history"].update(past_war_chance=0.8, fallen_wars=[2, 4], fall_strength=0.9)
+    return pipeline.generate(config, request.param)
+
+
 def _events(world: World, kind: str, *tags: str) -> list[ChronicleEvent]:
     return [e for e in world.chronicle if e.kind == kind and set(tags) <= set(e.tags)]
 
@@ -91,15 +99,16 @@ def test_relations_are_not_confined_to_one_period() -> None:
 # --- older wars and peace -------------------------------------------------------------------------
 
 
-def test_an_older_war_ends_in_one_peace(world: World) -> None:
-    ended = _events(world, "war", "ended")
+def test_an_older_war_ends_in_one_peace(busy: World) -> None:
+    ended = _events(busy, "war", "ended")
     realm_wars = [e for e in ended if not e.fallen_ids]
-    assert realm_wars and len(_events(world, "peace")) == len(realm_wars)
+    assert realm_wars and len(_events(busy, "peace")) == len(realm_wars)
 
 
-def test_a_peace_follows_its_war(world: World) -> None:
-    starts = {frozenset(e.realm_ids): e.year for e in _events(world, "war", "ended") if not e.fallen_ids}
-    assert all(e.year > starts[frozenset(e.realm_ids)] for e in _events(world, "peace"))
+def test_a_peace_follows_its_war(busy: World) -> None:
+    starts = {frozenset(e.realm_ids): e.year for e in _events(busy, "war", "ended") if not e.fallen_ids}
+    peaces = _events(busy, "peace")
+    assert peaces and all(e.year > starts[frozenset(e.realm_ids)] for e in peaces)
 
 
 def test_a_peace_names_the_winner_then_the_loser(world: World) -> None:
@@ -107,12 +116,12 @@ def test_a_peace_names_the_winner_then_the_loser(world: World) -> None:
     assert all(frozenset(e.realm_ids) in pairs for e in _events(world, "peace"))
 
 
-def test_a_relation_that_follows_an_older_war_comes_after_its_peace(world: World, cfg: Config) -> None:
+def test_a_relation_that_follows_an_older_war_comes_after_its_peace(busy: World, cfg: Config) -> None:
     gap = cfg.get("history.min_gap_years")
-    peace = {frozenset(e.realm_ids): e.year for e in _events(world, "peace")}
-    later = _events(world, "war", "ongoing") + _events(world, "rivalry") + _events(world, "treaty")
+    peace = {frozenset(e.realm_ids): e.year for e in _events(busy, "peace")}
+    later = _events(busy, "war", "ongoing") + _events(busy, "rivalry") + _events(busy, "treaty")
     checked = [e for e in later if frozenset(e.realm_ids) in peace]
-    assert checked and all(e.year >= min(peace[frozenset(e.realm_ids)] + gap, world.year) for e in checked)
+    assert checked and all(e.year >= min(peace[frozenset(e.realm_ids)] + gap, busy.year) for e in checked)
 
 
 def test_no_older_wars_at_chance_zero() -> None:
@@ -170,11 +179,9 @@ def test_nothing_happens_to_a_fallen_realm_outside_its_life(world: World) -> Non
             assert fallen.founded <= event.year <= fallen.fell
 
 
-def test_a_conquered_realm_falls_to_a_realm_that_existed(world: World) -> None:
-    conquered = _events(world, "fall", "conquered")
-    assert conquered and all(
-        len(e.realm_ids) == 1 and world.realms[e.realm_ids[0]].founded <= e.year for e in conquered
-    )
+def test_a_conquered_realm_falls_to_a_realm_that_existed(busy: World) -> None:
+    conquered = _events(busy, "fall", "conquered")
+    assert conquered and all(len(e.realm_ids) == 1 and busy.realms[e.realm_ids[0]].founded <= e.year for e in conquered)
 
 
 # --- strengths ------------------------------------------------------------------------------------
