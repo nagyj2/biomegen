@@ -40,6 +40,10 @@ VALUES: Dict[str, Any] = {
     # Trade goods when a realm's biome (or relief) names none: the first for the first realm, the second for the
     # other, the third when the two would otherwise trade the same good.
     "fallback_goods": ["wool", "wine", "copper"],
+    # A reason may name a river, range or sea only when one lies within ``reason_near_km`` of the two powers' border
+    # (their seats when they share none); ``reason_points`` caps how many border cells the distance is measured from.
+    "reason_near_km": 250.0,
+    "reason_points": 12,
     # The kinds of settlement a reason such as "the border town of {town}" may name when no town is claimed.
     "reason_town_kinds": ["town", "village"],
 }

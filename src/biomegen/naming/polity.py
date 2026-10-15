@@ -84,13 +84,12 @@ def _trade_goods(a: Realm, b: Realm, config: Config) -> tuple[str, str]:
     return goods_a, goods_b
 
 
-def _largest(world: World, kind: str, config: Config, fallback: str) -> str:
-    """Name of the biggest named feature of ``kind`` (longest river), without a leading "The ", else ``fallback``."""
-    features = [f for f in world.features if f.kind == kind and f.name]
-    if not features:
-        return fallback
-    best = max(features, key=lambda f: (f.length_km if kind == "river" else f.area_km2, -f.id))
-    return best.name.removeprefix(_THE)
+def _place(world: World, relation: Relation, token: str, config: Config) -> str:
+    """The name of the feature the diplomacy stage chose for ``token`` (no leading "The "), else the fallback words."""
+    feature = relation.places.get(token)
+    if feature is not None and world.features[feature].name:
+        return world.features[feature].name.removeprefix(_THE)
+    return str(config.get(f"tables.reason_tokens.{token}.fallback"))
 
 
 def _town(world: World, config: Config, relation: Relation, stream: random.Random, tops: dict[int, int]) -> str:
@@ -105,20 +104,18 @@ def _town(world: World, config: Config, relation: Relation, stream: random.Rando
 
 
 def describe_relations(world: World, config: Config, seed: int) -> None:
-    """Replace each relation's raw reason template by its text, naming the town, river, range, sea and goods."""
+    """Replace each relation's raw reason template by its text, naming the town, river, range, sea and goods.
+
+    A river, range or sea is the nearby feature diplomacy recorded in ``relation.places``.
+    """
     realms = world.realms
     tops = {r.id: world.top_realm(r.id) for r in realms}
-    places = {
-        "river": _largest(world, "river", config, str(config.get("tables.reason_tokens.river.fallback"))),
-        "range": _largest(world, "range", config, str(config.get("tables.reason_tokens.range.fallback"))),
-        "sea": _largest(world, "sea", config, str(config.get("tables.reason_tokens.sea.fallback"))),
-    }
     for index, relation in enumerate(world.relations):
         stream = rng.derive(seed, "naming", "reason", index)
         a, b = realms[relation.a], realms[relation.b]
         goods_a, goods_b = _trade_goods(a, b, config)
         tokens = {
-            **places,
+            **{token: _place(world, relation, token, config) for token in ("river", "range", "sea")},
             "town": _town(world, config, relation, stream, tops),
             "goods_a": goods_a,
             "goods_b": goods_b,

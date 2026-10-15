@@ -11,6 +11,7 @@ from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.pipeline.civilization import diplomacy
+from biomegen.pipeline.story.places import nearest_feature
 from biomegen.util.units import grid_scale
 from biomegen.world.entities import POI, Realm
 from biomegen.world.tile import Biome
@@ -280,3 +281,60 @@ def test_front_cells_do_not_depend_on_the_pair_order(generated: World) -> None:
         diplomacy.front_cells(generated, war.a, war.b).tolist()
         == diplomacy.front_cells(generated, war.b, war.a).tolist()
     )
+
+
+# --- reasons name only what lies near the border ---------------------------------------------------------------------
+
+
+def _war_with_reasons(templates: list[str]) -> tuple[World, Config]:
+    config = _config()
+    config.data["tables"]["reasons"]["war"]["templates"] = templates
+    config.data["politics"]["reason_near_km"] = 100.0
+    world = _land([3, 3], ["major", "major"])
+    world.landmass_id[:] = 0
+    return world, config
+
+
+def _river_at(world: World, x: int) -> None:
+    from biomegen.world.entities import GeoFeature, River
+
+    world.rivers.append(River(id=0, path=[(x, y) for y in range(HEIGHT)]))
+    world.features.append(GeoFeature(id=0, kind="river", anchor=(x, 0), ref=0, name="The Wend"))
+
+
+def test_a_reason_naming_a_far_river_is_never_chosen() -> None:
+    # The border runs 15 cells in; at 30 km a cell a river at column 0 is 450 km away, beyond the 100 km cap.
+    config = _config()
+    config.data["tables"]["reasons"]["war"]["templates"] = ["control of the {river}", "an assassinated envoy"]
+    config.data["politics"]["reason_near_km"] = 100.0
+    world = _land([15, 15], ["major", "major"])
+    world.landmass_id[:] = 0
+    _river_at(world, 0)
+    assert _run(world, config).relations[0].why == "an assassinated envoy"
+
+
+def test_a_reason_may_name_a_river_beside_the_border() -> None:
+    world, config = _war_with_reasons(["control of the {river}"])
+    _river_at(world, 3)
+    relation = _run(world, config).relations[0]
+    assert relation.why == "control of the {river}" and relation.places == {"river": 0}
+
+
+def test_a_reason_with_no_place_token_records_no_place() -> None:
+    world, config = _war_with_reasons(["an assassinated envoy"])
+    _river_at(world, 3)
+    assert _run(world, config).relations[0].places == {}
+
+
+def test_when_no_template_qualifies_the_whole_list_stays() -> None:
+    # Naming then uses the fallback words, so a world with no river near the border still gets a reason.
+    world, config = _war_with_reasons(["control of the {river}"])
+    assert _run(world, config).relations[0].why == "control of the {river}"
+
+
+def test_every_named_place_of_a_generated_reason_lies_near_the_border(generated: World, cfg: Config) -> None:
+    for relation in generated.relations:
+        points = diplomacy._reason_points(generated, relation)
+        for token, feature in relation.places.items():
+            assert nearest_feature(generated, cfg, token, points) == feature
+            assert generated.features[feature].name.removeprefix("The ") in relation.why

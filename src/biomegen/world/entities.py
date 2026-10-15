@@ -97,7 +97,8 @@ class Relation:
     """A diplomatic tie between two independent powers (realm ids ``a`` < ``b``).
 
     ``why`` is the reason text. Only a war has an ``attacker`` (a or b) and a ``claim_poi`` (index into
-    ``World.pois``, -1 if none); ``border_km`` is the length of the shared border (0 across the sea).
+    ``World.pois``, -1 if none); ``border_km`` is the length of the shared border (0 across the sea). ``places`` holds,
+    for each ``{river}``, ``{range}`` or ``{sea}`` token the reason template uses, the nearby feature it names.
     """
 
     a: int
@@ -107,6 +108,7 @@ class Relation:
     why: str = ""
     attacker: int = -1
     claim_poi: int = -1
+    places: dict = field(default_factory=dict)  # reason token ({river}, {range}, {sea}) -> id in World.features
 
 
 @dataclass

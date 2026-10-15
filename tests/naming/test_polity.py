@@ -188,19 +188,25 @@ def test_a_world_without_towns_uses_the_fallback_words(config: Config) -> None:
     assert world.relations[0].why == "a cold war over Nowhere"
 
 
-def test_places_use_the_largest_named_feature_without_its_article(config: Config) -> None:
-    world = _pair(config, "war", "{river} {range} {sea}")
-    world.features = [
-        GeoFeature(id=0, kind="river", anchor=(0, 0), name="Short", length_km=10.0),
-        GeoFeature(id=1, kind="river", anchor=(0, 0), name="Long", length_km=900.0),
-        GeoFeature(id=2, kind="range", anchor=(0, 0), name="The Grey Peaks", area_km2=5.0),
-        GeoFeature(id=3, kind="sea", anchor=(0, 0), name="The Deep", area_km2=9.0),
+def _features() -> list[GeoFeature]:
+    return [
+        GeoFeature(id=0, kind="river", anchor=(0, 0), name="Short"),
+        GeoFeature(id=1, kind="river", anchor=(0, 0), name="Long"),
+        GeoFeature(id=2, kind="range", anchor=(0, 0), name="The Grey Peaks"),
+        GeoFeature(id=3, kind="sea", anchor=(0, 0), name="The Deep"),
     ]
-    polity.describe_relations(world, config, 1)
-    assert world.relations[0].why == "Long Grey Peaks Deep"
 
 
-def test_missing_places_use_their_fallback_words(config: Config) -> None:
-    world = _pair(config, "war", "{river} / {range} / {sea}")
+def test_places_are_the_features_diplomacy_chose_without_their_article(config: Config) -> None:
+    world = _pair(config, "war", "{river} {range} {sea}")
+    world.features = _features()
+    world.relations[0].places = {"river": 0, "range": 2, "sea": 3}
     polity.describe_relations(world, config, 1)
-    assert world.relations[0].why == "river crossings / border hills / open sea"
+    assert world.relations[0].why == "Short Grey Peaks Deep"
+
+
+def test_a_place_diplomacy_did_not_choose_uses_the_fallback_words(config: Config) -> None:
+    world = _pair(config, "war", "{river} {range} {sea}")
+    world.features = _features()
+    polity.describe_relations(world, config, 1)
+    assert world.relations[0].why == "river crossings border hills open sea"

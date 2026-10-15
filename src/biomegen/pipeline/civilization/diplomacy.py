@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import colorsys
 import random
+import string
 from dataclasses import dataclass
 
 import numpy as np
@@ -30,6 +31,7 @@ from ...config.model import Config
 from ...util import rng
 from ...world.entities import Realm, Relation
 from ...world.world import World
+from ..story.places import nearest_feature
 
 Pair = tuple[int, int]
 
@@ -212,6 +214,41 @@ def _war(
     relation.claim_poi = min(targets, key=lambda i: (nearest_km(i), i))
 
 
+_PLACE_TOKENS = ("river", "range", "sea")
+
+
+def _reason_points(world: World, relation: Relation) -> list[tuple[int, int]]:
+    """The cells a reason's places are measured from: the border of the two powers, else their seats."""
+    if relation.border_km > 0:
+        flat = front_cells(world, relation.a, relation.b).tolist()
+        return [(index % world.width, index // world.width) for index in flat]
+    seats = [world.realms[r].seat_poi for r in (relation.a, relation.b)]
+    return [(world.pois[seat].x, world.pois[seat].y) for seat in seats if seat >= 0]
+
+
+def _word(world: World, config: Config, relation: Relation, stream: random.Random) -> None:
+    """Pick the relation's raw reason template, only one whose river, range or sea lies near the border.
+
+    The chosen template's place tokens are recorded in ``relation.places`` (token -> feature id) for naming to word.
+    A template whose place is far away is dropped; when none qualifies the whole list stays and naming uses the
+    fallback words of ``tables.reason_tokens``.
+    """
+    templates = list(config.get(f"tables.reasons.{relation.kind}.templates"))
+    used = {template: _place_tokens(template) for template in templates}
+    wanted = {token for tokens in used.values() for token in tokens}
+    points = _reason_points(world, relation) if wanted else []
+    near = {token: pick for token in sorted(wanted) if (pick := nearest_feature(world, config, token, points)) >= 0}
+    allowed = [t for t in templates if used[t] <= set(near)]
+    chosen = stream.choice(allowed or templates)
+    relation.why = chosen
+    relation.places = {token: near[token] for token in sorted(used[chosen]) if token in near}
+
+
+def _place_tokens(template: str) -> set[str]:
+    """The ``{river}``, ``{range}`` and ``{sea}`` tokens a reason template uses."""
+    return {field for _, field, _, _ in string.Formatter().parse(template) if field in _PLACE_TOKENS}
+
+
 def front_cells(world: World, a: int, b: int) -> np.ndarray:
     """Return the sorted flat indices of the cells along the border of independent powers ``a`` and ``b``.
 
@@ -250,4 +287,4 @@ def run(world: World, config: Config, seed: int) -> None:
     for relation in world.relations:
         if relation.kind == "war":
             _war(world, config, edges, tops, relation, stream)
-        relation.why = stream.choice(config.get(f"tables.reasons.{relation.kind}.templates"))
+        _word(world, config, relation, stream)
