@@ -27,13 +27,15 @@ VALUES: Dict[str, Any] = {
     # Roads & bridges at the detail scales (zoom, local, site). Roads render as a thin meandering BED, not a full
     # tile: a detail cell is road when it lies within ``road_half_width`` world tiles of the straight line joining two
     # adjacent road-tile centres, so a road is a fixed fraction of a tile wide and scales with the magnification
-    # (about one row at zoom, two or three at the site view). ``road_min_rows`` keeps it at least that many rows thick
+    # (about one row at zoom, two at the site view). ``road_min_rows`` keeps it at least that many rows thick and
+    # ``road_max_rows`` at most that many (a vertical road is as wide in columns as the cell aspect makes it look)
     # when the magnification is low. Because the test is a pure function of world position, every scale draws the same
     # shape. A small coherent ``road_warp`` (in tiles) wobbles the bed so it meanders rather than reading as straight
     # segments. ``road_clutter`` scatters small glyphs along the bed at the detail scales; ``road_clutter_local`` adds
     # extra fine detail at the local scale only.
     "road_half_width": 0.07,
     "road_min_rows": 1.0,
+    "road_max_rows": 2.0,
     "road_warp": 0.05,
     "road_bed": {
         "glyphs": {"horizontal": "─", "vertical": "│", "rising": "╱", "falling": "╲"},

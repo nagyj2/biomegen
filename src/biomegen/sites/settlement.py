@@ -1,17 +1,21 @@
-"""Settlements: a street network with buildings on lots facing it, a plaza, trees and, for the big ones, a wall.
+"""Settlements: an irregular town with winding streets, lots, a plaza, trees and, for the big ones, a wall.
 
-The plan is laid out streets first. A **plaza** sits at the middle of the dry ground. **Main streets** run from every
-road gate to it (or, with no road, across the extent both ways), bridging water. **Side streets** branch off the mains.
-Then **lots** are packed along the streets, nearest the plaza first: each lot is a free rectangle a gap from the street
-it faces, filled by a thin-walled building (:mod:`.building`) whose street door faces that street. A building no street
-can be joined to is not built. A settlement with a wall (``walled`` in its row) has buildings only inside it, and the
-wall has a gate wherever a street crosses it. Trees and bushes fill free ground.
+The **outline** is organic: a wobbling closed curve round the middle of the dry ground, stretched along the roads that
+reach it. Inside it the street network is laid out as a medieval town grows: a **plaza** at the middle, **spokes**
+running from it out to the edge (every road gate is one), partial **rings** round it, and **lanes** from the nearest
+street into any ground still too far from one. Then **lots** are packed along the streets, nearest the plaza first:
+each lot is a free rectangle a gap from the street it faces, filled by a thin-walled building (:mod:`.building`) whose
+street door faces that street. A building no street can be joined to is not built. A settlement with a wall
+(``walled`` in its row) is ringed along its outline, with a gate wherever a spoke or the road reaches it. Trees and
+bushes fill free ground.
 
-Seen from outside every building is a roof and the wall is solid stone; the streets and trees are as they are.
+Seen from outside every building is a roof and the wall is solid stone; the streets and trees are as they are. The
+world's road is laid in first (:func:`.streets.lay_roads`), so the town grows round and onto it.
 """
 
 from __future__ import annotations
 
+import math
 import random
 from typing import Optional
 
@@ -32,89 +36,258 @@ _PATH = int(Cell.PATH)
 _BRIDGE = int(Cell.BRIDGE)
 _STREET = (_PATH, _BRIDGE)
 _ROLES = ("hall", "kitchen", "bedroom", "storage")
+_MIN_TOWN = 0.2  # a footprint smaller than this share of the extent falls back to the whole extent
+_RING_STEP = 0.5  # radians between the sample points of a ring street
 
 
-def _plaza(ctx: SiteContext, centre: Point) -> np.ndarray:
-    """Return the plaza: an ellipse about ``centre`` ``plaza_rows`` tall, widened by the cell aspect."""
+def _block(ctx: SiteContext) -> int:
+    """Rows between two parallel streets: a lot's depth, its gap to the street, and a lane's width."""
+    rows_hi = int(ctx.setting("building_rows")[1])
+    return rows_hi + 2 * int(ctx.setting("street_gap")[1]) + 2
+
+
+def _plaza(ctx: SiteContext, centre: Point, stream: random.Random) -> np.ndarray:
+    """Return the plaza: a lumpy ellipse about ``centre`` ``plaza_rows`` tall, widened by the cell aspect."""
     ys, xs = np.ogrid[0 : ctx.rows, 0 : ctx.cols]
     radius = max(1, ctx.plaza_rows)
-    return ((xs - centre[0]) / (radius * ctx.aspect)) ** 2 + ((ys - centre[1]) / radius) ** 2 <= 1.0
+    u, v = (xs - centre[0]) / ctx.aspect, (ys - centre[1]).astype(float)
+    lump = 1.0 + 0.2 * np.sin(3.0 * np.arctan2(v, u) + stream.uniform(0.0, 2.0 * math.pi))
+    return np.hypot(u, v) <= radius * lump
 
 
-def _axis_end(dry: np.ndarray, centre: Point, step: Point) -> Point:
-    """Walk from ``centre`` along ``step`` over dry ground and return the last dry cell before the edge or water."""
-    rows, cols = dry.shape
-    x, y = centre
-    while 0 <= x + step[0] < cols and 0 <= y + step[1] < rows and dry[y + step[1], x + step[0]]:
-        x, y = x + step[0], y + step[1]
-    return x, y
+def _tidy(town: np.ndarray, centre: Point) -> np.ndarray:
+    """Round off thin spurs, keep the piece holding ``centre`` and fill its holes."""
+    opened = ndimage.binary_opening(town, structure=np.ones((3, 3), bool))
+    labels, count = ndimage.label(opened)
+    if count == 0 or labels[centre[1], centre[0]] == 0:
+        return town
+    return ndimage.binary_fill_holes(labels == labels[centre[1], centre[0]])
 
 
-def _pitch(ctx: SiteContext) -> tuple[int, int]:
-    """Return the ``(columns, rows)`` between parallel streets: a building each side of one, back to back."""
-    gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
-    rows_hi = int(ctx.setting("building_rows")[1])
-    return round(rows_hi * ctx.aspect * 1.6) + 2 * gap_x + ctx.vertical_width + 1, 2 * rows_hi + 2 * gap_y + 3
+def _outline(ctx: SiteContext, centre: Point, inner: np.ndarray, stream: random.Random) -> np.ndarray:
+    """Return the settlement's footprint: a wobbling curve round ``centre`` that bulges towards each road gate.
+
+    ``inner`` is where the footprint may lie (inside the extent, a margin in from its edge).
+    """
+    rows, cols = inner.shape
+    cx, cy = centre
+    settings = ctx.config.get("sites.settlement")
+    ys, xs = np.mgrid[0:rows, 0:cols]
+    u, v = (xs - cx) / ctx.aspect, (ys - cy).astype(float)
+    theta = np.arctan2(v, u)
+    reach_x, reach_y = max(1.0, cols / ctx.aspect / 2.0), max(1.0, rows / 2.0)
+    scale = np.ones(inner.shape)
+    for harmonic, amplitude in enumerate(settings["wobble"], start=1):
+        scale = scale + float(amplitude) * np.sin(harmonic * theta + stream.uniform(0.0, 2.0 * math.pi))
+    for gate in ctx.patch.gates:
+        delta = (theta - math.atan2(gate.row - cy, (gate.col - cx) / ctx.aspect) + math.pi) % (2.0 * math.pi) - math.pi
+        scale = scale + float(settings["road_stretch"]) * np.exp(-((delta / 0.5) ** 2))
+    town = np.hypot(u / reach_x, v / reach_y) <= float(settings["radius"]) * scale
+    town = _tidy(town & inner, centre)
+    return town if int(town.sum()) >= _MIN_TOWN * int(inner.sum()) else inner
 
 
-def _run(grid: np.ndarray, room: np.ndarray, start: Point, step: Point, width: int) -> int:
-    """Paint a straight street from ``start`` along ``step`` while ``room`` allows; return how many cells it painted.
+def _edge(town: np.ndarray, dry: np.ndarray, centre: Point, angle: float, aspect: float) -> Point:
+    """Walk from ``centre`` along ``angle`` while on dry ground in the footprint; return the last cell."""
+    rows, cols = town.shape
+    last = centre
+    for step in range(1, 4 * (rows + cols)):
+        x = round(centre[0] + math.cos(angle) * aspect * step * 0.5)
+        y = round(centre[1] + math.sin(angle) * step * 0.5)
+        if not (0 <= x < cols and 0 <= y < rows and town[y, x] and dry[y, x]):
+            break
+        last = (x, y)
+    return last
 
-    A street that runs up and down is ``width`` columns wide so it is as thick as a horizontal one.
+
+def _bend(ctx: SiteContext, centre: Point, end: Point, town: np.ndarray, stream: random.Random) -> Point:
+    """Return a waypoint off the line from ``centre`` to ``end`` so a street meanders."""
+    du, dv = (end[0] - centre[0]) / ctx.aspect, float(end[1] - centre[1])
+    length = math.hypot(du, dv)
+    if length < 1.0:
+        return end
+    offset = stream.uniform(-0.2, 0.2) * length
+    mu, mv = 0.5 * du - dv / length * offset, 0.5 * dv + du / length * offset
+    x, y = round(centre[0] + mu * ctx.aspect), round(centre[1] + mv)
+    if 0 <= x < town.shape[1] and 0 <= y < town.shape[0] and town[y, x]:
+        return x, y
+    return round(centre[0] + 0.5 * du * ctx.aspect), round(centre[1] + 0.5 * dv)
+
+
+def _spokes(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    town: np.ndarray,
+    dry: np.ndarray,
+    centre: Point,
+    stream: random.Random,
+) -> list[Point]:
+    """Lay streets from the plaza out to the footprint's edge, towards every gate and a few more; return their ends."""
+    cx, cy = centre
+    taken = [math.atan2(g.row - cy, (g.col - cx) / ctx.aspect) for g in ctx.patch.gates]
+    low, high = (int(v) for v in ctx.config.get("sites.settlement.spokes"))
+    radius = max(1.0, math.sqrt(float(np.count_nonzero(town)) / math.pi / ctx.aspect))  # in rows
+    count = min(stream.randint(low, high), max(2, int(2.0 * math.pi * 0.7 * radius / _block(ctx))))
+    start = stream.uniform(0.0, 2.0 * math.pi)
+    angles = list(taken)
+    for index in range(count):
+        angle = start + 2.0 * math.pi * index / count + stream.uniform(-0.3, 0.3)
+        if all(abs((angle - other + math.pi) % (2.0 * math.pi) - math.pi) > 0.6 for other in angles):
+            angles.append(angle)
+    ends = []
+    for angle in angles:
+        end = _edge(town, dry, centre, angle, ctx.aspect)
+        if end == centre:
+            continue
+        _polyline(grid, town & dry, [centre, _bend(ctx, centre, end, town, stream), end], ctx.vertical_width, stream)
+        ends.append(end)
+    return ends
+
+
+def _rings(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    town: np.ndarray,
+    dry: np.ndarray,
+    centre: Point,
+    stream: random.Random,
+) -> None:
+    """Lay partial ring streets round the plaza, each a run of arcs that wander in and out a little."""
+    settings = ctx.config.get("sites.settlement")
+    radius = math.sqrt(float(np.count_nonzero(town)) / math.pi / ctx.aspect)  # the footprint's mean radius, in rows
+    fractions, last = [], float(ctx.plaza_rows)
+    for fraction in (float(f) for f in settings["rings"]):
+        if fraction * radius - last >= _block(ctx) and (1.0 - fraction) * radius >= _block(ctx) / 2.0:
+            fractions.append(fraction)
+            last = fraction * radius
+    for fraction in fractions:
+        start = stream.uniform(0.0, _RING_STEP)
+        points: list[Optional[Point]] = []
+        angle = start
+        while angle < start + 2.0 * math.pi:
+            edge = _edge(town, dry, centre, angle, ctx.aspect)
+            f = fraction * stream.uniform(0.9, 1.1)
+            point = (round(centre[0] + f * (edge[0] - centre[0])), round(centre[1] + f * (edge[1] - centre[1])))
+            inside = 0 <= point[0] < town.shape[1] and 0 <= point[1] < town.shape[0]
+            points.append(point if inside and town[point[1], point[0]] and dry[point[1], point[0]] else None)
+            angle += _RING_STEP
+        for a, b in zip(points, points[1:], strict=False):
+            if a is not None and b is not None and stream.random() >= float(settings["ring_gap"]):
+                _polyline(grid, town & dry, [a, b], ctx.vertical_width, stream)
+
+
+def _segment(grid: np.ndarray, room: np.ndarray, a: Point, b: Point, width: int) -> None:
+    """Paint an axis-aligned street from ``a`` to ``b`` (columns ``width`` wide when it runs up and down).
+
+    Only free ground in ``room`` is painted: a street runs through existing streets and stops at anything else.
     """
     rows, cols = grid.shape
-    x, y = start
-    painted = 0
-    while 0 <= x < cols and 0 <= y < rows and room[y, x] and grid[y, x] in (_VOID, _PATH):
-        grid[y, x] = _PATH
-        if step[0] == 0:
-            for extra in range(1, width):
-                if x + extra < cols and room[y, x + extra] and grid[y, x + extra] == _VOID:
-                    grid[y, x + extra] = _PATH
-        painted += 1
-        x, y = x + step[0], y + step[1]
-    return painted
+    (ax, ay), (bx, by) = a, b
+    for y in range(min(ay, by), max(ay, by) + 1):
+        for x in range(min(ax, bx), max(ax, bx) + 1):
+            for extra in range(width if ax == bx and ay != by else 1):
+                cx = x + extra
+                if 0 <= cx < cols and 0 <= y < rows and room[y, cx] and grid[y, cx] == _VOID:
+                    grid[y, cx] = _PATH
 
 
-def _streets(
-    ctx: SiteContext, grid: np.ndarray, room: np.ndarray, dry: np.ndarray, centre: Point, stream: random.Random
-) -> None:
-    """Lay the street network: gates to the plaza, two axes through it, and parallel streets a block apart."""
-    rules = ctx.street_rules
-    settings = ctx.config.get("sites.settlement")
-    width = max(1, round(ctx.aspect))
-    gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
-    pitch_x, pitch_y = _pitch(ctx)
-    drop, jitter = float(settings["drop"]), int(settings["jitter"])
-    cx, cy = centre
-    for gate in ctx.patch.gates:
-        end = (gate.col, gate.row)
-        if end != centre:
-            lay_street(grid, dry, end, centre, rules)
-    for step in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-        _run(grid, room, centre, step, width)
-    for direction in (1, -1):
-        for k in range(1, 12):
-            y = cy + direction * k * pitch_y + stream.randint(-jitter, jitter)
-            if 0 <= y < grid.shape[0] and stream.random() >= drop:
-                for step in ((1, 0), (-1, 0)):
-                    _run(grid, room, (cx + step[0], y), step, width)
-            x = cx + direction * k * pitch_x + stream.randint(-jitter, jitter)
-            if 0 <= x < grid.shape[1] and stream.random() >= drop:
-                for step in ((0, 1), (0, -1)):
-                    _run(grid, room, (x, cy + step[1]), step, width)
+def _polyline(grid: np.ndarray, room: np.ndarray, points: list[Point], width: int, stream: random.Random) -> None:
+    """Paint a street through ``points``, joining each pair with an L (across then up or down, or the other way)."""
+    for a, b in zip(points, points[1:], strict=False):
+        corner = (b[0], a[1]) if stream.random() < 0.5 else (a[0], b[1])
+        _segment(grid, room, a, corner, width)
+        _segment(grid, room, corner, b, width)
 
 
-def _free(blocked: np.ndarray, rect: tuple[int, int, int, int], margin: tuple[int, int]) -> bool:
-    """Whether ``rect = (x0, y0, x1, y1)`` (end exclusive) lies on the grid and it and its margin hold no blocked cell.
+def _lanes(ctx: SiteContext, grid: np.ndarray, ground: np.ndarray, town: np.ndarray, stream: random.Random) -> None:
+    """Branch lanes off the nearest street into any ground too far from one for a lot to face it.
 
-    The margin (columns, rows) is clipped to the grid: only the building itself has to be on it.
+    A lane runs from the street cell nearest the farthest bit of ground out to that spot, so lanes fan into the gaps
+    like the side streets of an old town. Lots need ``building_rows`` deep of ground beside a street, so ground
+    farther than the shallowest building is served.
     """
+    rows_lo = int(ctx.setting("building_rows")[0])
+    reach = float(rows_lo + int(ctx.setting("street_gap")[1]) + 1)  # in rows
+    street = np.isin(grid, _STREET)
+    if not street.any():
+        return
+    sampling = (1.0, 1.0 / ctx.aspect)
+    distance, nearest = ndimage.distance_transform_edt(~street, sampling=sampling, return_indices=True)
+    far = np.where(ground, distance, 0.0)
+    room = town & (grid == _VOID) | street
+    for _ in range(int(ctx.config.get("sites.settlement.max_lanes"))):
+        y, x = np.unravel_index(int(np.argmax(far)), far.shape)
+        if far[y, x] <= reach:
+            return
+        start = (int(nearest[1][y, x]), int(nearest[0][y, x]))
+        _polyline(grid, room, [start, (int(x), int(y))], ctx.vertical_width, stream)
+        y0, y1 = max(0, y - int(2 * reach) - 4), min(far.shape[0], y + int(2 * reach) + 5)
+        x0, x1 = max(0, x - int(4 * reach * ctx.aspect)), min(far.shape[1], x + int(4 * reach * ctx.aspect) + 1)
+        near = np.isin(grid[y0:y1, x0:x1], _STREET)
+        if near.any():
+            local = ndimage.distance_transform_edt(~near, sampling=sampling)
+            far[y0:y1, x0:x1] = np.minimum(far[y0:y1, x0:x1], local)
+        far[max(0, y - 1) : y + 2, max(0, x - 1) : x + 2] = (
+            0.0  # never retry this spot, whether or not the lane got there
+        )
+
+
+def _fit_lot(
+    blocked: np.ndarray,
+    streets: np.ndarray,
+    step: int,
+    anchor: Point,
+    along: tuple[int, int, int],
+    depth: tuple[int, int, int],
+    stream: random.Random,
+) -> Optional[tuple[int, int, int, int]]:
+    """Fit a lot into the free ground beside the street cell ``anchor``: ``(start, edge, length, depth)`` or None.
+
+    Everything is in the street's own frame: ``blocked`` and ``streets`` are indexed ``[across, along]`` (a lot on a
+    street that runs up and down is seen transposed), the lot lies on the ``step`` side of the street, ``along`` is
+    ``(shortest, longest, gap)`` for its length along the street and ``depth`` the same for how deep it reaches. The lot
+    is as long and as deep as it can be up to its random target, and ``None`` when the free ground is too small: so
+    it packs a gap rather than failing in it.
+
+    Returns the lot's first cell along the street, its near edge across the street (its first row when ``step`` is 1,
+    one past its last when ``step`` is -1), its length and its depth.
+    """
+    across, at = anchor
     rows, cols = blocked.shape
-    x0, y0, x1, y1 = rect
-    if x0 < 0 or y0 < 0 or x1 > cols or y1 > rows:
-        return False
-    return not blocked[max(0, y0 - margin[1]) : y1 + margin[1], max(0, x0 - margin[0]) : x1 + margin[0]].any()
+    short, long_, gap_along = along
+    shallow, deep, gap_across = depth
+    band = streets[max(0, across - 3) : across + 4, max(0, at - short // 2) : at + short // 2 + 1]
+    hits = np.nonzero(band.any(axis=1))[0] + max(0, across - 3)
+    edge = across if len(hits) == 0 else int(hits.max() if step > 0 else hits.min())
+    edge = edge + step * (gap_across + 1) if step > 0 else edge - gap_across
+    near, far = (edge, edge + shallow + gap_across) if step > 0 else (edge - shallow - gap_across, edge)
+    if near < 0 or far > rows:
+        return None
+    strip = blocked[near:far].any(axis=0)
+    if strip[at]:
+        return None
+    first, last = at, at
+    while first > 0 and not strip[first - 1]:
+        first -= 1
+    while last < cols - 1 and not strip[last + 1]:
+        last += 1
+    room = last - first + 1 - 2 * gap_along
+    if room < short:
+        return None
+    length = min(room, stream.randint(short, long_))
+    start = first + gap_along + stream.randint(0, room - length)
+    reach = stream.randint(shallow, deep)
+    free = shallow
+    while free < reach:
+        row = edge + free if step > 0 else edge - free - 1
+        guard = row + gap_across if step > 0 else row - gap_across
+        if (
+            not (0 <= row < rows and 0 <= guard < rows)
+            or blocked[min(row, guard) : max(row, guard) + 1, start : start + length].any()
+        ):
+            break
+        free += 1
+    return start, edge, length, free
 
 
 def _lots(
@@ -125,21 +298,24 @@ def _lots(
     gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
     rows_lo, rows_hi = (int(v) for v in ctx.setting("building_rows"))
     aspect = ctx.aspect
-    widest = _pitch(ctx)[0] - 2 * gap_x - ctx.vertical_width - 1  # a lot must fit between two parallel streets
+    widest = round(rows_hi * aspect * 1.6)  # the widest a building may be
+    narrowest = round(0.8 * rows_lo * aspect)
     furniture = {role: ctx.weights(role) for role in _ROLES}
     density = float(ctx.setting("clutter_density")) * float(ctx.config.get("sites.furnish.home_density"))
     spec = Spec(int(ctx.setting("room_rows")[0]), aspect, _ROLES, furniture, density)
     rows, cols = grid.shape
     blocked = ~ground | (grid != _VOID)
     roofs = np.zeros(grid.shape, dtype=bool)
-    street = np.argwhere(np.isin(grid, _STREET))
-    order = sorted(
-        (tuple(int(v) for v in cell[::-1]) for cell in street[:: max(1, int(aspect))]),
-        key=lambda p: (((p[0] - centre[0]) / aspect) ** 2 + (p[1] - centre[1]) ** 2, p[1], p[0]),
-    )
     target = float(settings["fill"]) * int(ground.sum())
     covered = 0
     placed: list[Point] = []
+    stride = max(1, round(aspect))
+    street = np.argwhere(np.isin(grid, _STREET))
+    order = sorted(
+        (tuple(int(v) for v in cell[::-1]) for cell in street[::stride]),
+        key=lambda p: (((p[0] - centre[0]) / aspect) ** 2 + (p[1] - centre[1]) ** 2, p[1], p[0]),
+    )
+    streets = np.isin(grid, _STREET)
     for sx, sy in order:
         if covered >= target:
             break
@@ -152,33 +328,41 @@ def _lots(
             sides = sides[2:]
         stream.shuffle(sides)
         for step_x, step_y in sides:
-            for attempt in range(int(settings["lot_tries"])):
-                height = max(rows_lo, round(stream.randint(rows_lo, rows_hi) * (1.0 - 0.12 * attempt)))
-                width = min(widest, max(round(rows_lo * aspect), round(height * aspect * stream.uniform(1.0, 1.4))))
-                if step_y:
-                    x0 = sx - width // 2 + stream.randint(-width // 4, width // 4)
-                    y0 = sy + gap_y + 1 if step_y > 0 else sy - gap_y - height
-                else:
-                    y0 = sy - height // 2 + stream.randint(-height // 4, height // 4)
-                    x0 = sx + gap_x + 1 if step_x > 0 else sx - gap_x - width
-                if not _free(blocked, (x0, y0, x0 + width, y0 + height), (gap_x, gap_y)):
+            if step_y:  # a lot above or below an east-west street: its length is columns, its depth rows
+                fit = _fit_lot(
+                    blocked, streets, step_y, (sy, sx), (narrowest, widest, gap_x), (rows_lo, rows_hi, gap_y), stream
+                )
+                if fit is None:
                     continue
-                toward = (sx - x0, sy - y0)
-                building = build_building(height, width, stream, spec, toward)
-                if building is None or building.front is None:
+                x0, y0, width, height = fit[0], fit[1] - (fit[3] if step_y < 0 else 0), fit[2], fit[3]
+            else:  # beside a north-south street: its length is rows, its depth columns
+                fit = _fit_lot(
+                    blocked.T,
+                    streets.T,
+                    step_x,
+                    (sx, sy),
+                    (rows_lo, rows_hi, gap_y),
+                    (narrowest, widest, gap_x),
+                    stream,
+                )
+                if fit is None:
                     continue
-                front = (x0 + building.front[0], y0 + building.front[1])
-                if not _join(grid, front, (sx, sy), (step_x, step_y)):
-                    continue
-                inside = building.cells != _VOID
-                grid[y0 : y0 + height, x0 : x0 + width][inside] = building.cells[inside]
-                roofs[y0 : y0 + height, x0 : x0 + width] |= building.footprint
-                blocked[max(0, y0 - gap_y) : y0 + height + gap_y, max(0, x0 - gap_x) : x0 + width + gap_x] = True
-                covered += int(building.footprint.sum())
-                placed.append(front)
-                break
-            else:
+                y0, x0, height, width = fit[0], fit[1] - (fit[3] if step_x < 0 else 0), fit[2], fit[3]
+            if height < rows_lo or width < narrowest:
                 continue
+            building = build_building(height, width, stream, spec, (sx - x0, sy - y0))
+            if building is None or building.front is None:
+                continue
+            front = (x0 + building.front[0], y0 + building.front[1])
+            if not _join(grid, front, (sx, sy), (step_x, step_y)):
+                continue
+            inside = building.cells != _VOID
+            grid[y0 : y0 + height, x0 : x0 + width][inside] = building.cells[inside]
+            roofs[y0 : y0 + height, x0 : x0 + width] |= building.footprint
+            blocked[max(0, y0 - gap_y) : y0 + height + gap_y, max(0, x0 - gap_x) : x0 + width + gap_x] = True
+            streets = np.isin(grid, _STREET)
+            covered += int(building.footprint.sum())
+            placed.append(front)
             break
     return roofs, placed
 
@@ -201,17 +385,18 @@ def _join(grid: np.ndarray, front: Point, street: Point, side: Point) -> bool:
     return True
 
 
-def _wall(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray) -> None:
-    """Ring the settlement with a thin wall; a street crossing it makes a gate. Water leaves a gap."""
-    inset_x, inset_y = (int(v) for v in ctx.config.get("sites.settlement.wall_inset"))
-    rows, cols = grid.shape
-    x0, x1, y0, y1 = inset_x, cols - 1 - inset_x, inset_y, rows - 1 - inset_y
-    ring = np.zeros(grid.shape, dtype=bool)
-    ring[y0 : y1 + 1, x0 : x1 + 1] = True
-    ring[y0 + 1 : y1, x0 + 1 : x1] = False
+def _wall(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, town: np.ndarray, ends: list[Point]) -> None:
+    """Ring the footprint with a thin wall; the road and each spoke crossing it make a gate. Water leaves a gap."""
+    ring = ndimage.binary_dilation(town, structure=np.ones((3, 3), bool)) & ~town & dry
     streets = np.isin(grid, _STREET)
-    grid[ring & dry & (grid == _VOID)] = _WALL
-    grid[ring & dry & streets] = _DOOR
+    grid[ring & (grid == _VOID)] = _WALL
+    grid[ring & streets] = _DOOR
+    rows, cols = grid.shape
+    for x, y in ends:
+        for step_x, step_y in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            gx, gy = x + step_x, y + step_y
+            if 0 <= gx < cols and 0 <= gy < rows and ring[gy, gx]:
+                grid[gy, gx] = _DOOR
 
 
 def _plant(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, stream: random.Random) -> None:
@@ -234,17 +419,22 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
         return None
     grid = np.full((rows, cols), _VOID, dtype=np.uint8)
     stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
+    inset_x, inset_y = (int(v) for v in ctx.config.get("sites.settlement.wall_inset"))
+    inner = np.zeros(grid.shape, dtype=bool)
+    inner[inset_y + 1 : rows - inset_y - 1, inset_x + 1 : cols - inset_x - 1] = True
+    town = _outline(ctx, centre, inner & ground, stream)
+    ground = ground & town
     lay_roads(grid, ctx.patch)
-    grid[_plaza(ctx, centre) & dry] = _PATH
-    if ctx.walled:
-        inset_x, inset_y = (int(v) for v in ctx.config.get("sites.settlement.wall_inset"))
-        inner = np.zeros(grid.shape, dtype=bool)
-        inner[inset_y + 1 : rows - inset_y - 1, inset_x + 1 : cols - inset_x - 1] = True
-        ground = ground & inner
-    _streets(ctx, grid, ground, dry, centre, stream)
+    grid[_plaza(ctx, centre, stream) & dry & town] = _PATH
+    for gate in ctx.patch.gates:
+        if (gate.col, gate.row) != centre:
+            lay_street(grid, dry, (gate.col, gate.row), centre, ctx.street_rules, town | np.isin(grid, _STREET))
+    ends = _spokes(ctx, grid, town, dry, centre, stream)
+    _rings(ctx, grid, town, dry, centre, stream)
+    _lanes(ctx, grid, ground, town, stream)
     roofs, _fronts = _lots(ctx, grid, ground, centre, stream)
     if ctx.walled:
-        _wall(ctx, grid, dry)
+        _wall(ctx, grid, dry, town, ends)
     _plant(ctx, grid, dry, roofs, stream)
     outside = grid.copy()
     outside[roofs] = int(Cell.ROOF)

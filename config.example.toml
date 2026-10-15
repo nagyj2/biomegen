@@ -70,7 +70,7 @@ margin_tiles = 0.5              # terrain kept round the extent in the site view
 max_gates = 3                   # road gates cut into a site's edge
 room_rows = [3, 6]              # room height range in rows (widths are widened by render.cell_aspect)
 building_rows = [5, 8]          # settlement building outer height range in rows, walls included
-street_gap = [2, 1]             # clear ground [columns, rows] kept round each settlement building
+street_gap = [1, 1]             # clear ground [columns, rows] kept round each settlement building
 clutter_density = 0.10          # fraction of free floor cells furnished
 shape = "mixed"                 # solid-building outline: rectangle|blob|cellular|drunkard|diamond|cross|mixed
 ruin_erosion = 0.45             # fraction of a ruin's walls that have collapsed
@@ -94,6 +94,7 @@ blend_strength = 0.85           # soften biome boundaries at detail scales (0 = 
 blend_scale = 2.5               # feature size (tiles) of the boundary-blend warp
 road_half_width = 0.07          # road-bed half-width in tiles; the bed scales with zoom (a thin path, not a full tile)
 road_min_rows = 1.0             # but never thinner than this many rows, so roads stay visible at zoom
+road_max_rows = 2.0             # and never thicker, so a road through a site is a street and not a field
 road_warp = 0.05                # organic wobble (tiles) of the road bed; 0 = dead-straight segments
 # road_bed (the glyphs the detail-scale road bed is drawn with, by direction) and roads (the map-scale glyph set,
 # including the diagonal and junction glyphs) are also tunable.

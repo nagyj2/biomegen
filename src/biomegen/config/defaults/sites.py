@@ -15,7 +15,7 @@ VALUES: Dict[str, Any] = {
     "max_gates": 3,  # road gates cut into a site's edge, one per distinct side the roads arrive from
     "room_rows": [3, 6],  # room height range in rows; the width is this times render.cell_aspect
     "building_rows": [5, 8],  # settlement building outer height range in rows, walls included
-    "street_gap": [2, 1],  # clear ground [columns, rows] between a settlement building and the street it faces
+    "street_gap": [1, 1],  # clear ground [columns, rows] between a settlement building and the street it faces
     "clutter_density": 0.10,  # fraction of free floor cells that get furniture
     "shape": "mixed",  # outline of solid structures: "rectangle", "blob", "cellular", "drunkard", "diamond", "cross"
     # or "mixed" to pick one per structure
@@ -24,12 +24,17 @@ VALUES: Dict[str, Any] = {
     "street_water_cost": 6.0,  # cost of a street cell over water relative to dry ground (it becomes a bridge)
     "bridge_max_rows": 6,  # the widest water, in rows, a settlement street will bridge
     "settlement": {
-        "fill": 0.35,  # share of the buildable ground that lots try to cover with buildings
+        "fill": 0.6,  # share of the buildable ground that lots try to cover with buildings
         "trees": 0.03,  # share of free ground planted with trees and bushes
-        "drop": 0.25,  # a parallel street is left out this often, so the grid is loose
-        "jitter": 2,  # a parallel street is moved up to this many cells off the regular pitch
-        "wall_inset": [3, 2],  # [columns, rows] between a settlement wall and the edge of its extent
+        "wall_inset": [3, 2],  # [columns, rows] kept clear between the footprint and the edge of the extent
         "lot_tries": 6,  # sizes tried at each spot along a street before moving on
+        "radius": 0.9,  # footprint radius as a share of the extent's half size
+        "wobble": [0.16, 0.1, 0.07],  # amplitude of the outline's first three harmonics, as a share of the radius
+        "road_stretch": 0.3,  # how far the outline bulges towards each road gate, as a share of the radius
+        "spokes": [3, 5],  # streets from the plaza to the outline, besides the ones towards road gates
+        "rings": [0.4, 0.72],  # ring streets, each at this share of the way from the plaza to the outline
+        "ring_gap": 0.3,  # chance a ring street leaves out one of its arcs
+        "max_lanes": 80,  # most lanes laid into ground too far from a street
     },
     "extra_corridors": {"dungeon": 0.34, "tower": 0.15, "ruin": 0.2},  # extra room-to-room links per room, by layout
     "furnish": {

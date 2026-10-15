@@ -24,6 +24,7 @@ _BRIDGE = int(Cell.BRIDGE)
 _RAIL = int(Cell.BRIDGE_WALL)
 _OPEN = (_VOID, _PATH, _BRIDGE, _RAIL)  # cells a street may enter
 _REUSE = 0.4  # cost multiplier on an existing street, so streets merge instead of running side by side
+_GREED = 0.8  # weight of the straight-line estimate: above the admissible 0.4, so the search heads for the goal
 
 
 @dataclass(frozen=True)
@@ -41,14 +42,18 @@ class StreetRules:
     aspect: float
 
 
-def _route(grid: np.ndarray, dry: np.ndarray, a: Point, b: Point, rules: StreetRules) -> Optional[list[Point]]:
+def _route(
+    grid: np.ndarray, dry: np.ndarray, a: Point, b: Point, rules: StreetRules, allowed: Optional[np.ndarray] = None
+) -> Optional[list[Point]]:
     rows, cols = grid.shape
 
     def neighbours(node: Hashable) -> list[Point]:
         x, y = cast(Point, node)
         out = []
         for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
-            if 0 <= nx < cols and 0 <= ny < rows and (int(grid[ny, nx]) in _OPEN or (nx, ny) == b):
+            if not (0 <= nx < cols and 0 <= ny < rows):
+                continue
+            if (nx, ny) == b or (int(grid[ny, nx]) in _OPEN and (allowed is None or allowed[ny, nx])):
                 out.append((nx, ny))
         return out
 
@@ -60,7 +65,7 @@ def _route(grid: np.ndarray, dry: np.ndarray, a: Point, b: Point, rules: StreetR
 
     def heuristic(n: Hashable, goal: Hashable) -> float:
         (nx, ny), (gx, gy) = cast(Point, n), cast(Point, goal)
-        return _REUSE * (abs(nx - gx) + rules.aspect * abs(ny - gy))
+        return _GREED * (abs(nx - gx) + rules.aspect * abs(ny - gy))
 
     path = geo.astar(a, b, neighbours, cost, heuristic, max_expansions=rows * cols * 2)
     return [cast(Point, node) for node in path] if path is not None else None
@@ -74,13 +79,22 @@ def _longest_water_run(path: list[Point], dry: np.ndarray) -> int:
     return longest
 
 
-def lay_street(grid: np.ndarray, dry: np.ndarray, a: Point, b: Point, rules: StreetRules) -> Optional[list[Point]]:
+def lay_street(
+    grid: np.ndarray,
+    dry: np.ndarray,
+    a: Point,
+    b: Point,
+    rules: StreetRules,
+    allowed: Optional[np.ndarray] = None,
+) -> Optional[list[Point]]:
     """Route a street from ``a`` to ``b`` and write it; return its path, or None if there is none or water is too wide.
+
+    With ``allowed`` the street keeps to those cells (the ends excepted).
 
     Dry cells become path, and a vertical run is widened to the cell aspect in columns so it looks as thick as a
     horizontal one. Water cells become bridge deck, railed on both sides where there is water to rail.
     """
-    path = _route(grid, dry, a, b, rules)
+    path = _route(grid, dry, a, b, rules, allowed)
     if path is None or _longest_water_run(path, dry) > rules.bridge_max:
         return None
     rows, cols = grid.shape

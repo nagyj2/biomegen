@@ -19,7 +19,7 @@
 furniture = "home"
 layout = "settlement"
 extent_tiles = [3.5, 2.5]
-rows_per_tile = 16
+rows_per_tile = 24
 grows_with_pop = true
 plaza_tiles = 0.25
 walled = true
@@ -28,7 +28,7 @@ walled = true
 furniture = "home"
 layout = "settlement"
 extent_tiles = [2.5, 2.0]
-rows_per_tile = 16
+rows_per_tile = 24
 grows_with_pop = true
 plaza_tiles = 0.18
 walled = true
@@ -37,7 +37,7 @@ walled = true
 furniture = "home"
 layout = "settlement"
 extent_tiles = [2.0, 1.5]
-rows_per_tile = 16
+rows_per_tile = 22
 grows_with_pop = true
 plaza_tiles = 0.12
 
@@ -45,7 +45,7 @@ plaza_tiles = 0.12
 furniture = "home"
 layout = "settlement"
 extent_tiles = [1.5, 1.25]
-rows_per_tile = 16
+rows_per_tile = 20
 grows_with_pop = true
 plaza_tiles = 0.08
 

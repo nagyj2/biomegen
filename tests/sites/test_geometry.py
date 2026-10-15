@@ -48,9 +48,9 @@ def test_a_capital_spans_several_tiles(cfg: Config) -> None:
 
 
 def test_plan_cells_are_widened_by_the_cell_aspect(cfg: Config) -> None:
-    # 16 rows per tile and an aspect of 2 give 32 columns per tile, so a tile stays square on screen.
+    # 20 rows per tile and an aspect of 2 give 40 columns per tile, so a tile stays square on screen.
     geometry = _geometry(cfg, "village")
-    assert (geometry.cell_w, geometry.cell_h) == (32, 16)
+    assert (geometry.cell_w, geometry.cell_h) == (40, 20)
 
 
 def test_window_holds_the_extent_and_its_margin(cfg: Config) -> None:
@@ -68,9 +68,9 @@ def test_box_lies_inside_the_window(cfg: Config) -> None:
 
 
 def test_box_size_follows_the_extent_and_resolution(cfg: Config) -> None:
-    # A village extent of 1.5 x 1.25 tiles at 32 x 16 cells per tile is 48 x 20 cells.
+    # A village extent of 1.5 x 1.25 tiles at 40 x 20 cells per tile is 60 x 25 cells.
     geometry = _geometry(cfg, "village")
-    assert (geometry.box_cols, geometry.box_rows) == (48, 20)
+    assert (geometry.box_cols, geometry.box_rows) == (60, 25)
 
 
 def test_cell_at_and_position_of_are_inverse(cfg: Config) -> None:

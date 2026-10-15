@@ -111,7 +111,8 @@ def test_zoom_and_local_draw_the_same_bed() -> None:
     world.road[1, :] = 1
     world.road[:, 3] = 1
     config = load_config(None)
-    config.data["render"]["road_min_rows"] = 0.0  # the floor depends on the scale; compare the pure geometry
+    config.data["render"]["road_min_rows"] = 0.0  # the floor and the cap depend on the scale; compare the geometry
+    config.data["render"]["road_max_rows"] = 99.0
     zoom, _, _ = _draw(world, ROADS, config, cell=(10, 5))
     local, _, _ = _draw(world, ROADS, config, cell=(30, 15), scale=SCALE_LOCAL)
     road_bg = config.get("render.detail_colors.road_bg")
@@ -180,3 +181,12 @@ def test_ascii_bed_uses_ascii_glyphs() -> None:
     sampler = DetailSampler(world, config, 10, 5, 0, 0, world.width, world.height, "zoom")
     grid = build_grid(world, config, ROADS, sampler, ascii_only=True)
     assert _bed_glyphs(grid, config) == {"\\"}
+
+
+def test_the_bed_is_never_thicker_than_the_cap_in_rows() -> None:
+    # At a fine scale the fixed-fraction bed would be several rows thick; road_max_rows holds it to two.
+    world = make_world(5, 3, Biome.GRASS)
+    world.road[1, :] = 1
+    grid, _, config = _draw(world, ROADS, cell=(60, 30))
+    rows = np.nonzero(_is_color(grid, config.get("render.detail_colors.road_bg"))[:, 150])[0]
+    assert len(rows) <= int(config.get("render.road_max_rows"))

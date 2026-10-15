@@ -74,10 +74,11 @@ def _mark_segment(
 
 
 def bed_half_width(config: Config, sampler: DetailSampler) -> float:
-    """Return the bed's half width in tiles: a fixed fraction of a tile, but never under ``render.road_min_rows``."""
+    """Return the bed's half width in tiles: a fixed fraction of a tile, kept within the min and max rows."""
     half = float(config.get("render.road_half_width"))
     if half <= 0:
         return 0.0
+    half = min(half, 0.5 * float(config.get("render.road_max_rows")) / sampler.cell_h)
     return max(half, 0.5 * float(config.get("render.road_min_rows")) / sampler.cell_h)
 
 

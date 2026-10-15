@@ -443,10 +443,10 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   lines at draw time by the 4-neighbour mask (`cells.wall_index`, `render.interior_walls`); doors are gaps.
 - **Layouts** (`layout.py`, one per `layout` key; each returns `(cells, outside)`). `building.py` makes a rect, L or T
   footprint, subdivides it recursively with shared one-cell walls, joins rooms by a door spanning tree plus loops, adds a
-  street door, assigns roles by size and furnishes them from `tables.furniture.<family>.<role>`. `settlement.py` lays a
-  plaza, main streets from the gates, axes and a loose parallel grid (A*, bridging water up to `sites.bridge_max_rows`),
-  packs building lots along them (courtyards between), joins each front to a street, and rings walled tiers with a wall
-  and gates (`walled`). `structure.py` builds dungeon (a surface gatehouse plus underground rock floors of rooms and
+  street door, assigns roles by size and furnishes them from `tables.furniture.<family>.<role>`. `settlement.py` grows an irregular town: a
+  wobbling outline (stretched towards each road), a plaza, spokes from it to the outline, partial rings, lanes into any
+  ground still too far from a street, then lots fitted to the free ground beside the streets (each a building whose door
+  faces its street), and for walled tiers a wall along the outline with gates where spokes and the road meet it. `structure.py` builds dungeon (a surface gatehouse plus underground rock floors of rooms and
   corridors or caves), tower (tapering single-room floors, aligned stairs, a lookout) and ruin (a building with breaches,
   rubble, trees and partial roofs); the entrance faces a gate. `camp.py` and `boat.py` are open-air (tents, hull).
 - **Scales.** One plan per face, scaled into the cells its extent covers by `blit.sample_rect`. Where a view is coarser

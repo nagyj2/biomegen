@@ -115,3 +115,45 @@ def test_bigger_tiers_have_bigger_sites(config: Config) -> None:
         _plan(config, kind, pop=hi).cells.size for kind, hi in (("village", 1000), ("town", 5000), ("city", 20000))
     ]
     assert sizes == sorted(sizes)
+
+
+def test_a_capital_is_not_a_rectangle(config: Config) -> None:
+    # The wall follows a wobbling outline: it leaves much of its bounding box empty.
+    plan = _plan(config, "capital", pop=80000)
+    ys, xs = np.nonzero(plan.outside != VOID)
+    box = (ys.max() - ys.min() + 1) * (xs.max() - xs.min() + 1)
+    assert int((plan.outside != VOID).sum()) < 0.8 * box
+
+
+def test_the_wall_is_not_a_rectangle_of_the_extent_edge(config: Config) -> None:
+    # A wall hugging a rectangle would have every cell on the outer rows and columns of its own bounding box.
+    plan = _plan(config, "capital", pop=80000)
+    ys, xs = np.nonzero(plan.cells == WALL)
+    inner = (ys > ys.min()) & (ys < ys.max()) & (xs > xs.min()) & (xs < xs.max())
+    assert int(inner.sum()) > len(ys) // 4
+
+
+def test_a_town_has_streets_on_many_rows(config: Config) -> None:
+    # A grid of axes would put its streets on a handful of rows; a grown network spreads over the plan.
+    plan = _plan(config, "town")
+    assert int((plan.cells == PATH).any(axis=1).sum()) >= 8
+
+
+def test_two_towns_of_different_seeds_have_different_outlines(config: Config) -> None:
+    world = flat_world(16, 12)
+    plans = [site_plan(add_poi(world, "town", 8, 6, pop=2000, interior_seed=seed), 0, config, world) for seed in (3, 4)]
+    assert plans[0] is not None and plans[1] is not None and not np.array_equal(plans[0].outside, plans[1].outside)
+
+
+def test_the_streets_still_reach_every_building_door(config: Config) -> None:
+    # Each door on a building's outside wall has street (or the road) directly outside: nothing is stranded.
+    plan = _plan(config, "town")
+    labels, _count = ndimage.label(np.isin(plan.cells, (PATH, int(Cell.BRIDGE))))
+    doors = np.argwhere(plan.cells == DOOR)
+    reached = 0
+    for y, x in doors.tolist():
+        around = [(y + dy, x + dx) for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+        reached += any(
+            0 <= cy < plan.cells.shape[0] and 0 <= cx < plan.cells.shape[1] and labels[cy, cx] > 0 for cy, cx in around
+        )
+    assert doors.size and reached >= len(doors) // 2

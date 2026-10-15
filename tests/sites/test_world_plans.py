@@ -81,24 +81,19 @@ def _side(cells: np.ndarray, road: np.ndarray, y: int, x: int) -> int:
 
 
 def test_no_building_door_opens_onto_bare_ground(world: World, cfg: Config) -> None:
-    # In a settlement a door joins two rooms, or a room and a street or road: never a room and the empty terrain.
-    # (A gate, a door cut where the road crosses a city wall, lies on the road and is skipped.) The road's own cells
-    # are void in the plan.
-    street = {int(Cell.PATH), int(Cell.BRIDGE)}
+    # A door from a room (floor or furniture on one side) opens onto a street or road, never the empty terrain. A gate
+    # cut in a city wall has no room beside it, and the road's own cells (void in the plan) count as path.
+    outdoors = {VOID, int(Cell.WALL), int(Cell.DOOR), int(Cell.PATH), int(Cell.BRIDGE), int(Cell.TREE), int(Cell.BUSH)}
     for poi, geometry, plan in _plans(world, cfg):
         if poi.kind not in {"capital", "city", "town", "village"}:
             continue
         cells = plan.cells
         road = read_patch(poi, geometry, world, cfg).road
-
         for y, x in np.argwhere(cells == int(Cell.DOOR)).tolist():
-            if road[y, x]:
-                continue
-            above, below = _side(cells, road, y - 1, x), _side(cells, road, y + 1, x)
-            left, right = _side(cells, road, y, x - 1), _side(cells, road, y, x + 1)
-            if (above in street and below in street) or (left in street and right in street):
-                continue
-            assert VOID not in (above, below, left, right), f"{poi.kind} at {poi.x},{poi.y} floor {plan.floor}"
+            for (ay, ax), (by, bx) in (((y - 1, x), (y + 1, x)), ((y, x - 1), (y, x + 1))):
+                a, b = _side(cells, road, ay, ax), _side(cells, road, by, bx)
+                if (a in outdoors) != (b in outdoors):  # a room on one side
+                    assert (a if a in outdoors else b) != VOID, f"{poi.kind} at {poi.x},{poi.y} floor {plan.floor}"
 
 
 def test_the_ground_floor_of_a_structure_has_a_door(world: World, cfg: Config) -> None:

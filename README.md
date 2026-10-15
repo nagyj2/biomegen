@@ -186,11 +186,12 @@ Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[ta
 | `margin_tiles` | `0.5` | Terrain kept round a site's extent in the site view |
 | `max_gates` | `3` | Road gates cut into a site's edge |
 | `room_rows` / `building_rows` | `[3, 6]` / `[5, 8]` | Room (interior) and building (outer) height range in rows (widths follow `render.cell_aspect`) |
-| `street_gap` | `[2, 1]` | Clear ground `[columns, rows]` round each settlement building |
+| `street_gap` | `[1, 1]` | Clear ground `[columns, rows]` round each settlement building |
 | `clutter_density` | `0.10` | Fraction of free floor cells furnished |
 | `shape` | `"mixed"` | Outline for solid buildings: `rectangle`/`blob`/`cellular`/`drunkard`/`diamond`/`cross`/`mixed` |
 | `ruin_erosion` | `0.45` | Fraction of a ruin's walls that have collapsed |
 | `bridge_max_rows` | `6` | The widest water a settlement street will bridge |
+| `settlement.*` | — | Settlement growth: `fill` (share of ground built on), `trees`, `radius`, `wobble`, `road_stretch` (outline shape), `spokes`, `rings`, `ring_gap`, `max_lanes` (street network), `wall_inset`, `lot_tries` |
 
 Per-kind rows (layout, `extent_tiles`, `rows_per_tile`, furniture set) are in `src/biomegen/data/sites.toml`; furniture
 weights in `furniture.toml`.
