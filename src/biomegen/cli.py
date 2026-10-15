@@ -7,7 +7,7 @@ Run the CLI application with::
                     [--headless] [--view NAME] [--scale {map,zoom,local,site}] [--at X,Y] [--floor N]
                     [--labels {all,cities,none}]
                     [--color {auto,truecolor,256,none}] [--ascii] [--no-legend] [--save FILE] [--html FILE]
-                    [--chronicle] [--chronicle-format {text,json}] [--color-test]
+                    [--chronicle] [--chronicle-format {text,json}] [--start {present,dawn}] [--color-test]
 
 This launcher wires together the three top-level concerns and nothing else:
     1. parse CLI arguments,
@@ -127,6 +127,12 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("text", "json"),
         default="text",
         help="Format of --chronicle: readable text, or JSON with the realms and places its ids name.",
+    )
+    parser.add_argument(
+        "--start",
+        choices=("present", "dawn"),
+        default=None,
+        help="Overrides history.start: a finished world with a history, or a young unsettled one at year 0.",
     )
     parser.add_argument("--color-test", action="store_true", help="Show colour and glyph test swatches and exit.")
     return parser
@@ -269,6 +275,8 @@ def _apply_overrides(args: argparse.Namespace, config: Config, parser: argparse.
         parser.error("--at needs --scale zoom, local or site")
     if args.scale == "site" and args.at is None:
         parser.error("--scale site needs --at X,Y on a point of interest")
+    if args.start is not None:
+        config.data["history"]["start"] = args.start
     if args.size_km is not None:
         config.data["world"]["size_km"] = list(args.size_km)
     if args.lat is not None:

@@ -6,6 +6,9 @@ stages so there is no backtracking:
     terrain -> climate -> hydrology -> biomes -> geography -> settlements -> pois -> roads
     -> realms -> diplomacy -> history -> naming
 
+With ``history.start = "dawn"`` the stages from settlements to history are skipped: a young, unsettled world at year 0
+with no realms, POIs or chronicle, for a later simulation to settle.
+
 Roads end at every POI's anchor. A POI's site plan (:mod:`biomegen.sites`) is built lazily and finds the roads
 that reach it from the world arrays, so no stage records anything for it.
 
@@ -32,6 +35,9 @@ from . import naming, pois
 from .civilization import diplomacy, realms, roads, settlements
 from .physical import biomes, climate, geography, hydrology, terrain
 from .story import history
+
+#: Stages a dawn start skips: everything people do, up to and including the history that records it.
+DAWN_SKIPPED = frozenset({"settlements", "pois", "roads", "realms", "diplomacy", "history"})
 
 
 def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = None) -> World:
@@ -78,6 +84,7 @@ def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = No
     gen_seed = world.seed
 
     # Downstream stages (only reached once a land-bearing world is in hand).
+    dawn = config.get("history.start") == "dawn"
     for name, stage in (
         ("climate", climate.run),
         ("hydrology", hydrology.run),
@@ -91,7 +98,8 @@ def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = No
         ("history", history.run),
         ("naming", naming.run),
     ):
-        timed(name, stage, world, gen_seed)
+        if not (dawn and name in DAWN_SKIPPED):
+            timed(name, stage, world, gen_seed)
     return world
 
 

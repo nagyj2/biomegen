@@ -33,12 +33,12 @@ def run(world: World, config: Config, seed: int) -> None:
         realm.culture = cultures.culture_for_realm(seed, realm)
     realm_culture = {realm.id: realm.culture for realm in world.realms}
 
-    # 2. Island name from the largest realm (lowest id breaks ties).
+    # 2. Island name from the largest realm (lowest id breaks ties); a world with no realms uses the common culture.
     if world.realms:
         largest = max(world.realms, key=lambda r: (r.area_km2, -r.id))
         world.island_name = forge.name_entity(seed, "island", (largest.id,), largest.culture, generators, naming_cfg)
     else:
-        world.island_name = ""
+        world.island_name = forge.name_entity(seed, "island", (-1,), COMMON, generators, naming_cfg)
 
     # 3. Name POIs.
     for poi in world.pois:
