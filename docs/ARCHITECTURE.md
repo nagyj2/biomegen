@@ -74,6 +74,7 @@ src/biomegen/
       settlements.py    Stage 7 — habitability, capital / city / town / village placement
       roads.py          Stage 9 — road network (a road over water is a bridge)
       realms.py         Stage 9b — realm seeds, strength-weighted claiming, tribes, realm_id
+      diplomacy.py      Stage 9c — vassal tree, colours, relations, war fronts
     story/
     naming.py           Stage 10 — names and lore for all entities
   naming/
@@ -168,7 +169,7 @@ rank, so the gate only trips when a style's land fraction is configured below th
 
 ```
 terrain → climate → hydrology → biomes → geography → regions → settlements
-         → pois → roads → realms → naming
+         → pois → roads → realms → diplomacy → naming
 ```
 
 Roads end at every POI's anchor. A POI's site plan (`sites/`) is built lazily and finds the roads that reach
@@ -336,6 +337,20 @@ Partitions solid land (any cell whose biome is not water; a river keeps its land
    the area's most populous settlement (or its most inland cell); claiming then runs again with every seed.
 4. **Record**: `realm_id` (-1 wild), a `Realm` per seed (seat, area, population, dominant biome, highland) and each
    POI's `realm_id`. Names, rulers and culture come from naming; vassals, colours and relations from diplomacy.
+
+### Stage 9c — Diplomacy (`pipeline/civilization/diplomacy.py`)
+
+1. **Borders**: shared border length in km per realm pair, from the edges between 4-adjacent solid cells.
+2. **Vassalage**: majors, smallest first, with no vassals of their own may swear fealty (`vassal_chance` of their kind) to
+   the independent neighbouring major sharing the longest border that is at least `vassal_area_ratio` times their
+   area; city-states and tribes may swear to any neighbouring major. Only leaves swear, so the tree has no cycles.
+3. **Colours**: golden-ratio hues for majors, a paler shade (`tables.realm_colors.vassal`) of the top's hue for vassals,
+   vivid city-states, muted tribes.
+4. **Relations** between independent powers sharing a border (borders summed over their vassal trees): war, rivalry,
+   alliance, trade or none by `tables.relation_weights`; at least one war when any border exists; one sea pact between
+   far-apart majors. `Relation.why` is a raw template from `tables.reasons`; naming fills its tokens.
+5. **Fronts**: a war marks the border cells of its two powers in `World.front`, picks an attacker by coin toss and
+   claims the defender's non-capital settlement nearest `claim_samples` border cells.
 
 ### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 
