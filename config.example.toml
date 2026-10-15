@@ -53,9 +53,10 @@ min_river_km = 150.0
 city_state_far_km = 540.0        # a city this far from every capital is likely a city-state (realm kinds: data/polity.toml)
 tribe_max = 6                    # tribes claiming the largest unclaimed areas
 claim_budget_km = 1500.0         # how far (cost in km) a realm of strength 1 reaches over flat land
+reason_near_km = 250.0           # a war or rivalry names a river, range or sea only this near the border
 
 [history]
-start = "present"                # "dawn" stops after the physical stages: year 0, nothing settled, no chronicle
+start = "present"                # "dawn": year 0, nothing settled, no chronicle (only a few ruins, towers and dungeons stand)
 span_years = 1200                # the present year of a "present" world (event wording: data/chronicle.toml)
 battles_per_100km_front = 0.1    # battles fought along a war's border, per 100 km of it
 fallen_realms_per_million_km2 = 1.0   # vanished realms whose ruins lie on wild land
@@ -81,7 +82,7 @@ building_rows = [5, 8]          # settlement building outer height range in rows
 street_gap = [1, 1]             # clear ground [columns, rows] kept round each settlement building
 clutter_density = 0.10          # fraction of free floor cells furnished
 shape = "mixed"                 # solid-building outline: rectangle|blob|cellular|drunkard|diamond|cross|mixed
-ruin_erosion = 0.45             # fraction of a ruin's walls that have collapsed
+ruin_erosion = 0.45             # fraction of a ruin's walls that have collapsed once it is old (ruin_erosion_young when new)
 coast_margin_rows = 1           # bare ground kept between a solid structure and any water
 bridge_max_rows = 6             # the widest water a settlement street will bridge
 # Per-kind site rows (layout, extent in tiles, plan resolution, furniture set) live in

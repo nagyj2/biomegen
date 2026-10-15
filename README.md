@@ -2,8 +2,8 @@
 
 A seed-reproducible **procedural island generator and explorer** that runs in your terminal. It
 builds a realistic island — terrain, climate, rivers and lakes, natural biomes, realms with
-rulers, vassals, wars and alliances, points of interest (villages, towns, cities, capitals, towers, dungeons, ruin,
-camps, boats) connected by meandering roads — and lets you explore it in a colour terminal UI,
+rulers, vassals, wars and alliances, points of interest (villages, towns, cities, capitals, towers, dungeons, ruins,
+battlefields, watchtowers, shrines, camps, boats) connected by meandering roads — and lets you explore it in a colour terminal UI,
 zoom in to see structure detail, and export the view to SVG/PNG.
 
 > **Status:** The world generator and the layered renderer are in place (redesign phases 0–4; see
@@ -11,7 +11,8 @@ zoom in to see structure detail, and export the view to SVG/PNG.
 > the SVG/PNG exports, so they all look alike. Every POI archetype renders an interior embedded in the
 > terrain at the zoom (shell) and local (full, furnished) scales, with floor cycling for towers and dungeons.
 > Settlements and politics (realms, vassals, relations and a political view with borders and war fronts) and the
-> chronicle (a derived history, `--chronicle`) are in; POIs placed from that history are the next phase.
+> chronicle (a derived history, `--chronicle`) are in, and POIs follow that history (ruins of fallen realms, battlefields,
+> watchtowers on war fronts, shrines) with a stored hook each; the explorer's info panel is the next phase.
 
 ---
 
@@ -179,6 +180,7 @@ Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[ta
 | `river_cost` / `coastal_hop_km` / `coastal_hop_cost` | `3.0` / `60.0` / `6.0` | Extra cost of a river cell; how far from land a realm may hop over water, and at what cost |
 | `vassal_area_ratio` | `2.0` | A major swears fealty only to a major at least this many times larger |
 | `habitats` | dry / cold / wood | Biome groups that favour a realm name form |
+| `reason_near_km` | `250.0` | A war or rivalry names a river, range or sea only within this distance of the border |
 
 Realm kinds (strength, rural population, vassal chance), name and ruler forms, relation weights and realm colours are
 in `src/biomegen/data/polity.toml`; reason texts for wars, rivalries, alliances and trade in `reasons.toml`.
@@ -187,7 +189,9 @@ in `src/biomegen/data/polity.toml`; reason texts for wars, rivalries, alliances 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `density` | `1.0` | Multiplies every wild kind's count (one per `km2_per_poi`) |
-| `types.*` | — | Per-kind rules: `priority`, `km2_per_poi`, `min_spacing_km`, `biomes`, `elevation_min_m/max_m`, `floors` |
+
+Per-kind rows (placement numbers, the events that make a kind, name forms, hooks and the simulation seams) are in
+`src/biomegen/data/pois.toml`; the fates of a fallen realm's ruins and the shrine sites are its `poi_fates` and `poi_sites`.
 
 #### `[sites]`
 | Key | Default | Description |
@@ -199,7 +203,7 @@ in `src/biomegen/data/polity.toml`; reason texts for wars, rivalries, alliances 
 | `street_gap` | `[1, 1]` | Clear ground `[columns, rows]` round each settlement building |
 | `clutter_density` | `0.10` | Fraction of free floor cells furnished |
 | `shape` | `"mixed"` | Outline for solid buildings: `rectangle`/`blob`/`cellular`/`drunkard`/`diamond`/`cross`/`mixed` |
-| `ruin_erosion` | `0.45` | Fraction of a ruin's walls that have collapsed |
+| `ruin_erosion` | `0.45` | Fraction of a ruin's walls that have collapsed once it is old (`ruin_erosion_young` and `ruin_erosion_years` set how fast a new ruin gets there) |
 | `bridge_max_rows` | `6` | The widest water a settlement street will bridge |
 | `settlement.*` | — | Settlement growth: `fill` (share of ground built on), `trees`, `radius`, `wobble`, `road_stretch` (outline shape), `spokes`, `rings`, `ring_gap`, `max_lanes` (street network), `wall_inset`, `lot_tries` |
 
@@ -274,8 +278,8 @@ config, e.g. `[tables.biomes.desert]` with `goods = "glass"`; each file document
 The world is built by an ordered, fully seed-reproducible pipeline:
 
 ```
-terrain → climate → hydrology → biomes → geography → settlements → pois → roads
-         → realms → diplomacy → naming
+terrain → climate → hydrology → biomes → geography → settlements → roads → realms → diplomacy
+         → history → pois → spurs → naming
 ```
 
 All algorithms are industry-standard and most are swappable via config (see `docs/ARCHITECTURE.md`).

@@ -22,7 +22,7 @@ Every tunable lives here. The program must run correctly with no config file at 
 
 ## Tables
 
-- Per-name attribute rows (biomes, relief, tiers, later polity and POI kinds) live in `../data/*.toml`,
+- Per-name attribute rows (biomes, relief, tiers, polity, POI kinds and their fates and sites) live in `../data/*.toml`,
   not in `defaults/`. `defaults/tables.py` loads them as the `tables` section; one file may not repeat
   another's table. Global numbers (counts, budgets) stay in `defaults/`.
 - Each table has a row schema in `tables.py` (`SCHEMAS`); a new table or column needs an entry there.

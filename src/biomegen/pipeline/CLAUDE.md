@@ -12,7 +12,8 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 - Iterate collections in a defined order (`sorted()`); dict and set order is not a contract.
 - Every tunable comes from `config.get(...)`, not a literal (see `config/CLAUDE.md`).
 - Folders say what a stage models: `physical/` (land and water), `civilization/` (settlements, roads, realms, diplomacy).
-  Flat modules still to be reorganised (`pois`, `naming`) stay in `pipeline/` until the phase that replaces them.
+  `story/` holds the history and what follows from it (the chronicle, the POIs events make). `pois.py` is the location-placement
+  helper the pois stage (`story/pois.py`) calls; `naming.py` stays in `pipeline/`.
 
 ## Physical stages (`physical/`)
 
@@ -31,10 +32,10 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 - Per-name rows (styles, relief heights, geo name forms) are data tables; classifier numbers stay in
   `config/defaults/`. Time stages with `scripts/bench.sh` when a change could slow them.
 
-## Civilization stages (`civilization/`, `pois.py`)
+## Civilization stages (`civilization/`)
 
-- Order: settlements -> pois -> roads -> realms -> diplomacy -> history -> naming. Settlements are placed first and
-  every later stage counts them (spacing, remoteness, road endpoints).
+- Order: settlements -> roads -> realms -> diplomacy -> history -> pois -> spurs -> naming. Settlements are placed first and
+  every later stage counts them (spacing, remoteness, road endpoints); POIs come after history so they can follow it.
 - Tiers are data (`data/tiers.toml`): placement order is `rank`, count is land km² over `land_per_settlement_km2`,
   separation is `spacing_km`, and `backbone` says whether roads join the tier into the trunk. A new tier is a row,
   not a code branch; the settlement interior builder and the render markers still need the kind registered.
@@ -44,9 +45,10 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   depend on iteration order.
 - Roads route per landmass (a connected `water_type != SALT` component), so they never cross open ocean. The trunk is
   a minimum spanning tree over *every pair* of backbone settlements in km (a k-nearest graph can leave a backbone town
-  out); villages and wild POIs branch off as spurs to the nearest road tile. A step costs its km length, over the
-  biome and relief `move_cost` rows.
-- Wild POIs (`pois.py`) are interim: counts are area over `km2_per_poi`, and phase 8 replaces them with data rows.
+  out); villages branch off as spurs to the nearest road tile. A step costs its km length, over the biome and relief
+  `move_cost` rows. `roads.run` links the settlements; `roads.spurs` (after the pois stage) branches every non-settlement
+  POI with `POI.connect` onto that network (`roads.uncivilized_connect_prob` each, own stream, none on a landmass without a
+  road). `connect` is set at commit from the kind's `tables.pois` or `tables.tiers` row (a shrine's from its `poi_sites` row).
 
 ## Politics stages (`civilization/realms.py`, `diplomacy.py`)
 
@@ -90,12 +92,33 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   once every name exists. A template may use only its row's tokens (`config/tables.py`); a new token is a schema entry,
   a value in `naming/chronicle.py` and a test that no `{` is left in any text.
 - **Locality cap.** A place named in an event comes from `places.nearest_settlement`: a settlement on the same landmass
-  within `history.near_km`, else the event draws only from `templates` (never `templates_near`). Phase 8 applies the same
-  helper to the `{river}`, `{range}` and `{sea}` tokens of relation reasons.
+  within `history.near_km`, else the event draws only from `templates` (never `templates_near`). The same rule governs a
+  relation's reason: diplomacy keeps only templates whose `{river}`, `{range}` or `{sea}` has a feature within
+  `politics.reason_near_km` of the border (`places.nearest_feature`, recorded in `Relation.places`); naming words that
+  feature, never the largest in the world.
 - Every draw is `rng.derive(seed, "history", ...)` keyed on the entity (realm, POI, relation, battle number, fallen realm),
   so no event depends on another's draws.
-- `history.start = "dawn"` skips settlements through history in `generate()` (`DAWN_SKIPPED`); everything that reads a world
-  must work with no realms, POIs or events.
+- **Decisive battles.** `conflicts.py` tags a battle `decisive` when it changes a border: the last battle of an older war
+  before its peace, and the battle that conquers a fallen realm. A battlefield may mark it.
+- `history.start = "dawn"` skips settlements through history and the spurs in `generate()` (`DAWN_SKIPPED`); the pois stage
+  still runs, placing only `source = "both"` kinds by location. Everything that reads a world must work with no realms,
+  settlements or events.
+
+## POIs from history (`story/pois.py`, `poi_rules.py`)
+
+- **Rule table.** `poi_rules.poi_for_event(world, config, seed, event)` is pure: it returns the `PoiPlan`s the event makes (a
+  rule is when an event makes a POI; a cap is a limit on how many) from `tables.pois` rows, never placing or writing. Draws
+  are `rng.derive(seed, "poi", "event", event.id, kind)` in a fixed order, so a plan depends on its event alone. A later
+  simulation calls it per event (`simulated=True` opens the `sim_only` fates, `now=` is its year).
+- **Placement** (`story/pois.py`) walks the ledger in order and places each plan: ruins on the fallen realm's exact site plus
+  holdings, battlefields, towers and dungeons on the nearest free cell round the event, watchtowers on the front, shrines in
+  their site's band round the seat. Spacing is checked against the POIs placed so far (it depends on order, so it is not a
+  rule). The location pass follows. New POIs append to `world.pois`; an index never moves.
+- **Event link.** A POI lists the events that made or mark it in `event_ids` (and a settlement its founding or settling event);
+  an event's `poi_ids` is never appended to, because naming reads `poi_ids[0]` as a `{town}`. `World.events_at` finds events
+  through both.
+- **Simulation seams.** Rows carry `owner`, `dynamic`, `connect`, `bandit_strength`, `bandit_radius_km`, `lifespan`; `POI.fell`
+  and `bandit_strength` are data only until a simulation reads them. No simulation code lives here.
 
 ## Adding a stage
 

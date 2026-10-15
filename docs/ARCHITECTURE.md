@@ -74,10 +74,10 @@ src/biomegen/
       hydrology.py      Stage 3 — rivers, lakes, flow accumulation
       biomes.py         Stage 4 — biome from °C / mm / m, relief, volcanoes
       geography.py      Stage 5 — landmass_id; landmass, range, peak, lake, sea, river features
-    pois.py             Stage 8 — wild POI placement (interim until phase 8)
+    pois.py             Location placement of the POI kinds (score fields, blue-noise picks, `commit`); run by story/pois.py
     civilization/
       settlements.py    Stage 7 — habitability, capital / city / town / village placement
-      roads.py          Stage 9 — road network (a road over water is a bridge)
+      roads.py          Stage 8 — settlement roads (a road over water is a bridge); Stage 9f — `spurs` for the POIs placed later
       realms.py         Stage 9b — realm seeds, strength-weighted claiming, tribes, realm_id
       diplomacy.py      Stage 9c — vassal tree, colours, relations, war fronts
     story/
@@ -85,7 +85,9 @@ src/biomegen/
       rulers.py         Ruling styles and the successions that change them (abstracted from real lifetimes)
       conflicts.py      Wars, peace, pacts, battles and falls played through time with faction strengths
       ledger.py         Ledger: collects the events, then sorts and numbers them
-      places.py         nearest_settlement(): the locality rule for a place named in an event
+      places.py         nearest_settlement() and nearest_feature(): the locality rule for a place named in text
+      poi_rules.py      poi_for_event(): the pure event-to-POI rule table (what an event makes)
+      pois.py           Stage 9e — places the POIs the events make, then the location pass
     naming.py           Stage 10 — names for all entities, realms and relation reasons
   naming/
     cultures.py         Culture profiles + biome-biased culture assignment
@@ -94,6 +96,7 @@ src/biomegen/
     forge.py            Name-generation facade (root → dressed name)
     polity.py           Realm names, ruler styles and the wording of relation reasons
     chronicle.py        Fallen-realm names and cultures; renders every chronicle event's text
+    hooks.py            POI.hook / hook_refs: an event's text or a row template, with its name spans
   sampling/             How a grid cell reads the world, shared by render and the site plans
     sampler.py          Sampler: one cell per tile, or a strided viewport
     detail.py           DetailSampler: magnified scales, warped continuous lookup; camera helpers
@@ -151,7 +154,8 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 Sparse entity lists: `pois`, `realms` (`Realm`), `relations` (`Relation`), `rivers`, `lakes`, `features` (`GeoFeature`),
 `island_name`. History: `year` (the present; 0 for a dawn start), `chronicle` (`ChronicleEvent`, sorted, `id` is the
 index) and `fallen_realms` (`FallenRealm`), read through `events_until(year)`, `events_at(x, y)` and `events_of(realm_id)`.
-`Realm.founded` and `POI.founded` are chronicle years. None of this is in the per-tile arrays, so the fingerprint ignores it.
+`Realm.founded` and `POI.founded` are chronicle years; a `POI` also holds `fell`, `event_ids` (the events that made or mark
+it), `hook` / `hook_refs`, `bandit_strength`, `purpose` (a camp's) and `connect`. None of this is in the per-tile arrays, so the fingerprint ignores it.
 
 Scale metadata: `World.scale` is a `util.units.GridScale` built by `generate()` from `world.size_km`
 and `world.center_lat` / `center_lon` (`center_lat = "seed"` draws it per generation attempt from the
@@ -190,14 +194,16 @@ backtracking. A **land-exists gate** wraps the cheap terrain stage: if a seed yi
 rank, so the gate only trips when a style's land fraction is configured below the minimum.
 
 ```
-terrain → climate → hydrology → biomes → geography → settlements → pois → roads
-         → realms → diplomacy → history → naming
+terrain → climate → hydrology → biomes → geography → settlements → roads → realms → diplomacy
+         → history → pois → spurs → naming
 ```
 
-`history.start = "dawn"` (`--start dawn`) skips settlements through history: a young world with the land, rivers and
-features but no POIs, roads, realms or chronicle, at year 0, for a later simulation to settle.
+`history.start = "dawn"` (`--start dawn`) skips settlements through history and the spurs: a young world with the land,
+rivers and features and a few ruins, towers and dungeons, but no settlements, roads, realms or chronicle, at year 0, for a
+later simulation to settle.
 
-Roads end at every POI's anchor. A POI's site plan (`sites/`) is built lazily and finds the roads that reach
+The roads stage links the settlements; the `spurs` stage, after the pois stage, branches off the POIs that may be linked
+(`POI.connect`). A POI's site plan A POI's site plan (`sites/`) is built lazily and finds the roads that reach
 it from the world arrays, so no stage records anything for it.
 
 ### Stage 1 — Terrain (`pipeline/physical/terrain.py`)
@@ -287,23 +293,9 @@ Places the four settlement tiers (`capital`, `city`, `town`, `village`; rows in 
    `settlements.capital_min_landmass_km2` (or the biggest); cities and towns need a named-feature landmass.
 3. **Record**: a `POI` of the tier's kind with a population from the tier's range and `port` / `river` / `lake` tags.
 
-### Stage 8 — Wild POI placement (`pipeline/pois.py`)
+### Stage 8 — Roads (`pipeline/civilization/roads.py`)
 
-Places towers, dungeons, ruins, camps and boats (interim; phase 8 makes POI kinds data-driven). Settlements come
-from Stage 7 and count for spacing and remoteness:
-
-1. **Count**: land km² (sea km² for boats) ÷ the kind's `km2_per_poi`, times `poi.density`.
-2. **Eligibility**: allowed biomes, elevation bounds, land or water, a free tile, and for land kinds at least
-   `poi.min_footprint_land` dry land under the tiles its site may cover (`footprint_land_fraction_mask`, a summed-area
-   table), so a structure can sit on a coast but never mostly over water.
-3. **Score**: 1 + freshwater and coastal closeness (km falloff) + remoteness from settlements + seeded jitter.
-4. **Blue-noise pick**: kinds in `priority` order, best score first, kept when no placed POI is closer than
-   `min_spacing_km` (aspect-aware km).
-5. **Interior seed**: each POI mints a deterministic `interior_seed = blake2b(master_seed, "poi_interior", x, y)` used by the lazy site plan (see Sites and the Render layer).
-
-### Stage 9 — Roads (`pipeline/civilization/roads.py`)
-
-Connects POIs with meandering least-cost roads:
+Connects the settlements with meandering least-cost roads (the wild and history POIs come later, see Stage 9f):
 
 1. **Landmass grouping**: `water_type != SALT` (land + rivers + lakes, but not ocean) is labelled
    with 8-connected components. Roads are only routed within one component — they cannot cross open
@@ -321,7 +313,7 @@ Connects POIs with meandering least-cost roads:
    reduces zigzagging. Search is bounded to a padded bounding box + `max_expansions` cap; a
    Bresenham straight-line fallback fires if A* exhausts its budget.
    - **Trunk phase**: MST + loop edges are routed first.
-   - **Spur phase**: isolated POIs connect to the nearest existing road tile (not to a distant POI),
+   - **Spur phase**: isolated POIs (villages) connect to the nearest existing road tile (not to a distant POI),
      preventing parallel-road artefacts.
 4. **Bridges are not recorded.** A road tile over water is a bridge; the renderer and the site plans draw it from the
    road alone (`sampling/roads.py`). A diagonal step between two land tiles that passes between two water corners
@@ -353,7 +345,8 @@ Partitions solid land (any cell whose biome is not water; a river keeps its land
    vivid city-states, muted tribes.
 4. **Relations** between independent powers sharing a border (borders summed over their vassal trees): war, rivalry,
    alliance, trade or none by `tables.relation_weights`; at least one war when any border exists; one sea pact between
-   far-apart majors. `Relation.why` is a raw template from `tables.reasons`; naming fills its tokens.
+   far-apart majors. `Relation.why` is a raw template from `tables.reasons`, one whose river, range or sea lies within
+   `politics.reason_near_km` of the border (`places.nearest_feature`; recorded in `Relation.places`); naming fills its tokens.
 5. **Fronts**: a war marks the border cells of its two powers in `World.front`, picks an attacker by coin toss and
    claims the defender's non-capital settlement nearest `claim_samples` border cells.
 
@@ -378,8 +371,8 @@ and every draw is a `history` sub-stream keyed on the entity.
    - each relation of two powers sharing a border may have an older, ended war (`past_war_chance`, `past_war_years`) with
      battles and a `peace`; the relation itself (an ongoing `war`, `rivalry` or `treaty`) begins at any later year, so wars
      and pacts are not confined to one period;
-   - a fallen realm fights up to `fallen_wars` wars against the nearest living realms that exist at the time, one decisive
-     battle each at its ruins; once a lost battle leaves it under `fall_strength` it is conquered a few years on (a `fall`
+   - a fallen realm fights up to `fallen_wars` wars against the nearest living realms that exist at the time, one
+     battle each at its ruins (the one that conquers it is tagged `decisive`, as is the last battle of an older war); once a lost battle leaves it under `fall_strength` it is conquered a few years on (a `fall`
      tagged `conquered` naming the victor), otherwise it falls at its natural year;
    - battles along a front (`battles_per_100km_front`, on `diplomacy.front_cells`) are won with a chance proportional to
      strength; `realm_ids` of a battle or peace is `[winner, loser]`.
@@ -391,17 +384,48 @@ every name in it). The ledger sorts events by `(year, kind order, creation order
 the terminal (`render/chronicle.py`: realms in their map colour, `history.colors` for the rest); `scripts/chronicle.sh`
 wraps it.
 
+### Stage 9e — POIs (`pipeline/story/pois.py`, `poi_rules.py`, `pipeline/pois.py`)
+
+Runs after history, so a POI can follow the chronicle and take its realm by grid lookup. One row per kind in
+`tables.pois` (`data/pois.toml`): `source` (`location`, `history`, `both`), the placement numbers, the events that make it,
+and the simulation seams (`owner`, `dynamic`, `connect`, `bandit_strength`, `bandit_radius_km`, `lifespan`).
+
+1. **Rule table** (`poi_rules.poi_for_event`, pure): from one event, the world's present state, the config and the seed it
+   returns a `PoiPlan` per kind that event makes: a `fall` makes ruins (the capital plus `holdings`, each with a fate from
+   `tables.poi_fates`; the `sim_only` fates are returned only to a simulation) and, at `chance`, a tower or a dungeon (only a
+   conquered fall); a `decisive` battle at least `min_age_years` old makes a battlefield at `chance`; an ongoing war makes
+   a watchtower per `per_km_of_front` of its front, at most `max_per_event`; a succession into a devout style makes a shrine,
+   whose site (`tables.poi_sites`) the previous ruler's `temper` (`tables.ruling_styles`) picks.
+2. **History placement** (`story/pois.py`): events in ledger order; a fall's capital ruin sits exactly on the fallen realm's
+   site, holdings in the `holding_km` band; a battlefield, tower or dungeon on the nearest free cell round the event
+   (`offset_km`); watchtowers on the front, on high ground; a shrine on the best cell of its site's band round the seat.
+   Spacing is checked against the POIs placed so far (`min_spacing_km`, `event_spacing_km`, `kind_spacing_km`). Each POI
+   carries `event_ids`, `founded` and, for a ruin, `fell`.
+3. **Location pass** (`pipeline/pois.py`): per kind in `priority` order: count = land km² (sea for boats) over `km2_per_poi`
+   times `poi.density`; eligibility (biomes, elevation, a free tile, `poi.min_footprint_land`); score = 1 + freshwater,
+   coast, remoteness from settlements, wildness and remoteness from seats (the last two make towers and dungeons bandit
+   country) + jitter; blue-noise pick with `min_spacing_km`. At a dawn start only `source = "both"` kinds are placed.
+4. **Interior seed**: each POI mints `interior_seed = blake2b(master_seed, "poi_interior", x, y)` for its lazy site plan.
+
+### Stage 9f — Spurs (`roads.spurs`)
+
+Every POI whose `connect` is true and that is not a settlement draws `roads.uncivilized_connect_prob`; a winner gets a spur
+to the nearest road tile of its landmass. `connect` comes from the kind's row (a shrine's from its site row).
+
 ### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 
 Assigns names to all entities; region lore is gone, and the chronicle's text is rendered here:
 
 - **Culture assignment**: each realm draws its culture from a biome-biased weighted distribution seeded on
   `(master_seed, "naming.culture", "realm", realm_id)`; a vassal keeps its own. POIs, rivers, lakes and features take the
-  culture of the realm holding them, wild land and open water `common`. The island name uses the largest realm's culture.
+  culture of the realm holding them, wild land and open water `common`. A POI's name is a pattern from its kind's `names`
+  (`names_fallen` for a fallen realm's capital ruin, which takes the realm's name). The island name uses the largest realm's culture.
 - **Realms and relations** (`naming/polity.py`): a realm's form (name pattern and ruler styles) is a weighted draw among its
   kind's `tables.realm_forms` rows, favoured by the habitat of its land; its base word and ruler's name are made in its
   culture. A city-state is short-named after its seat. Last, each relation's reason template gets its tokens: the claimed
-  or a nearby town, the longest river, the largest range and sea, and the realms' trade goods.
+  or a nearby town, the river, range and sea diplomacy found near the border (`Relation.places`), and the realms' trade goods.
+- **Hooks** (`naming/hooks.py`): after the chronicle, each POI's `hook` and `hook_refs`: the text of its first event, else a
+  template from its row's `hooks` (`hooks_near` too when `places.nearest_settlement` finds a settlement).
 - **Chronicle** (`naming/chronicle.py`): last, a fallen realm gets a culture from its ruins' biome and a name from a
   major realm's forms (a stand-in realm with a negative id keeps its streams apart), then every event's template has its
   tokens filled from the named realms, places and relations; the first letter is capitalised.
@@ -535,8 +559,10 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   wobbling outline (stretched towards each road), a plaza, spokes from it to the outline, partial rings, lanes into any
   ground still too far from a street, then lots fitted to the free ground beside the streets (each a building whose door
   faces its street), and for walled tiers a wall along the outline with gates where spokes and the road meet it. `structure.py` builds dungeon (a surface gatehouse plus underground rock floors of rooms and
-  corridors or caves), tower (tapering single-room floors, aligned stairs, a lookout) and ruin (a building with breaches,
-  rubble, trees and partial roofs); the entrance faces a gate. `camp.py` and `boat.py` are open-air (tents, hull).
+  corridors or caves), tower (tapering single-room floors, aligned stairs, a lookout; a watchtower is the same layout in its
+  own furniture), ruin (a building with breaches, rubble, trees and partial roofs, eroded more the longer ago it fell) and
+  shrine (one walled room with an altar); the entrance faces a gate. `camp.py`, `battlefield.py` and `boat.py` are open-air
+  (tents, a trampled field with debris and wrecked wagons, hull); a camp's `purpose` picks its site row (`camp_<purpose>`).
 - **Scales.** One plan per face, scaled into the cells its extent covers by `blit.sample_rect`. Where a view is coarser
   than the plan, the cell of highest `OUTSIDE_PRIORITY` wins, so a one-cell wall survives. Void is transparent. The
   world's road is drawn everywhere (roads layer, under the plans); a plan leaves its cells void and adds only lanes.
