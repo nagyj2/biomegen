@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from biomegen.util.units import grid_scale
-from biomegen.world.entities import Realm
+from biomegen.world.entities import POI, ChronicleEvent, Realm
 from biomegen.world.tile import Relief
 from biomegen.world.world import World
 
@@ -118,3 +118,39 @@ def test_view_reads_realm_id() -> None:
     world = World(8, 4, seed=1)
     world.realm_id[1, 2] = 3
     assert world.view(2, 1).realm_id == 3
+
+
+def _history_world() -> World:
+    world = World(6, 3, seed=1)
+    world.pois.append(POI(kind="town", x=2, y=1, interior_seed=1))
+    world.poi_index[1, 2] = 0
+    world.chronicle = [
+        ChronicleEvent(id=0, year=10, kind="founding", realm_ids=[0], location=(0, 0)),
+        ChronicleEvent(id=1, year=20, kind="settling", realm_ids=[0], poi_ids=[0]),
+        ChronicleEvent(id=2, year=30, kind="war", realm_ids=[0, 1]),
+    ]
+    return world
+
+
+def test_new_world_has_no_history() -> None:
+    # Before the history stage: year 0, no events and no fallen realms.
+    world = World(6, 3, seed=1)
+    assert (world.year, world.chronicle, world.fallen_realms) == (0, [], [])
+
+
+def test_events_until_keeps_events_up_to_the_year() -> None:
+    # The year bound is inclusive.
+    assert [e.id for e in _history_world().events_until(20)] == [0, 1]
+
+
+def test_events_at_matches_a_location() -> None:
+    assert [e.id for e in _history_world().events_at(0, 0)] == [0]
+
+
+def test_events_at_matches_the_poi_on_the_cell() -> None:
+    # An event naming the settlement at a cell is found there though its own location is unset.
+    assert [e.id for e in _history_world().events_at(2, 1)] == [1]
+
+
+def test_events_of_lists_the_events_naming_a_realm() -> None:
+    assert [e.id for e in _history_world().events_of(1)] == [2]

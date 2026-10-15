@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 
 from ..util.units import GridScale, grid_scale
-from .entities import POI, GeoFeature, Lake, Realm, Relation, River
+from .entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Lake, Realm, Relation, River
 from .tile import Biome, Relief, TileView, WaterType
 
 
@@ -112,6 +112,11 @@ class World:
         self.lakes: list[Lake] = []
         self.features: list[GeoFeature] = []  # filled by the geography stage
 
+        # History (filled by the history stage). ``year`` is the present; events are sorted and ``id`` is the index.
+        self.year: int = 0
+        self.chronicle: list[ChronicleEvent] = []
+        self.fallen_realms: list[FallenRealm] = []
+
         # Terrain style row name (filled by the terrain stage; metadata, not hashed).
         self.terrain_style: str = ""
 
@@ -183,6 +188,20 @@ class World:
         while self.realms[index].liege >= 0:
             index = self.realms[index].liege
         return index
+
+    # ------------------------------------------------------------------ history
+    def events_until(self, year: int) -> list[ChronicleEvent]:
+        """Return the chronicle events dated ``year`` or earlier, oldest first."""
+        return [event for event in self.chronicle if event.year <= year]
+
+    def events_at(self, x: int, y: int) -> list[ChronicleEvent]:
+        """Return the events located at cell ``(x, y)`` or naming the POI anchored there, oldest first."""
+        poi = int(self.poi_index[y, x])
+        return [e for e in self.chronicle if e.location == (x, y) or (poi >= 0 and poi in e.poi_ids)]
+
+    def events_of(self, realm_id: int) -> list[ChronicleEvent]:
+        """Return the events that name realm ``realm_id``, oldest first."""
+        return [event for event in self.chronicle if realm_id in event.realm_ids]
 
     # ------------------------------------------------------------------ reproducibility
     def fingerprint(self) -> str:

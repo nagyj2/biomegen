@@ -14,6 +14,8 @@ from typing import List, Optional, Tuple
 
 REALM_KINDS: Tuple[str, ...] = ("major", "city_state", "tribal")
 RELATION_KINDS: Tuple[str, ...] = ("war", "rivalry", "alliance", "trade")
+EVENT_KINDS: Tuple[str, ...] = ("founding", "settling", "conquest", "war", "rivalry", "treaty", "battle", "fall")
+NO_LOCATION: Tuple[int, int] = (-1, -1)  # a chronicle event not tied to a cell
 
 
 @dataclass
@@ -34,6 +36,7 @@ class POI:
     floor_count: int = 1  # >1 for towers (above ground) and dungeons (below ground)
     lowest_floor: int = 0  # 0 for ground-level; negative for dungeons going underground
     pop: int = 0  # population (settlements only)
+    founded: int = 0  # chronicle year the settlement was founded (set by the history stage; 0 = not dated)
     tags: Tuple[str, ...] = ()  # site traits, e.g. "port", "river"
     extra: dict = field(default_factory=dict)  # kind-specific data (e.g. boat cargo type)
 
@@ -61,6 +64,7 @@ class Realm:
     liege: int = -1
     vassals: List[int] = field(default_factory=list)
     color: Tuple[int, int, int] = (0, 0, 0)
+    founded: int = 0  # chronicle year the realm was founded (set by the history stage)
 
 
 @dataclass
@@ -126,3 +130,41 @@ class GeoFeature:
     elevation_m: float = 0.0  # summit height (peak, range, landmass) or greatest depth below sea (sea, < 0)
     summit: int = -1  # feature id of the highest peak (landmass, range)
     into: int = -1  # rivers: feature id of the lake or sea at the mouth (-1 if none)
+
+
+@dataclass
+class FallenRealm:
+    """A realm that vanished before the present, known only by its ruins on wild land.
+
+    It is not in ``World.realms``, so the realm partition and vassal tree never see it. ``location`` is the cell of its
+    ruins, ``founded`` and ``fell`` are chronicle years; the naming stage fills ``culture`` and ``name``.
+    """
+
+    id: int  # index into World.fallen_realms
+    location: Tuple[int, int]
+    founded: int
+    fell: int
+    culture: str = ""
+    name: str = ""
+
+
+@dataclass
+class ChronicleEvent:
+    """One entry of the derived history (``World.chronicle``), plain data a later simulation can also emit.
+
+    ``realm_ids``, ``poi_ids`` and ``fallen_ids`` index ``World.realms``, ``World.pois`` and ``World.fallen_realms``.
+    ``location`` is a cell (:data:`NO_LOCATION` when none). ``template`` is the raw wording with its ``{tokens}``; the
+    naming stage renders it into ``text``. The list is sorted by ``(year, kind order, creation order)`` and ``id`` is
+    the index into it.
+    """
+
+    id: int
+    year: int
+    kind: str  # one of EVENT_KINDS
+    realm_ids: List[int] = field(default_factory=list)
+    poi_ids: List[int] = field(default_factory=list)
+    fallen_ids: List[int] = field(default_factory=list)
+    location: Tuple[int, int] = NO_LOCATION
+    template: str = ""
+    text: str = ""
+    tags: Tuple[str, ...] = ()
