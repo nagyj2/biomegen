@@ -7,6 +7,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.pipeline.story.history import relation_start_year
 from biomegen.world.entities import EVENT_KINDS
 from biomegen.world.world import World
 
@@ -114,18 +115,16 @@ def test_a_realms_seat_has_no_settling_event(world: World) -> None:
 def test_templates_come_from_the_table(world: World, cfg: Config) -> None:
     pool = {
         t
-        for row in ("founding", "settling", "conquest")
+        for row in cfg.get("tables.chronicle")
         for key in ("templates", "templates_near")
-        for t in cfg.get(f"tables.chronicle.{row}", {}).get(key, [])
+        for t in cfg.get(f"tables.chronicle.{row}").get(key, [])
     }
     assert all(e.template in pool for e in world.chronicle)
 
 
 def test_a_near_template_needs_a_near_settlement(world: World, cfg: Config) -> None:
     near = {
-        t
-        for row in ("founding", "settling", "conquest")
-        for t in cfg.get(f"tables.chronicle.{row}", {}).get("templates_near", [])
+        t for row in cfg.get("tables.chronicle") for t in cfg.get(f"tables.chronicle.{row}").get("templates_near", [])
     }
     assert all(e.near_poi >= 0 for e in world.chronicle if e.template in near)
 
@@ -168,3 +167,73 @@ def test_no_near_cap_means_no_near_settlements() -> None:
     config.data["history"]["near_km"] = 0.0
     world = pipeline.generate(config, 42)
     assert all(e.near_poi == -1 for e in world.chronicle)
+
+
+# --- relations: war, rivalry and treaty ------------------------------------------------------------------------
+
+
+RELATION_EVENT = {"war": "war", "rivalry": "rivalry", "alliance": "treaty", "trade": "treaty"}
+
+
+def _relation_events(world: World) -> list:
+    return [e for e in world.chronicle if e.kind in ("war", "rivalry", "treaty")]
+
+
+def test_every_relation_is_one_event(world: World) -> None:
+    kinds = sorted(RELATION_EVENT[r.kind] for r in world.relations)
+    assert kinds == sorted(e.kind for e in _relation_events(world))
+
+
+def test_a_war_is_ongoing(world: World) -> None:
+    wars = [e for e in world.chronicle if e.kind == "war"]
+    assert wars and all("ongoing" in e.tags for e in wars)
+
+
+def test_a_war_names_the_attacker_first(world: World) -> None:
+    attackers = {frozenset((r.a, r.b)): r.attacker for r in world.relations if r.kind == "war"}
+    wars = [e for e in world.chronicle if e.kind == "war"]
+    assert all(e.realm_ids[0] == attackers[frozenset(e.realm_ids)] for e in wars)
+
+
+def test_a_war_carries_the_claimed_town(world: World) -> None:
+    claims = {frozenset((r.a, r.b)): r.claim_poi for r in world.relations if r.kind == "war"}
+    wars = [e for e in world.chronicle if e.kind == "war"]
+    assert all(
+        e.poi_ids == ([claims[frozenset(e.realm_ids)]] if claims[frozenset(e.realm_ids)] >= 0 else []) for e in wars
+    )
+
+
+def test_a_treaty_is_tagged_with_its_kind(world: World) -> None:
+    pacts = {frozenset((r.a, r.b)): r.kind for r in world.relations if r.kind in ("alliance", "trade")}
+    treaties = [e for e in world.chronicle if e.kind == "treaty"]
+    assert all(e.tags == (pacts[frozenset(e.realm_ids)],) for e in treaties)
+
+
+def test_wars_join_independent_neighbours(world: World) -> None:
+    # Only independent powers sharing a border fight (the plan's causality rule).
+    wars = [r for r in world.relations if r.kind == "war"]
+    assert (
+        wars and all(world.realms[i].liege < 0 for r in wars for i in (r.a, r.b)) and all(r.border_km > 0 for r in wars)
+    )
+
+
+def test_a_relation_begins_after_both_powers_exist(world: World, cfg: Config) -> None:
+    gap = cfg.get("history.min_gap_years")
+    for event in _relation_events(world):
+        first = min(max(world.realms[i].founded for i in event.realm_ids) + gap, world.year)
+        assert event.year >= first
+
+
+def test_a_longer_border_starts_a_relation_earlier() -> None:
+    # Same span and bounds: 1500 km of border gives the longest relation, 0 km the shortest.
+    long_border = relation_start_year(1200, (10, 300), 1500.0, 1500.0, 0)
+    short_border = relation_start_year(1200, (10, 300), 0.0, 1500.0, 0)
+    assert (long_border, short_border) == (900, 1190)
+
+
+def test_a_relation_never_starts_before_the_first_allowed_year() -> None:
+    assert relation_start_year(1200, (10, 300), 1500.0, 1500.0, 1000) == 1000
+
+
+def test_a_relation_never_starts_after_the_present() -> None:
+    assert relation_start_year(1200, (10, 300), 0.0, 1500.0, 1250) == 1200

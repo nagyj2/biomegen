@@ -9,6 +9,10 @@ Everything is placed from static quantities, so the same world always gives the 
    (at least ``history.min_gap_years``), a settlement on wild land from the ``tribal`` age range. The kinds in
    ``history.settle_kinds`` also get a ``settling`` event.
 3. **Conquest.** Every vassal tie is one event, after both realms exist plus ``history.min_gap_years``.
+4. **Relations.** Every relation between two independent powers is one event: a war (``ongoing``, attacker first,
+   the claimed town in ``poi_ids``), a rivalry or a treaty (tagged ``alliance`` or ``trade``). It began some years
+   before the present, more for a longer shared border (``history.war_years`` or ``other_years``, up to
+   ``history.border_km_for_full_span``), but never before both powers exist plus ``history.min_gap_years``.
 
 Events are collected in a :class:`Ledger`, sorted by ``(year, kind order, creation order)`` and numbered, so an event's
 ``id`` is its index in ``World.chronicle``. An event holds a raw template picked from ``tables.chronicle`` (its
@@ -151,6 +155,44 @@ def _realm_events(world: World, config: Config, seed: int, span: int, ledger: Le
         ledger.add(year, "conquest", "conquest", (realm.id,), seed, realm_ids=[realm.id, liege.id], tags=("vassalage",))
 
 
+def relation_start_year(span: int, years: Sequence[int], border_km: float, full_km: float, first: int) -> int:
+    """Return the year a relation began: ``span`` minus its length, no earlier than ``first``.
+
+    The length runs from ``years[0]`` to ``years[1]`` as the shared border grows to ``full_km``.
+    """
+    share = min(1.0, max(0.0, border_km / full_km)) if full_km > 0 else 1.0
+    length = years[0] + (years[1] - years[0]) * share
+    return min(max(span - round(length), first), span)
+
+
+def _relation_events(world: World, config: Config, seed: int, span: int, ledger: Ledger) -> None:
+    """Add a war, rivalry or treaty event for every relation."""
+    gap = int(config.get("history.min_gap_years"))
+    full_km = float(config.get("history.border_km_for_full_span"))
+    for index, relation in enumerate(world.relations):
+        first = min(max(world.realms[relation.a].founded, world.realms[relation.b].founded) + gap, span)
+        years = config.get("history.war_years" if relation.kind == "war" else "history.other_years")
+        year = relation_start_year(span, years, relation.border_km, full_km, first)
+        pair = [relation.a, relation.b]
+        if relation.kind == "war":
+            attacker = relation.attacker if relation.attacker >= 0 else relation.a
+            defender = relation.b if attacker == relation.a else relation.a
+            ledger.add(
+                year,
+                "war",
+                "war",
+                (index,),
+                seed,
+                realm_ids=[attacker, defender],
+                poi_ids=[relation.claim_poi] if relation.claim_poi >= 0 else [],
+                tags=("ongoing",),
+            )
+        elif relation.kind == "rivalry":
+            ledger.add(year, "rivalry", "rivalry", (index,), seed, realm_ids=pair, tags=("rivalry",))
+        else:
+            ledger.add(year, "treaty", f"treaty_{relation.kind}", (index,), seed, realm_ids=pair, tags=(relation.kind,))
+
+
 def run(world: World, config: Config, seed: int) -> None:
     """Date the realms and settlements and derive ``world.chronicle``, mutating ``world`` in place."""
     span = int(config.get("history.span_years"))
@@ -159,4 +201,5 @@ def run(world: World, config: Config, seed: int) -> None:
     _settlement_founding_years(world, config, seed, span)
     ledger = Ledger(config)
     _realm_events(world, config, seed, span, ledger)
+    _relation_events(world, config, seed, span, ledger)
     world.chronicle = ledger.finish()
