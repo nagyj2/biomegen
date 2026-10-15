@@ -22,7 +22,8 @@ def rgb_to_256(color: RGB) -> int:
     return 16 + 36 * round(red / 255 * 5) + 6 * round(green / 255 * 5) + round(blue / 255 * 5)
 
 
-def _color_code(prefix: int, color: RGB, mode: str) -> str:
+def color_code(prefix: int, color: RGB, mode: str) -> str:
+    """Return the SGR parameters setting the glyph colour (``prefix`` 38) or the fill (48) to ``color``."""
     if mode == "truecolor":
         return f"{prefix};2;{color[0]};{color[1]};{color[2]}"
     return f"{prefix};5;{rgb_to_256(color)}"
@@ -33,9 +34,9 @@ def style_codes(fg: Optional[RGB], bg: Optional[RGB], bold: bool, mode: str) -> 
     if bold:
         codes.append("1")
     if fg is not None:
-        codes.append(_color_code(38, fg, mode))
+        codes.append(color_code(38, fg, mode))
     if bg is not None:
-        codes.append(_color_code(48, bg, mode))
+        codes.append(color_code(48, bg, mode))
     return "\x1b[" + ";".join(codes) + "m"
 
 

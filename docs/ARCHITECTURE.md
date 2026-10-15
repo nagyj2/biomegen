@@ -514,8 +514,9 @@ frame, diff-writes it, blocks on a key, and repeats, so an idle explorer uses no
   whole tile block at zoom and local), and pastes the info panel under it into one terminal-sized grid.
   `e` exports the map grid *without* the cursor.
 - **Writer.** `DiffWriter` compares the grid with the last frame (numpy) and sends a cursor move and the
-  new cells for each run of changed cells, with a style sequence only where the style changes; an
-  unchanged frame writes nothing. It owns the alternate screen, the hidden cursor and line wrap, and
+  new cells for each run of changed cells, with a style sequence only where the style changes, naming only the
+  parts (bold, glyph colour, fill) that differ from the last one sent; runs and segments are found for the whole
+  frame at once and colour codes are memoised. An unchanged frame writes nothing. It owns the alternate screen, the hidden cursor and line wrap, and
   restores them on exit even after an error. Colour is truecolor, 256 or none.
 - **Keys.** A reader yields tokens (`termios` cbreak on POSIX with a self-pipe for resize, `msvcrt` on
   Windows); `resolve_action` maps them through the rebindable `keys` table. Any key closes the `?` help.

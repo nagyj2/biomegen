@@ -11,6 +11,7 @@ import pytest
 from biomegen.explorer.writer import DiffWriter
 from biomegen.render.grid import CellGrid
 from tests.explorer.replay import replay as _replay
+from tests.explorer.replay import replay_styles
 
 
 def _grid(rows: int = 3, cols: int = 6) -> CellGrid:
@@ -100,6 +101,45 @@ def test_replaying_a_sequence_of_frames_rebuilds_the_last_one() -> None:
     # Replaying both outputs in order on one screen is what a terminal does.
     glyph, fg, bg = _replay(initial + update, 4, 10)
     assert (glyph == second.glyph).all() and (fg == second.fg).all() and (bg == second.bg).all()
+
+
+def test_replaying_random_frames_rebuilds_every_style() -> None:
+    # Random glyphs, colours and bold over several frames: the replayed screen equals each frame in every attribute,
+    # though most style changes name only the part that differs.
+    out = io.StringIO()
+    writer = DiffWriter(out, "truecolor")
+    rng = np.random.default_rng(5)
+    written = ""
+    for _ in range(4):
+        grid = _grid(5, 12)
+        grid.glyph[:] = np.where(rng.random((5, 12)) < 0.5, "#", ".")
+        grid.fg[:] = rng.integers(0, 3, size=grid.fg.shape) * 100
+        grid.bg[:] = rng.integers(0, 2, size=grid.bg.shape) * 120
+        grid.bold[:] = rng.random((5, 12)) < 0.3
+        written += _draw(writer, out, grid)
+        glyph, fg, bg, bold = replay_styles(written, 5, 12)
+        assert (glyph == grid.glyph).all() and (fg == grid.fg).all() and (bg == grid.bg).all()
+        assert (bold == grid.bold).all()
+
+
+def test_a_style_change_names_only_what_differs() -> None:
+    # Two cells sharing a fill: the second only changes the glyph colour, so its sequence carries no fill.
+    out = io.StringIO()
+    writer = DiffWriter(out, "truecolor")
+    grid = _grid(1, 2)
+    grid.bg[:] = (10, 20, 30)
+    grid.fg[0, 1] = (200, 0, 0)
+    sequences = re.findall(r"\x1b\[([0-9;]*)m", _draw(writer, out, grid))
+    assert sequences[-2] == "38;2;200;0;0"  # the last is the closing reset
+
+
+def test_bold_turns_off_without_a_reset() -> None:
+    out = io.StringIO()
+    writer = DiffWriter(out, "truecolor")
+    grid = _grid(1, 2)
+    grid.bold[0, 0] = True
+    sequences = re.findall(r"\x1b\[([0-9;]*)m", _draw(writer, out, grid))
+    assert sequences[-2] == "22"  # the last is the closing reset
 
 
 def test_a_size_change_clears_and_repaints_everything() -> None:

@@ -2,8 +2,9 @@
 
 The explorer composes one :class:`~biomegen.render.grid.CellGrid` the size of the terminal per frame. The
 writer compares it with the previous frame (numpy, per cell), then emits a cursor move and the new cells for
-each run of changed cells, with a style sequence only where the style changes. An unchanged frame writes
-nothing, and a cursor step rewrites a handful of cells instead of the whole screen.
+each run of changed cells, with a style sequence only where the style changes, naming only the parts (bold, glyph
+colour, fill) that differ from the last one sent. An unchanged frame writes nothing, and a cursor step rewrites a
+handful of cells instead of the whole screen.
 
 The writer owns the terminal state: the alternate screen, the hidden hardware cursor and disabled line wrap
 (so writing the bottom-right cell cannot scroll). Colour is ``"truecolor"``, ``"256"`` or ``"none"``.
@@ -16,8 +17,8 @@ from typing import Optional, TextIO
 
 import numpy as np
 
-from ..render.backends.ansi import MODES, style_codes
-from ..render.grid import RGB, CellGrid
+from ..render.backends.ansi import MODES, color_code
+from ..render.grid import CellGrid
 
 _ENTER = "\x1b[?1049h\x1b[?25l\x1b[?7l\x1b[2J"
 _LEAVE = "\x1b[0m\x1b[?7h\x1b[?25h\x1b[?1049l"
@@ -39,10 +40,6 @@ def _pack_styles(grid: CellGrid) -> np.ndarray:
     )
 
 
-def _rgb(color: np.ndarray) -> RGB:
-    return int(color[0]), int(color[1]), int(color[2])
-
-
 class DiffWriter:
     """Writes grids to ``out`` as minimal ANSI updates.
 
@@ -57,6 +54,7 @@ class DiffWriter:
         self.mode = mode
         self._glyph: Optional[np.ndarray] = None
         self._style: Optional[np.ndarray] = None
+        self._codes: dict[tuple[int, int], str] = {}
 
     def enter(self) -> None:
         """Switch to the alternate screen, hide the cursor and stop line wrap."""
@@ -86,11 +84,12 @@ class DiffWriter:
             changed = np.ones(glyph.shape, dtype=bool)
         else:
             assert self._style is not None
-            changed = (glyph != self._glyph) | (style != self._style)
-            if self.mode == "none":
-                changed = glyph != self._glyph
-        for row in np.nonzero(changed.any(axis=1))[0].tolist():
-            self._write_row(pieces, grid, style, changed[row], row)
+            changed = glyph != self._glyph
+            if self.mode != "none":
+                changed |= style != self._style
+        cells = np.flatnonzero(changed)
+        if cells.size:
+            self._encode(pieces, glyph, style, cells)
         self._glyph = glyph.copy()
         self._style = style
         if pieces:
@@ -98,22 +97,61 @@ class DiffWriter:
             self._out.write("".join(pieces))
             self._out.flush()
 
-    def _write_row(self, pieces: list[str], grid: CellGrid, style: np.ndarray, changed: np.ndarray, row: int) -> None:
-        """Append the runs of changed cells of one row: a cursor move, then glyphs with style changes."""
-        columns = np.nonzero(changed)[0]
-        breaks = np.nonzero(np.diff(columns) > 1)[0] + 1
-        for run in np.split(columns, breaks):
-            start, stop = int(run[0]), int(run[-1]) + 1
-            pieces.append(f"\x1b[{row + 1};{start + 1}H")
-            if self.mode == "none":
-                pieces.append("".join(grid.glyph[row, start:stop].tolist()))
-                continue
-            cuts = np.nonzero(np.diff(style[row, start:stop]))[0] + 1
-            for segment in np.split(np.arange(start, stop), cuts):
-                first, last = int(segment[0]), int(segment[-1]) + 1
-                pieces.append(
-                    style_codes(
-                        _rgb(grid.fg[row, first]), _rgb(grid.bg[row, first]), bool(grid.bold[row, first]), self.mode
-                    )
-                )
-                pieces.append("".join(grid.glyph[row, first:last].tolist()))
+    def _encode(self, pieces: list[str], glyph: np.ndarray, style: np.ndarray, cells: np.ndarray) -> None:
+        """Append the changed ``cells`` (flat indices, row-major): a cursor move per run, a style change per segment.
+
+        Runs and style segments are found for the whole frame at once; the loop only joins strings. The terminal keeps
+        its style across cursor moves, so a segment sends only the parts of the style that differ from the last one.
+        """
+        cols = glyph.shape[1]
+        col = cells % cols
+        run_start = np.ones(cells.size, dtype=bool)
+        run_start[1:] = (np.diff(cells) != 1) | (col[1:] == 0)
+        glyphs = glyph.ravel()[cells].tolist()
+        if self.mode == "none":
+            starts = np.flatnonzero(run_start)
+            styles: list[int] = []
+        else:
+            packed = style.ravel()[cells]
+            segment_start = run_start.copy()
+            segment_start[1:] |= packed[1:] != packed[:-1]
+            starts = np.flatnonzero(segment_start)
+            styles = packed[starts].tolist()
+        ends = np.append(starts[1:], cells.size).tolist()
+        moves = run_start[starts].tolist()
+        rows = (cells[starts] // cols).tolist()
+        columns = col[starts].tolist()
+        current: Optional[int] = None
+        for index, (first, last) in enumerate(zip(starts.tolist(), ends, strict=True)):
+            if moves[index]:
+                pieces.append(f"\x1b[{rows[index] + 1};{columns[index] + 1}H")
+            if styles and styles[index] != current:
+                pieces.append(self._style_change(current, styles[index]))
+                current = styles[index]
+            pieces.append("".join(glyphs[first:last]))
+
+    def _style_change(self, previous: Optional[int], packed: int) -> str:
+        """Return the SGR sequence from style ``previous`` (``None``: unknown) to ``packed`` (see ``_pack_styles``)."""
+        bold, fg, bg = packed >> 48 & 1, packed >> 24 & 0xFFFFFF, packed & 0xFFFFFF
+        if previous is None:
+            codes = ["0", "1"] if bold else ["0"]
+            codes += [self._color(38, fg), self._color(48, bg)]
+        else:
+            codes = []
+            if bold != previous >> 48 & 1:
+                codes.append("1" if bold else "22")
+            if fg != previous >> 24 & 0xFFFFFF:
+                codes.append(self._color(38, fg))
+            if bg != previous & 0xFFFFFF:
+                codes.append(self._color(48, bg))
+        return "\x1b[" + ";".join(codes) + "m"
+
+    def _color(self, prefix: int, rgb: int) -> str:
+        """Return the colour parameters for ``rgb`` (packed ``0xRRGGBB``), memoised per colour."""
+        key = (prefix, rgb)
+        code = self._codes.get(key)
+        if code is None:
+            color = (rgb >> 16 & 0xFF, rgb >> 8 & 0xFF, rgb & 0xFF)
+            code = color_code(prefix, color, self.mode)
+            self._codes[key] = code
+        return code
