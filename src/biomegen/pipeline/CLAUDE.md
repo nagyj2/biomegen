@@ -33,7 +33,7 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 
 ## Civilization stages (`civilization/`, `pois.py`)
 
-- Order: settlements -> pois -> roads -> realms -> diplomacy -> naming. Settlements are placed first and
+- Order: settlements -> pois -> roads -> realms -> diplomacy -> history -> naming. Settlements are placed first and
   every later stage counts them (spacing, remoteness, road endpoints).
 - Tiers are data (`data/tiers.toml`): placement order is `rank`, count is land km² over `land_per_settlement_km2`,
   separation is `spacing_km`, and `backbone` says whether roads join the tier into the trunk. A new tier is a row,
@@ -66,6 +66,27 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   powers only. A relation's `why` is a raw template from `tables.reasons`; naming fills its tokens last.
 - Every draw is a `diplomacy` or `realms` sub-stream drawn in a fixed order (always draw, then test, so the stream stays
   aligned); `World.realms[i].id == i`.
+
+## Story stage (`story/history.py`)
+
+- The chronicle is derived from the finished political state; there is no tick simulation. It runs after diplomacy and
+  before naming, writes only entities (`world.chronicle`, `fallen_realms`, `founded`, `year`) and never a per-tile array, so
+  the fingerprint is the same with or without it.
+- **Causality.** A realm's first event is its founding; a conquest, war, rivalry or treaty comes at least
+  `history.min_gap_years` after both realms exist (or at the present); a battle falls between its war's start and the
+  present; a fall is before the present. Wars join independent, bordering powers only (they are `Relation`s).
+- **Ledger.** Events are collected, sorted by `(year, kind order in EVENT_KINDS, creation order)` and then numbered, so an
+  event's `id` is its index. Anything added later (a simulation) has `year >= World.year`, so appending keeps the order.
+- **Token resolution.** The stage stores a raw template and the ids it needs; `naming/chronicle.py` fills the tokens last,
+  once every name exists. A template may use only its row's tokens (`config/tables.py`); a new token is a schema entry,
+  a value in `naming/chronicle.py` and a test that no `{` is left in any text.
+- **Locality cap.** A place named in an event comes from `places.nearest_settlement`: a settlement on the same landmass
+  within `history.near_km`, else the event draws only from `templates` (never `templates_near`). Phase 8 applies the same
+  helper to the `{river}`, `{range}` and `{sea}` tokens of relation reasons.
+- Every draw is `rng.derive(seed, "history", ...)` keyed on the entity (realm, POI, relation, battle number, fallen realm),
+  so no event depends on another's draws.
+- `history.start = "dawn"` skips settlements through history in `generate()` (`DAWN_SKIPPED`); everything that reads a world
+  must work with no realms, POIs or events.
 
 ## Adding a stage
 

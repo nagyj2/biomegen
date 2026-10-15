@@ -10,8 +10,8 @@ zoom in to see structure detail, and export the view to SVG/PNG.
 > `docs/redesign_plan.md`). One layer stack draws the interactive explorer, static maps, zoomed views and
 > the SVG/PNG exports, so they all look alike. Every POI archetype renders an interior embedded in the
 > terrain at the zoom (shell) and local (full, furnished) scales, with floor cycling for towers and dungeons.
-> Settlements and politics (realms, vassals, relations and a political view with borders and war fronts) are in; the
-> chronicle is the next phase.
+> Settlements and politics (realms, vassals, relations and a political view with borders and war fronts) and the
+> chronicle (a derived history, `--chronicle`) are in; POIs placed from that history are the next phase.
 
 ---
 
@@ -53,6 +53,9 @@ uv run biomegen --width 240 --height 60                # override world dimensio
 uv run biomegen --noise-backend opensimplex            # use OpenSimplex noise instead of default Perlin
 uv run biomegen --noise-backend value                  # use value noise (cheaper, blockier look)
 uv run biomegen --seed 1 --headless                    # generate + print stats, no terminal needed
+uv run biomegen --seed 1 --chronicle                    # the world's history, one dated line per event
+uv run biomegen --seed 1 --chronicle --chronicle-format json   # the same as JSON, with the realms and places it names
+uv run biomegen --seed 1 --start dawn --view terrain    # a young world at year 0: land only, nothing settled
 uv run biomegen --seed 1 --view terrain --color none    # static map with legend, no UI
 uv run biomegen --seed 1 --scale zoom --at 60,30        # a magnified part of the world (zoom or local)
 uv run biomegen --seed 1 --view terrain --save map.svg  # write a map image (.svg .png .html .txt), no UI

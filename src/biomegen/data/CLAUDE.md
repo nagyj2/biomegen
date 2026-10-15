@@ -11,7 +11,7 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   `tables.detail`, `tables.detail_relief` from `detail.toml`; `tables.tiers`; `tables.styles` from `terrain.toml`;
   `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
   `tables.relation_weights` and `tables.realm_colors` from `polity.toml`; `tables.reasons` and `tables.reason_tokens` from
-  `reasons.toml`).
+  `reasons.toml`; `tables.chronicle` from `chronicle.toml`).
 - A user config overrides with the ordinary deep-merge: `[tables.biomes.desert]` + `goods = "glass"`
   changes one attribute and keeps the rest of the row.
 - `config/tables.py` validates every row against its table's schema (`SCHEMAS`): unknown keys, missing
@@ -50,6 +50,17 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   (`{town}`, `{river}`, `{range}`, `{sea}` for war and rivalry; `{goods_a}`, `{goods_b}`, `{short_a}`, `{short_b}` for trade).
   `reason_tokens` gives the words used when the world lacks the place.
 - Counts, budgets and distances (km) are in the `politics` config section.
+
+## Chronicle
+
+- `chronicle.toml`: `chronicle` has one row per kind of event text (`founding`, `settling`, `conquest`, `war`, `rivalry`,
+  `treaty_alliance`, `treaty_trade`, `battle`, `fall`). `templates` are sentences that name no nearby place;
+  `templates_near` (optional) are sentences that name one with `{near}` and must contain it. The tokens a row may use are
+  listed in the file's header and checked (`{year}` is allowed everywhere); `{near}` is allowed in `templates_near` only.
+- The history stage picks a template per event (`templates_near` only when a settlement qualifies, see
+  `pipeline/CLAUDE.md`) and naming fills the tokens. To change a wording, edit the row; to add a token, see "Token
+  resolution" in `pipeline/CLAUDE.md`.
+- Counts, years and distances (km) are in the `history` config section.
 
 ## Adding a table or column
 

@@ -40,6 +40,7 @@ src/biomegen/
     tiers.toml          Settlement tiers: marker, population, spacing and density in km
     polity.toml         Realm kinds, name and ruler forms, relation weights, realm colours
     reasons.toml        Reason templates for wars, rivalries, alliances and trade; fallback place words
+    chronicle.toml      Wording of the chronicle's events: templates, and templates_near that name a nearby place
     terrain.toml        Terrain styles (continents, pangaea, archipelago, islands)
     geography.toml      Name patterns per geographic feature kind
   util/
@@ -52,7 +53,8 @@ src/biomegen/
     world.py            Immutable World (parallel numpy arrays) + fingerprint()
     overlay.py          Mutable Overlay (runtime edits, composited at read time; a revision counts edits)
     derived.py          derived(): values worked out once per world (road pieces), checked by a source digest
-    entities.py         POI / Realm / Relation / River / Lake / GeoFeature dataclasses
+    entities.py         POI / Realm / Relation / River / Lake / GeoFeature / ChronicleEvent / FallenRealm dataclasses
+    chronicle.py        chronicle_text() and chronicle_json(): the history as text or JSON
   sites/                Lazy, deterministic, cached site plans: what you see zooming into a POI
     geometry.py         Extent, window and plan resolution of a POI's site, in world tiles
     patch.py            The terrain under a site (read through the render sampler) and the road gates
@@ -78,6 +80,8 @@ src/biomegen/
       realms.py         Stage 9b — realm seeds, strength-weighted claiming, tribes, realm_id
       diplomacy.py      Stage 9c — vassal tree, colours, relations, war fronts
     story/
+      history.py        Stage 9d — the chronicle: dates realms and settlements, derives the events and fallen realms
+      places.py         nearest_settlement(): the locality rule for a place named in an event
     naming.py           Stage 10 — names for all entities, realms and relation reasons
   naming/
     cultures.py         Culture profiles + biome-biased culture assignment
@@ -85,6 +89,7 @@ src/biomegen/
     markov.py           Order-N character Markov name generator
     forge.py            Name-generation facade (root → dressed name)
     polity.py           Realm names, ruler styles and the wording of relation reasons
+    chronicle.py        Fallen-realm names and cultures; renders every chronicle event's text
   sampling/             How a grid cell reads the world, shared by render and the site plans
     sampler.py          Sampler: one cell per tile, or a strided viewport
     detail.py           DetailSampler: magnified scales, warped continuous lookup; camera helpers
@@ -138,7 +143,10 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `dist_to_ocean` | float32 | ≥ 0 km (aspect-aware) | terrain |
 | `flow_accum` | float64 | km², wetness-weighted catchment | hydrology |
 
-Sparse entity lists: `pois`, `realms` (`Realm`), `relations` (`Relation`), `rivers`, `lakes`, `features` (`GeoFeature`), `island_name`.
+Sparse entity lists: `pois`, `realms` (`Realm`), `relations` (`Relation`), `rivers`, `lakes`, `features` (`GeoFeature`),
+`island_name`. History: `year` (the present; 0 for a dawn start), `chronicle` (`ChronicleEvent`, sorted, `id` is the
+index) and `fallen_realms` (`FallenRealm`), read through `events_until(year)`, `events_at(x, y)` and `events_of(realm_id)`.
+`Realm.founded` and `POI.founded` are chronicle years. None of this is in the per-tile arrays, so the fingerprint ignores it.
 
 Scale metadata: `World.scale` is a `util.units.GridScale` built by `generate()` from `world.size_km`
 and `world.center_lat` / `center_lon` (`center_lat = "seed"` draws it per generation attempt from the
@@ -178,8 +186,11 @@ rank, so the gate only trips when a style's land fraction is configured below th
 
 ```
 terrain → climate → hydrology → biomes → geography → settlements → pois → roads
-         → realms → diplomacy → naming
+         → realms → diplomacy → history → naming
 ```
+
+`history.start = "dawn"` (`--start dawn`) skips settlements through history: a young world with the land, rivers and
+features but no POIs, roads, realms or chronicle, at year 0, for a later simulation to settle.
 
 Roads end at every POI's anchor. A POI's site plan (`sites/`) is built lazily and finds the roads that reach
 it from the world arrays, so no stage records anything for it.
@@ -341,9 +352,30 @@ Partitions solid land (any cell whose biome is not water; a river keeps its land
 5. **Fronts**: a war marks the border cells of its two powers in `World.front`, picks an attacker by coin toss and
    claims the defender's non-capital settlement nearest `claim_samples` border cells.
 
+### Stage 9d — History (`pipeline/story/history.py`)
+
+A chronicle derived from the finished political state; there is no tick simulation. Dates come from static quantities and
+every draw is a `history` sub-stream keyed on the entity.
+
+1. **Founding**: each realm is founded `age` years before the present (`history.span_years`), the age drawn from its kind's
+   `history.age_range` and pulled older by a larger area (`age_area_weight`). A seated realm's founding is its seat's too
+   (tag `capital` for a capital). Every civilized POI gets `founded`: a seat with its realm, others later, wild ones from
+   the tribal range.
+2. **Settling** (`history.settle_kinds`, cities), **conquest** (one per vassal tie, after both realms plus `min_gap_years`).
+3. **Relations**: each is one `war` (tag `ongoing`, attacker first, claimed town in `poi_ids`), `rivalry` or `treaty` (tag
+   `alliance` / `trade`), begun earlier for a longer shared border (`war_years` / `other_years`).
+4. **Battles**: `battles_per_100km_front` per 100 km of a war's front, each on a cell from `diplomacy.front_cells`;
+   `realm_ids` is `[winner, loser]`.
+5. **Falls**: `FallenRealm`s on wild, habitable land (`fall_min_habitability`) spaced `fall_spacing_km` from each other and
+   from settlements, each with a `fall` event. Without the `fall` kind there are none.
+
+An event holds a raw template from `tables.chronicle` (`templates_near` only when `places.nearest_settlement` finds a
+settlement on the same landmass within `history.near_km`); naming renders `text`. The ledger sorts events by `(year, kind
+order, creation order)` and numbers them. `--chronicle [--chronicle-format json]` and `scripts/chronicle.sh` print them.
+
 ### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 
-Assigns names to all entities; region lore is gone (phase 7's chronicle replaces it):
+Assigns names to all entities; region lore is gone, and the chronicle's text is rendered here:
 
 - **Culture assignment**: each realm draws its culture from a biome-biased weighted distribution seeded on
   `(master_seed, "naming.culture", "realm", realm_id)`; a vassal keeps its own. POIs, rivers, lakes and features take the
@@ -352,6 +384,9 @@ Assigns names to all entities; region lore is gone (phase 7's chronicle replaces
   kind's `tables.realm_forms` rows, favoured by the habitat of its land; its base word and ruler's name are made in its
   culture. A city-state is short-named after its seat. Last, each relation's reason template gets its tokens: the claimed
   or a nearby town, the longest river, the largest range and sea, and the realms' trade goods.
+- **Chronicle** (`naming/chronicle.py`): last, a fallen realm gets a culture from its ruins' biome and a name from a
+  major realm's forms (a stand-in realm with a negative id keeps its streams apart), then every event's template has its
+  tokens filled from the named realms, places and relations; the first letter is capitalised.
 - **Root generation** (per-entity RNG keyed on `(category, *stable_key)`):
   - *Syllable assembly* (default): draws `onset + nucleus + coda` from the culture's phoneme sets
     with a vowel-collision guard and syllable-boundary length cap.
