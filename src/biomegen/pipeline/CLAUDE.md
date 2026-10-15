@@ -76,20 +76,38 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 - The chronicle is derived from the finished political state; there is no tick simulation. It runs after diplomacy and
   before naming, writes only entities (`world.chronicle`, `fallen_realms`, `founded`, `year`) and never a per-tile array, so
   the fingerprint is the same with or without it.
-- **Causality.** A realm's first event is its founding (a fallen realm's too); a conquest, war, rivalry or treaty comes
+- **Causality.** A realm's first event is its founding or the secession that made it (a fallen realm's is its founding); a conquest, war, rivalry or treaty comes
   at least `history.min_gap_years` after both realms exist (or at the present); nothing happens to a fallen realm outside
   its life; a fall is before the present. Wars join independent, bordering powers only (they are `Relation`s), and
   a relation that follows an older war begins after its peace.
-- **Succession is abstract.** `rulers.py` gives a realm a ruling style that may change every `succession_years`; only a
-  change is an event, so the chronicle never lists individual rulers. The style timeline feeds `conflicts` (a battle's odds
-  use the style's `strength_mul` in that year); it is not stored on the entity except the present `Realm.ruling_style`.
+- **Rulers are records, successions mostly silent.** `rulers.py` gives a realm a ruling style that may change every
+  `succession_years` and a `Ruler` per reign (the founder, then one per succession, silent ones included) with the style's
+  base traits plus a draw on its own stream (`history.ruler_trait_spread`); only a style change is an event, so the chronicle
+  does not fill with rulers dying. The style timeline feeds `conflicts` (a battle's odds use the style's `strength_mul` in that
+  year); the present style is `Realm.ruling_style`. Texts find a ruler by realm and year (`World.ruler_at`).
 - **Factions through time.** `conflicts.py` plans every battle and peace, then plays them in year order against
   per-faction strengths (a win raises, a loss lowers); a dead (fallen) faction takes no further steps. Strengths are
   tracked in the timeline, not stored on the entities.
 - **Founding dates.** Realm founding years are shifted so the oldest is in `history.first_founding_year`; an event
   never comes before it.
+- **Free settlements.** A free city or town (`POI.free`, never stored) has a `settling` event tagged `free`; one within
+  `history.remnant_km` of a fallen realm's site on its landmass is a remnant, dated after the conflicts inside that realm's
+  life, with a `settling_remnant` event and the fall event in its `event_ids`. Hooks come from the tier's `hooks_free` or
+  `hooks_remnant`.
+- **Secession** (`secession.py`, `founding.py`; `docs/redesign_plan.md` phase 8b). No cell moves and the
+  partition, one seat per major, acyclic vassal tree and relation invariants are untouched. Order: clean splits are planned
+  and applied first (touching realms of `OFFSHOOT_KINDS` share the earlier founding year, the old realm is a `Predecessor`
+  with its own founding, one `secession` event replaces the two foundings), then the rulers, then offshoots and defections are
+  *planned* (candidates only) and checked on the conflicts timeline in their year, reading the parent's or old owner's strength
+  then; a failed check gives the ordinary founding or settling, so those events are held back until the check. The chance is
+  `history.secession.chance` times the form's weight share (`form_chance`) times the score (`secession.py`, pure, shared with a
+  later simulation), at most `max_per_world` in all. A realm is in at most one split; a tribe is never part of one; a realm's
+  first event is its founding or its secession; an offshoot's parent is an older major realm; a split's children share its
+  year; a defecting town was settled for the realm it left.
 - **Ledger.** Events are collected, sorted by `(year, kind order in EVENT_KINDS, creation order)` and then numbered, so an
-  event's `id` is its index. Anything added later (a simulation) has `year >= World.year`, so appending keeps the order.
+  event's `id` is its index. Anything added later (a simulation) has `year >= World.year`, so appending keeps the order. An id
+  shifts whenever an event is added, swapped or a kind is switched off, so nothing seeded may be keyed on it: POI draws use
+  `poi_rules.event_key` (the event's content).
 - **Token resolution.** The stage stores a raw template and the ids it needs; `naming/chronicle.py` fills the tokens last,
   once every name exists. A template may use only its row's tokens (`config/tables.py`); a new token is a schema entry,
   a value in `naming/chronicle.py` and a test that no `{` is left in any text.
@@ -110,12 +128,15 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 
 - **Rule table.** `poi_rules.poi_for_event(world, config, seed, event)` is pure: it returns the `PoiPlan`s the event makes (a
   rule is when an event makes a POI; a cap is a limit on how many) from `tables.pois` rows, never placing or writing. Draws
-  are `rng.derive(seed, "poi", "event", event.id, kind)` in a fixed order, so a plan depends on its event alone. A later
+  are `rng.derive(seed, "poi", "event", *event_key(event), kind)` in a fixed order, so a plan depends on its event alone. A later
   simulation calls it per event (`simulated=True` opens the `sim_only` fates, `now=` is its year).
 - **Placement** (`story/pois.py`) walks the ledger in order and places each plan: ruins on the fallen realm's exact site plus
   holdings, battlefields, towers and dungeons on the nearest free cell round the event, watchtowers on the front, shrines in
   their site's band round the seat. Spacing is checked against the POIs placed so far (it depends on order, so it is not a
   rule). The location pass follows. New POIs append to `world.pois`; an index never moves.
+- **Ruins by origin.** A ruin records `ruin_of` (the tier it was; a fall's capital ruin is `capital`, holdings and location ruins
+  draw from `tables.pois.ruin` `holding_origins` and `origins`) and `pop` (the tier's range), on streams keyed on the cell; they
+  move nothing. The site draws it as that tier's settlement (see `sites/CLAUDE.md`).
 - **Event link.** A POI lists the events that made or mark it in `event_ids` (and a settlement its founding or settling event);
   an event's `poi_ids` is never appended to, because naming reads `poi_ids[0]` as a `{town}`. `World.events_at` finds events
   through both.

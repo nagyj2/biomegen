@@ -45,7 +45,12 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
 - **Tower** and **watchtower** share one layout (tapering single-room floors, aligned stairs, a lookout); the watchtower has
   its own furniture family. **Dungeon**, **ruin**, **camp**, **boat** and **settlement** as above.
 - **Ruin** erosion grows with `age_years` from `sites.ruin_erosion_young` to `sites.ruin_erosion` over
-  `sites.ruin_erosion_years`; an undated ruin (placed by location) is fully eroded.
+  `sites.ruin_erosion_years`; an undated ruin (placed by location) is fully eroded. A ruin with a `ruin_of` is drawn from that
+  tier's site row (`site_row_for`), scaled by its `ruin_extent_share`: the tier's settlement plan, then a fall pass
+  (`SiteContext.fall`, `settlement._fall`) on its own `site.erode` streams, so streets and lots are the settlement's: each
+  building stands with a chance (`ruin_standing`, falling with age) and at least one always does, a fallen one gets breaches,
+  cracked floors, trees and a roof only over rooms that kept it, the wall falls in stretches (`ruin_wall_fall`) and every gate is
+  rubble. With no room for buildings the single fallen building is drawn instead (as for a ruin with no origin).
 - **Shrine**: one small walled room, a street door, an altar (`hearth`) at its middle, a roof from outside.
 - **Battlefield**: open ground, an ellipse of floor (`sites.battlefield.clearing`) strewn with debris and a few wrecked
   wagons; nothing is built.

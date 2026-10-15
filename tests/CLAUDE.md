@@ -18,7 +18,10 @@ Run with `scripts/test.sh [pytest args]` (or `uv run pytest -q`). `scripts/check
 
 - `tests/pipeline/test_generation.py` compares the world fingerprint across `PYTHONHASHSEED` values in
   subprocesses. Any use of builtin `hash()` in the generation path fails it.
-- The before/after proof for refactors is `scripts/fingerprint.sh` output, not a pinned literal.
+- The before/after proof for refactors is `scripts/fingerprint.sh` output, not a pinned literal. Its seeds are 42, 7 and 1337
+  plus 11 (a defection) and 15 (an offshoot), which `tests/pipeline/story/test_secession_fixtures.py` keeps honest.
+- Secession tests run on small hand-made worlds and on worlds made with a config where one form has chance 1 (the other forms'
+  weights 0); the default chance is low, so the default fixture seeds hold few secessions.
 
 ## Known skips
 

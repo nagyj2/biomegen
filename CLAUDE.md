@@ -38,7 +38,8 @@ layer never imports a higher one; `render/` does no terminal I/O (rules in `src/
 
 Same seed must give the same world on any machine. Details in `docs/ARCHITECTURE.md`, "Determinism rules".
 
-- `blake2b` only, never builtin `hash()`; sub-streams come from `util.rng.derive(seed, *labels)`.
+- `blake2b` only, never builtin `hash()`; sub-streams come from `util.rng.derive(seed, *labels)`. Key a draw on what an entity
+  is, never on a ledger position: an event id shifts when events are added, so POI draws use `poi_rules.event_key`.
 - Iterate collections in a defined order (`sorted()`) in Python-loop stages.
 - `scripts/fingerprint.sh` output must not change in a refactor; a behaviour change must say so.
 

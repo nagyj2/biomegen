@@ -11,7 +11,8 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   `tables.detail`, `tables.detail_relief` from `detail.toml`; `tables.tiers`; `tables.styles` from `terrain.toml`;
   `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.pois`, `tables.poi_fates` and `tables.poi_sites` from `pois.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
   `tables.relation_weights` and `tables.realm_colors` from `polity.toml`; `tables.reasons` and `tables.reason_tokens` from
-  `reasons.toml`; `tables.ruling_styles` from `rulers.toml`; `tables.chronicle` from `chronicle.toml`).
+  `reasons.toml`; `tables.ruling_styles` from `rulers.toml`; `tables.chronicle` from `chronicle.toml`; `tables.secession_terms`,
+  `tables.secession_relations` and `tables.secession_forms` from `secession.toml`; `tables.free_fates` from `pois.toml`).
 - A user config overrides with the ordinary deep-merge: `[tables.biomes.desert]` + `goods = "glass"`
   changes one attribute and keeps the rest of the row.
 - `config/tables.py` validates every row against its table's schema (`SCHEMAS`): unknown keys, missing
@@ -35,7 +36,9 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 
 - `sites.toml` has one row per POI kind: its `layout`, the `furniture` set, `extent_tiles` (w, h in world tiles, below 1
   for a site smaller than a tile), `rows_per_tile` (plan resolution) and, for settlements, `grows_with_pop`,
-  `plaza_tiles` and the optional `walled` (a wall with a gate where each road arrives). Every settlement tier in `tiers.toml` and every `tables.pois` kind needs a site row to be zoomable. A camp's `purpose` picks the row
+  `plaza_tiles` and the optional `walled` (a wall with a gate where each road arrives). A tier that a ruin may have been
+  (`tables.pois.ruin` origins) also needs `ruin_standing` and `ruin_wall_fall` ([young, old] shares of buildings standing and
+  wall fallen, over `sites.ruin_erosion_years`) and `ruin_extent_share` (a factor on its extent as a ruin). Every settlement tier in `tiers.toml` and every `tables.pois` kind needs a site row to be zoomable. A camp's `purpose` picks the row
   `camp_<purpose>` (`site_row_name`).
 - `furniture.toml` has weight sets nested by family then room role (`[furniture.dungeon.vault]` + `chest = 4.0`): each
   key a lower-case `Cell` name, each value a weight. A layout asks for a role per room; a missing role leaves it bare.
@@ -56,6 +59,12 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   `{name}` and `hooks_near` also `{near}` and need it. A kind placed by location needs `hooks`. All are checked.
 - Adding a kind: a `pois` row, a `sites` row (reuse a layout until it has its own), a furniture family, a `render.markers`
   glyph and the texts. Check `scripts/fingerprint.sh`: a kind placed by location or from an event changes the world.
+- The `ruin` row also has `origins` (tier -> weight, a ruin placed by location), `fall_origin` (the tier of a fallen realm's capital
+  ruin) and `holding_origins` (tier -> weight, its holdings); every named tier must be a settlement tier.
+- `free_fates` rows (`join`, `found`, `bandit`: `weight`, `sim_only`, `factors`) are what a later simulation draws for a free
+  settlement; generation reads none of it.
+- `tiers.toml` rows may set `free_fg` (the marker colour of a free settlement), `hooks_free` (`{name}`) and `hooks_remnant`
+  (`{name}` and `{fallen}`, needed): the texts of a settlement no realm holds, and of one that outlived a fallen realm.
 - `tiers.toml` rows may set `dynamic` (a later simulation mints it; the settlements stage skips it), `connect` (roads link
   it) and `map_marker` (false hides the marker at the map scale): the hamlet tier does all three.
 
@@ -75,10 +84,16 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 
 - `rulers.toml`: `ruling_styles` has one row per ruling style: `label` (the word the text uses), `weight` (the chance it is
   drawn) and `strength_mul` (a battle multiplier while it holds) and `temper` (`aggressive` or `passive`, which picks a shrine's site). A new
-  style is a row; the succession rate is in the
+  style is a row (its `traits` are the five base personality values, 0 to 1, of a ruler of the style; a ruler draws within
+  `history.ruler_trait_spread` of them); the succession rate is in the
   `history` section.
 
-- `chronicle.toml`: `chronicle` has one row per kind of event text (`founding`, `founding_fallen`, `settling`, `conquest`,
+- `secession.toml`: `secession_terms` (a `weight` per term: proximity, size, age, relation, prosperity, leader, strength),
+  `secession_relations` (a `score` and a wording `tag`, bitter or amicable, per relation kind and `none`) and `secession_forms`
+  (a `weight` per form: offshoot, split, defection; `history.secession.chance` is the chance of the likeliest form and a form
+  with weight 0 never happens). The rows are exactly these sets.
+- `chronicle.toml`: `chronicle` has one row per kind of event text (`founding`, `founding_fallen`, `founding_predecessor`,
+  `settling`, `settling_free`, `settling_remnant`, `secession_<offshoot|split|defection>_<bitter|amicable>`, `conquest`,
   `succession`, `war`, `war_ended`, `war_fallen`, `rivalry`, `treaty_alliance`, `treaty_trade`, `battle`, `peace`, `fall`,
   `fall_conquered`). `templates` are sentences that name no nearby place;
   `templates_near` (optional) are sentences that name one with `{near}` and must contain it. The tokens a row may use are

@@ -41,7 +41,8 @@ src/biomegen/
     polity.toml         Realm kinds, name and ruler forms, relation weights, realm colours
     reasons.toml        Reason templates for wars, rivalries, alliances and trade; fallback place words
     chronicle.toml      Wording of the chronicle's events: templates, and templates_near that name a nearby place
-    rulers.toml         Ruling styles: label, draw weight and battle strength multiplier
+    rulers.toml         Ruling styles: label, draw weight, battle strength multiplier, temper and base personality traits
+    secession.toml      Secession scoring: term weights, relation scores and wording tags, form weights
     terrain.toml        Terrain styles (continents, pangaea, archipelago, islands)
     geography.toml      Name patterns per geographic feature kind
   util/
@@ -82,7 +83,9 @@ src/biomegen/
       diplomacy.py      Stage 9c — vassal tree, colours, relations, war fronts
     story/
       history.py        Stage 9d — the chronicle: dates realms and settlements, places fallen realms, founding/settling/conquest
-      rulers.py         Ruling styles and the successions that change them (abstracted from real lifetimes)
+      rulers.py         Ruling styles, the successions that change them and every realm's `Ruler` records (traits included)
+      secession.py      Secession score (pure term functions shared with a later simulation) and the planning of splits, offshoots and defections
+      founding.py       The founding and settling events a secession step may add or change
       conflicts.py      Wars, peace, pacts, battles and falls played through time with faction strengths
       ledger.py         Ledger: collects the events, then sorts and numbers them
       places.py         nearest_settlement() and nearest_feature(): the locality rule for a place named in text
@@ -155,7 +158,12 @@ Sparse entity lists: `pois`, `realms` (`Realm`), `relations` (`Relation`), `rive
 `island_name`. History: `year` (the present; 0 for a dawn start), `chronicle` (`ChronicleEvent`, sorted, `id` is the
 index) and `fallen_realms` (`FallenRealm`), read through `events_until(year)`, `events_at(x, y)` and `events_of(realm_id)`.
 `Realm.founded` and `POI.founded` are chronicle years; a `POI` also holds `fell`, `event_ids` (the events that made or mark
-it), `hook` / `hook_refs`, `bandit_strength`, `purpose` (a camp's) and `connect`. None of this is in the per-tile arrays, so the fingerprint ignores it.
+it), `hook` / `hook_refs`, `bandit_strength`, `purpose` (a camp's) and `connect`. A ruin holds `ruin_of` (the settlement tier it
+was, always set) and `pop` (its peak population); `POI.free` is derived (civilized, no realm) and never stored. `rulers`
+(`Ruler`: realm, reign years, style, five traits, name) lists every realm's rulers, founder first, read through
+`rulers_of(realm_id)` and `ruler_at(realm_id, year)`. A realm that began in a secession records `origin` (`offshoot` or `split`),
+`parent` (an offshoot's parent realm) or `predecessor` (a split's index into `predecessors`: a `Predecessor`, the old realm that
+ended in a clean split). None of this is in the per-tile arrays, so the fingerprint ignores it.
 
 Scale metadata: `World.scale` is a `util.units.GridScale` built by `generate()` from `world.size_km`
 and `world.center_lat` / `center_lon` (`center_lat = "seed"` draws it per generation attempt from the
@@ -362,12 +370,27 @@ and every draw is a `history` sub-stream keyed on the entity.
    oldest is in `history.first_founding_year`. A seated realm's founding is its seat's too (tag `capital`). Every civilized
    POI gets `founded`. Each fallen realm has a founding event too.
 2. **Settling** (`history.settle_kinds`), **conquest** (one per vassal tie, after both realms plus `min_gap_years`).
-   **Ruling styles** (`rulers.py`): each realm is founded under a style from `tables.ruling_styles`; a succession falls every
-   `history.succession_years` and changes the style with `succession_change_chance`. Only a change is a `succession` event
-   (tags `from:` and `to:`); real lifetimes are abstracted away. `Realm.ruling_style` is the present style, and a style's
-   `strength_mul` tilts that realm's battles while it holds.
+   **Ruling styles and rulers** (`rulers.py`): each realm is founded under a style from `tables.ruling_styles`; a succession falls
+   every `history.succession_years` and changes the style with `succession_change_chance`. Only a change is a `succession` event
+   (tags `from:` and `to:`), but every succession, silent ones included, starts a `Ruler` (the founder first) with the style's base
+   `traits` plus a draw within `history.ruler_trait_spread`, on its own stream so the style draws never move. `Realm.ruling_style`
+   is the present ruler's style, and a style's `strength_mul` tilts that realm's battles while it holds. Naming names the rulers;
+   the texts name the founder in a founding, the overlord's ruler of that year in a conquest and both rulers in a succession.
+   **Free settlements**: a free city or town (no realm holds it) gets a `settling` event tagged `free`; one within
+   `history.remnant_km` of a fallen realm's site is a remnant: dated inside that realm's life (after the conflicts, so its fall
+   year is final) with a `settling_remnant` event naming it, and also marked by the fall it outlived.
+   **Secession** (`secession.py`, scored by the terms of `data/secession.toml`; `history.secession.chance` is the chance of the
+   likeliest form and each form scales it by its `tables.secession_forms` weight, at most `max_per_world` in a world):
+   a *clean split* (two touching realms of one old realm: they share the earlier founding year, the old realm is a
+   `Predecessor` with its own founding event, and one `secession` event replaces the two foundings) is decided up front, before
+   the rulers are drawn, because the younger realm's founding moves; an *offshoot* (a major or city-state left an older major
+   realm; its founding is held back) and a *defection* (a non-seat city or town left an older independent realm for its holder;
+   its settling is held back) are planned from the finished map and checked on the conflicts timeline in their year with the
+   parent's or old owner's strength then, a failed check giving the ordinary founding or settling. No cell moves.
 3. **Fallen realms**: `FallenRealm`s on wild, habitable land (`fall_min_habitability`) spaced `fall_spacing_km` from each
    other and from settlements, with a founding year and a natural fall year.
+   The stage runs: founding years, settlement years, fallen realms, clean splits applied, rulers, offshoot and defection planning,
+   the realm, settling and conquest events, the conflicts (with the secession checks), then the remnants.
 4. **Conflicts** (`conflicts.py`): every faction has a strength (a realm's area over the mean; a draw for a fallen realm)
    that a won battle raises and a lost one lowers. The timeline is planned, then played in year order:
    - each relation of two powers sharing a border may have an older, ended war (`past_war_chance`, `past_war_years`) with
@@ -384,7 +407,7 @@ settlement on the same landmass within `history.near_km`); naming renders `text`
 every name in it). The ledger sorts events by `(year, kind order, creation order)` and numbers them.
 `--chronicle [--chronicle-format json]` prints them as three columns (year, event type, text), coloured by `--color` or
 the terminal (`render/chronicle.py`): a realm, its ruler and its settlements are in the realm's map colour (`Realm.color`),
-a fallen realm in its own (`FallenRealm.color`); a settlement is in the neutral `history.colors.settlement` the first time
+a fallen realm in its own (`FallenRealm.color`), the old realm of a split in its own (`Predecessor.color`); a settlement is in the neutral `history.colors.settlement` the first time
 it is named (and always when wild), a river, range, sea or other named land in the neutral `place`; the kinds and the year
 use `history.colors` too. The places a reason names are marked too (`Relation.why_refs`, moved into the event's `refs`).
 `scripts/chronicle.sh` wraps it.
@@ -401,11 +424,14 @@ and the simulation seams (`owner`, `dynamic`, `connect`, `bandit_strength`, `ban
    conquered fall); a `decisive` battle at least `min_age_years` old makes a battlefield at `chance`; an ongoing war makes
    a watchtower per `per_km_of_front` of its front, at most `max_per_event`; a succession into a devout style makes a shrine,
    whose site (`tables.poi_sites`) the previous ruler's `temper` (`tables.ruling_styles`) picks.
-2. **History placement** (`story/pois.py`): events in ledger order; a fall's capital ruin sits exactly on the fallen realm's
+2. **History placement** (`story/pois.py`): events in ledger order, every draw keyed on `poi_rules.event_key` (the event's kind,
+   year, realms, fallen realms, towns, location and tags), never its id, so adding or switching off other events leaves the POIs
+   alone; a fall's capital ruin sits exactly on the fallen realm's
    site, holdings in the `holding_km` band; a battlefield, tower or dungeon on the nearest free cell round the event
    (`offset_km`); watchtowers on the front, on high ground; a shrine on the best cell of its site's band round the seat.
    Spacing is checked against the POIs placed so far (`min_spacing_km`, `event_spacing_km`, `kind_spacing_km`). Each POI
-   carries `event_ids`, `founded` and, for a ruin, `fell`.
+   carries `event_ids`, `founded` and, for a ruin, `fell`, `ruin_of` (a fall's capital ruin was a capital, its holdings a
+   village, town or city by `holding_origins`, a location ruin by `origins`) and `pop` (its tier's range).
 3. **Location pass** (`pipeline/pois.py`): per kind in `priority` order: count = land km² (sea for boats) over `km2_per_poi`
    times `poi.density`; eligibility (biomes, elevation, a free tile, `poi.min_footprint_land`); score = 1 + freshwater,
    coast, remoteness from settlements, wildness and remoteness from seats (the last two make towers and dungeons bandit
@@ -429,10 +455,14 @@ Assigns names to all entities; region lore is gone, and the chronicle's text is 
   kind's `tables.realm_forms` rows, favoured by the habitat of its land; its base word and ruler's name are made in its
   culture. A city-state is short-named after its seat. Last, each relation's reason template gets its tokens: the claimed
   or a nearby town, the river, range and sea diplomacy found near the border (`Relation.places`), and the realms' trade goods.
-- **Hooks** (`naming/hooks.py`): after the chronicle, each POI's `hook` and `hook_refs`: the text of its first event, else a
+- **Rulers** (`name_ruler`, `name_rulers`): a title from the realm's form and a personal name in its culture, keyed on the
+  realm and the reign; `Realm.ruler` is the present ruler's name.
+- **Hooks** (`naming/hooks.py`): after the chronicle, each POI's `hook` and `hook_refs`: a free settlement takes its tier's
+  `hooks_free` (`hooks_remnant`, naming the fallen realm, for a remnant), else the text of its first event, else a
   template from its row's `hooks` (`hooks_near` too when `places.nearest_settlement` finds a settlement).
 - **Chronicle** (`naming/chronicle.py`): last, a fallen realm gets a culture from its ruins' biome and a name from a
-  major realm's forms (a stand-in realm with a negative id keeps its streams apart), then every event's template has its
+  major realm's forms (a stand-in realm with a negative id keeps its streams apart; a predecessor is named the same way in its
+  first child's culture), then every event's template has its
   tokens filled from the named realms, places and relations; the first letter is capitalised.
 - **Root generation** (per-entity RNG keyed on `(category, *stable_key)`):
   - *Syllable assembly* (default): draws `onset + nucleus + coda` from the culture's phoneme sets
@@ -565,7 +595,11 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   ground still too far from a street, then lots fitted to the free ground beside the streets (each a building whose door
   faces its street), and for walled tiers a wall along the outline with gates where spokes and the road meet it. `structure.py` builds dungeon (a surface gatehouse plus underground rock floors of rooms and
   corridors or caves), tower (tapering single-room floors, aligned stairs, a lookout; a watchtower is the same layout in its
-  own furniture), ruin (a building with breaches, rubble, trees and partial roofs, eroded more the longer ago it fell) and
+  own furniture), ruin (a building with breaches, rubble, trees and partial roofs, eroded more the longer ago it fell; a ruin with a `ruin_of` is
+  instead its tier's settlement plan with a fall pass: each building stands with a chance that falls with age, at least one
+  always does, the others fall in, the wall breaks in stretches and every gate is rubble; the numbers are `ruin_standing`,
+  `ruin_wall_fall` and `ruin_extent_share` on the tier's `sites.toml` row, and the single building is kept for a ruin with no
+  origin or no room) and
   shrine (one walled room with an altar); the entrance faces a gate. `camp.py`, `battlefield.py` and `boat.py` are open-air
   (tents, a trampled field with debris and wrecked wagons, hull); a camp's `purpose` picks its site row (`camp_<purpose>`).
 - **Scales.** One plan per face, scaled into the cells its extent covers by `blit.sample_rect`. Where a view is coarser
