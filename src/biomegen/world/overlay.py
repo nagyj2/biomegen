@@ -31,9 +31,15 @@ InteriorKey = Tuple[int, int]  # (interior_seed, floor)
 
 
 class Overlay:
-    """Sparse store of runtime modifications, applied over the immutable base at read time."""
+    """Sparse store of runtime modifications, applied over the immutable base at read time.
+
+    Attributes:
+        revision: Counts the edits made so far, so a reader that keeps what it drew (the render cache) can tell
+            when the overlay has changed under it.
+    """
 
     def __init__(self) -> None:
+        self.revision = 0
         # Surface edits: (x, y) -> {attribute: value}.
         self._surface: Dict[Coord, Dict[str, Any]] = {}
         # Interior edits: (interior_seed, floor) -> {(x, y): cell_int}.
@@ -43,6 +49,7 @@ class Overlay:
     def set_surface(self, x: int, y: int, **attrs: Any) -> None:
         """Merge ``attrs`` into the surface delta at ``(x, y)`` (creating it if needed)."""
         self._surface.setdefault((int(x), int(y)), {}).update(attrs)
+        self.revision += 1
 
     def get_surface(self, x: int, y: int) -> Optional[Dict[str, Any]]:
         """Return the surface delta dict at ``(x, y)`` (or None if the tile is unmodified)."""
@@ -50,7 +57,8 @@ class Overlay:
 
     def clear_surface(self, x: int, y: int) -> None:
         """Remove any surface delta at ``(x, y)`` (revert to the generated base)."""
-        self._surface.pop((int(x), int(y)), None)
+        if self._surface.pop((int(x), int(y)), None) is not None:
+            self.revision += 1
 
     def surface_edits(self) -> list[tuple[Coord, Dict[str, Any]]]:
         """Return every surface delta as ``((x, y), attrs)``, sorted by coordinate (deterministic order)."""
@@ -64,6 +72,7 @@ class Overlay:
     def set_interior(self, interior_seed: int, floor: int, x: int, y: int, cell: int) -> None:
         """Record that interior ``interior_seed`` floor ``floor`` has ``cell`` at ``(x, y)``."""
         self._interior.setdefault((int(interior_seed), int(floor)), {})[(int(x), int(y))] = int(cell)
+        self.revision += 1
 
     def get_interior_cell(self, interior_seed: int, floor: int, x: int, y: int) -> Optional[int]:
         """Return the overridden cell at ``(x, y)`` for this interior/floor, or None if unmodified."""

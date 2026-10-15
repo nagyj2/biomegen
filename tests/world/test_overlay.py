@@ -68,3 +68,16 @@ def test_surface_edits_are_listed_in_coordinate_order() -> None:
     overlay.set_surface(5, 1, glyph="b")
     overlay.set_surface(2, 9, glyph="a")
     assert [coord for coord, _ in overlay.surface_edits()] == [(2, 9), (5, 1)]
+
+
+def test_every_overlay_edit_moves_the_revision() -> None:
+    # Readers that keep what they drew compare the revision to know the overlay changed.
+    overlay = Overlay()
+    seen = [overlay.revision]
+    overlay.set_surface(1, 2, glyph="x")
+    seen.append(overlay.revision)
+    overlay.set_interior(5, 0, 1, 1, 3)
+    seen.append(overlay.revision)
+    overlay.clear_surface(1, 2)
+    seen.append(overlay.revision)
+    assert seen == sorted(set(seen))

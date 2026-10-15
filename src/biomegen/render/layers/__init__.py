@@ -171,6 +171,11 @@ Layer = Callable[[LayerContext, CellGrid], None]
 
 LAYERS: Registry[Layer] = Registry("render_layer")
 
+# The layers whose every cell depends only on its world position (and its neighbours within one cell), never on where
+# the grid's edges or the camera are, nor on anything that changes while the explorer runs except the overlay. The
+# render cache keeps their output (see ``render.cache``); a new layer that keeps this rule can be added here.
+CACHEABLE: frozenset[str] = frozenset({"terrain", "relief", "tint", "water", "clutter", "borders", "roads", "sites"})
+
 
 def build_grid(
     world: World,

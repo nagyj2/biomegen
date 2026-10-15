@@ -71,6 +71,15 @@ VALUES: Dict[str, Any] = {
     },
     "default_view": "fit",  # "fit" (whole map downsampled) or "onetoone" (1:1 panning)
     "status_height": 12,  # rows reserved below the map for the status/legend panel
+    # The explorer's render cache (render/cache.py). At the zoom, local and site scales the terrain layers are drawn
+    # once into chunks of chunk_cols x chunk_rows cells and reused while panning; at most max_cells cells are kept
+    # (about 14 bytes each), the least recently shown dropped first. The map scales keep their last map_frames frames.
+    "cache": {
+        "chunk_cols": 32,
+        "chunk_rows": 16,
+        "max_cells": 4_000_000,
+        "map_frames": 8,
+    },
     "show_legend": True,
     # Layered renderer (phase 4). A view is an ordered list of layer names (see render.layers) for the map
     # scale, an optional ``detail_layers`` list for the zoom and local scales (empty = the map list), and the

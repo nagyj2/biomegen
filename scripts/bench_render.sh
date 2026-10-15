@@ -126,6 +126,7 @@ print(f"{'site':>6} {compose:9.1f} {full:11.1f} {step:11.1f} {compose + step:7.1
 # the starting cursor's row, each frame composed and diff-written. Best-of timings hide the cost of new ground coming
 # into view (a camera scroll repaints the screen, a site's plan is built the first time it shows); this does not.
 from biomegen.explorer.state import move_cursor
+from biomegen.render.cache import RenderCache
 from biomegen.sites import clear_cache
 
 
@@ -136,13 +137,14 @@ def percentile(values: list[float], share: float) -> float:
 
 def sweep(state: ExplorerState, steps: int) -> None:
     clear_cache()
+    cache = RenderCache(config)  # a fresh one, as the explorer starts with
     sink = io.StringIO()
     writer = DiffWriter(sink, "truecolor")
     overlay = Overlay()
     composes, writes, sizes = [], [], []
     for _ in range(steps):
         start = time.perf_counter()
-        frame = compose_frame(world, config, state, overlay, size)
+        frame = compose_frame(world, config, state, overlay, size, cache=cache)
         middle = time.perf_counter()
         before = sink.tell()
         writer.draw(frame.screen)

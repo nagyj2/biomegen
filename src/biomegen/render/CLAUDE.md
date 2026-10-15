@@ -41,6 +41,11 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
 - **Back-end parity.** ANSI, plain, HTML, SVG and PNG draw the same grid; a change to a layer needs no
   back-end change. Output stays byte-identical for a fixed seed.
 - Rendering never changes the world: `scripts/fingerprint.sh` must not move.
+- **Cacheable layers.** A layer in `layers.CACHEABLE` is drawn once into the explorer's render cache (`cache.py`) and
+  reused while panning, so its cells may depend only on their world position, neighbours within one cell, the world, the
+  config and the overlay; never on the grid's size or edges, the camera, or `ctx.labels`. A layer that breaks the rule
+  (it places text or reads the screen) stays out of the set and runs every frame. `tests/render/test_cache.py` checks
+  cached frames against fresh draws.
 
 ## Adding a layer
 

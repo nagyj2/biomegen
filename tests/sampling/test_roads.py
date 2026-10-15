@@ -327,3 +327,15 @@ def test_the_meander_labels_are_registered() -> None:
     from biomegen.util import rng
 
     rng.assert_known_labels(["roadmeander.x", "roadmeander.y"])
+
+
+def test_a_region_of_a_window_has_the_whole_window_bed() -> None:
+    # A chunk or a screenful of a window marks exactly the cells the whole window's bed marks there.
+    world = make_world(12, 8)
+    world.road[2, 1:10] = 1
+    world.road[2:7, 9] = 1
+    config = load_config(None)
+    whole = road_bed(DetailSampler(world, config, 8, 4, 0, 0, 12, 8), world, config)
+    region = road_bed(DetailSampler(world, config, 8, 4, 0, 0, 12, 8, origin=(40, 6), shape=(14, 37)), world, config)
+    assert whole is not None and region is not None
+    assert np.array_equal(region.bed, whole.bed[6:20, 40:77]) and np.array_equal(region.kind, whole.kind[6:20, 40:77])

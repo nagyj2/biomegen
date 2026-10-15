@@ -50,7 +50,8 @@ src/biomegen/
   world/
     tile.py             Biome / Relief / WaterType / Cell enums + TileView accessor
     world.py            Immutable World (parallel numpy arrays) + fingerprint()
-    overlay.py          Mutable Overlay (runtime edits, composited at read time)
+    overlay.py          Mutable Overlay (runtime edits, composited at read time; a revision counts edits)
+    derived.py          derived(): values worked out once per world (road pieces), checked by a source digest
     entities.py         POI / Realm / Relation / River / Lake / GeoFeature dataclasses
   sites/                Lazy, deterministic, cached site plans: what you see zooming into a POI
     geometry.py         Extent, window and plan resolution of a POI's site, in world tiles
@@ -90,6 +91,7 @@ src/biomegen/
   render/               Pure frame building (no terminal I/O); layer stack shared by every output
     grid.py             CellGrid IR (glyph, fg, bg, bold arrays) and the Document / Span form for static text
     fit.py              FitSampler: fit-to-screen map, each cell shows its block's most salient tile
+    cache.py            RenderCache: the explorer's terrain kept in chunks per scale, map frames kept whole
     views.py            View: layer lists per scale family + tint (a ramp or the realm tint), from render.views
     colors.py           Colour maths and per-biome / relief / detail / interior lookup arrays from the tables
     scatter.py          Stable per-cell decoration keyed on tile and sub-cell
@@ -154,7 +156,15 @@ The **only** mutable runtime state. Two layers composited over the immutable bas
 - `surface`: sparse `(x, y) → attrs dict` for gameplay edits on the map surface.
 - `interior`: sparse `(interior_seed, floor) → {(x, y): Cell}` edits to a POI's site plan.
 
-JSON-serialisable. The base biome arrays are never mutated after generation.
+JSON-serialisable. The base biome arrays are never mutated after generation. `revision` counts the edits, so a reader
+that keeps what it drew (the render cache) knows when to redraw.
+
+### Derived values (`world/derived.py`)
+
+Because the base is immutable, anything worked out from its arrays is computed once: `derived(world, key, build,
+*sources)` keeps a value per world (weakly) and rebuilds it only when a blake2b digest of its source arrays changes (a
+hand-made test world edited in place). The road network's pieces (`sampling.roads.road_pieces`) live here; a later
+simulation's per-tile lookups (movement costs, distances) belong here too.
 
 ---
 
@@ -399,6 +409,13 @@ explorer, `--view`, `--scale` and the SVG/PNG exports all run the same stack, so
   `tables.detail` and `tables.detail_relief` (`data/*.toml`), and the `render.*` config; none are literals.
 - **Back-ends** (`render/backends/`) turn a grid or document into ANSI, plain text, HTML, SVG or PNG.
 - Hot paths are numpy; the only Python loops are over POIs and road links.
+- **Render cache** (`render/cache.py`, explorer only). The layers in `layers.CACHEABLE` (terrain up to sites) paint a
+  cell from its world position alone, so at the detail scales `RenderCache` keeps their output in chunks of
+  `render.cache.chunk_cols x chunk_rows` cells of the scale's whole-world grid, drawn with a one-cell halo so neighbour
+  tests (`borders`) are seamless. A pan reuses the chunks on screen and draws only the new ground in one pass; the
+  remaining layers (markers, labels, compass, later anything that moves) run every frame on top. Map-scale frames are
+  kept whole (`map_frames`). An overlay edit drops what was drawn; `invalidate(box)` drops the chunks near a box of
+  tiles. At most `max_cells` cells are kept, least recently shown first out. Static output never uses it.
 
 **Scales and the cursor.** Four scales; the first three share one tile cursor and one camera:
 

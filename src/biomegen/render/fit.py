@@ -63,6 +63,11 @@ class FitSampler(Sampler):
         tile_y = np.arange(rows)[:, np.newaxis] * self.block_h + best // self.block_w
         super().__init__(world, tile_x.astype(np.float64), tile_y.astype(np.float64))
 
+    @property
+    def signature(self) -> tuple | None:
+        """The block size and grid size, which fix every cell's tile."""
+        return ("fit", self.block_w, self.block_h, self.rows, self.cols)
+
     def cell_coords(self, x: float, y: float) -> tuple[int, int] | None:
         """Return the cell whose block contains tile ``(x, y)``."""
         return int(x) // self.block_w, int(y) // self.block_h

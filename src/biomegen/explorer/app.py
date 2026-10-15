@@ -14,10 +14,11 @@ from dataclasses import dataclass
 from typing import Callable, Optional, TextIO
 
 from ..config.model import Config
+from ..render.cache import RenderCache
 from ..render.fit import FitSampler
 from ..render.grid import CellGrid
 from ..render.layers import Seen, build_grid
-from ..render.views import resolve_view, view_names
+from ..render.views import View, resolve_view, view_names
 from ..sampling.detail import SCALE_SITE, DetailSampler, centre_camera, detail_cell_size
 from ..sampling.sampler import Sampler
 from ..sites import SiteGeometry, site_geometry, window_sampler
@@ -58,6 +59,24 @@ class Frame:
     screen: CellGrid
     map_grid: CellGrid
     view_name: str
+
+
+def _draw(
+    cache: Optional[RenderCache],
+    world: World,
+    config: Config,
+    view: View,
+    sampler: Sampler,
+    overlay: Overlay,
+    ascii_only: bool,
+    color: bool,
+    floor: int,
+    seen: Seen,
+) -> CellGrid:
+    """Draw the map through ``sampler``: from the render cache when the explorer keeps one, else from scratch."""
+    if cache is None:
+        return build_grid(world, config, view, sampler, overlay, ascii_only, color, floor=floor, seen=seen)
+    return cache.draw(world, config, view, sampler, overlay, ascii_only, color, floor=floor, seen=seen)
 
 
 def _paste(screen: CellGrid, grid: CellGrid, top: int) -> None:
@@ -127,6 +146,7 @@ def _site_view(
     geometry: SiteGeometry,
     color: bool,
     ascii_only: bool,
+    cache: Optional[RenderCache] = None,
 ) -> tuple[CellGrid, CellGrid]:
     """Draw the part of the open site's window that fits ``area``; return ``(map grid, shown grid)``.
 
@@ -156,7 +176,8 @@ def _site_view(
             (src_cols.start, src_rows.start),
             (src_rows.stop - src_rows.start, src_cols.stop - src_cols.start),
         )
-        part = build_grid(
+        part = _draw(
+            cache,
             world,
             config,
             resolve_view(config, view_name),
@@ -164,8 +185,8 @@ def _site_view(
             overlay,
             ascii_only,
             color,
-            floor=state.floor,
-            seen=seen,
+            state.floor,
+            seen,
         )
         for name in ("glyph", "fg", "bg", "bold"):
             getattr(view, name)[dst_rows, dst_cols] = getattr(part, name)
@@ -187,8 +208,12 @@ def compose_frame(
     color: bool = True,
     ascii_only: bool = False,
     help_open: bool = False,
+    cache: Optional[RenderCache] = None,
 ) -> Frame:
-    """Compose one terminal-sized frame for ``state``: the map with its cursor, the panel, and the help overlay."""
+    """Compose one terminal-sized frame for ``state``: the map with its cursor, the panel, and the help overlay.
+
+    With a ``cache`` (the explorer keeps one) the map reuses what earlier frames drew; the frame is the same.
+    """
     cols, rows = size
     names = view_names(config)
     view_name = names[state.view_index % len(names)]
@@ -203,11 +228,12 @@ def compose_frame(
     geometry = site_geometry(state.poi, config) if state.scale == SCALE_SITE and state.poi is not None else None
     if geometry is not None:
         map_grid, shown = _site_view(
-            world, config, view_name, state, overlay, (cols, map_rows), seen, geometry, color, ascii_only
+            world, config, view_name, state, overlay, (cols, map_rows), seen, geometry, color, ascii_only, cache
         )
     else:
         sampler = _map_sampler(world, config, state, (cols, map_rows))
-        map_grid = build_grid(
+        map_grid = _draw(
+            cache,
             world,
             config,
             resolve_view(config, view_name),
@@ -215,8 +241,8 @@ def compose_frame(
             overlay,
             ascii_only,
             color,
-            floor=state.floor,
-            seen=seen,
+            state.floor,
+            seen,
         )
         shown = CellGrid(map_grid.rows, map_grid.cols)
         for name in ("glyph", "fg", "bg", "bold"):
@@ -269,6 +295,7 @@ def run(
     writer = DiffWriter(out if out is not None else sys.stdout, color_mode)
     size_of = get_size if get_size is not None else _terminal_size
     overlay = Overlay()
+    cache = RenderCache(config)
     state = ViewState(mode=config.get("render.default_view", MODE_FIT))
     state.cx, state.cy = initial_cursor(world, config)
     state.notify(f"colour mode: {color_mode}")
@@ -280,7 +307,7 @@ def run(
             while True:
                 tracking = sync_floor(world, config, state, tracking)
                 frame = compose_frame(
-                    world, config, state, overlay, size_of(), color_mode != "none", ascii_only, help_open
+                    world, config, state, overlay, size_of(), color_mode != "none", ascii_only, help_open, cache
                 )
                 writer.draw(frame.screen)
                 action = resolve_action(reader.read_key(), config)

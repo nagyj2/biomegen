@@ -109,6 +109,12 @@ road_meander_scale = 5.0        # tiles across a meander feature
 default_view = "fit"            # "fit" | "onetoone"
 status_height = 12
 
+[render.cache]
+chunk_cols = 32                 # the explorer draws terrain once, in chunks of this many cells across
+chunk_rows = 16                 # and this many down, and reuses them while panning
+max_cells = 4000000             # cells kept (about 14 bytes each); the least recently shown go first
+map_frames = 8                  # whole map-scale frames kept
+
 [export]
 dir = "./images"
 cell_px = 12

@@ -84,6 +84,16 @@ class Sampler:
         sampler._origin = (x0, y0, step_x, step_y)
         return sampler
 
+    @property
+    def signature(self) -> tuple | None:
+        """A value equal for two samplers that read the same positions, or ``None`` when there is no cheap one.
+
+        A viewport's is its origin, step and size; the render cache reuses a frame drawn through an equal sampler.
+        """
+        if self._origin is None:
+            return None
+        return ("viewport", self._origin, self.rows, self.cols)
+
     def cell_coords(self, x: float, y: float) -> tuple[int, int] | None:
         """Return the ``(col, row)`` the grid would give tile ``(x, y)``, even off the grid; ``None`` if unknown.
 
