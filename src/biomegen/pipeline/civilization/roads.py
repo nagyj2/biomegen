@@ -14,11 +14,11 @@ design has three parts:
    back to all POIs if a component has none) →
    probabilistically attach the remaining POIs (civilized more likely than uncivilized) → a few extra
    loop edges. All random draws come from one per-component RNG consumed in a fixed sorted edge order.
-3. **Routing.** Each selected edge is routed with A* over a precomputed cost surface (the biome and relief
-   ``move_cost`` rows; slopes and water are dear; existing road is discounted; a smooth noise field adds
-   meander). Step lengths are km, so a north-south step costs more than an east-west one on a tall cell. The
-   search is confined to the component's mask and a padded bounding box and capped, with a straight-line
-   fallback, so it stays fast on the non-monotone cost.
+3. **Routing.** Each selected edge is routed with A* (eight directions, or four with ``roads.cardinal_only``) over a
+   precomputed cost surface (the biome and relief ``move_cost`` rows; slopes and water are dear; existing road is
+   discounted; a smooth noise field adds meander). Step lengths are km, so a north-south step costs more than an
+   east-west one on a tall cell. The search is confined to the component's mask and a padded bounding box and
+   capped, with a straight-line fallback, so it stays fast on the non-monotone cost.
 """
 
 from __future__ import annotations
@@ -188,6 +188,14 @@ def _bresenham(a: Coord, b: Coord) -> List[Coord]:
     return cells
 
 
+def _l_path(a: Coord, b: Coord) -> List[Coord]:
+    """Cardinal fallback line from a to b: along the row to b's column, then along the column."""
+    (x0, y0), (x1, y1) = a, b
+    step_x = 1 if x1 >= x0 else -1
+    step_y = 1 if y1 >= y0 else -1
+    return [(x, y0) for x in range(x0, x1, step_x)] + [(x1, y) for y in range(y0, y1 + step_y, step_y)]
+
+
 def _route(
     world: World,
     comp_mask: np.ndarray,
@@ -197,8 +205,11 @@ def _route(
     costs: Tuple[float, float, float, float],
     turn_cost: float = 0.0,
     settlement: np.ndarray | None = None,
+    cardinal_only: bool = False,
 ) -> List[Coord]:
     """A* route a→b within the component mask + padded bbox; straight-line fallback if it bails.
+
+    With ``cardinal_only`` a step goes north, east, south or west (never diagonally), and the fallback is an L.
 
     When turn_cost > 0, state is augmented with the incoming direction (x, y, dx, dy) so that
     direction changes incur an extra flat penalty. This reduces zigzagging caused by the meander
@@ -206,6 +217,7 @@ def _route(
     """
     h, w = world.height, world.width
     col_km, row_km = world.scale.km_per_col, world.scale.km_per_row  # a step costs its km length over col_km
+    adjacent = geo.neighbors4 if cardinal_only else geo.neighbors8
     elev = world.elevation_m / 1000.0  # km, so the slope costs are per km of height change
     road = world.road
     slope_cost, uphill, discount, base_cost = costs
@@ -223,7 +235,7 @@ def _route(
             nx0, ny0 = node
             return [
                 (nx, ny)
-                for (nx, ny) in geo.neighbors8(nx0, ny0, w, h)
+                for (nx, ny) in adjacent(nx0, ny0, w, h)
                 if x0 <= nx <= x1 and y0 <= ny <= y1 and comp_mask[ny, nx]
             ]
 
@@ -257,7 +269,7 @@ def _route(
             sx, sy, _pdx, _pdy = state
             return [
                 (nx, ny, nx - sx, ny - sy)
-                for (nx, ny) in geo.neighbors8(sx, sy, w, h)
+                for (nx, ny) in adjacent(sx, sy, w, h)
                 if x0 <= nx <= x1 and y0 <= ny <= y1 and comp_mask[ny, nx]
             ]
 
@@ -299,7 +311,7 @@ def _route(
         # Exclude SALT tiles — they are outside the landmass component and must never carry roads.
         path = [
             (x, y)
-            for (x, y) in _bresenham(a, b)
+            for (x, y) in (_l_path(a, b) if cardinal_only else _bresenham(a, b))
             if world.in_bounds(x, y) and world.water_type[y, x] != int(WaterType.SALT)
         ]
     return _straighten_coastal_detours(world, cast(List[Coord], path))
@@ -381,6 +393,7 @@ def run(world: World, config: Config, seed: int) -> None:
         base_cost,
     )
     turn_cost = float(config.get("roads.turn_cost"))
+    cardinal_only = bool(config.get("roads.cardinal_only"))
 
     col_km, row_km = world.scale.km_per_col, world.scale.km_per_row
     tiers = config.get("tables.tiers")
@@ -414,7 +427,9 @@ def run(world: World, config: Config, seed: int) -> None:
 
         # Trunk phase: route the MST backbone + extra loop edges first.
         for i, j in trunk_edges:
-            path = _route(world, comp_mask, enter_base, coords[i], coords[j], costs, turn_cost, settlement)
+            path = _route(
+                world, comp_mask, enter_base, coords[i], coords[j], costs, turn_cost, settlement, cardinal_only
+            )
             for x, y in path:
                 world.road[y, x] = 1
                 if world.road_tier[y, x] == 0:
@@ -439,7 +454,7 @@ def run(world: World, config: Config, seed: int) -> None:
                     for t in backbone
                 ]
                 target = coords[backbone[int(np.argmin(d2_list))]]
-            path = _route(world, comp_mask, enter_base, start, target, costs, turn_cost, settlement)
+            path = _route(world, comp_mask, enter_base, start, target, costs, turn_cost, settlement, cardinal_only)
             for x, y in path:
                 world.road[y, x] = 1
                 if world.road_tier[y, x] == 0:

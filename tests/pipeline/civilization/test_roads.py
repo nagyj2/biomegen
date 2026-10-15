@@ -166,3 +166,63 @@ def test_a_diagonal_crossing_of_a_river_puts_no_road_on_the_river():
     _add_poi(world, "town", 7, 7)
     roads.run(world, cfg, 1)
     assert world.road.any() and not (world.road.astype(bool) & (world.water_type == int(WaterType.FRESH))).any()
+
+
+def _diagonal_bits(road):
+    from biomegen.render.layers.roads import connection_mask8
+
+    return (connection_mask8(road) & (2 | 8 | 32 | 128)) * (road > 0)
+
+
+def test_cardinal_only_roads_use_no_diagonal_link():
+    # Two towns on opposite corners of open grass: the default route cuts diagonals, the cardinal one never does.
+    from biomegen.pipeline.civilization import roads
+
+    cfg = load_config(None)
+    cfg.data["roads"].update({"meander_strength": 0.0, "cardinal_only": True})
+    world = _flat_world(16, 12)
+    _add_poi(world, "town", 1, 1)
+    _add_poi(world, "town", 14, 10)
+    roads.run(world, cfg, 1)
+    assert world.road.any() and not _diagonal_bits(world.road).any()
+
+
+def test_default_roads_may_use_diagonals():
+    from biomegen.pipeline.civilization import roads
+
+    cfg = load_config(None)
+    cfg.data["roads"]["meander_strength"] = 0.0
+    world = _flat_world(16, 12)
+    _add_poi(world, "town", 1, 1)
+    _add_poi(world, "town", 14, 10)
+    roads.run(world, cfg, 1)
+    assert _diagonal_bits(world.road).any()
+
+
+def test_cardinal_only_roads_still_join_every_town():
+    from biomegen.pipeline.civilization import roads
+
+    cfg = load_config(None)
+    cfg.data["roads"].update({"meander_strength": 0.0, "cardinal_only": True})
+    world = _flat_world(16, 12)
+    _add_poi(world, "town", 1, 1)
+    _add_poi(world, "town", 14, 10)
+    roads.run(world, cfg, 1)
+    labels, _ = geo.label_by_value(world.road, connectivity=4)
+    assert labels[1, 1] == labels[10, 14] and world.road[1, 1] and world.road[10, 14]
+
+
+def test_cardinal_fallback_is_an_l():
+    from biomegen.pipeline.civilization.roads import _l_path
+
+    path = _l_path((1, 1), (4, 3))
+    assert path == [(1, 1), (2, 1), (3, 1), (4, 1), (4, 2), (4, 3)]
+
+
+def test_cardinal_only_whole_world_has_no_diagonal_link(cfg):
+    from biomegen.config import load_config as load
+
+    config = load(None)
+    config.data["roads"]["cardinal_only"] = True
+    world = pipeline.generate(config, 42)
+    assert world.road.any() and not _diagonal_bits(world.road).any()

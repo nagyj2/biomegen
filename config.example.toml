@@ -85,6 +85,7 @@ bridge_max_rows = 6             # the widest water a settlement street will brid
 pathfinder = "astar"            # "astar" | "tcod" | "dijkstra"
 civilized_connect_prob = 0.9
 uncivilized_connect_prob = 0.25
+cardinal_only = false           # true routes every road north, east, south or west only (one box-drawing glyph set)
 meander_strength = 0.30
 
 [render]

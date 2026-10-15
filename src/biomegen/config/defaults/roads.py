@@ -19,5 +19,7 @@ VALUES: Dict[str, Any] = {
     "road_discount": 0.3,  # cost multiplier when reusing an existing road tile (encourages joins)
     "turn_cost": 0.1,  # flat penalty added whenever the path changes direction; values in
     # the 1–3× base_cost range reduce zigzagging without over-straightening
+    "cardinal_only": False,  # True routes every road north, east, south or west only (no diagonal links), so the
+    # map draws one box-drawing glyph set with no slashes or junction stars
     "meander_strength": 0.30,  # deterministic per-tile noise added to cost so paths curve
 }
