@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Per-stage generation time (seconds) at several world sizes, best of N runs on the fixture seed.
+# Per-stage generation time (seconds) at several world sizes, best of N runs on a seed.
 # Usage: scripts/bench.sh [runs] [WxH ...]   (default: 3 runs at 128x32 192x48 192x75 256x64 320x80)
 source "$(dirname "${BASH_SOURCE[0]}")/_fixtures.sh"
 
+help_if_asked "Usage: scripts/bench.sh [--seed SEED] [runs] [WxH ...]   (no --seed: random seed)" "$@"
+bench_seed_args "$@"
+set -- "${bench_args[@]}"
 runs="${1:-3}"
 shift || true
 sizes=("$@")
@@ -10,7 +13,7 @@ if [[ ${#sizes[@]} -eq 0 ]]; then
     sizes=(128x32 192x48 192x75 256x64 320x80)
 fi
 
-uv run python - "${fixture_seed}" "${runs}" "${sizes[@]}" <<'PY'
+uv run python - "${bench_seed}" "${runs}" "${sizes[@]}" <<'PY'
 import sys
 
 from biomegen import pipeline

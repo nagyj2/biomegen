@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run the test suite. Extra arguments go to pytest, e.g. scripts/test.sh tests/config -k defaults
+# Run the tests. All arguments go to pytest.
 source "$(dirname "${BASH_SOURCE[0]}")/_fixtures.sh"
+help_if_asked "Usage: scripts/test.sh [pytest args]   (later -h is pytest's)" "$@"
 
 uv run pytest -q "$@"

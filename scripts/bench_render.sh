@@ -2,13 +2,16 @@
 # Frame time (milliseconds) of the zoom and local detail frames and of the whole explorer frame, best of N runs on a
 # seed's world, then a cold pan sweep: the cursor held moving right across the world (and across the largest site),
 # every frame composed and diff-written with no warm caches, the way the explorer draws while a key is held.
-# Usage: scripts/bench_render.sh [runs] [seed] [COLSxROWS] [view]   (default: 5 runs, fixture seed, 120x36, terrain)
+# Usage: scripts/bench_render.sh [--seed S] [runs] [COLSxROWS] [view]   (default: 5 runs, random seed, 120x36, terrain)
 source "$(dirname "${BASH_SOURCE[0]}")/_fixtures.sh"
 
+help_if_asked "Usage: scripts/bench_render.sh [--seed SEED] [runs] [COLSxROWS] [view]   (no --seed: random seed)" "$@"
+bench_seed_args "$@"
+set -- "${bench_args[@]}"
 runs="${1:-5}"
-seed="${2:-${fixture_seed}}"
-area="${3:-120x36}"
-view_name="${4:-terrain}"
+seed="${bench_seed}"
+area="${2:-120x36}"
+view_name="${3:-terrain}"
 
 uv run python - "${seed}" "${runs}" "${area}" "${view_name}" <<'PY'
 import sys

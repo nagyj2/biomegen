@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Headless stats dump, including the fingerprint. Usage: scripts/stats.sh [seed]
+# Headless stats dump, including the fingerprint. All arguments go to biomegen.
 source "$(dirname "${BASH_SOURCE[0]}")/_fixtures.sh"
+help_if_asked "Usage: scripts/stats.sh [biomegen args]   (no --seed: random seed; later -h is biomegen's)" "$@"
 
-uv run biomegen --headless --seed "${1:-${fixture_seed}}"
+uv run biomegen --headless "$@"

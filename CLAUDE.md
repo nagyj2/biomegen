@@ -17,17 +17,19 @@ Redesign plan and phases: `docs/redesign_plan.md`. Nested `CLAUDE.md` files hold
 
 ## Commands
 
-All wrap `uv run` and pin fixture seeds and sizes in `scripts/_fixtures.sh`:
+All wrap `uv run`. Arguments go straight to biomegen (or pytest); `--seed S` works everywhere and no seed means a random
+one (echoed). `-h` as the first argument shows the script's usage; later `-h` reaches biomegen. Fixtures live in `scripts/_fixtures.sh`:
 
 - `scripts/test.sh [pytest args]`: run the tests.
 - `scripts/check.sh`: ruff format check, ruff, mypy, pytest.
-- `scripts/run.sh [args]`: launch the app on the fixture seed (42).
-- `scripts/stats.sh [seed]`: headless stats dump, including the fingerprint.
-- `scripts/fingerprint.sh [seed ...]`: world fingerprints (default seeds 42, 7, 1337, 11, 15; 11 and 15 hold a defection and an offshoot); the before/after
-  proof for refactors.
-- `scripts/export.sh [seed] [dir]`: headless SVG/PNG export (default `build/export`).
-- `scripts/view.sh [view] [seed] [args]`: a static map; add `--scale zoom|local --at X,Y` for a magnified part.
-- `scripts/bench_render.sh [runs] [seed] [COLSxROWS] [view]`: frame times of the detail layers and the explorer frame.
+- `scripts/run.sh [args]`: launch the app.
+- `scripts/stats.sh [args]`: headless stats dump, including the fingerprint.
+- `scripts/chronicle.sh [args]`: print the chronicle (`--chronicle-format json`).
+- `scripts/fingerprint.sh [--seed S]`: world fingerprints (default seeds 42, 7, 1337, 11, 15; 11 and 15 hold a defection and an
+  offshoot, since a proof needs fixed worlds); the before/after proof for refactors.
+- `scripts/export.sh [args]`: headless SVG/PNG export to `build/export`.
+- `scripts/view.sh [args]`: a static map fitted to the terminal; add `--scale zoom|local --at X,Y` for a magnified part.
+- `scripts/bench_render.sh [--seed S] [runs] [COLSxROWS] [view]`: frame times of the detail layers and the explorer frame.
 
 ## Layering
 
