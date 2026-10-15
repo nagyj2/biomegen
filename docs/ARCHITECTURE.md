@@ -291,9 +291,7 @@ Connects POIs with meandering least-cost roads:
    relief's `move_cost` (tables `biomes`, `relief`) + `slope_cost_per_km × |Δelevation_m| / 1000` +
    `uphill_surcharge_per_km` (uphill only) + `water_cost` (cross water). A step costs its km length, so on tall
    cells a north-south step costs more than an east-west one. Existing road tiles are discounted by `road_discount`.
-   A low-frequency noise field (scaled by `meander_strength`) bends roads a little. A long road (two
-   `meander_step_km` or more) is also steered through waypoints every step along its line, pushed sideways by a smooth
-   seeded curve of up to `meander_strength` times its length, so it winds; the routing between waypoints is the same A*. A `turn_cost` penalty
+   A low-frequency noise field (`meander_strength`) bends roads organically. A `turn_cost` penalty
    reduces zigzagging. Search is bounded to a padded bounding box + `max_expansions` cap; a
    Bresenham straight-line fallback fires if A* exhausts its budget.
    - **Trunk phase**: MST + loop edges are routed first.

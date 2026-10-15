@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Dict, List, Tuple, cast
 
 import numpy as np
 
@@ -165,79 +165,6 @@ def _meander_field(world: World, config: Config, seed: int) -> np.ndarray:
     cx, cy = noise.coordinate_grid((world.height, world.width), 16.0)
     field = noise.normalize01(noise.fbm(sampler, cx, cy, octaves=3, persistence=0.5, lacunarity=2.0))
     return (field * strength * base).astype(np.float64)
-
-
-def _meander_waypoints(
-    world: World, comp_mask: np.ndarray, a: Coord, b: Coord, config: Config, seed: int
-) -> List[Coord]:
-    """Waypoints that make a long road wander sideways: a smooth seeded curve laid off the straight line ``a`` to ``b``.
-
-    One waypoint lies every ``roads.meander_step_km`` along the line, pushed sideways by up to
-    ``roads.meander_strength`` times the road's length (a sum of two sines with seeded phases, tapering to nothing at
-    either end), and snapped to the nearest cell of the landmass. A road shorter than two steps is not bent. The routing
-    between waypoints is the ordinary A*, so the road still goes round water and mountains.
-    """
-    strength = float(config.get("roads.meander_strength"))
-    step_km = float(config.get("roads.meander_step_km"))
-    col_km, row_km = world.scale.km_per_col, world.scale.km_per_row
-    (ax, ay), (bx, by) = (a[0] * col_km, a[1] * row_km), (b[0] * col_km, b[1] * row_km)
-    length = math.hypot(bx - ax, by - ay)
-    count = int(length // step_km) if step_km > 0 else 0
-    if strength <= 0 or count < 2:
-        return []
-    stream = rng.derive(seed, "roads.meander", a[0], a[1], b[0], b[1])
-    phase = [stream.uniform(0.0, 2.0 * math.pi) for _ in range(2)]
-    cycles = max(1.0, count / 3.0)
-    amplitude = strength * length
-    nx, ny = -(by - ay) / length, (bx - ax) / length
-    points: List[Coord] = []
-    for index in range(1, count):
-        t = index / count
-        wave = 0.65 * math.sin(2.0 * math.pi * cycles * t + phase[0]) + 0.35 * math.sin(
-            4.0 * math.pi * cycles * t + phase[1]
-        )
-        offset = amplitude * wave * math.sin(math.pi * t)
-        x = round((ax + t * (bx - ax) + nx * offset) / col_km)
-        y = round((ay + t * (by - ay) + ny * offset) / row_km)
-        snapped = _snap(comp_mask, x, y)
-        if snapped is not None and snapped not in points and snapped not in (a, b):
-            points.append(snapped)
-    return points
-
-
-def _snap(mask: np.ndarray, x: int, y: int, radius: int = 3) -> Optional[Coord]:
-    """Return the nearest cell of ``mask`` to ``(x, y)`` within ``radius`` (row-major on ties), or None."""
-    height, width = mask.shape
-    best: Optional[Tuple[int, int, int]] = None
-    for cy in range(max(0, y - radius), min(height, y + radius + 1)):
-        for cx in range(max(0, x - radius), min(width, x + radius + 1)):
-            if mask[cy, cx]:
-                key = ((cx - x) ** 2 + (cy - y) ** 2, cy, cx)
-                if best is None or key < best:
-                    best = key
-    return None if best is None else (best[2], best[1])
-
-
-def _route_through(
-    world: World,
-    comp_mask: np.ndarray,
-    enter_base: np.ndarray,
-    a: Coord,
-    b: Coord,
-    waypoints: List[Coord],
-    costs: Tuple[float, float, float, float],
-    turn_cost: float,
-    settlement: np.ndarray | None,
-    cardinal_only: bool,
-) -> List[Coord]:
-    """Route ``a`` to ``b`` through ``waypoints`` in order, joining the A* routes of each leg."""
-    path: List[Coord] = [a]
-    here = a
-    for there in waypoints + [b]:
-        leg = _route(world, comp_mask, enter_base, here, there, costs, turn_cost, settlement, cardinal_only)
-        path.extend(leg[1:] if leg and leg[0] == here else leg)
-        here = there
-    return path
 
 
 def _bresenham(a: Coord, b: Coord) -> List[Coord]:
@@ -463,8 +390,7 @@ def _close_diagonals(world: World) -> None:
                 if world.water_type[cy, cx] == int(WaterType.SALT):
                     continue
                 world.road[cy, cx] = 1
-                tiers = [int(world.road_tier[y, x]), int(world.road_tier[y + 1, nx])]
-                world.road_tier[cy, cx] = max(tiers)
+                world.road_tier[cy, cx] = max(int(world.road_tier[y, x]), int(world.road_tier[y + 1, nx]))
                 road[cy, cx] = True
 
 
@@ -532,18 +458,8 @@ def run(world: World, config: Config, seed: int) -> None:
 
         # Trunk phase: route the MST backbone + extra loop edges first.
         for i, j in trunk_edges:
-            waypoints = _meander_waypoints(world, comp_mask, coords[i], coords[j], config, seed)
-            path = _route_through(
-                world,
-                comp_mask,
-                enter_base,
-                coords[i],
-                coords[j],
-                waypoints,
-                costs,
-                turn_cost,
-                settlement,
-                cardinal_only,
+            path = _route(
+                world, comp_mask, enter_base, coords[i], coords[j], costs, turn_cost, settlement, cardinal_only
             )
             for x, y in path:
                 world.road[y, x] = 1
@@ -569,10 +485,7 @@ def run(world: World, config: Config, seed: int) -> None:
                     for t in backbone
                 ]
                 target = coords[backbone[int(np.argmin(d2_list))]]
-            waypoints = _meander_waypoints(world, comp_mask, start, target, config, seed)
-            path = _route_through(
-                world, comp_mask, enter_base, start, target, waypoints, costs, turn_cost, settlement, cardinal_only
-            )
+            path = _route(world, comp_mask, enter_base, start, target, costs, turn_cost, settlement, cardinal_only)
             for x, y in path:
                 world.road[y, x] = 1
                 if world.road_tier[y, x] == 0:
