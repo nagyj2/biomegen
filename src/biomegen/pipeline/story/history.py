@@ -15,6 +15,10 @@ Everything is placed from static quantities, so the same world always gives the 
    ``history.border_km_for_full_span``), but never before both powers exist plus ``history.min_gap_years``.
 5. **Battles.** A war's front sees ``history.battles_per_100km_front`` battles per 100 km of border, each on a cell
    of the front between the war's start and the present; ``realm_ids`` is ``[winner, loser]``.
+6. **Falls.** Realms that vanished before the present: ``history.fallen_realms_per_million_km2`` of them, each a
+   :class:`~biomegen.world.entities.FallenRealm` on wild land habitable enough to have held a realm
+   (``history.fall_min_habitability``), spaced ``history.fall_spacing_km`` from each other and from settlements. A
+   ``fall`` event is dated when the realm fell. Without the ``fall`` kind there are no fallen realms.
 
 Events are collected in a :class:`Ledger`, sorted by ``(year, kind order, creation order)`` and numbered, so an event's
 ``id`` is its index in ``World.chronicle``. An event holds a raw template picked from ``tables.chronicle`` (its
@@ -26,11 +30,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+import numpy as np
+
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import EVENT_KINDS, NO_LOCATION, ChronicleEvent, Relation
+from ...world.entities import EVENT_KINDS, NO_LOCATION, ChronicleEvent, FallenRealm, Relation
+from ...world.tile import WaterType
 from ...world.world import World
 from ..civilization.diplomacy import front_cells
+from ..civilization.settlements import habitability
+from ..pois import pick_blue_noise
 from .places import nearest_settlement
 
 
@@ -41,6 +50,10 @@ class Ledger:
         self._config = config
         self._enabled = set(config.get("history.kinds"))
         self._pending: list[tuple[int, int, int, ChronicleEvent]] = []
+
+    def enabled(self, kind: str) -> bool:
+        """Return whether events of ``kind`` are derived (``history.kinds``)."""
+        return kind in self._enabled
 
     def add(
         self,
@@ -230,6 +243,41 @@ def _battle_events(world: World, config: Config, seed: int, span: int, ledger: L
             )
 
 
+def _fallen_realms(world: World, config: Config, seed: int, span: int, ledger: Ledger) -> None:
+    """Place the fallen realms on wild, habitable land and add a ``fall`` event for each."""
+    world.fallen_realms = []
+    if not ledger.enabled("fall"):
+        return
+    land = world.water_type == int(WaterType.NONE)
+    count = round(
+        float(land.sum()) * world.scale.cell_area_km2 / 1e6 * float(config.get("history.fallen_realms_per_million_km2"))
+    )
+    score = habitability(world, config, seed)
+    eligible = land & (world.realm_id < 0) & (world.landmass_id >= 0) & (world.poi_index < 0)
+    eligible &= score >= float(config.get("history.fall_min_habitability"))
+    settled = [(poi.x, poi.y) for poi in world.pois if poi.civilized]
+    sites = pick_blue_noise(
+        np.where(eligible, score, -np.inf), count, float(config.get("history.fall_spacing_km")), settled, world
+    )
+    life_lo, life_hi = (int(v) for v in config.get("history.fallen_life_years"))
+    last_fall = max(span - int(config.get("history.fallen_min_years_ago")), 0)
+    for number, (x, y) in enumerate(sites):
+        stream = rng.derive(seed, "history", "fallen", number)
+        life = min(stream.randint(life_lo, life_hi), last_fall)
+        founded = stream.randint(0, last_fall - life)
+        world.fallen_realms.append(FallenRealm(id=number, location=(x, y), founded=founded, fell=founded + life))
+        ledger.add(
+            founded + life,
+            "fall",
+            "fall",
+            (number,),
+            seed,
+            fallen_ids=[number],
+            location=(x, y),
+            near_poi=nearest_settlement(world, config, x, y),
+        )
+
+
 def run(world: World, config: Config, seed: int) -> None:
     """Date the realms and settlements and derive ``world.chronicle``, mutating ``world`` in place."""
     span = int(config.get("history.span_years"))
@@ -240,4 +288,5 @@ def run(world: World, config: Config, seed: int) -> None:
     _realm_events(world, config, seed, span, ledger)
     _relation_events(world, config, seed, span, ledger)
     _battle_events(world, config, seed, span, ledger)
+    _fallen_realms(world, config, seed, span, ledger)
     world.chronicle = ledger.finish()

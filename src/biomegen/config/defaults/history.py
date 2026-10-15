@@ -29,9 +29,9 @@ VALUES: Dict[str, Any] = {
     "battles_per_100km_front": 0.5,  # battles fought along a war's border, per 100 km of it
     # Fallen realms: wild land (no realm) habitable enough to have held a realm, away from each other and from
     # settlements. They lasted ``fallen_life_years`` and fell at least ``fallen_min_years_ago`` before the present.
-    "fallen_realms_per_million_km2": 3.0,
+    "fallen_realms_per_million_km2": 1.0,
     "fall_min_habitability": 0.3,
-    "fall_spacing_km": 300.0,
+    "fall_spacing_km": 200.0,
     "fallen_life_years": [100, 500],
     "fallen_min_years_ago": 50,
     # A place named in an event ({near}) must be a settlement on the same landmass within this distance.

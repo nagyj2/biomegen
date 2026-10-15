@@ -99,7 +99,7 @@ def _floors(kind: str, row: dict, stream: random.Random) -> tuple[int, int]:
     return count, (-(count - 1) if kind == "dungeon" else 0)
 
 
-def _pick(
+def pick_blue_noise(
     score: np.ndarray, count: int, spacing_km: float, placed: list[tuple[int, int]], world: World
 ) -> list[tuple[int, int]]:
     """Blue-noise pick: best-scoring cells first, each kept when every placed POI is at least ``spacing_km`` away."""
@@ -179,6 +179,6 @@ def run(world: World, config: Config, seed: int) -> None:
         score = np.where(mask, score + noise, -np.inf)
 
         stream = rng.derive(seed, "poi", kind, "floors")
-        for x, y in _pick(score, count, float(row["min_spacing_km"]), placed, world):
+        for x, y in pick_blue_noise(score, count, float(row["min_spacing_km"]), placed, world):
             _commit(world, seed, kind, x, y, _floors(kind, row, stream))
             placed.append((x, y))

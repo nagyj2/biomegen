@@ -281,3 +281,81 @@ def test_no_battles_at_rate_zero() -> None:
     config = load_config(None)
     config.data["history"]["battles_per_100km_front"] = 0.0
     assert _battles(pipeline.generate(config, 42)) == []
+
+
+# --- fallen realms ----------------------------------------------------------------------------------------
+
+
+def _falls(world: World) -> list:
+    return [e for e in world.chronicle if e.kind == "fall"]
+
+
+def test_every_fallen_realm_has_one_fall_event(world: World) -> None:
+    assert world.fallen_realms and sorted(f for e in _falls(world) for f in e.fallen_ids) == [
+        fallen.id for fallen in world.fallen_realms
+    ]
+
+
+def test_fallen_realm_ids_are_their_indexes(world: World) -> None:
+    assert [fallen.id for fallen in world.fallen_realms] == list(range(len(world.fallen_realms)))
+
+
+def test_a_fall_is_dated_when_the_realm_fell(world: World) -> None:
+    assert all(e.year == world.fallen_realms[e.fallen_ids[0]].fell for e in _falls(world))
+
+
+def test_a_fallen_realm_lived_before_it_fell(world: World, cfg: Config) -> None:
+    # Founded no earlier than year 0, living within the configured life, and fallen before the present.
+    lo, hi = cfg.get("history.fallen_life_years")
+    last = world.year - cfg.get("history.fallen_min_years_ago")
+    assert all(0 <= f.founded and lo <= f.fell - f.founded <= hi and f.fell <= last for f in world.fallen_realms)
+
+
+def test_ruins_lie_on_wild_land(world: World) -> None:
+    assert all(
+        world.realm_id[y, x] == -1 and world.landmass_id[y, x] >= 0
+        for x, y in (f.location for f in world.fallen_realms)
+    )
+
+
+def test_ruins_lie_on_habitable_land(world: World, cfg: Config) -> None:
+    from biomegen.pipeline.civilization.settlements import habitability
+
+    score = habitability(world, cfg, world.seed)
+    floor = cfg.get("history.fall_min_habitability")
+    assert all(score[y, x] >= floor for x, y in (f.location for f in world.fallen_realms))
+
+
+def test_ruins_keep_their_distance_from_settlements(world: World, cfg: Config) -> None:
+    spacing = cfg.get("history.fall_spacing_km")
+    settled = [p for p in world.pois if p.civilized]
+    nearest = [min(world.scale.distance_km(*f.location, p.x, p.y) for p in settled) for f in world.fallen_realms]
+    assert nearest and min(nearest) >= spacing
+
+
+def test_ruins_keep_their_distance_from_each_other(world: World, cfg: Config) -> None:
+    spacing = cfg.get("history.fall_spacing_km")
+    sites = [f.location for f in world.fallen_realms]
+    gaps = [world.scale.distance_km(*a, *b) for i, a in enumerate(sites) for b in sites[i + 1 :]]
+    assert gaps and min(gaps) >= spacing
+
+
+def test_a_fall_knows_where_the_ruins_are(world: World) -> None:
+    assert all(e.location == world.fallen_realms[e.fallen_ids[0]].location for e in _falls(world))
+
+
+def test_some_falls_name_a_near_settlement(world: World) -> None:
+    # With the default spacing a ruin can lie within the near cap of a settlement.
+    assert any(e.near_poi >= 0 for e in _falls(world))
+
+
+def test_no_fall_kind_means_no_fallen_realms() -> None:
+    config = load_config(None)
+    config.data["history"]["kinds"] = ["founding"]
+    assert pipeline.generate(config, 42).fallen_realms == []
+
+
+def test_no_fallen_realms_at_rate_zero() -> None:
+    config = load_config(None)
+    config.data["history"]["fallen_realms_per_million_km2"] = 0.0
+    assert pipeline.generate(config, 42).fallen_realms == []
