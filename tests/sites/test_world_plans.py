@@ -105,3 +105,33 @@ def test_the_ground_floor_of_a_structure_has_a_door(world: World, cfg: Config) -
     for poi, _geometry, plan in _plans(world, cfg):
         if poi.kind in ("dungeon", "tower", "ruin") and plan.floor == 0:
             assert int(Cell.DOOR) in plan.cells, f"{poi.kind} at {poi.x},{poi.y}"
+
+
+def test_every_settlement_has_at_least_one_house(world: World, cfg: Config) -> None:
+    # A settlement is at least one house: some roof is seen from outside, whatever the shore does to its lots.
+    empty = []
+    for poi in world.pois:
+        if poi.civilized:
+            plan = site_plan(poi, 0, cfg, world)
+            if plan is None or not (plan.outside == int(Cell.ROOF)).any():
+                empty.append((poi.kind, poi.x, poi.y))
+    assert empty == []
+
+
+def test_a_village_on_a_shore_with_no_room_for_lots_still_has_a_house(cfg: Config) -> None:
+    # Seed 42's village at (165, 7) is half water; its lots found no room, and it used to have no building at all.
+    shore = pipeline.generate(cfg, 42)
+    poi = next(p for p in shore.pois if (p.x, p.y) == (165, 7))
+    plan = site_plan(poi, 0, cfg, shore)
+    assert plan is not None and (plan.outside == int(Cell.ROOF)).any() and (plan.cells == int(Cell.DOOR)).any()
+
+
+def test_the_house_of_a_crowded_shore_village_is_reached_by_a_street(cfg: Config) -> None:
+    from scipy import ndimage as nd
+
+    shore = pipeline.generate(cfg, 42)
+    poi = next(p for p in shore.pois if (p.x, p.y) == (165, 7))
+    plan = site_plan(poi, 0, cfg, shore)
+    assert plan is not None
+    streets = nd.binary_dilation(plan.cells == int(Cell.PATH), structure=np.ones((3, 3), bool))
+    assert (streets & (plan.cells == int(Cell.DOOR))).any()

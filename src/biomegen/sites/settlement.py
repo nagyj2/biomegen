@@ -690,6 +690,72 @@ def _wheel_geometry(
     return axle, rim
 
 
+def _try_house(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    ground: np.ndarray,
+    rect: tuple[int, int, int, int],
+    street: Point,
+    stream: random.Random,
+    spec: Spec,
+) -> Optional[tuple[np.ndarray, Lot]]:
+    """Build a house on ``rect`` with its door joined to ``street``: ``(the grid with it stamped, its lot)`` or None.
+
+    The grid given is not changed; the caller takes the returned copy if it keeps the house. The door's approach and
+    the street to ``street`` are laid over free ground.
+    """
+    x0, y0, width, height = rect
+    shape_seed = stream.getrandbits(32)
+    building = build_building(height, width, stream, spec, (street[0] - x0, street[1] - y0), random.Random(shape_seed))
+    if building is None or building.front is None:
+        return None
+    front = (x0 + building.front[0], y0 + building.front[1])
+    if not (0 <= front[0] < grid.shape[1] and 0 <= front[1] < grid.shape[0]) or grid[front[1], front[0]] != _VOID:
+        return None
+    trial = grid.copy()
+    inside = building.cells != _VOID
+    trial[y0 : y0 + height, x0 : x0 + width][inside] = building.cells[inside]
+    trial[front[1], front[0]] = _PATH
+    if lay_street(trial, dry, front, street, ctx.street_rules, ground | np.isin(trial, _STREET)) is None:
+        return None
+    return trial, Lot(x0, y0, width, height, shape_seed, building)
+
+
+def _ensure_house(
+    ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarray, centre: Point
+) -> Optional[Lot]:
+    """Build one house for a settlement whose lots found no room: the smallest, on free dry ground nearest the plaza.
+
+    A settlement with a small footprint (a village on a shore) can have no stretch of ground deep enough beside a street
+    for a lot. A settlement is always at least one house, so the house goes on any free dry ground that fits it, ground
+    in the footprint first, its door joined to the nearest street. Returns the lot, or None if nothing fits.
+    """
+    streets = np.isin(grid, _STREET)
+    if not streets.any():
+        return None
+    height = int(ctx.setting("building_rows")[0])
+    width = round(0.8 * height * ctx.aspect)
+    free = dry & (grid == _VOID)
+    sampling = (1.0, 1.0 / ctx.aspect)
+    fits = ndimage.minimum_filter(free.astype(np.uint8), size=(height, width), mode="constant", cval=0) > 0
+    cx, cy = centre
+    spots = sorted(
+        (not ground[y, x], ((x - cx) / ctx.aspect) ** 2 + (y - cy) ** 2, y, x) for y, x in np.argwhere(fits).tolist()
+    )[:_MILL_TRIES]
+    _, street_at = ndimage.distance_transform_edt(~streets, sampling=sampling, return_indices=True)
+    stream = rng.derive(ctx.seed, "site.layout", "house")
+    spec = _spec(ctx)
+    for _, _, mid_y, mid_x in spots:
+        rect = (mid_x - width // 2, mid_y - height // 2, width, height)
+        street = (int(street_at[1][mid_y, mid_x]), int(street_at[0][mid_y, mid_x]))
+        placed = _try_house(ctx, grid, dry, ground, rect, street, stream, spec)
+        if placed is not None:
+            grid[:] = placed[0]
+            return placed[1]
+    return None
+
+
 def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarray, centre: Point) -> Optional[Lot]:
     """Build a mill for a river settlement: a house beside the river, a water wheel set into it and an axle between.
 
@@ -730,21 +796,10 @@ def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarra
         if not plans:
             continue
         street = (int(street_at[1][mid_y, mid_x]), int(street_at[0][mid_y, mid_x]))
-        shape_seed = stream.getrandbits(32)
-        building = build_building(
-            height, width, stream, spec, (street[0] - x0, street[1] - y0), random.Random(shape_seed)
-        )
-        if building is None or building.front is None:
+        placed = _try_house(ctx, grid, dry, ground, rect, street, stream, spec)
+        if placed is None:
             continue
-        front = (x0 + building.front[0], y0 + building.front[1])
-        if not (0 <= front[0] < grid.shape[1] and 0 <= front[1] < grid.shape[0]) or grid[front[1], front[0]] != _VOID:
-            continue
-        trial = grid.copy()
-        inside = building.cells != _VOID
-        trial[y0 : y0 + height, x0 : x0 + width][inside] = building.cells[inside]
-        trial[front[1], front[0]] = _PATH
-        if lay_street(trial, dry, front, street, ctx.street_rules, ground | np.isin(trial, _STREET)) is None:
-            continue
+        trial, lot = placed
         for _, side, (axle, rim) in sorted(plans, key=lambda p: (p[0], _STEPS.index(p[1]))):
             if any(trial[y, x] != _VOID for x, y in axle + rim):
                 continue  # the street or the door's approach is in the way: try another side
@@ -753,7 +808,7 @@ def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarra
             for x, y in axle:
                 trial[y, x] = _AXLE[side]
             grid[:] = trial
-            return Lot(x0, y0, width, height, shape_seed, building)
+            return lot
     return None
 
 
@@ -809,6 +864,11 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     _close_slivers(grid, dry)
     mill = _mill(ctx, grid, dry, ground, centre)
     roofs, lots = _lots(ctx, grid, ground, centre, stream, [mill] if mill is not None else [])
+    if not lots:  # a settlement is at least one house
+        house = _ensure_house(ctx, grid, dry, ground, centre)
+        if house is not None:
+            lots = [house]
+            roofs[house.y : house.y + house.height, house.x : house.x + house.width] |= house.building.footprint
     uppers = _storeys(ctx, grid, lots, centre, stream)
     if ctx.walled:
         _wall(ctx, grid, dry, town, ends)
