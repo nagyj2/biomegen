@@ -41,6 +41,16 @@ class ScriptedKeys:
     def read_key(self) -> str:
         return self._tokens.pop(0) if self._tokens else "q"
 
+    def pending(self) -> bool:
+        return False  # one key per frame: every token is drawn
+
+
+class BurstKeys(ScriptedKeys):
+    """A key source whose tokens all arrive at once, as a held key's repeats do while a frame is drawn."""
+
+    def pending(self) -> bool:
+        return bool(self._tokens)
+
 
 def _world(tower: bool = False):
     world = make_world(40, 20, Biome.GRASS)
@@ -66,10 +76,10 @@ def _site_state(world, config: Config) -> ViewState:
     return state
 
 
-def _run(world, config: Config, *tokens: str, color: str = "none", get_size=None) -> RecordingOut:
+def _run(world, config: Config, *tokens: str, color: str = "none", get_size=None, keys=ScriptedKeys) -> RecordingOut:
     """Run the loop on a scripted keyboard; the result holds every frame as screen text (``.frames``)."""
     out = RecordingOut(SIZE[1], SIZE[0])
-    run(world, config, color, reader=ScriptedKeys(*tokens), out=out, get_size=get_size or (lambda: SIZE))
+    run(world, config, color, reader=keys(*tokens), out=out, get_size=get_size or (lambda: SIZE))
     return out
 
 
@@ -85,6 +95,20 @@ def _shown(out: RecordingOut, text: str) -> bool:
 
 def _frame(world, config: Config, state: ViewState | None = None, **kwargs):
     return compose_frame(world, config, state or ViewState(cx=20, cy=10), Overlay(), kwargs.pop("size", SIZE), **kwargs)
+
+
+def test_waiting_moves_are_drawn_once(config: Config) -> None:
+    # Three moves that arrive together draw one frame, not three: two fewer frames than one key at a time.
+    one_by_one = _run(_world(), config, "right", "right", "down")
+    together = _run(_world(), config, "right", "right", "down", keys=BurstKeys)
+    assert len(one_by_one.frames) - len(together.frames) == 2
+
+
+def test_waiting_moves_end_where_single_moves_end(config: Config) -> None:
+    # The skipped frames change nothing but the drawing: the last frame is the same, and a key after the moves acts.
+    one_by_one = _run(_world(), config, "right", "right", "down", "v")
+    together = _run(_world(), config, "right", "right", "down", "v", keys=BurstKeys)
+    assert _screen(together) == _screen(one_by_one)
 
 
 def test_frame_is_the_size_of_the_terminal(config: Config) -> None:

@@ -520,6 +520,8 @@ frame, diff-writes it, blocks on a key, and repeats, so an idle explorer uses no
   restores them on exit even after an error. Colour is truecolor, 256 or none.
 - **Keys.** A reader yields tokens (`termios` cbreak on POSIX with a self-pipe for resize, `msvcrt` on
   Windows); `resolve_action` maps them through the rebindable `keys` table. Any key closes the `?` help.
+  Move keys already waiting (a held key's repeats) are applied together and drawn once (`reader.pending`), so the
+  cursor stops when the key is let go instead of working through a backlog.
 - **Testing.** The loop takes an injected key source and output stream, so the tests drive it with a
   scripted keyboard, replay the written escape codes on a tiny virtual screen, and run the real program on a
   pseudo-terminal. The Windows paths cannot be exercised on Linux.

@@ -112,6 +112,19 @@ def test_reader_returns_typed_characters(terminal) -> None:
 
 
 @posix_only
+def test_reader_says_whether_a_key_is_waiting(terminal) -> None:
+    # Nothing typed: nothing waiting. Two keys typed: one waits after the first is read, none after the second.
+    master, slave = terminal
+    with PosixKeyReader(slave) as reader:
+        idle = reader.pending()
+        os.write(master, b"ab")
+        reader.read_key()
+        after_first = reader.pending()
+        reader.read_key()
+        assert (idle, after_first, reader.pending()) == (False, True, False)
+
+
+@posix_only
 def test_reader_names_arrow_sequences(terminal) -> None:
     master, slave = terminal
     with PosixKeyReader(slave) as reader:

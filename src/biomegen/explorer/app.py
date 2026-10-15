@@ -25,7 +25,7 @@ from ..sites import SiteGeometry, site_geometry, window_sampler
 from ..world.overlay import Overlay
 from ..world.world import World
 from .exports import export_screen, export_world
-from .input import KeyReader, make_reader, resolve_action
+from .input import Action, KeyReader, make_reader, resolve_action
 from .panel import build_panel, draw_help, panel_color
 from .state import (
     MODE_FIT,
@@ -270,6 +270,20 @@ def _export(world: World, config: Config, state: ViewState, overlay: Overlay, fr
     state.notify(f"exported {names}{suffix}")
 
 
+def _drain_moves(world: World, config: Config, state: ViewState, reader: KeyReader) -> Optional[Action]:
+    """Apply every move key already waiting, without drawing between them; return the first other action, if any.
+
+    Held arrow keys repeat faster than a frame can be drawn. Drawing once per repeat would leave a backlog that keeps
+    the cursor moving after the key is let go, so the waiting moves are applied one by one and only the end is drawn.
+    """
+    while reader.pending():
+        action = resolve_action(reader.read_key(), config)
+        if action[0] != "move":
+            return action
+        move_cursor(world, config, state, action[1], action[2])
+    return None
+
+
 def run(
     world: World,
     config: Config,
@@ -301,6 +315,7 @@ def run(
     state.notify(f"colour mode: {color_mode}")
     tracking: object = None
     help_open = False
+    queued: Optional[Action] = None  # an action read while draining moves, handled after the frame they lead to
     with reader:
         writer.enter()
         try:
@@ -310,7 +325,8 @@ def run(
                     world, config, state, overlay, size_of(), color_mode != "none", ascii_only, help_open, cache
                 )
                 writer.draw(frame.screen)
-                action = resolve_action(reader.read_key(), config)
+                action = queued if queued is not None else resolve_action(reader.read_key(), config)
+                queued = None
                 if help_open and action[0] != "resize":
                     help_open = False  # any key closes the help and does nothing else
                     continue
@@ -319,6 +335,7 @@ def run(
                     break
                 if name == "move":
                     move_cursor(world, config, state, action[1], action[2])
+                    queued = _drain_moves(world, config, state, reader)
                 elif name == "zoom":
                     step_out(state)
                     state.notify(f"scale: {state.scale}")

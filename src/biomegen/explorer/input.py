@@ -123,6 +123,10 @@ class KeyReader(Protocol):
         """Block until a key arrives and return its token (``"eof"`` when input closes)."""
         ...
 
+    def pending(self) -> bool:
+        """Return whether a key (or a resize) is waiting, so :meth:`read_key` would not block."""
+        ...
+
 
 class PosixKeyReader:
     """Reads keys from a terminal file descriptor in cbreak mode, with ``"resize"`` on SIGWINCH."""
@@ -170,6 +174,14 @@ class PosixKeyReader:
         except OSError:
             pass  # pipe full: a resize is already pending
 
+    def pending(self) -> bool:
+        if self._pending:
+            return True
+        import select
+
+        ready, _, _ = select.select([self._fd, self._wake_read], [], [], 0)
+        return bool(ready)
+
     def read_key(self) -> str:
         import select
 
@@ -201,6 +213,9 @@ class WindowsKeyReader:
         self, kind: Optional[type[BaseException]], value: Optional[BaseException], trace: Optional[TracebackType]
     ) -> None:
         return None
+
+    def pending(self) -> bool:
+        return bool(importlib.import_module("msvcrt").kbhit())
 
     def read_key(self) -> str:
         msvcrt = importlib.import_module("msvcrt")  # Windows only; looked up at call time
