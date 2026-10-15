@@ -191,6 +191,12 @@ _RULING_STYLE_ROW = {
     "traits": "traits",
 }
 _CHRONICLE_ROW = {"templates": "text_list", "templates_near": "text_list"}
+SECESSION_TERMS = ("proximity", "size", "age", "relation", "prosperity", "leader", "strength")
+SECESSION_FORMS = ("offshoot", "split", "defection")
+SECESSION_TAGS = ("bitter", "amicable")  # how a break is worded, by the relation between the two sides
+_SECESSION_TERM_ROW = {"weight": "nonneg"}
+_SECESSION_RELATION_ROW = {"score": "unit", "tag": "secession_tag"}
+_SECESSION_FORM_ROW = {"weight": "nonneg"}
 
 #: The POI row keys a kind may omit (placement numbers a history-only kind lacks, and the optional seam fields).
 _POI_OPTIONAL = frozenset(
@@ -276,6 +282,16 @@ _CHRONICLE_TOKENS = {
     "war_fallen": frozenset({"attacker", "attacker_short", "defender", "defender_short", "fallen"}),
     "peace": frozenset({"winner", "winner_short", "loser", "loser_short"}),
     "fall_conquered": frozenset({"fallen", "founded", "victor", "victor_short"}),
+    "secession_offshoot_bitter": frozenset({"realm", "short", "parent", "parent_short", "ruler", "seat"}),
+    "secession_offshoot_amicable": frozenset({"realm", "short", "parent", "parent_short", "ruler", "seat"}),
+    "secession_split_bitter": frozenset(
+        {"predecessor", "realm_a", "short_a", "ruler_a", "realm_b", "short_b", "ruler_b"}
+    ),
+    "secession_split_amicable": frozenset(
+        {"predecessor", "realm_a", "short_a", "ruler_a", "realm_b", "short_b", "ruler_b"}
+    ),
+    "secession_defection_bitter": frozenset({"town", "realm", "short", "parent", "parent_short"}),
+    "secession_defection_amicable": frozenset({"town", "realm", "short", "parent", "parent_short"}),
 }
 
 # Table name -> (row schema, keys a row may omit).
@@ -303,6 +319,9 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "reason_tokens": (_REASON_TOKEN_ROW, frozenset()),
     "ruling_styles": (_RULING_STYLE_ROW, frozenset()),
     "chronicle": (_CHRONICLE_ROW, frozenset({"templates_near"})),
+    "secession_terms": (_SECESSION_TERM_ROW, frozenset()),
+    "secession_relations": (_SECESSION_RELATION_ROW, frozenset()),
+    "secession_forms": (_SECESSION_FORM_ROW, frozenset()),
 }
 
 
@@ -352,6 +371,7 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "source": lambda v: v in POI_SOURCES,
         "owner": lambda v: v in POI_OWNERS,
         "temper": lambda v: v in TEMPERS,
+        "secession_tag": lambda v: v in SECESSION_TAGS,
         "land": lambda v: v in SITE_LANDS,
         "number": _is_number,
         "floors": _is_floors,
@@ -668,6 +688,23 @@ def _validate_chronicle(chronicle: Any, errors: List[str]) -> None:
                     errors.append(f"{where}: {text!r} must use {{near}}")
 
 
+def _validate_secession(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check the secession tables: exactly the known terms, forms and relation kinds (and ``none``)."""
+    from ..world.entities import RELATION_KINDS  # local import: avoids import-order coupling
+
+    for name, expected in (
+        ("secession_terms", SECESSION_TERMS),
+        ("secession_forms", SECESSION_FORMS),
+        ("secession_relations", (*RELATION_KINDS, "none")),
+    ):
+        rows = tables.get(name)
+        if isinstance(rows, dict) and set(rows) != set(expected):
+            errors.append(f"tables.{name} must have exactly the rows: {', '.join(expected)}")
+    forms = tables.get("secession_forms")
+    if isinstance(forms, dict) and forms and all(isinstance(r, dict) and r.get("weight") == 0 for r in forms.values()):
+        errors.append("tables.secession_forms: needs at least one weight above 0")
+
+
 def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     """Validate every row of every table under ``cfg["tables"]``, appending problems to ``errors``."""
 
@@ -701,6 +738,7 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     _validate_polity(tables, errors)
     _validate_chronicle(tables.get("chronicle", {}), errors)
     _validate_pois(tables, errors)
+    _validate_secession(tables, errors)
 
     styles = tables.get("styles", {})
     style = cfg.get("terrain", {}).get("style")

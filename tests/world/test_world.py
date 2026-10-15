@@ -181,3 +181,7 @@ def test_the_ruler_before_a_founding_is_the_founder_and_a_realm_without_rulers_h
     world = World(4, 4, 1)
     world.rulers = [Ruler(id=0, realm_id=0, from_year=10, to_year=None, style="martial")]
     assert world.ruler_at(0, 1).id == 0 and world.ruler_at(5, 100) is None  # type: ignore[union-attr]
+
+
+def test_a_new_world_has_no_predecessors() -> None:
+    assert World(4, 4, 1).predecessors == []

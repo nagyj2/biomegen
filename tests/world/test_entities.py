@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
-from biomegen.world.entities import EVENT_KINDS, NO_LOCATION, POI, ChronicleEvent, FallenRealm, Realm, Relation
+from biomegen.world.entities import (
+    EVENT_KINDS,
+    NO_LOCATION,
+    POI,
+    REALM_ORIGINS,
+    REF_KINDS,
+    ChronicleEvent,
+    FallenRealm,
+    Predecessor,
+    Realm,
+    Relation,
+)
 
 
 def test_realm_starts_independent_and_unnamed() -> None:
@@ -86,3 +97,26 @@ def test_a_held_settlement_is_not_free() -> None:
 
 def test_a_wild_poi_is_not_free() -> None:
     assert not POI(kind="tower", x=0, y=0, interior_seed=1, realm_id=-1).free
+
+
+def test_a_realm_begins_with_no_origin_parent_or_predecessor() -> None:
+    realm = Realm(id=0, kind="major")
+    assert (realm.origin, realm.parent, realm.predecessor) == ("", -1, -1)
+
+
+def test_the_realm_origins_are_none_offshoot_and_split() -> None:
+    assert REALM_ORIGINS == ("", "offshoot", "split")
+
+
+def test_a_secession_event_kind_follows_the_founding() -> None:
+    assert EVENT_KINDS.index("secession") == EVENT_KINDS.index("founding") + 1
+
+
+def test_a_predecessor_can_be_named_in_a_text() -> None:
+    assert "predecessor" in REF_KINDS
+
+
+def test_a_predecessors_children_are_not_shared() -> None:
+    a, b = Predecessor(id=0, founded=10, split_year=300), Predecessor(id=1, founded=20, split_year=400)
+    a.children.append(5)
+    assert b.children == []

@@ -50,6 +50,9 @@ def test_shipped_tables_load_and_validate() -> None:
         "relation_weights",
         "relief",
         "ruling_styles",
+        "secession_forms",
+        "secession_relations",
+        "secession_terms",
         "sites",
         "styles",
         "tiers",
@@ -185,6 +188,9 @@ def test_loader_combines_the_shipped_files() -> None:
         "relation_weights",
         "relief",
         "ruling_styles",
+        "secession_forms",
+        "secession_relations",
+        "secession_terms",
         "sites",
         "styles",
         "tiers",
@@ -505,3 +511,55 @@ def test_a_trait_outside_zero_to_one_is_rejected() -> None:
     cfg["tables"]["ruling_styles"]["martial"]["traits"]["greed"] = 1.5
     with pytest.raises(ConfigError, match=r"tables\.ruling_styles\.martial\.traits: expected traits"):
         validate(cfg)
+
+
+def test_the_secession_tables_have_exactly_their_rows() -> None:
+    from biomegen.world.entities import RELATION_KINDS
+
+    tables = get_defaults()["tables"]
+    assert sorted(tables["secession_terms"]) == [
+        "age",
+        "leader",
+        "prosperity",
+        "proximity",
+        "relation",
+        "size",
+        "strength",
+    ]
+    assert sorted(tables["secession_forms"]) == ["defection", "offshoot", "split"]
+    assert sorted(tables["secession_relations"]) == sorted((*RELATION_KINDS, "none"))
+
+
+def test_a_secession_term_row_cannot_be_left_out() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["secession_terms"]["leader"]
+    with pytest.raises(ConfigError, match=r"tables\.secession_terms must have exactly the rows"):
+        validate(cfg)
+
+
+def test_a_secession_relation_tag_must_be_known() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["secession_relations"]["war"]["tag"] = "furious"
+    with pytest.raises(ConfigError, match=r"tables\.secession_relations\.war\.tag: expected secession_tag"):
+        validate(cfg)
+
+
+def test_a_secession_relation_score_is_a_share() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["secession_relations"]["war"]["score"] = 1.5
+    with pytest.raises(ConfigError, match=r"tables\.secession_relations\.war\.score: expected unit"):
+        validate(cfg)
+
+
+def test_the_secession_forms_need_a_weight_above_zero() -> None:
+    cfg = get_defaults()
+    for row in cfg["tables"]["secession_forms"].values():
+        row["weight"] = 0.0
+    with pytest.raises(ConfigError, match=r"tables\.secession_forms: needs at least one weight above 0"):
+        validate(cfg)
+
+
+def test_every_wording_of_a_secession_exists_for_both_tags() -> None:
+    rows = get_defaults()["tables"]["chronicle"]
+    names = {f"secession_{form}_{tag}" for form in ("offshoot", "split", "defection") for tag in ("bitter", "amicable")}
+    assert names <= set(rows)

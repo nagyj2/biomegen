@@ -21,8 +21,10 @@ def test_every_event_kind_is_enabled_by_default() -> None:
 def test_every_event_kind_has_wording() -> None:
     # A kind is worded by the row of its name (the treaty kind by the two treaty rows), plus rows for the variants.
     rows = get_defaults()["tables"]["chronicle"]
-    variants = {"founding_fallen", "war_ended", "war_fallen", "fall_conquered", "settling_free", "settling_remnant"}
-    assert set(rows) == {"treaty_alliance", "treaty_trade"} | variants | (set(EVENT_KINDS) - {"treaty"})
+    variants = {"founding_fallen", "war_ended", "war_fallen", "fall_conquered", "settling_free", "settling_remnant"} | {
+        f"secession_{form}_{tag}" for form in ("offshoot", "split", "defection") for tag in ("bitter", "amicable")
+    }
+    assert set(rows) == {"treaty_alliance", "treaty_trade"} | variants | (set(EVENT_KINDS) - {"treaty", "secession"})
 
 
 def test_unknown_start_is_rejected() -> None:
@@ -127,3 +129,18 @@ def test_a_ruling_style_with_a_bad_weight_is_rejected() -> None:
     cfg["tables"]["ruling_styles"]["martial"]["weight"] = 0
     with pytest.raises(ConfigError, match=r"tables\.ruling_styles\.martial\.weight"):
         validate(cfg)
+
+
+def test_a_secession_chance_beyond_a_share_is_clamped() -> None:
+    cfg = get_defaults()
+    cfg["history"]["secession"]["chance"] = 3.0
+    validate(cfg)
+    assert cfg["history"]["secession"]["chance"] == 1.0
+
+
+def test_the_default_secession_chance_is_low() -> None:
+    assert 0.0 < get_defaults()["history"]["secession"]["chance"] <= 0.2
+
+
+def test_every_event_kind_has_a_colour() -> None:
+    assert set(EVENT_KINDS) <= set(get_defaults()["history"]["colors"])

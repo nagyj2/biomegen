@@ -14,8 +14,10 @@ from typing import List, Optional, Tuple
 
 REALM_KINDS: Tuple[str, ...] = ("major", "city_state", "tribal")
 RELATION_KINDS: Tuple[str, ...] = ("war", "rivalry", "alliance", "trade")
+REALM_ORIGINS: Tuple[str, ...] = ("", "offshoot", "split")  # how a realm began: ex nihilo, or by a secession
 EVENT_KINDS: Tuple[str, ...] = (
     "founding",
+    "secession",
     "settling",
     "conquest",
     "succession",
@@ -28,8 +30,15 @@ EVENT_KINDS: Tuple[str, ...] = (
 )
 TRAITS: Tuple[str, ...] = ("aggression", "greed", "trust", "expansionism", "caution")  # a ruler's personality
 NO_LOCATION: Tuple[int, int] = (-1, -1)  # a chronicle event not tied to a cell
-REF_KINDS: Tuple[str, ...] = ("realm", "poi", "fallen", "ruler", "feature")  # what a name in a text can refer to
-REF_REALM, REF_POI, REF_FALLEN, REF_RULER, REF_FEATURE = REF_KINDS
+REF_KINDS: Tuple[str, ...] = (
+    "realm",
+    "poi",
+    "fallen",
+    "ruler",
+    "feature",
+    "predecessor",
+)  # what a name in a text can refer to
+REF_REALM, REF_POI, REF_FALLEN, REF_RULER, REF_FEATURE, REF_PREDECESSOR = REF_KINDS
 
 
 @dataclass
@@ -97,6 +106,11 @@ class Realm:
     color: Tuple[int, int, int] = (0, 0, 0)
     founded: int = 0  # chronicle year the realm was founded (set by the history stage)
     ruling_style: str = ""  # the ruler's style now, a tables.ruling_styles row (set by the history stage)
+    origin: str = (
+        ""  # how it began, one of REALM_ORIGINS: "" founded outright, "offshoot" or "split" from another realm
+    )
+    parent: int = -1  # an offshoot's parent realm id (the realm it left, which lives on); -1 otherwise
+    predecessor: int = -1  # a split's index into World.predecessors (the realm that ended in the split); -1 otherwise
 
 
 @dataclass
@@ -200,6 +214,24 @@ class FallenRealm:
     culture: str = ""
     name: str = ""
     color: Tuple[int, int, int] = (0, 0, 0)  # its colour in the chronicle, distinct from every realm's (set by history)
+
+
+@dataclass
+class Predecessor:
+    """A realm that ended in a clean split into two new realms (``children``, realm ids), known only by its name.
+
+    It is not in ``World.realms``, so the partition and the vassal tree never see it, and it is not a ``FallenRealm``:
+    it left no ruins and fought no wars. ``founded`` and ``split_year`` are chronicle years (the children's founding
+    year is the split year); the naming stage fills ``culture`` and ``name``, the history stage the colour.
+    """
+
+    id: int  # index into World.predecessors
+    founded: int
+    split_year: int
+    children: List[int] = field(default_factory=list)
+    culture: str = ""
+    name: str = ""
+    color: Tuple[int, int, int] = (0, 0, 0)  # its colour in the chronicle, distinct from every realm's
 
 
 @dataclass

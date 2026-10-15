@@ -11,7 +11,7 @@ from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.naming import chronicle, polity
 from biomegen.util.units import grid_scale
-from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Realm, Relation, Ruler
+from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Predecessor, Realm, Relation, Ruler
 from biomegen.world.tile import Biome
 from biomegen.world.world import World
 
@@ -339,3 +339,39 @@ def test_a_realm_with_no_ruler_records_falls_back_to_its_ruler_string(cfg: Confi
     world.rulers = []
     event = ChronicleEvent(0, 100, "founding", [0], [0], template="{realm} under {ruler}.")
     assert _render(world, event, cfg) == "Kingdom of Aldor under King Bran."
+
+
+# --- predecessors ----------------------------------------------------------------------------------------------------
+
+
+def _with_predecessor() -> World:
+    world = _small_world()
+    world.predecessors = [Predecessor(id=0, founded=40, split_year=100, children=[0, 1])]
+    world.realms[0].culture = "common"
+    return world
+
+
+def test_a_predecessor_is_named(cfg: Config) -> None:
+    world = _with_predecessor()
+    chronicle.name_predecessors(world, cfg, 3)
+    assert world.predecessors[0].name
+
+
+def test_a_predecessor_takes_its_first_childs_culture(cfg: Config) -> None:
+    world = _with_predecessor()
+    world.realms[0].culture = "norse"
+    chronicle.name_predecessors(world, cfg, 3)
+    assert world.predecessors[0].culture == "norse"
+
+
+def test_a_predecessor_is_named_the_same_every_time(cfg: Config) -> None:
+    first, second = _with_predecessor(), _with_predecessor()
+    chronicle.name_predecessors(first, cfg, 3)
+    chronicle.name_predecessors(second, cfg, 3)
+    assert first.predecessors[0].name == second.predecessors[0].name
+
+
+def test_a_predecessor_name_differs_from_its_childrens(cfg: Config) -> None:
+    world = _with_predecessor()
+    chronicle.name_predecessors(world, cfg, 3)
+    assert world.predecessors[0].name not in {r.name for r in world.realms}

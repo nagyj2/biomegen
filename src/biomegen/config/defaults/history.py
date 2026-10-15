@@ -14,7 +14,19 @@ VALUES: Dict[str, Any] = {
     "start": "present",
     "span_years": 1200,  # the present year of a "present" world
     # The event kinds to derive (any of world.entities.EVENT_KINDS); leave one out to switch it off.
-    "kinds": ["founding", "settling", "conquest", "succession", "war", "rivalry", "treaty", "battle", "peace", "fall"],
+    "kinds": [
+        "founding",
+        "secession",
+        "settling",
+        "conquest",
+        "succession",
+        "war",
+        "rivalry",
+        "treaty",
+        "battle",
+        "peace",
+        "fall",
+    ],
     # Founding: a realm's age is a share of span_years drawn from its kind's range, pulled toward the oldest end by
     # larger area by ``age_area_weight`` (0 = pure draw, 1 = rank only).
     "age_range": {"major": [0.6, 1.0], "city_state": [0.3, 0.8], "tribal": [0.7, 1.0]},
@@ -67,6 +79,7 @@ VALUES: Dict[str, Any] = {
     "colors": {
         "year": [150, 150, 160],
         "founding": [120, 210, 130],
+        "secession": [210, 170, 90],
         "settling": [150, 200, 160],
         "conquest": [230, 150, 90],
         "succession": [200, 180, 120],
@@ -81,4 +94,19 @@ VALUES: Dict[str, Any] = {
     },
     # A place named in an event ({near}) must be a settlement on the same landmass within this distance.
     "near_km": 250.0,
+    # Secession (pipeline/story/secession.py; the weights and wording are data/secession.toml and chronicle.toml). A
+    # secession is an offshoot (a realm leaves an older one), a clean split (an old realm ends in two) or a defection (a
+    # settlement changes sides). Each realm's founding year, and each settlement a defection may touch, is checked
+    # once: it happens with chance ``chance`` times the plausibility score (0..1), at most ``max_per_world`` times in
+    # a world.
+    "secession": {
+        "chance": 0.1,
+        "max_per_world": 4,
+        "defect_km": 250.0,  # a settlement may leave a realm whose land lies within this distance of it
+        "proximity_km": 600.0,  # two seats this far apart score nothing for proximity
+        "size_share": [0.2, 0.7],  # the breakaway's area, as a share of its parent's, over which the size term is full
+        "age_years": 600,  # a parent's age at which the age term is full
+        "prosperity_ratio": 2.0,  # the breakaway's people per km2 over its parent's: the prosperity term is full
+        "weak_strength": 0.5,  # a parent's strength (against the mean) at or below which the strength term is full
+    },
 }

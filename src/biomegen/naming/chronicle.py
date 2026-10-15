@@ -37,6 +37,29 @@ def name_fallen_realms(world: World, config: Config, seed: int) -> None:
         fallen.name = stand_in.name
 
 
+_PREDECESSOR_BASE = 1_000_000  # a predecessor's stand-in realm has id -(this + its id), clear of the fallen realms' ids
+
+
+def name_predecessors(world: World, config: Config, seed: int) -> None:
+    """Fill each predecessor's ``culture`` (its first child's) and ``name`` (a major realm's form).
+
+    The name is made by :func:`polity.name_realm` for a stand-in major realm of the child's biome whose id is negative
+    and far from the fallen realms' stand-ins, so its streams never meet another realm's.
+    """
+    for predecessor in world.predecessors:
+        child = world.realms[predecessor.children[0]] if predecessor.children else None
+        stand_in = Realm(
+            id=-_PREDECESSOR_BASE - predecessor.id,
+            kind="major",
+            culture=child.culture if child else "common",
+            dominant_biome=child.dominant_biome if child else 0,
+            highland=child.highland if child else False,
+        )
+        predecessor.culture = stand_in.culture
+        polity.name_realm(seed, stand_in, "", config)
+        predecessor.name = stand_in.name
+
+
 def _ruler(world: World, realm: Realm, year: int) -> tuple[str, tuple[str, int] | None]:
     """Return the name of ``realm``'s ruler in ``year`` and what it refers to (``None``: the realm has no ruler records,
     so its ``ruler`` string stands and names no one in particular)."""
@@ -135,6 +158,7 @@ def describe_events(world: World, config: Config, seed: int) -> None:
     The first letter of the text is capitalised (a ruler's title such as "the Synod of ..." may open it); no span moves.
     """
     name_fallen_realms(world, config, seed)
+    name_predecessors(world, config, seed)
     relations = {(r.a, r.b): r for r in world.relations}
     for event in world.chronicle:
         tokens, where = _tokens(world, config, event, relations)

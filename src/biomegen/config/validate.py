@@ -135,6 +135,13 @@ def _validate_history(history: Dict[str, Any], errors: List[str]) -> None:
     ):
         errors.append(f"history.age_range needs a [min, max] within 0..1 for each of: {', '.join(REALM_KINDS)}")
     _clamp(history, "age_area_weight", 0.0, 1.0, errors, "history")
+    secession = history.get("secession")
+    if secession is not None:
+        if not isinstance(secession, dict):
+            errors.append("history.secession must be a table")
+        else:
+            _clamp(secession, "chance", 0.0, 1.0, errors, "history.secession")
+            _clamp(secession, "max_per_world", 0, 1_000_000, errors, "history.secession")
     colors = history.get("colors")
     if colors is not None:
         needed = {"year", "settlement", "place", *EVENT_KINDS}

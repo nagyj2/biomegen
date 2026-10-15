@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 
 from ..util.units import GridScale, grid_scale
-from .entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Lake, Realm, Relation, River, Ruler
+from .entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Lake, Predecessor, Realm, Relation, River, Ruler
 from .tile import Biome, Relief, TileView, WaterType
 
 
@@ -117,6 +117,7 @@ class World:
         self.chronicle: list[ChronicleEvent] = []
         self.fallen_realms: list[FallenRealm] = []
         self.rulers: list[Ruler] = []  # every realm's rulers, realm by realm, oldest first
+        self.predecessors: list[Predecessor] = []  # realms that ended in a clean split
 
         # Terrain style row name (filled by the terrain stage; metadata, not hashed).
         self.terrain_style: str = ""

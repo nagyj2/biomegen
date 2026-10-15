@@ -165,3 +165,47 @@ templates = [
 templates_near = [
   "{victor_short} conquers {fallen}; its ruins lie near {near}.",
 ]
+
+# A secession is worded by its form and by how bitter the break was (the relation between the two sides, data/secession.toml).
+# Tokens: an offshoot {realm} {short} {parent} {parent_short} {ruler} {seat} (the new realm, the realm it left, the new
+# ruler, the new capital); a split {predecessor} and, for each of the two new realms, {realm_a} {short_a} {ruler_a} and
+# {realm_b} {short_b} {ruler_b}; a defection {town} {realm} {short} {parent} {parent_short} (the settlement, the realm it
+# joins, the realm it leaves).
+
+[chronicle.secession_offshoot_bitter]
+templates = [
+  "{realm} breaks from {parent} under {ruler}, taking {seat} for its capital.",
+  "{ruler} raises the banner of revolt at {seat}; {short} will not kneel to {parent_short} again.",
+  "{short} tears itself loose from {parent_short}.",
+]
+
+[chronicle.secession_offshoot_amicable]
+templates = [
+  "{ruler} and {parent} part as friends: {realm} is founded at {seat}.",
+  "{parent_short} lets {short} go; {realm} takes {seat} for its capital under {ruler}.",
+  "By agreement, {seat} and its lands leave {parent_short} to form {realm}.",
+]
+
+[chronicle.secession_split_bitter]
+templates = [
+  "{predecessor} is torn apart: {realm_a} under {ruler_a} and {realm_b} under {ruler_b} rise from its ruins.",
+  "{predecessor} breaks in civil war into {short_a} and {short_b}.",
+]
+
+[chronicle.secession_split_amicable]
+templates = [
+  "{predecessor} is divided by agreement between {realm_a}, ruled by {ruler_a}, and {realm_b}, ruled by {ruler_b}.",
+  "The heirs of {predecessor} part ways: {short_a} under {ruler_a}, {short_b} under {ruler_b}.",
+]
+
+[chronicle.secession_defection_bitter]
+templates = [
+  "{town} renounces {parent} and swears to {realm}.",
+  "The people of {town} throw out the officers of {parent_short} and open their gates to {short}.",
+]
+
+[chronicle.secession_defection_amicable]
+templates = [
+  "{town} leaves {parent} for {realm} by a vote of its elders.",
+  "{short} is welcomed in {town}, which leaves the rule of {parent_short} without bloodshed.",
+]

@@ -1,0 +1,74 @@
+# Secession tables, loaded into the config tree as `tables.secession_terms`, `tables.secession_relations` and
+# `tables.secession_forms`; override one attribute of a row with e.g. `[tables.secession_terms.proximity]` +
+# `weight = 2.0` in a user config. Counts, chances and distances (km) are in the `history.secession` config section; the
+# wording of a secession is in chronicle.toml (`secession_*`).
+#
+# A secession is scored from 0 to 1 as the weighted mean of its terms (pipeline/story/secession.py), each term itself
+# a value from 0 to 1, and happens with chance `history.secession.chance` times that score.
+#
+# secession_terms, one row per term (a term with weight 0 is left out):
+#   weight   how much the term counts in the mean
+#   proximity   the two sides' seats lie close (a shared border counts as close)
+#   size        the breakaway is smaller than its parent (full inside `history.secession.size_share`)
+#   age         the parent is old at the time (full at `history.secession.age_years`)
+#   relation    the present relation between the two sides, by `secession_relations`
+#   prosperity  the breakaway is richer per km2 than its parent (full at `history.secession.prosperity_ratio`)
+#   leader      the parent's ruler of that year is a poor keeper of a realm: low trust, high aggression
+#   strength    the parent is weak at that moment (a realm that has lost battles); not used by a clean split
+#
+# secession_relations, one row per kind of relation between two sides, and `none` for no relation:
+#   score    how readily sides in this relation part (the `relation` term)
+#   tag      how the break is worded: "bitter" or "amicable" (the `secession_*_<tag>` rows of chronicle.toml)
+#
+# secession_forms, one row per form, the chance of each among the secessions that happen:
+#   weight   relative chance of the form
+
+[secession_terms.proximity]
+weight = 1.0
+
+[secession_terms.size]
+weight = 1.0
+
+[secession_terms.age]
+weight = 0.6
+
+[secession_terms.relation]
+weight = 1.2
+
+[secession_terms.prosperity]
+weight = 0.8
+
+[secession_terms.leader]
+weight = 1.0
+
+[secession_terms.strength]
+weight = 1.0
+
+[secession_relations.war]
+score = 0.9
+tag = "bitter"
+
+[secession_relations.rivalry]
+score = 0.7
+tag = "bitter"
+
+[secession_relations.alliance]
+score = 0.4
+tag = "amicable"
+
+[secession_relations.trade]
+score = 0.5
+tag = "amicable"
+
+[secession_relations.none]
+score = 0.2
+tag = "amicable"
+
+[secession_forms.offshoot]
+weight = 5.0
+
+[secession_forms.split]
+weight = 2.0
+
+[secession_forms.defection]
+weight = 3.0
