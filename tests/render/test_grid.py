@@ -35,6 +35,25 @@ def test_put_reads_array_arguments_at_masked_cells() -> None:
     assert grid.fg[0].tolist() == [[10, 0, 0], [20, 0, 0]]
 
 
+@pytest.mark.parametrize("density", [1.0, 0.5, 0.02])
+def test_put_matches_an_indexed_assignment_at_any_mask_density(density: float) -> None:
+    # A full, dense and sparse mask take different write paths; each writes what an indexed assignment would,
+    # including casting wider integer colours to uint8.
+    rng = np.random.default_rng(3)
+    mask = rng.random((8, 12)) < density
+    glyphs = rng.choice(np.array(list("ab#~"), dtype="U1"), size=(8, 12))
+    colours = rng.integers(0, 256, size=(8, 12, 3)).astype(np.int64)
+    grid = CellGrid(8, 12)
+    grid.put(mask, glyph=glyphs, fg=colours, bg=(7, 8, 9), bold=True)
+    expected = CellGrid(8, 12)
+    expected.glyph[mask] = glyphs[mask]
+    expected.fg[mask] = colours[mask]
+    expected.bg[mask] = (7, 8, 9)
+    expected.bold[mask] = True
+    for name in ("glyph", "fg", "bg", "bold"):
+        assert np.array_equal(getattr(grid, name), getattr(expected, name)), name
+
+
 def test_to_document_merges_cells_with_one_style() -> None:
     grid = CellGrid(1, 3, bg=(0, 0, 0), fg=(1, 1, 1))
     grid.glyph[0] = list("abc")

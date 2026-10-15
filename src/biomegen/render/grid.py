@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 RGB = tuple[int, int, int]
 
@@ -27,6 +28,24 @@ class Span:
 
 
 Document = list[list[Span]]
+
+
+_DENSE = 1.0 / 16.0  # share of masked cells above which one masked copy beats gathering and scattering them
+
+
+def _write(target: np.ndarray, mask: np.ndarray, value: ArrayLike, density: float) -> None:
+    """Write ``value`` (a full-grid array or a scalar) into ``target`` where ``mask`` holds, ``density`` of the cells.
+
+    A full mask is a plain assignment and a dense one a single masked copy; only a sparse mask gathers its cells.
+    Values are cast as an indexed assignment would cast them.
+    """
+    if density == 1.0:
+        target[...] = value
+        return
+    if density >= _DENSE:
+        np.copyto(target, value, casting="unsafe", where=mask[..., np.newaxis] if target.ndim == 3 else mask)
+        return
+    target[mask] = value[mask] if isinstance(value, np.ndarray) else value
 
 
 class CellGrid:
@@ -70,14 +89,18 @@ class CellGrid:
         Array arguments are full-grid (``[rows, cols]`` or ``[rows, cols, 3]``) and are read at the masked
         cells; scalars (a string, an RGB triple, a bool) apply to every masked cell.
         """
+        count = int(np.count_nonzero(mask))
+        if count == 0:
+            return
+        density = 1.0 if count == mask.size else count / mask.size
         if glyph is not None:
-            self.glyph[mask] = glyph[mask] if isinstance(glyph, np.ndarray) else glyph
+            _write(self.glyph, mask, glyph, density)
         if fg is not None:
-            self.fg[mask] = fg[mask] if isinstance(fg, np.ndarray) else fg
+            _write(self.fg, mask, fg, density)
         if bg is not None:
-            self.bg[mask] = bg[mask] if isinstance(bg, np.ndarray) else bg
+            _write(self.bg, mask, bg, density)
         if bold is not None:
-            self.bold[mask] = bold
+            _write(self.bold, mask, bold, density)
 
     def to_document(self) -> Document:
         """Return the grid as rows of spans, merging neighbouring cells that share a style."""
