@@ -417,6 +417,8 @@ VALUES: Dict[str, Any] = {
     # Clutter that should not draw the eye: these cells take the floor fill, and a glyph only this factor brighter.
     "interior_subtle": ["rubble", "rock", "barrel", "crate", "cargo"],
     "interior_subtle_fg_scale": 1.2,
+    # Marks on the ground that must stay easy to read: they take the floor fill and keep their own glyph colour.
+    "interior_on_floor": ["bones"],
     # Interior Cell -> RGB base colour, used when a detail cell belongs to a POI interior (the
     # single colour authority for interiors, shared with SVG/PNG export later). ``void`` is never
     # drawn (the surrounding terrain shows through), so it has no colour entry.

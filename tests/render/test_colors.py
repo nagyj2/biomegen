@@ -86,3 +86,15 @@ def test_style_tables_are_built_once_and_read_only() -> None:
     config = load_config(None)
     style = biome_style(config)
     assert biome_style(config) is style and not style.bg.flags.writeable
+
+
+def test_bones_sit_on_the_floor_fill_in_their_own_colour() -> None:
+    # Bones are filled like the floor so the glyph stands out, and the glyph keeps the bone colour from the palette.
+    from biomegen.config import load_config
+    from biomegen.render.colors import interior_style
+    from biomegen.world.tile import Cell
+
+    config = load_config(None)
+    style = interior_style(config)
+    assert style.bg[int(Cell.BONES)].tolist() == config.get("render.interior_palette.floor")
+    assert style.fg[int(Cell.BONES)].tolist() == config.get("render.interior_palette.bones")

@@ -197,7 +197,8 @@ def _build_wall_glyph_table(config: Config, ascii_only: bool = False) -> np.ndar
 def _build_interior_style(config: Config, ascii_only: bool = False) -> InteriorStyle:
     """Build the interior lookup arrays from ``render.interior_glyphs`` and ``render.interior_palette``.
 
-    Cells named in ``render.interior_subtle`` (rubble and small clutter) take the floor colour, so they barely show.
+    Cells named in ``render.interior_subtle`` (rubble and small clutter) take the floor colour, so they barely show;
+    those in ``render.interior_on_floor`` (bones) take the floor fill but keep their own colour for the glyph.
 
     With ``ascii_only``, ``render.interior_glyphs_ascii`` replaces the glyphs that are not 7-bit.
     """
@@ -213,6 +214,7 @@ def _build_interior_style(config: Config, ascii_only: bool = False) -> InteriorS
     boost = float(config.get("render.interior_fg_scale"))
     subtle = set(config.get("render.interior_subtle"))
     quiet = float(config.get("render.interior_subtle_fg_scale"))
+    on_floor = set(config.get("render.interior_on_floor"))
     for cell in Cell:
         name = cell.name.lower()
         index = int(cell)
@@ -224,6 +226,8 @@ def _build_interior_style(config: Config, ascii_only: bool = False) -> InteriorS
         elif name in subtle:
             bg[index] = palette["floor"]
             fg[index] = scale_colors(palette["floor"], quiet)
+        elif name in on_floor and name in palette:
+            bg[index], fg[index] = palette["floor"], palette[name]
         elif name in palette:
             bg[index] = palette[name]
             fg[index] = scale_colors(palette[name], boost)
