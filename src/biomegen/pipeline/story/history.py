@@ -14,7 +14,10 @@ Everything is placed from static quantities, so the same world always gives the 
    a :class:`~biomegen.world.entities.FallenRealm` on wild land habitable enough to have held a realm
    (``history.fall_min_habitability``), spaced ``history.fall_spacing_km`` from each other and from settlements. Each
    has a founding event; its fall comes from :mod:`.conflicts`. Without the ``fall`` kind there are no fallen realms.
-5. **Conflicts** (:mod:`.conflicts`): wars, battles, peace, rivalries, treaties and falls, tracked through time.
+5. **Secession** (:mod:`.secession`): a living realm may have left an older one. Such a realm's founding event is held
+   back; the conflicts timeline checks at its founding year, with the parent's strength then, and writes a
+   ``secession`` event or, if the check fails, the ordinary founding.
+6. **Conflicts** (:mod:`.conflicts`): wars, battles, peace, rivalries, treaties and falls, tracked through time.
 
 Events are collected in a :class:`~.ledger.Ledger`, sorted by ``(year, kind order, creation order)`` and numbered, so
 an event's ``id`` is its index in ``World.chronicle``. An event holds a raw template picked from ``tables.chronicle``
@@ -25,18 +28,20 @@ text. Every draw is a ``history`` sub-stream keyed on the entity, so the result 
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 
 import numpy as np
 
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import NO_LOCATION, POI, FallenRealm
+from ...world.entities import POI, FallenRealm
 from ...world.tile import WaterType
 from ...world.world import World
 from ..civilization.diplomacy import faction_color, neutral_colors
 from ..civilization.settlements import habitability
 from ..pois import pick_blue_noise
-from . import conflicts, rulers
+from . import conflicts, rulers, secession
+from .founding import add_founding
 from .ledger import Ledger
 from .places import nearest_settlement
 
@@ -126,25 +131,19 @@ def _remnant_of(world: World, config: Config, poi: POI) -> int:
     return best[1]
 
 
-def _realm_events(world: World, config: Config, seed: int, span: int, ledger: Ledger) -> None:
-    """Add the founding (realms and fallen realms), settling and conquest events."""
+def _realm_events(
+    world: World, config: Config, seed: int, span: int, ledger: Ledger, offshoots: Mapping[int, int]
+) -> None:
+    """Add the founding (realms and fallen realms), settling and conquest events.
+
+    A realm in ``offshoots`` (it may have left an older realm) has no founding yet: the conflicts timeline adds a
+    ``secession`` event, or the founding if the check fails.
+    """
     gap = int(config.get("history.min_gap_years"))
     settle_kinds = set(config.get("history.settle_kinds"))
     for realm in world.realms:
-        seat = realm.seat_poi
-        poi = world.pois[seat] if seat >= 0 else None
-        ledger.add(
-            realm.founded,
-            "founding",
-            "founding",
-            (realm.id,),
-            seed,
-            realm_ids=[realm.id],
-            poi_ids=[seat] if poi else [],
-            location=(poi.x, poi.y) if poi else NO_LOCATION,
-            near_poi=nearest_settlement(world, config, poi.x, poi.y, (seat,)) if poi else -1,
-            tags=(realm.kind, "capital") if poi and poi.kind == "capital" else (realm.kind,),
-        )
+        if realm.id not in offshoots:
+            add_founding(world, config, seed, ledger, realm)
     for fallen in world.fallen_realms:
         ledger.add(
             fallen.founded,
@@ -232,13 +231,14 @@ def run(world: World, config: Config, seed: int) -> None:
     _settlement_founding_years(world, config, seed, span)
     ledger = Ledger(config)
     _place_fallen_realms(world, config, seed, span, ledger.enabled("fall"))
-    _realm_events(world, config, seed, span, ledger)
     styles = rulers.derive(world, config, seed, span, ledger)
-    conflicts.derive(world, config, seed, span, ledger, styles)
+    offshoots = secession.plan_offshoots(world, config, seed) if ledger.enabled("secession") else {}
+    _realm_events(world, config, seed, span, ledger, offshoots)
+    conflicts.derive(world, config, seed, span, ledger, styles, offshoots)
     remnants = _remnants(world, config, seed, ledger)
     world.chronicle = ledger.finish()
     for event in world.chronicle:  # a settlement is marked by the event that founded or settled it
-        if event.kind in ("founding", "settling"):
+        if event.kind in ("founding", "secession", "settling"):
             for index in event.poi_ids:
                 world.pois[index].event_ids.append(event.id)
     falls = {event.fallen_ids[0]: event.id for event in world.chronicle if event.kind == "fall"}

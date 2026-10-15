@@ -69,6 +69,20 @@ def _ruler(world: World, realm: Realm, year: int) -> tuple[str, tuple[str, int] 
     return ruler.name, (REF_RULER, ruler.id)
 
 
+def _offshoot_tokens(
+    world: World, event: ChronicleEvent, child: Realm, parent: Realm, tokens: dict[str, object], where: Where
+) -> None:
+    """Fill the tokens of an offshoot's secession: the new realm, the realm it left, its founder and its capital."""
+    seat = world.pois[child.seat_poi].name if child.seat_poi >= 0 else child.short
+    tokens.update(realm=child.name, short=child.short, parent=parent.name, parent_short=parent.short, seat=seat)
+    where.update(realm=(REF_REALM, child.id), short=(REF_REALM, child.id))
+    where.update(parent=(REF_REALM, parent.id), parent_short=(REF_REALM, parent.id))
+    where["seat"] = (REF_POI, child.seat_poi) if child.seat_poi >= 0 else (REF_REALM, child.id)
+    tokens["ruler"], ref = _ruler(world, child, event.year)
+    if ref:
+        where["ruler"] = ref
+
+
 def _tokens(
     world: World, config: Config, event: ChronicleEvent, relations: dict[tuple[int, int], Relation]
 ) -> tuple[dict[str, object], Where]:
@@ -88,6 +102,8 @@ def _tokens(
     if event.kind == "settling" and "free" in event.tags:  # a settlement no realm holds
         tokens["town"] = world.pois[event.poi_ids[0]].name
         where["town"] = (REF_POI, event.poi_ids[0])
+    elif event.kind == "secession" and "offshoot" in event.tags and len(realms) == 2:
+        _offshoot_tokens(world, event, realms[0], realms[1], tokens, where)
     elif event.kind == "succession" and realms:
         realm = realms[0]
         styles = dict(tag.split(":") for tag in event.tags if tag.partition(":")[0] in ("from", "to"))

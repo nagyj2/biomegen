@@ -25,8 +25,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from ...config.model import Config
+from ...util import rng
 from ...world.entities import POI, Realm, Relation, Ruler
 from ...world.world import World
+
+OFFSHOOT_KINDS = ("major", "city_state")  # a tribal land is native to its area: it never broke away from a realm
+PARENT_KINDS = ("major",)
 
 
 def proximity_term(config: Config, km: float, bordering: bool) -> float:
@@ -231,3 +235,31 @@ def fracture_score(world: World, config: Config, realm: Realm, year: int, streng
             "strength": strength_term(config, strength_ratio),
         },
     )
+
+
+def plan_offshoots(world: World, config: Config, seed: int) -> dict[int, int]:
+    """Return ``{breakaway realm id: parent realm id}`` for every realm that may have left an older one.
+
+    A realm of ``OFFSHOOT_KINDS`` is a candidate when some major realm was founded at least ``history.min_gap_years``
+    before it. Its parent is drawn among those by their offshoot score (without a strength, which only the timeline
+    knows). Nothing is decided here: the timeline checks each candidate at its founding year. Empty when the chance
+    is 0.
+    """
+    if float(config.get("history.secession.chance")) <= 0.0:
+        return {}
+    gap = int(config.get("history.min_gap_years"))
+    planned: dict[int, int] = {}
+    for child in world.realms:
+        if child.kind not in OFFSHOOT_KINDS:
+            continue
+        parents = [
+            r for r in world.realms if r.kind in PARENT_KINDS and r.id != child.id and r.founded + gap <= child.founded
+        ]
+        scores = [offshoot_score(world, config, child, parent, child.founded) for parent in parents]
+        pick = rng.derive(seed, "history", "secession", "offshoot", child.id).random() * sum(scores)
+        for parent, score in zip(parents, scores, strict=True):
+            pick -= score
+            if pick < 0:
+                planned[child.id] = parent.id
+                break
+    return planned

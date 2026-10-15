@@ -55,29 +55,45 @@ def test_no_event_comes_before_the_first_year(world: World, cfg: Config) -> None
     assert min(event.year for event in world.chronicle) >= cfg.get("history.first_founding_year")
 
 
-def test_every_realm_has_one_founding(world: World) -> None:
+def _beginnings(world: World) -> dict[int, object]:
+    """Each realm's beginning: its founding event, or the secession that made it (the first listing the realm)."""
+    return {
+        e.realm_ids[0]: e
+        for e in world.chronicle
+        if e.kind == "founding" or (e.kind == "secession" and e.realm_ids and world.realms[e.realm_ids[0]].origin)
+        if e.realm_ids
+    }
+
+
+def test_every_realm_has_one_founding_or_secession(world: World) -> None:
     founded = sorted(r for e in world.chronicle if e.kind == "founding" for r in e.realm_ids)
-    assert founded == [realm.id for realm in world.realms]
+    seceded = sorted(realm.id for realm in world.realms if realm.origin)
+    assert sorted(founded + seceded) == [realm.id for realm in world.realms]
 
 
-def test_a_realms_first_event_is_its_founding(world: World) -> None:
+def test_a_realms_first_event_is_its_founding_or_secession(world: World) -> None:
     # Causality: nothing happens to a realm before it exists.
-    assert all(world.events_of(realm.id)[0].kind == "founding" for realm in world.realms)
+    assert all(world.events_of(realm.id)[0].kind in ("founding", "secession") for realm in world.realms)
 
 
 def test_founding_event_is_dated_by_the_realm(world: World) -> None:
-    years = {e.realm_ids[0]: e.year for e in world.chronicle if e.kind == "founding" and e.realm_ids}
-    assert all(years[realm.id] == realm.founded for realm in world.realms)
+    beginnings = _beginnings(world)
+    assert all(beginnings[realm.id].year == realm.founded for realm in world.realms)  # type: ignore[attr-defined]
 
 
 def test_a_capitals_founding_carries_the_capital_tag(world: World) -> None:
-    founding = {e.realm_ids[0]: e for e in world.chronicle if e.kind == "founding" and e.realm_ids}
+    beginnings = _beginnings(world)
     seated = [r for r in world.realms if r.seat_poi >= 0 and world.pois[r.seat_poi].kind == "capital"]
-    assert seated and all("capital" in founding[r.id].tags for r in seated)
+    assert seated and all("capital" in beginnings[r.id].tags for r in seated)  # type: ignore[attr-defined]
 
 
 def test_a_seat_is_as_old_as_its_realm(world: World) -> None:
-    assert all(world.pois[r.seat_poi].founded == r.founded for r in world.realms if r.seat_poi >= 0)
+    # An offshoot's seat stood under its parent before the break, so it may be older.
+    assert all(
+        world.pois[r.seat_poi].founded == r.founded or (r.origin and world.pois[r.seat_poi].founded < r.founded)
+        for r in world.realms
+        if r.seat_poi >= 0
+    )
 
 
 def test_a_settlement_is_never_older_than_its_realm(world: World) -> None:

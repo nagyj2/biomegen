@@ -22,19 +22,23 @@ dict or set order, and nothing here writes a per-tile array.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from ...config.model import Config
 from ...util import rng
+from ...world.entities import NO_LOCATION
 from ...world.world import World
 from ..civilization.diplomacy import front_cells
+from . import secession
+from .founding import add_founding
 from .ledger import Ledger
 from .places import nearest_settlement
 from .rulers import StyleTimeline, style_at
 
 Faction = tuple[str, int]  # ("realm", realm id) or ("fallen", fallen realm id)
 REALM, FALLEN = "realm", "fallen"
-_ORDER = {"war": 0, "battle": 1, "peace": 2}  # the order of steps in one year
+_ORDER = {"war": 0, "battle": 1, "peace": 2, "secession": 3}  # the order of steps in one year
 
 
 @dataclass(frozen=True)
@@ -66,6 +70,7 @@ class _Timeline:
         self.styles = styles or {}
         self.steps: list[_Step] = []
         self.dead: set[Faction] = set()
+        self.secessions = 0  # how many have happened so far, against history.secession.max_per_world
         realms = world.realms
         mean_area = sum(r.area_km2 for r in realms) / len(realms) if realms else 1.0
         lo, hi = (float(v) for v in config.get("history.start_strength_range"))
@@ -110,6 +115,9 @@ class _Timeline:
     def play(self) -> None:
         """Play every step in year order, then let each surviving fallen realm fall at its natural year."""
         for step in sorted(self.steps, key=lambda s: (s.year, _ORDER[s.kind])):
+            if step.kind == "secession":
+                self._offshoot(step)
+                continue
             if step.a in self.dead or step.b in self.dead:
                 continue
             if step.kind == "war":
@@ -147,6 +155,43 @@ class _Timeline:
                     location=record.location,
                     near_poi=nearest_settlement(self.world, self.config, *record.location),
                 )
+
+    def _offshoot(self, step: _Step) -> None:
+        """Check whether realm ``step.b`` left realm ``step.a`` in the year of its founding.
+
+        The odds are ``history.secession.chance`` times the offshoot score, which reads the parent's strength at this
+        moment (against the mean of the living realms), and at most ``max_per_world`` happen. If it does the realm's
+        founding is a ``secession`` event, its seat older than the realm; if not, it is founded as any realm is.
+        """
+        world, config, seed = self.world, self.config, self.seed
+        parent, child = world.realms[step.a[1]], world.realms[step.b[1]]
+        mean = sum(self.strength[(REALM, r.id)] for r in world.realms) / len(world.realms)
+        score = secession.offshoot_score(world, config, child, parent, step.year, self.strength[step.a] / mean)
+        roll = rng.derive(seed, "history", "secession", "check", "offshoot", child.id).random()
+        chance = float(config.get("history.secession.chance"))
+        if self.secessions >= int(config.get("history.secession.max_per_world")) or roll >= chance * score:
+            add_founding(world, config, seed, self.ledger, child)
+            return
+        self.secessions += 1
+        child.origin, child.parent = "offshoot", parent.id
+        seat = world.pois[child.seat_poi] if child.seat_poi >= 0 else None
+        if seat is not None:  # the seat stood under the parent before the break
+            first = parent.founded + int(config.get("history.min_gap_years"))
+            if child.founded > first:
+                roll = rng.derive(seed, "history", "secession", "seat", child.id).random()
+                seat.founded = first + int(roll * (child.founded - first))
+        tag = secession.relation_tag(world, config, parent, child)
+        self.ledger.add(
+            step.year,
+            "secession",
+            f"secession_offshoot_{tag}",
+            ("offshoot", child.id),
+            seed,
+            realm_ids=[child.id, parent.id],
+            poi_ids=[child.seat_poi] if seat is not None else [],
+            location=(seat.x, seat.y) if seat is not None else NO_LOCATION,
+            tags=(child.kind, "offshoot", tag, *(("capital",) if seat is not None and seat.kind == "capital" else ())),
+        )
 
     def _battle(self, step: _Step, winner: Faction, loser: Faction) -> None:
         x, y = step.location
@@ -311,11 +356,29 @@ def _plan_fallen_wars(timeline: _Timeline) -> None:
             timeline.plan(year, "battle", (REALM, realm.id), (FALLEN, fallen.id), key, fallen.location)
 
 
+def _plan_offshoots(timeline: _Timeline, offshoots: Mapping[int, int]) -> None:
+    """Plan the check of every realm that may have left an older one, at the year it was founded."""
+    for child_id, parent_id in sorted(offshoots.items()):
+        child = timeline.world.realms[child_id]
+        timeline.plan(child.founded, "secession", (REALM, parent_id), (REALM, child_id), ("offshoot", child_id))
+
+
 def derive(
-    world: World, config: Config, seed: int, span: int, ledger: Ledger, styles: dict[int, StyleTimeline] | None = None
+    world: World,
+    config: Config,
+    seed: int,
+    span: int,
+    ledger: Ledger,
+    styles: dict[int, StyleTimeline] | None = None,
+    offshoots: Mapping[int, int] | None = None,
 ) -> None:
-    """Add the war, peace, battle, rivalry, treaty and fall events of the world to ``ledger``."""
+    """Add the war, peace, battle, rivalry, treaty and fall events of the world to ``ledger``.
+
+    ``offshoots`` maps a realm that may have left an older one to that parent: each gets its founding (or secession)
+    event here, from a check at its founding year.
+    """
     timeline = _Timeline(world, config, seed, span, ledger, styles)
     _plan_relations(timeline)
     _plan_fallen_wars(timeline)
+    _plan_offshoots(timeline, offshoots or {})
     timeline.play()
