@@ -30,6 +30,7 @@ VALUES: Dict[str, Any] = {
         "lot_tries": 6,  # sizes tried at each spot along a street before moving on
         "radius": 0.9,  # footprint radius as a share of the extent's half size
         "wobble": [0.16, 0.1, 0.07],  # amplitude of the outline's first three harmonics, as a share of the radius
+        "storey_chance": 0.6,  # chance a building has another storey, each, near the plaza (less with distance)
         "road_stretch": 0.3,  # how far the outline bulges towards each road gate, as a share of the radius
         "spokes": [3, 5],  # streets from the plaza to the outline, besides the ones towards road gates
         "rings": [0.4, 0.72],  # ring streets, each at this share of the way from the plaza to the outline

@@ -140,12 +140,15 @@ def run(world: World, config: Config, seed: int) -> None:
                 landmass = int(world.landmass_id[y, x])
                 if landmass < 0 or not allowed[landmass]:
                     continue
-            _commit(world, reach, seed, tier, x, y, stream.randint(lo, hi))
+            floors = rng.derive(seed, "poi_interior", x, y, "floors").randint(*(int(v) for v in row["floors"]))
+            _commit(world, reach, seed, tier, x, y, stream.randint(lo, hi), floors)
             nearest_km = np.minimum(nearest_km, _km_to(world, x, y))
             placed += 1
 
 
-def _commit(world: World, reach: dict[str, np.ndarray], seed: int, tier: str, x: int, y: int, population: int) -> None:
+def _commit(
+    world: World, reach: dict[str, np.ndarray], seed: int, tier: str, x: int, y: int, population: int, floors: int
+) -> None:
     """Append one settlement POI, tagged by the water in reach, and register it with its region."""
     region_id = int(world.region_id[y, x])
     tags = tuple(tag for tag, key in _TAGS if reach[key][y, x])
@@ -157,6 +160,7 @@ def _commit(world: World, reach: dict[str, np.ndarray], seed: int, tier: str, x:
         civilized=True,
         region_id=region_id,
         pop=population,
+        floor_count=max(1, floors),
         tags=tags,
     )
     index = len(world.pois)

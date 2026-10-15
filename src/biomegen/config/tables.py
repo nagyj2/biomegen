@@ -58,6 +58,7 @@ _TIER_ROW = {
     "fg": "color",
     "bg": "color",
     "pop": "range",
+    "floors": "range",
     "spacing_km": "positive",
     "land_per_settlement_km2": "positive",
     "backbone": "bool",

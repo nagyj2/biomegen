@@ -6,7 +6,7 @@ import numpy as np
 from scipy import ndimage
 
 from biomegen.config.model import Config
-from biomegen.sites import site_plan
+from biomegen.sites import clear_cache, site_plan
 from biomegen.world.tile import Biome, Cell, WaterType
 from tests.sites.conftest import add_poi, flat_world
 
@@ -157,3 +157,53 @@ def test_the_streets_still_reach_every_building_door(config: Config) -> None:
             0 <= cy < plan.cells.shape[0] and 0 <= cx < plan.cells.shape[1] and labels[cy, cx] > 0 for cy, cx in around
         )
     assert doors.size and reached >= len(doors) // 2
+
+
+def _floors(config: Config, kind: str, count: int, pop: int):
+    world = flat_world(16, 12)
+    poi = add_poi(world, kind, 8, 6, pop=pop, floor_count=count)
+    plans = [site_plan(poi, floor, config, world) for floor in range(count)]
+    assert all(plan is not None for plan in plans)
+    return plans
+
+
+def test_a_tall_settlement_has_stairs_up_on_the_ground_floor(config: Config) -> None:
+    plans = _floors(config, "city", 3, 12000)
+    assert int(Cell.STAIRS_UP) in plans[0].cells
+
+
+def test_the_upper_floor_has_stairs_down_but_no_streets(config: Config) -> None:
+    plans = _floors(config, "city", 3, 12000)
+    assert int(Cell.STAIRS_DOWN) in plans[1].cells and PATH not in plans[1].cells
+
+
+def test_the_stairs_of_one_floor_meet_the_floor_above(config: Config) -> None:
+    # Each staircase up on floor 0 stands where the stairs down are on floor 1.
+    plans = _floors(config, "city", 3, 12000)
+    up = set(zip(*np.nonzero(plans[0].cells == int(Cell.STAIRS_UP)), strict=True))
+    down = set(zip(*np.nonzero(plans[1].cells == int(Cell.STAIRS_DOWN)), strict=True))
+    assert down and down <= up
+
+
+def test_an_upper_storey_stands_inside_the_ground_footprint(config: Config) -> None:
+    # Every cell of an upper floor is under a roof seen from outside.
+    plans = _floors(config, "city", 3, 12000)
+    upper = plans[1].cells != VOID
+    assert upper.any() and (plans[0].outside[upper] == ROOF).all()
+
+
+def test_a_single_floor_settlement_has_no_stairs(config: Config) -> None:
+    plans = _floors(config, "village", 1, 500)
+    assert int(Cell.STAIRS_UP) not in plans[0].cells
+
+
+def test_the_ground_floor_is_the_same_whichever_floor_is_asked_first(config: Config) -> None:
+    # A floor rebuilds the same ground plan: asking for floor 1 first does not change floor 0.
+    world = flat_world(16, 12)
+    poi = add_poi(world, "city", 8, 6, pop=12000, floor_count=3)
+    first = site_plan(poi, 0, config, world)
+    clear_cache()
+    site_plan(poi, 1, config, world)
+    clear_cache()
+    again = site_plan(poi, 0, config, world)
+    assert first is not None and again is not None and np.array_equal(first.cells, again.cells)

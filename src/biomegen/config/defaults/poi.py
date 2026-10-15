@@ -33,7 +33,7 @@ VALUES: Dict[str, Any] = {
             "biomes": ["snow", "grass", "forest", "tundra"],
             "elevation_min_m": 300.0,
             "remoteness": 0.5,
-            "floors": [2, 4],
+            "floors": [4, 8],
         },
         "dungeon": {
             "priority": 20,
@@ -42,7 +42,7 @@ VALUES: Dict[str, Any] = {
             "biomes": ["snow", "forest", "tundra", "desert", "swamp"],
             "elevation_min_m": 100.0,
             "remoteness": 0.7,
-            "floors": [2, 5],
+            "floors": [3, 6],
         },
         "ruin": {
             "priority": 30,

@@ -146,12 +146,21 @@ def _entrance(grid: np.ndarray, footprint: np.ndarray, toward: Point, aspect: fl
 
 
 def build_building(
-    rows: int, cols: int, rgen: random.Random, spec: Spec, toward: Optional[Point] = None
+    rows: int,
+    cols: int,
+    rgen: random.Random,
+    spec: Spec,
+    toward: Optional[Point] = None,
+    shape_rgen: Optional[random.Random] = None,
 ) -> Optional[Building]:
     """Build a building that fits ``rows x cols`` cells (outer size), with its street door facing ``toward``.
 
     ``toward`` is a point in the building's own grid, outside it or at its edge (None: no street door, for a ruin or a
     sealed vault). Returns None when the space is too small for even one room.
+
+    The footprint (its shape and flips) is drawn from ``shape_rgen`` (default ``rgen``), so two buildings built with a
+    fresh generator of the same seed and size have the same footprint but, from different ``rgen``, different rooms:
+    the floors of one tall building.
     """
     smallest_rows = spec.min_room_rows + 2
     smallest_cols = math.ceil(spec.min_room_rows * spec.aspect) + 2
@@ -160,11 +169,12 @@ def build_building(
     shapes = [name for name, _ in _SHAPES if name in spec.shapes]
     weights = [weight for name, weight in _SHAPES if name in spec.shapes]
     big = rows >= 2 * smallest_rows + 1 and cols >= 2 * smallest_cols
-    shape = rgen.choices(shapes, weights)[0] if big and shapes else "rect"
-    flip_x = rgen.random() < 0.5
-    flip_y = rgen.random() < 0.5
+    outline = shape_rgen or rgen
+    shape = outline.choices(shapes, weights)[0] if big and shapes else "rect"
+    flip_x = outline.random() < 0.5
+    flip_y = outline.random() < 0.5
     rooms: list[Rect] = []
-    for wing in _wings(rows, cols, shape, rgen):
+    for wing in _wings(rows, cols, shape, outline):
         rooms += (
             _split(rgen, wing, spec.min_room_rows, spec.aspect, 3 * spec.min_room_rows + 1)
             if spec.subdivide

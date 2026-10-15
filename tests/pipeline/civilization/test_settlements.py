@@ -152,3 +152,15 @@ def test_port_tag_marks_settlements_within_reach_of_the_sea() -> None:
             (HEIGHT - 3 - p.y) * scale.km_per_row,
         )
         assert ("port" in p.tags) == (to_sea_km <= reach)
+
+
+def test_a_settlement_has_the_floors_its_tier_allows(generated: World, cfg: Config) -> None:
+    # Bigger tiers have taller buildings: each settlement's floor count lies in its tier's floors range.
+    for poi in generated.pois:
+        if poi.kind in TIERS:
+            lo, hi = (int(v) for v in cfg.get(f"tables.tiers.{poi.kind}.floors"))
+            assert lo <= poi.floor_count <= hi
+
+
+def test_a_settlement_never_goes_underground(generated: World) -> None:
+    assert all(poi.lowest_floor == 0 for poi in generated.pois if poi.kind in TIERS)

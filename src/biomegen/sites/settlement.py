@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import random
+from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
@@ -24,7 +25,7 @@ from scipy import ndimage
 
 from ..util import rng
 from ..world.tile import Cell
-from .building import Spec, build_building
+from .building import Building, Spec, build_building
 from .carve import Point, nearest_true
 from .layout import SiteContext, layout
 from .streets import lay_roads, lay_street
@@ -34,10 +35,41 @@ _WALL = int(Cell.WALL)
 _DOOR = int(Cell.DOOR)
 _PATH = int(Cell.PATH)
 _BRIDGE = int(Cell.BRIDGE)
+_FLOOR = int(Cell.FLOOR)
+_UP = int(Cell.STAIRS_UP)
+_DOWN = int(Cell.STAIRS_DOWN)
 _STREET = (_PATH, _BRIDGE)
 _ROLES = ("hall", "kitchen", "bedroom", "storage")
 _MIN_TOWN = 0.2  # a footprint smaller than this share of the extent falls back to the whole extent
 _RING_STEP = 0.5  # radians between the sample points of a ring street
+
+
+@dataclass(frozen=True)
+class Lot:
+    """A building placed on the ground floor.
+
+    Attributes:
+        x: Column of its top-left cell.
+        y: Row of its top-left cell.
+        width: Its outer width in cells.
+        height: Its outer height in cells.
+        shape_seed: Seeds its footprint, so every storey of it has the same outline.
+        building: Its ground floor.
+    """
+
+    x: int
+    y: int
+    width: int
+    height: int
+    shape_seed: int
+    building: Building
+
+
+def _spec(ctx: SiteContext) -> Spec:
+    """What a settlement building is built to: homes, furnished at the home density."""
+    furniture = {role: ctx.weights(role) for role in _ROLES}
+    density = float(ctx.setting("clutter_density")) * float(ctx.config.get("sites.furnish.home_density"))
+    return Spec(int(ctx.setting("room_rows")[0]), ctx.aspect, _ROLES, furniture, density)
 
 
 def _block(ctx: SiteContext) -> int:
@@ -292,23 +324,21 @@ def _fit_lot(
 
 def _lots(
     ctx: SiteContext, grid: np.ndarray, ground: np.ndarray, centre: Point, stream: random.Random
-) -> tuple[np.ndarray, list[Point]]:
-    """Pack buildings along the streets; return ``(roof mask, doors' street-side cells)``."""
+) -> tuple[np.ndarray, list[Lot]]:
+    """Pack buildings along the streets; return ``(roof mask, the lots)``."""
     settings = ctx.config.get("sites.settlement")
     gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
     rows_lo, rows_hi = (int(v) for v in ctx.setting("building_rows"))
     aspect = ctx.aspect
     widest = round(rows_hi * aspect * 1.6)  # the widest a building may be
     narrowest = round(0.8 * rows_lo * aspect)
-    furniture = {role: ctx.weights(role) for role in _ROLES}
-    density = float(ctx.setting("clutter_density")) * float(ctx.config.get("sites.furnish.home_density"))
-    spec = Spec(int(ctx.setting("room_rows")[0]), aspect, _ROLES, furniture, density)
+    spec = _spec(ctx)
     rows, cols = grid.shape
     blocked = ~ground | (grid != _VOID)
     roofs = np.zeros(grid.shape, dtype=bool)
     target = float(settings["fill"]) * int(ground.sum())
     covered = 0
-    placed: list[Point] = []
+    placed: list[Lot] = []
     stride = max(1, round(aspect))
     street = np.argwhere(np.isin(grid, _STREET))
     order = sorted(
@@ -350,7 +380,8 @@ def _lots(
                 y0, x0, height, width = fit[0], fit[1] - (fit[3] if step_x < 0 else 0), fit[2], fit[3]
             if height < rows_lo or width < narrowest:
                 continue
-            building = build_building(height, width, stream, spec, (sx - x0, sy - y0))
+            shape_seed = stream.getrandbits(32)
+            building = build_building(height, width, stream, spec, (sx - x0, sy - y0), random.Random(shape_seed))
             if building is None or building.front is None:
                 continue
             front = (x0 + building.front[0], y0 + building.front[1])
@@ -362,9 +393,76 @@ def _lots(
             blocked[max(0, y0 - gap_y) : y0 + height + gap_y, max(0, x0 - gap_x) : x0 + width + gap_x] = True
             streets = np.isin(grid, _STREET)
             covered += int(building.footprint.sum())
-            placed.append(front)
+            placed.append(Lot(x0, y0, width, height, shape_seed, building))
             break
     return roofs, placed
+
+
+def _storeys(
+    ctx: SiteContext, grid: np.ndarray, lots: list[Lot], centre: Point, stream: random.Random
+) -> list[np.ndarray]:
+    """Raise the buildings: give each lot storeys, stamp the stairs on the ground floor and return the upper floors.
+
+    The nearer the plaza, the taller; at least the lot nearest it reaches the top floor. Every storey has the
+    footprint of the ground floor (same ``shape_seed``) and its own rooms, and the stairs stand on a floor cell free on
+    both floors. The result holds one full-size grid per floor above the ground (void outside the buildings).
+    """
+    top = ctx.floor_count
+    if top <= 1 or not lots:
+        return []
+    chance = float(ctx.config.get("sites.settlement.storey_chance"))
+
+    def distance(lot: Lot) -> float:
+        return math.hypot((lot.x + lot.width / 2 - centre[0]) / ctx.aspect, lot.y + lot.height / 2 - centre[1])
+
+    reach = max(distance(lot) for lot in lots) or 1.0
+    levels = []
+    for lot in lots:
+        count = 1
+        while count < top and stream.random() < chance * (1.0 - 0.7 * distance(lot) / reach):
+            count += 1
+        levels.append(count)
+    levels[min(range(len(lots)), key=lambda i: (distance(lots[i]), i))] = top
+    uppers = [np.zeros_like(grid) for _ in range(top - 1)]
+    spec = _spec(ctx)
+    for index, lot in enumerate(lots):
+        floors = [lot.building.cells]
+        for storey in range(1, levels[index]):
+            upper = build_building(
+                lot.height,
+                lot.width,
+                rng.derive(ctx.seed, "site.layout", "upper", index, storey),
+                spec,
+                None,
+                random.Random(lot.shape_seed),
+            )
+            if upper is None:
+                break
+            floors.append(upper.cells)
+        stairs: list[Point] = []
+        for storey in range(len(floors) - 1):
+            doors = (floors[storey] == _DOOR) | (floors[storey + 1] == _DOOR)
+            free = (floors[storey] == _FLOOR) & (floors[storey + 1] == _FLOOR)
+            free &= ~ndimage.binary_dilation(doors, structure=np.ones((3, 3), bool))
+            if stairs:
+                free[max(0, stairs[-1][1] - 1) : stairs[-1][1] + 2, max(0, stairs[-1][0] - 1) : stairs[-1][0] + 2] = (
+                    False
+                )
+            candidates = sorted((int(c), int(r)) for r, c in np.argwhere(free))
+            if not candidates:
+                break
+            stairs.append(candidates[stream.randrange(len(candidates))])
+        for storey, floor_cells in enumerate(floors[: len(stairs) + 1]):
+            layer = floor_cells.copy()
+            if storey < len(stairs):
+                layer[stairs[storey][1], stairs[storey][0]] = _UP
+            if storey > 0:
+                layer[stairs[storey - 1][1], stairs[storey - 1][0]] = _DOWN
+            window = (slice(lot.y, lot.y + lot.height), slice(lot.x, lot.x + lot.width))
+            target = grid if storey == 0 else uppers[storey - 1]
+            inside = layer != _VOID
+            target[window][inside] = layer[inside]
+    return uppers
 
 
 def _join(grid: np.ndarray, front: Point, street: Point, side: Point) -> bool:
@@ -418,7 +516,7 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     if centre is None:
         return None
     grid = np.full((rows, cols), _VOID, dtype=np.uint8)
-    stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
+    stream = rng.derive(ctx.seed, "site.layout", 0)  # every floor rebuilds the same ground, so the storeys stack
     inset_x, inset_y = (int(v) for v in ctx.config.get("sites.settlement.wall_inset"))
     inner = np.zeros(grid.shape, dtype=bool)
     inner[inset_y + 1 : rows - inset_y - 1, inset_x + 1 : cols - inset_x - 1] = True
@@ -432,12 +530,16 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     ends = _spokes(ctx, grid, town, dry, centre, stream)
     _rings(ctx, grid, town, dry, centre, stream)
     _lanes(ctx, grid, ground, town, stream)
-    roofs, _fronts = _lots(ctx, grid, ground, centre, stream)
+    roofs, lots = _lots(ctx, grid, ground, centre, stream)
+    uppers = _storeys(ctx, grid, lots, centre, stream)
     if ctx.walled:
         _wall(ctx, grid, dry, town, ends)
     _plant(ctx, grid, dry, roofs, stream)
+    if ctx.floor > 0:
+        layer = uppers[ctx.floor - 1] if ctx.floor - 1 < len(uppers) else np.zeros_like(grid)
+        return layer, np.zeros_like(layer)
     outside = grid.copy()
     outside[roofs] = int(Cell.ROOF)
     outside[(grid == _WALL) & ~roofs] = int(Cell.STONE)
-    outside[grid == _DOOR] = _PATH
+    outside[(grid == _DOOR) & ~roofs] = _PATH  # a gate in the wall, not a door under a roof
     return grid, outside
