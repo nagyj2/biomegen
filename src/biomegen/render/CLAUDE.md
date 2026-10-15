@@ -18,6 +18,9 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   instead of replacing the fill with a ramp; the `borders` layer then lightens the line between realms and reddens war
   fronts. Both read realms through `ctx.realm`, which uses the sampler's warped tile like the biome blend, so a border is the
   same line at the zoom and local scales. A view's `tint` is a `render.ramps` entry or `"realm"` (`View.ramp`, `View.political`).
+- **Tinted views at detail scales** draw the same ground as terrain (`clutter`, `roads`, `markers`, `sites`): clutter sits
+  under the tint (a ramp's `keep_clutter` keeps its glyphs, dimmed; the floor glyph is blanked) and roads and sites are drawn
+  over it, so inside a site the ground round the plan is tinted and the plan keeps its own colours.
 - **Sites.** The `sites` layer draws each POI's plan (`biomegen.sites`) into the cells its extent covers: the plan's
   outside view (roofs, stone walls, streets) at the zoom and local scales (the map shows only the POI's marker tile), the inside (thin walls joined into
   line glyphs) at the site scale. The site scale is a

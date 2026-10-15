@@ -27,7 +27,7 @@ All wrap `uv run` and pin fixture seeds and sizes in `scripts/_fixtures.sh`:
   proof for refactors.
 - `scripts/export.sh [seed] [dir]`: headless SVG/PNG export (default `build/export`).
 - `scripts/view.sh [view] [seed] [args]`: a static map; add `--scale zoom|local --at X,Y` for a magnified part.
-- `scripts/bench_render.sh [runs] [seed] [COLSxROWS]`: frame times of the detail layers and the explorer frame.
+- `scripts/bench_render.sh [runs] [seed] [COLSxROWS] [view]`: frame times of the detail layers and the explorer frame.
 
 ## Layering
 

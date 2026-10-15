@@ -104,17 +104,17 @@ VALUES: Dict[str, Any] = {
         },
         "elevation": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "markers"],
+            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "roads", "markers", "sites"],
             "tint": "elevation",
         },
         "temperature": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "markers"],
+            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "roads", "markers", "sites"],
             "tint": "temperature",
         },
         "rainfall": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "tint", "water", "roads", "markers"],
+            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "roads", "markers", "sites"],
             "tint": "rainfall",
         },
     },
@@ -141,12 +141,15 @@ VALUES: Dict[str, Any] = {
     # ``stops`` are ``[value, [r, g, b]]`` in ascending value order, blended linearly. elevation is in
     # metres, temperature in degrees C, rainfall in mm per year; ``label`` and ``unit`` (``unit_ascii`` for
     # ascii output) title the legend bar. Optional keys: ``shade`` (hillshade the
-    # land), ``keep_relief`` (keep relief glyphs; otherwise glyphs are blanked), ``water_scale`` (dim
-    # water cells by this factor) and ``water_color`` (paint water cells this colour).
+    # land), ``keep_relief`` (keep relief glyphs; otherwise glyphs are blanked), ``keep_clutter`` (at the zoom and
+    # local scales keep the clutter glyphs, dimmed against the ramp colour, so the tint lies over the ground's
+    # texture; the floor glyph is still blanked), ``water_scale`` (dim water cells by this factor) and
+    # ``water_color`` (paint water cells this colour).
     "ramps": {
         "elevation": {
             "field": "elevation_m",
             "label": "Elevation",
+            "keep_clutter": True,
             "unit": "m",
             "shade": True,
             "keep_relief": True,
@@ -168,6 +171,7 @@ VALUES: Dict[str, Any] = {
         "temperature": {
             "field": "temperature_c",
             "label": "Temperature, mean annual",
+            "keep_clutter": True,
             "unit": "°C",
             "unit_ascii": "degC",
             "water_scale": 0.6,
@@ -184,6 +188,7 @@ VALUES: Dict[str, Any] = {
         "rainfall": {
             "field": "rain_mm",
             "label": "Rainfall, mean annual",
+            "keep_clutter": True,
             "unit": "mm/yr",
             "water_color": [16, 30, 60],
             "stops": [

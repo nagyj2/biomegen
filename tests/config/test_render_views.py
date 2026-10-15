@@ -69,3 +69,10 @@ def test_validate_coerces_a_water_colour() -> None:
     cfg["render"]["ramps"]["rainfall"]["water_color"] = "#010203"
     validate(cfg)
     assert cfg["render"]["ramps"]["rainfall"]["water_color"] == [1, 2, 3]
+
+
+@pytest.mark.parametrize("name", ["elevation", "temperature", "rainfall", "political"])
+def test_tinted_views_draw_clutter_roads_and_sites_at_the_detail_scales(name: str) -> None:
+    # Clutter sits under the tint; roads, markers and sites are drawn over it, so the ground shows through the tint.
+    layers = get_defaults()["render"]["views"][name]["detail_layers"]
+    assert layers.index("clutter") < layers.index("tint") < layers.index("roads") < layers.index("sites")

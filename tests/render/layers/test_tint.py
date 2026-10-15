@@ -88,3 +88,42 @@ def test_realm_tint_keeps_relief_glyphs(config) -> None:
     world = _realm_world(config)
     world.relief[0, 0] = int(Relief.MOUNTAIN)
     assert _draw(world, config, "realm").glyph[0, 0] == config.get("tables.relief.mountain.glyph")
+
+
+# --- clutter under a data tint at the detail scales ----------------------------------------------------------------
+
+
+def _detail_draw(config, ramp: str = "rainfall"):
+    from biomegen.sampling.detail import DetailSampler
+
+    config.data["render"]["blend_strength"] = 0.0
+    world = make_world(4, 4, Biome.FOREST)
+    view = View("t", ("terrain", "relief", "clutter", "tint"), ramp)
+    return build_grid(world, config, view, DetailSampler(world, config, 10, 5, 0, 0, 4, 4)), world
+
+
+def test_a_data_tint_keeps_the_clutter_at_the_detail_scales() -> None:
+    config = load_config(None)
+    grid, _ = _detail_draw(config)
+    shown = set(grid.glyph.ravel().tolist()) - {" "}
+    assert shown and shown <= set(config.get("tables.detail.forest.clutter"))
+
+
+def test_a_data_tint_still_blanks_the_floor_at_the_detail_scales() -> None:
+    config = load_config(None)
+    grid, _ = _detail_draw(config)
+    assert config.get("tables.detail.forest.floor") not in set(grid.glyph.ravel().tolist())
+
+
+def test_clutter_is_dimmed_against_the_ramp_colour() -> None:
+    config = load_config(None)
+    grid, _ = _detail_draw(config)
+    shown = grid.glyph != " "
+    assert (grid.fg[shown].astype(int).sum(axis=1) < grid.bg[shown].astype(int).sum(axis=1)).all()
+
+
+def test_a_ramp_can_drop_the_clutter() -> None:
+    config = load_config(None)
+    config.data["render"]["ramps"]["rainfall"]["keep_clutter"] = False
+    grid, _ = _detail_draw(config)
+    assert set(grid.glyph.ravel().tolist()) == {" "}

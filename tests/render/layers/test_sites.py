@@ -221,3 +221,16 @@ def test_the_road_runs_on_through_the_site() -> None:
     rows, cols = _extent(sampler, world, config)
     road_bg = np.asarray(config.get("render.detail_colors.road_bg"), dtype=np.uint8)
     assert (grid.bg[rows, cols] == road_bg).all(axis=-1).any()
+
+
+def test_a_site_keeps_its_own_colours_under_a_data_tint() -> None:
+    # The tint colours the ground round a plan; the plan's cells keep the colours they have in an untinted view.
+    world = _world("dungeon")
+    config = _crisp_config()
+    tinted = View("t", ("terrain", "tint", "sites"), "elevation")
+    bare = View("t", ("terrain", "tint"), "elevation")
+    with_site, _, _ = _draw(world, tinted, config=config)
+    without_site, _, _ = _draw(world, bare, config=config)
+    plain, _, _ = _draw(world, WITH, config=config)
+    plan = (with_site.bg != without_site.bg).any(axis=2)
+    assert plan.any() and (with_site.bg[plan] == plain.bg[plan]).all()

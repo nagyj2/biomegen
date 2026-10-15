@@ -36,10 +36,10 @@ def _realm_tint(ctx: LayerContext, grid: CellGrid) -> None:
 def tint_layer(ctx: LayerContext, grid: CellGrid) -> None:
     """Replace the fill with the colour of the view's ramp (``render.ramps.<view.tint>``).
 
-    The ramp's options decide the rest: ``shade`` hillshades land, ``water_scale`` / ``water_color``
-    restyle water cells, and glyphs are blanked unless ``keep_relief`` keeps the relief glyphs (dimmed
-    against the new fill). A realm-tinted (political) view mixes realm colours into the land instead and keeps the
-    glyphs. A view with no tint leaves the grid unchanged.
+    The ramp's options decide the rest: ``shade`` hillshades land, ``water_scale`` / ``water_color`` restyle water
+    cells, and glyphs are blanked unless ``keep_relief`` keeps the relief glyphs or ``keep_clutter`` (zoom and local
+    only) keeps the clutter glyphs, both dimmed against the new fill. A realm-tinted (political) view mixes realm
+    colours into the land instead and keeps the glyphs. A view with no tint leaves the grid unchanged.
     """
     if not ctx.view.tint:
         return
@@ -58,9 +58,9 @@ def tint_layer(ctx: LayerContext, grid: CellGrid) -> None:
     if "water_color" in ramp:
         bg = np.where(water[..., np.newaxis], np.asarray(ramp["water_color"], dtype=np.uint8), bg)
 
-    relief_kept = ctx.land & (ctx.relief != int(Relief.NONE)) if ramp.get("keep_relief") else np.zeros_like(inside)
-    glyph = np.where(relief_kept, grid.glyph, " ")
-    fg = np.where(
-        relief_kept[..., np.newaxis], scale_colors(bg, float(ctx.config.get("render.tint_relief_fg"))), grid.fg
-    )
+    kept = ctx.land & (ctx.relief != int(Relief.NONE)) if ramp.get("keep_relief") else np.zeros_like(inside)
+    if ramp.get("keep_clutter") and ctx.sampler.detailed:
+        kept = kept | (ctx.land & (grid.glyph != ctx.detail_floor) & (grid.glyph != " "))
+    glyph = np.where(kept, grid.glyph, " ")
+    fg = np.where(kept[..., np.newaxis], scale_colors(bg, float(ctx.config.get("render.tint_relief_fg"))), grid.fg)
     grid.put(inside, glyph=glyph, fg=fg, bg=bg)

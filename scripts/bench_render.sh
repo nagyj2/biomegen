@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Frame time (milliseconds) of the zoom and local detail frames and of the whole explorer frame, best of N runs on a
 # seed's world.
-# Usage: scripts/bench_render.sh [runs] [seed] [COLSxROWS]   (default: 5 runs, fixture seed, 120x36)
+# Usage: scripts/bench_render.sh [runs] [seed] [COLSxROWS] [view]   (default: 5 runs, fixture seed, 120x36, terrain)
 source "$(dirname "${BASH_SOURCE[0]}")/_fixtures.sh"
 
 runs="${1:-5}"
 seed="${2:-${fixture_seed}}"
 area="${3:-120x36}"
+view_name="${4:-terrain}"
 
-uv run python - "${seed}" "${runs}" "${area}" <<'PY'
+uv run python - "${seed}" "${runs}" "${area}" "${view_name}" <<'PY'
 import sys
 import time
 
@@ -22,10 +23,11 @@ from biomegen.explorer.state import initial_cursor
 from biomegen.explorer.writer import DiffWriter
 from biomegen.sampling.detail import detail_sampler
 from biomegen.render.layers import build_grid
-from biomegen.render.views import resolve_view
+from biomegen.render.views import resolve_view, view_names
 
 seed, runs = int(sys.argv[1]), int(sys.argv[2])
 area_w, area_h = (int(v) for v in sys.argv[3].split("x"))
+view_name = sys.argv[4]
 config = load_config(None)
 world = pipeline.generate(config, seed)
 
@@ -39,8 +41,9 @@ def best_ms(call) -> float:
     return best * 1000.0
 
 
-print(f"seed {seed}, world {world.width}x{world.height}, viewport {area_w}x{area_h} cells, best of {runs}")
-view = resolve_view(config, "terrain")
+print(f"seed {seed}, world {world.width}x{world.height}, viewport {area_w}x{area_h} cells, view {view_name}, best of {runs}")
+view = resolve_view(config, view_name)
+view_index = view_names(config).index(view_name)
 print(f"{'scale':>6} {'cells':>7} {'layers ms':>10}")
 for scale in ("zoom", "local"):
     probe = detail_sampler(world, config, scale, area_w, area_h, 0, 0)
@@ -57,7 +60,7 @@ print()
 print(f"explorer frame on a {area_w}x{area_h + 12} terminal (budget 33 ms), best of {runs}")
 print(f"{'scale':>6} {'compose':>9} {'full write':>11} {'step write':>11} {'frame':>7}")
 for scale, mode in (("map", "fit"), ("map", "onetoone"), ("zoom", "fit"), ("local", "fit")):
-    state = ExplorerState(mode=mode, scale=scale, recenter=True)
+    state = ExplorerState(mode=mode, scale=scale, recenter=True, view_index=view_index)
     state.cx, state.cy = initial_cursor(world, config)
     size = (area_w, area_h + 12)
     overlay = Overlay()
@@ -89,7 +92,7 @@ from biomegen.sites import site_geometry
 
 settlements = [poi for poi in world.pois if poi.kind in ("capital", "city")]
 biggest = max(settlements, key=lambda poi: site_geometry(poi, config).box_cols * site_geometry(poi, config).box_rows)
-state = ExplorerState(scale="zoom", cx=biggest.x, cy=biggest.y, recenter=True)
+state = ExplorerState(scale="zoom", cx=biggest.x, cy=biggest.y, recenter=True, view_index=view_index)
 step_in(world, config, state)
 size = (area_w, area_h + 12)
 overlay = Overlay()
