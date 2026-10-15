@@ -91,12 +91,28 @@ def site_row_name(config: Config, kind: str, purpose: str = "") -> str:
     return named if purpose and config.get(f"tables.sites.{named}", None) is not None else kind
 
 
+def site_row_for(config: Config, poi: POI) -> str:
+    """Return the ``tables.sites`` row that draws ``poi``.
+
+    A ruin that records what it was (``ruin_of``) is drawn from the row of that settlement tier, so it is the
+    settlement's plan with a fall pass over it; every other POI (and a ruin with no origin) uses its kind's row.
+    """
+    if poi.kind == "ruin" and poi.ruin_of and config.get(f"tables.sites.{poi.ruin_of}", None) is not None:
+        return poi.ruin_of
+    return site_row_name(config, poi.kind, poi.purpose)
+
+
 def _scale(poi: POI, config: Config, row: dict) -> float:
-    """Return the extent factor for ``poi``: a seeded jitter, times a population factor for growing settlements."""
+    """Return the extent factor for ``poi``: a seeded jitter, times a population factor for growing settlements.
+
+    A ruin of a settlement tier is also scaled by that tier's ``ruin_extent_share``.
+    """
     jitter = float(config.get("sites.size_jitter"))
     factor = 1.0 + jitter * (2.0 * rng.derive(poi.interior_seed, "site.extent").random() - 1.0)
+    if poi.kind == "ruin" and poi.ruin_of and "ruin_extent_share" in row:
+        factor *= float(row["ruin_extent_share"])
     if row["grows_with_pop"]:
-        lo, hi = config.get(f"tables.tiers.{poi.kind}.pop")
+        lo, hi = config.get(f"tables.tiers.{poi.ruin_of or poi.kind}.pop")
         small, large = config.get("sites.pop_scale")
         share = 0.0 if hi <= lo else min(1.0, max(0.0, (poi.pop - lo) / (hi - lo)))
         factor *= small + (large - small) * share
@@ -105,7 +121,7 @@ def _scale(poi: POI, config: Config, row: dict) -> float:
 
 def site_geometry(poi: POI, config: Config) -> Optional[SiteGeometry]:
     """Return ``poi``'s site geometry, or ``None`` when its kind has no site row or the site would be too small."""
-    row = config.get(f"tables.sites.{site_row_name(config, poi.kind, poi.purpose)}", None)
+    row = config.get(f"tables.sites.{site_row_for(config, poi)}", None)
     if row is None:
         return None
     factor = _scale(poi, config, row)

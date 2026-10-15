@@ -337,7 +337,7 @@ def build_tower(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
 
 
 # ------------------------------------------------------------------------------------------------------------ ruin
-def _breach(grid: np.ndarray, rect: Rect, stream: random.Random, count: int) -> None:
+def breach(grid: np.ndarray, rect: Rect, stream: random.Random, count: int) -> None:
     """Knock gaps in the walls: a run of two to six wall cells each, along a wall."""
     x, y, w, h = rect
     walls = [(int(cx), int(cy)) for cy, cx in np.argwhere(grid[y : y + h, x : x + w] == _WALL).tolist()]
@@ -384,7 +384,7 @@ def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     grid = np.full((ctx.rows, ctx.cols), _VOID, dtype=np.uint8)
     _stamp(grid, building, rect)
     erosion = _erosion(ctx)
-    _breach(grid, rect, stream, max(2, round(erosion * len(building.rooms) * 3)))
+    breach(grid, rect, stream, max(2, round(erosion * len(building.rooms) * 3)))
     floor = grid == _FLOOR
     roll = rng.derive_numpy(ctx.seed, "site.erode").random(grid.shape)
     crack = erosion * float(ctx.config.get("sites.furnish.ruin_crack"))

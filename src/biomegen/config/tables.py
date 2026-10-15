@@ -78,6 +78,9 @@ _SITE_ROW = {
     "grows_with_pop": "bool",
     "plaza_tiles": "positive",
     "walled": "bool",
+    "ruin_standing": "unit_pair",
+    "ruin_wall_fall": "unit_pair",
+    "ruin_extent_share": "positive",
 }
 _POI_ROW = {
     "priority": "rank",
@@ -272,7 +275,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "tiers": (_TIER_ROW, frozenset({"bg", "dynamic", "connect", "map_marker"})),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
-    "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled"})),
+    "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled", "ruin_standing", "ruin_wall_fall", "ruin_extent_share"})),
     "pois": (_POI_ROW, _POI_OPTIONAL),
     "poi_fates": (_POI_FATE_ROW, frozenset()),
     "poi_sites": (_POI_SITE_ROW, frozenset()),
@@ -335,6 +338,9 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "pair": lambda v: isinstance(v, list) and len(v) == 2 and all(_is_number(n) and n > 0.0 for n in v),
         "forms": lambda v: (
             isinstance(v, list) and len(v) > 0 and all(isinstance(f, str) and f.count("{n}") == 1 for f in v)
+        ),
+        "unit_pair": lambda v: (
+            isinstance(v, list) and len(v) == 2 and all(_is_number(n) and 0.0 <= n <= 1.0 for n in v)
         ),
         "weights": lambda v: (
             isinstance(v, dict)
@@ -557,8 +563,14 @@ def _validate_poi_sites(sites: Any, pois: Dict[str, Any], errors: List[str]) -> 
             errors.append(f"tables.poi_sites: kind {kind!r} needs a site for each temper ({', '.join(TEMPERS)})")
 
 
-def _validate_ruin_origins(row: Dict[str, Any], tiers: Dict[str, Any], errors: List[str]) -> None:
-    """Check the ruin row's origins: every key present, and every named origin a settlement tier."""
+_RUIN_SITE_KEYS = ("ruin_standing", "ruin_wall_fall", "ruin_extent_share")
+
+
+def _validate_ruin_origins(
+    row: Dict[str, Any], tiers: Dict[str, Any], sites: Dict[str, Any], errors: List[str]
+) -> None:
+    """Check the ruin row's origins: every key present, every named origin a settlement tier, and each tier's site
+    row carrying the numbers that draw it as a ruin."""
     where = "tables.pois.ruin"
     for key in ("origins", "fall_origin", "holding_origins"):
         if key not in row:
@@ -570,6 +582,10 @@ def _validate_ruin_origins(row: Dict[str, Any], tiers: Dict[str, Any], errors: L
     for name in named:
         if name not in tiers:
             errors.append(f"{where}: origin {name!r} is no settlement tier")
+        elif isinstance(sites.get(name), dict):
+            for key in _RUIN_SITE_KEYS:
+                if key not in sites[name]:
+                    errors.append(f"tables.sites.{name}: needs {key} (it can be a ruin's origin)")
 
 
 def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
@@ -582,7 +598,7 @@ def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
             _validate_poi_history(kind, pois[kind], styles, errors)
             _validate_poi_text(kind, pois[kind], errors)
     if isinstance(pois.get("ruin"), dict) and isinstance(tables.get("tiers"), dict):
-        _validate_ruin_origins(pois["ruin"], tables["tiers"], errors)
+        _validate_ruin_origins(pois["ruin"], tables["tiers"], tables.get("sites", {}), errors)
     _validate_poi_sites(tables.get("poi_sites", {}), pois, errors)
 
 

@@ -9,7 +9,7 @@ world starts with none. The cached arrays are read-only; runtime edits go throug
 from __future__ import annotations
 
 import weakref
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 import numpy as np
@@ -20,8 +20,8 @@ from ..world.tile import Cell
 from ..world.world import World
 from . import battlefield, boat, camp, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
-from .geometry import SiteGeometry, site_geometry, site_row_name
-from .layout import LAYOUTS, SiteContext
+from .geometry import SiteGeometry, site_geometry, site_row_for
+from .layout import LAYOUTS, Fall, SiteContext
 from .patch import read_patch
 from .streets import clear_roads
 
@@ -69,6 +69,30 @@ def clear_cache() -> None:
     _CACHES.clear()
 
 
+def _furniture(config: Config, row: dict) -> dict[str, list[tuple[Cell, float]]]:
+    """The furniture weights of a site row's family, per room role."""
+    return {
+        role: [(Cell[name.upper()], float(weight)) for name, weight in sorted(weights.items())]
+        for role, weights in sorted(config.get(f"tables.furniture.{row['furniture']}").items())
+    }
+
+
+def _fall(config: Config, row: dict, age_years: Optional[int]) -> Fall:
+    """How far a ruin of the tier ``row`` has fallen at ``age_years`` (an undated ruin counts as old)."""
+    progress = (
+        1.0 if age_years is None else min(1.0, age_years / max(1.0, float(config.get("sites.ruin_erosion_years"))))
+    )
+
+    def along(young: float, old: float) -> float:
+        return young + (old - young) * progress
+
+    return Fall(
+        standing=along(*(float(v) for v in row["ruin_standing"])),
+        wall=along(*(float(v) for v in row["ruin_wall_fall"])),
+        erosion=along(float(config.get("sites.ruin_erosion_young")), float(config.get("sites.ruin_erosion"))),
+    )
+
+
 def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[SitePlan]:
     """Return the plan of ``poi``'s ``floor`` (clamped to its floors), or None if its kind has no site or no room."""
     floor = max(poi.lowest_floor, min(int(floor), poi.lowest_floor + poi.floor_count - 1))
@@ -76,6 +100,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     key = (
         poi.kind,
         poi.purpose,
+        poi.ruin_of,
         poi.x,
         poi.y,
         poi.interior_seed,
@@ -93,7 +118,8 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     if geometry is None:
         cache[key] = None
         return None
-    row = config.get(f"tables.sites.{site_row_name(config, poi.kind, poi.purpose)}")
+    row = config.get(f"tables.sites.{site_row_for(config, poi)}")
+    age_years = None if poi.fell is None else max(0, world.year - poi.fell)
     context = SiteContext(
         kind=poi.kind,
         seed=int(poi.interior_seed),
@@ -101,18 +127,27 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         lowest_floor=int(poi.lowest_floor),
         floor_count=int(poi.floor_count),
         patch=read_patch(poi, geometry, world, config),
-        furniture={
-            role: [(Cell[name.upper()], float(weight)) for name, weight in sorted(weights.items())]
-            for role, weights in sorted(config.get(f"tables.furniture.{row['furniture']}").items())
-        },
+        furniture=_furniture(config, row),
         plaza_rows=round(float(row.get("plaza_tiles", 0.0)) * int(row["rows_per_tile"])),
         walled=bool(row.get("walled", False)),
         config=config,
         tags=tuple(poi.tags),
-        age_years=None if poi.fell is None else max(0, world.year - poi.fell),
+        age_years=age_years,
         purpose=poi.purpose,
+        fall=_fall(config, row, age_years) if poi.kind == "ruin" and "ruin_standing" in row else None,
     )
     built = LAYOUTS[row["layout"]](context)
+    if built is None and context.fall is not None:  # no room for the settlement: a single fallen building instead
+        ruin_row = config.get("tables.sites.ruin")
+        built = LAYOUTS[ruin_row["layout"]](
+            replace(
+                context,
+                furniture=_furniture(config, ruin_row),
+                plaza_rows=0,
+                walled=False,
+                fall=None,
+            )
+        )
     plan = None
     if built is not None:
         cells, outside = built if isinstance(built, tuple) else (built, built)

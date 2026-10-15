@@ -33,6 +33,7 @@ from .building import Building, Spec, build_building
 from .carve import Point, nearest_true
 from .layout import SiteContext, layout
 from .streets import lay_roads, lay_street
+from .structure import breach
 
 _VOID = int(Cell.VOID)
 _WALL = int(Cell.WALL)
@@ -45,6 +46,7 @@ _DOWN = int(Cell.STAIRS_DOWN)
 _STREET = (_PATH, _BRIDGE)
 _ROLES = ("hall", "kitchen", "bedroom", "storage")
 _MIN_TOWN = 0.2  # a footprint smaller than this share of the extent falls back to the whole extent
+_RUBBLE = int(Cell.RUBBLE)
 _RING_STEP = 0.5  # radians between the sample points of a ring street
 _WHEEL = int(Cell.WHEEL)
 _STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1))
@@ -812,8 +814,13 @@ def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarra
     return None
 
 
-def _wall(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, town: np.ndarray, ends: list[Point]) -> None:
-    """Ring the footprint with a thin wall; the road and each spoke crossing it make a gate. Water leaves a gap."""
+def _wall(
+    ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, town: np.ndarray, ends: list[Point]
+) -> tuple[list[Point], list[Point]]:
+    """Ring the footprint with a thin wall; the road and each spoke crossing it make a gate. Water leaves a gap.
+
+    Returns the ``(x, y)`` cells of the wall and of its gates, each in row-major order.
+    """
     ring = ndimage.binary_dilation(town, structure=np.ones((3, 3), bool)) & ~town & dry
     streets = np.isin(grid, _STREET)
     grid[ring & (grid == _VOID)] = _WALL
@@ -824,6 +831,73 @@ def _wall(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, town: np.ndarray,
             gx, gy = x + step_x, y + step_y
             if 0 <= gx < cols and 0 <= gy < rows and ring[gy, gx]:
                 grid[gy, gx] = _DOOR
+    cells = [(int(x), int(y)) for y, x in np.argwhere(ring & (grid == _WALL)).tolist()]
+    gates = [(int(x), int(y)) for y, x in np.argwhere(ring & (grid == _DOOR)).tolist()]
+    return cells, gates
+
+
+def _crack(grid: np.ndarray, lot: Lot, share: float, ctx: SiteContext, index: int) -> None:
+    """Crack ``share`` of a lot's floor cells into rubble (a draw per cell, keyed on the lot)."""
+    window = grid[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width]
+    roll = rng.derive_numpy(ctx.seed, "site.erode", "settlement", index).random(window.shape)
+    window[(window == _FLOOR) & (roll < share)] = _RUBBLE
+
+
+def _fall(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    roofs: np.ndarray,
+    lots: list[Lot],
+    wall: tuple[list[Point], list[Point]],
+) -> None:
+    """Let a ruined settlement fall: most buildings fall in, a few stand, the wall breaks and its gates open.
+
+    A building stands with chance ``ctx.fall.standing`` (the lot a seeded draw picks always does). A fallen one has
+    breaches, cracked floors, trees growing in and a roof only over the rooms that kept it; a standing one has a few
+    cracks. Wall stretches fall until ``ctx.fall.wall`` of the wall is down, and every gate becomes rubble. The draws
+    use their own streams, so the streets and lots are exactly the settlement's.
+    """
+    fall = ctx.fall
+    assert fall is not None
+    stream = rng.derive(ctx.seed, "site.erode", "settlement")
+    standing = {index for index in range(len(lots)) if stream.random() < fall.standing}
+    if lots:
+        standing.add(stream.randrange(len(lots)))
+    crack = fall.erosion * float(ctx.config.get("sites.furnish.ruin_crack"))
+    for index, lot in enumerate(lots):
+        if index in standing:
+            _crack(grid, lot, crack * float(ctx.config.get("sites.furnish.ruin_standing_crack")), ctx, index)
+            continue
+        building = lot.building
+        breach(
+            grid, (lot.x, lot.y, lot.width, lot.height), stream, max(2, round(fall.erosion * len(building.rooms) * 3))
+        )
+        _crack(grid, lot, crack, ctx, index)
+        window = (slice(lot.y, lot.y + lot.height), slice(lot.x, lot.x + lot.width))
+        roofs[window][building.footprint] = False
+        covered = np.zeros(building.footprint.shape, dtype=bool)
+        for rx, ry, rw, rh in building.rooms:
+            if stream.random() >= fall.erosion:
+                covered[ry : ry + rh, rx : rx + rw] = True
+        roofs[window] |= covered & building.footprint
+        free = [(cx + lot.x, cy + lot.y) for cy, cx in np.argwhere((grid[window] == _FLOOR) & ~covered).tolist()]
+        for cx, cy in stream.sample(free, len(free) // 8):
+            grid[cy, cx] = int(Cell.TREE) if stream.random() < 0.5 else int(Cell.BUSH)
+    cells, gates = wall
+    for gx, gy in gates:
+        grid[gy, gx] = _RUBBLE
+    remaining = list(cells)
+    target = round(fall.wall * len(cells))
+    fallen = 0
+    while remaining and fallen < target:
+        cx, cy = remaining[stream.randrange(len(remaining))]
+        reach = stream.randint(2, 4)  # a stretch of wall: this many rows each way, widened by the cell aspect
+        near = [c for c in remaining if abs(c[1] - cy) <= reach and abs(c[0] - cx) <= reach * ctx.aspect]
+        for wx, wy in near:
+            grid[wy, wx] = _RUBBLE if stream.random() < 0.6 else _VOID
+        fallen += len(near)
+        gone = set(near)
+        remaining = [c for c in remaining if c not in gone]
 
 
 def _plant(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, stream: random.Random) -> None:
@@ -869,10 +943,15 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
         if house is not None:
             lots = [house]
             roofs[house.y : house.y + house.height, house.x : house.x + house.width] |= house.building.footprint
+    if ctx.fall is not None and not lots:  # nothing stood here: the caller draws a single fallen building instead
+        return None
     uppers = _storeys(ctx, grid, lots, centre, stream)
+    wall: tuple[list[Point], list[Point]] = ([], [])
     if ctx.walled:
-        _wall(ctx, grid, dry, town, ends)
+        wall = _wall(ctx, grid, dry, town, ends)
     _plant(ctx, grid, dry, roofs, stream)
+    if ctx.fall is not None:
+        _fall(ctx, grid, roofs, lots, wall)
     if ctx.floor > 0:
         layer = uppers[ctx.floor - 1] if ctx.floor - 1 < len(uppers) else np.zeros_like(grid)
         cells = grid.copy()  # the ground as it is: streets, trees, the wall and its gates, the harbour and the mill

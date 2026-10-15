@@ -21,7 +21,8 @@ VALUES: Dict[str, Any] = {
     # or "mixed" to pick one per structure
     "ruin_erosion": 0.45,  # fraction of a ruin's walls that have collapsed once it is old (and of one with no date)
     "ruin_erosion_young": 0.12,  # the fraction a ruin that has just fallen has lost
-    "ruin_erosion_years": 400,  # years until a fallen ruin has lost the full ``ruin_erosion``
+    "ruin_erosion_years": 400,  # years until a fallen ruin has lost the full ``ruin_erosion`` (and a ruined settlement
+    # its standing buildings and wall: the tier's ``ruin_standing`` and ``ruin_wall_fall`` in ``data/sites.toml``)
     "coast_margin_rows": 1,  # bare ground kept between a solid structure and any water, in rows
     "street_water_cost": 6.0,  # cost of a street cell over water relative to dry ground (it becomes a bridge)
     "bridge_max_rows": 6,  # the widest water, in rows, a settlement street will bridge
@@ -57,6 +58,7 @@ VALUES: Dict[str, Any] = {
         "lookout_density": 0.5,  # a tower's top floor is dressed at this share of the usual density
         "ruin_density": 0.8,  # ruins are strewn with debris: this multiple of clutter_density
         "ruin_crack": 0.5,  # floor cracks into rubble at this share of the wall-collapse rate
+        "ruin_standing_crack": 0.25,  # a building of a ruined settlement that still stands cracks at this share of that
         "home_density": 1.6,  # homes are cosier than dungeons: this multiple of clutter_density
         "boat_density": 1.4,  # a deck is laden with cargo: this multiple of clutter_density
         "supply_density": 0.6,  # a camp scatters supplies at this multiple of clutter_density (at least 0.04)

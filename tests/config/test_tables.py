@@ -432,3 +432,18 @@ def test_the_ruin_row_needs_its_origins() -> None:
     del cfg["tables"]["pois"]["ruin"]["fall_origin"]
     with pytest.raises(ConfigError, match=r"tables\.pois\.ruin: needs fall_origin"):
         validate(cfg)
+
+
+def test_a_tier_a_ruin_may_have_been_needs_its_ruin_numbers() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["sites"]["town"]["ruin_standing"]
+    with pytest.raises(ConfigError, match=r"tables\.sites\.town: needs ruin_standing"):
+        validate(cfg)
+
+
+@pytest.mark.parametrize("key", ["ruin_standing", "ruin_wall_fall"])
+def test_a_ruin_share_pair_must_be_two_shares(key: str) -> None:
+    cfg = get_defaults()
+    cfg["tables"]["sites"]["town"][key] = [0.5, 1.5]
+    with pytest.raises(ConfigError, match=rf"tables\.sites\.town\.{key}: expected unit_pair"):
+        validate(cfg)

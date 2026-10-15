@@ -32,6 +32,21 @@ def layout(name: str) -> Callable[[Layout], Layout]:
 
 
 @dataclass(frozen=True)
+class Fall:
+    """How far a ruined settlement has fallen, for the settlement layout's fall pass.
+
+    Attributes:
+        standing: Share of its buildings that still stand (at least one always does).
+        wall: Share of its wall that has fallen (its gates are always breached).
+        erosion: Share of a fallen building's walls that have collapsed.
+    """
+
+    standing: float
+    wall: float
+    erosion: float
+
+
+@dataclass(frozen=True)
 class SiteContext:
     """Everything a layout reads for one floor of one site.
 
@@ -49,6 +64,7 @@ class SiteContext:
         tags: The POI's site traits (``port``, ``river``, ``lake``): a settlement builds a harbour or a mill for them.
         age_years: Years since the POI fell (a ruin fell in with them); None when it is undated or still stands.
         purpose: The POI's purpose (a camp's: founding, bandit or army), which a layout may dress differently.
+        fall: Set for a ruin of a settlement tier: the settlement layout then lays the settlement and lets it fall.
     """
 
     kind: str
@@ -64,6 +80,7 @@ class SiteContext:
     tags: tuple[str, ...] = ()
     age_years: Optional[int] = None
     purpose: str = ""
+    fall: Optional[Fall] = None
 
     def weights(self, role: str) -> list[tuple[Cell, float]]:
         """The furniture weights of a room role (empty: the role is left bare)."""

@@ -71,8 +71,8 @@ def test_doors_and_stairs_are_mutually_reachable(world: World, cfg: Config) -> N
     # Furniture must never trap a door or a stair: all of a floor's doors and stairs share one walkable component.
     special = [int(Cell.DOOR), int(Cell.STAIRS_UP), int(Cell.STAIRS_DOWN)]
     for poi, _geometry, plan in _plans(world, cfg):
-        if poi.kind in ("camp", "boat") or poi.kind in {"capital", "city", "town", "village"}:
-            continue
+        if poi.kind in ("camp", "boat") or poi.kind in {"capital", "city", "town", "village"} or poi.ruin_of:
+            continue  # a settlement, or the ruin of one, is a town of buildings, not one structure
         labels, _ = ndimage.label(np.isin(plan.cells, _PASSABLE))
         marks = {int(labels[y, x]) for y, x in np.argwhere(np.isin(plan.cells, special)).tolist()}
         assert len(marks - {0}) <= 1, f"{poi.kind} at {poi.x},{poi.y} floor {plan.floor}"
