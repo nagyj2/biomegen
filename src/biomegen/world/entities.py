@@ -14,7 +14,17 @@ from typing import List, Optional, Tuple
 
 REALM_KINDS: Tuple[str, ...] = ("major", "city_state", "tribal")
 RELATION_KINDS: Tuple[str, ...] = ("war", "rivalry", "alliance", "trade")
-EVENT_KINDS: Tuple[str, ...] = ("founding", "settling", "conquest", "war", "rivalry", "treaty", "battle", "fall")
+EVENT_KINDS: Tuple[str, ...] = (
+    "founding",
+    "settling",
+    "conquest",
+    "war",
+    "rivalry",
+    "treaty",
+    "battle",
+    "peace",
+    "fall",
+)
 NO_LOCATION: Tuple[int, int] = (-1, -1)  # a chronicle event not tied to a cell
 
 

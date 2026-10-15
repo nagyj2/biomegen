@@ -144,3 +144,50 @@ def test_a_near_place_in_the_text_is_the_events_near_settlement(world: World) ->
 def test_event_text_is_the_same_on_a_second_run(cfg: Config) -> None:
     first, second = pipeline.generate(cfg, 42), pipeline.generate(cfg, 42)
     assert [e.text for e in first.chronicle] == [e.text for e in second.chronicle]
+
+
+def _with_fallen(event: ChronicleEvent, world: World) -> ChronicleEvent:
+    """Give ``event`` realm 0 and the fallen realm 0, as a war or battle with a ruin has."""
+    event.realm_ids, event.fallen_ids = [0], [0]
+    return event
+
+
+def test_a_fallen_realms_founding_names_it(cfg: Config) -> None:
+    world = _small_world()
+    event = ChronicleEvent(0, 100, "founding", fallen_ids=[0], template="{fallen} rises in {year}.")
+    assert _render(world, event, cfg) == f"{world.fallen_realms[0].name} rises in 100."
+
+
+def test_a_war_with_a_fallen_realm_names_the_attacker_first(cfg: Config) -> None:
+    world = _small_world()
+    tags = ("attacker:fallen",)
+    event = _with_fallen(ChronicleEvent(0, 100, "war", tags=tags, template="{attacker} attacks {defender}."), world)
+    assert _render(world, event, cfg) == f"{world.fallen_realms[0].name} attacks Kingdom of Aldor."
+
+
+def test_a_realm_can_be_the_attacker_of_a_fallen_realm(cfg: Config) -> None:
+    world = _small_world()
+    tags = ("attacker:realm",)
+    event = _with_fallen(
+        ChronicleEvent(0, 100, "war", tags=tags, template="{attacker_short} attacks {defender}."), world
+    )
+    assert _render(world, event, cfg) == f"Aldor attacks {world.fallen_realms[0].name}."
+
+
+def test_a_ruins_battle_names_the_winner_by_its_tag(cfg: Config) -> None:
+    world = _small_world()
+    tags = ("ruins", "won_by_fallen")
+    event = _with_fallen(ChronicleEvent(0, 100, "battle", tags=tags, template="{winner} beats {loser_short}."), world)
+    assert _render(world, event, cfg) == f"{world.fallen_realms[0].name} beats Aldor."
+
+
+def test_a_conquest_of_a_fallen_realm_names_the_victor(cfg: Config) -> None:
+    world = _small_world()
+    template = "{victor} ({victor_short}) ends {fallen}."
+    event = _with_fallen(ChronicleEvent(0, 100, "fall", tags=("conquered",), template=template), world)
+    assert _render(world, event, cfg) == f"Kingdom of Aldor (Aldor) ends {world.fallen_realms[0].name}."
+
+
+def test_a_peace_names_winner_and_loser(cfg: Config) -> None:
+    event = ChronicleEvent(0, 100, "peace", [1, 0], template="{winner_short} beats {loser_short}.")
+    assert _render(_small_world(), event, cfg) == "Wend beats Aldor."

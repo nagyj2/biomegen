@@ -57,7 +57,7 @@ claim_budget_km = 1500.0         # how far (cost in km) a realm of strength 1 re
 [history]
 start = "present"                # "dawn" stops after the physical stages: year 0, nothing settled, no chronicle
 span_years = 1200                # the present year of a "present" world (event wording: data/chronicle.toml)
-battles_per_100km_front = 0.5    # battles fought along a war's border, per 100 km of it
+battles_per_100km_front = 0.25   # battles fought along a war's border, per 100 km of it
 fallen_realms_per_million_km2 = 1.0   # vanished realms whose ruins lie on wild land
 near_km = 250.0                  # a place named in an event is a settlement at most this far away
 

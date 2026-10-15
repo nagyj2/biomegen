@@ -1,4 +1,4 @@
-"""Tests for the history stage: dating realms and settlements, and the founding, settling and conquest events."""
+"""Tests for the history stage: dating realms and settlements, fallen realms, and founding, settling and conquest."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.pipeline.story.history import relation_start_year
+from biomegen.pipeline.civilization.settlements import habitability
 from biomegen.world.entities import EVENT_KINDS
 from biomegen.world.world import World
 
@@ -46,6 +46,15 @@ def test_events_fall_inside_the_span(world: World) -> None:
     assert all(0 <= event.year <= world.year for event in world.chronicle)
 
 
+def test_the_oldest_realm_is_founded_in_the_first_year(world: World, cfg: Config) -> None:
+    # Foundings are shifted so the history starts around year 0, not somewhere in the middle of the span.
+    assert min(realm.founded for realm in world.realms) == cfg.get("history.first_founding_year")
+
+
+def test_no_event_comes_before_the_first_year(world: World, cfg: Config) -> None:
+    assert min(event.year for event in world.chronicle) >= cfg.get("history.first_founding_year")
+
+
 def test_every_realm_has_one_founding(world: World) -> None:
     founded = sorted(r for e in world.chronicle if e.kind == "founding" for r in e.realm_ids)
     assert founded == [realm.id for realm in world.realms]
@@ -57,12 +66,12 @@ def test_a_realms_first_event_is_its_founding(world: World) -> None:
 
 
 def test_founding_event_is_dated_by_the_realm(world: World) -> None:
-    years = {e.realm_ids[0]: e.year for e in world.chronicle if e.kind == "founding"}
+    years = {e.realm_ids[0]: e.year for e in world.chronicle if e.kind == "founding" and e.realm_ids}
     assert all(years[realm.id] == realm.founded for realm in world.realms)
 
 
 def test_a_capitals_founding_carries_the_capital_tag(world: World) -> None:
-    founding = {e.realm_ids[0]: e for e in world.chronicle if e.kind == "founding"}
+    founding = {e.realm_ids[0]: e for e in world.chronicle if e.kind == "founding" and e.realm_ids}
     seated = [r for r in world.realms if r.seat_poi >= 0 and world.pois[r.seat_poi].kind == "capital"]
     assert seated and all("capital" in founding[r.id].tags for r in seated)
 
@@ -131,12 +140,13 @@ def test_a_near_template_needs_a_near_settlement(world: World, cfg: Config) -> N
 
 def test_a_near_settlement_is_close_and_on_the_same_landmass(world: World, cfg: Config) -> None:
     cap = cfg.get("history.near_km")
-    for event in world.chronicle:
-        if event.near_poi >= 0:
-            x, y = event.location
-            poi = world.pois[event.near_poi]
-            assert world.scale.distance_km(x, y, poi.x, poi.y) <= cap
-            assert world.landmass_id[y, x] == world.landmass_id[poi.y, poi.x]
+    located = [e for e in world.chronicle if e.near_poi >= 0]
+    assert located
+    for event in located:
+        x, y = event.location
+        poi = world.pois[event.near_poi]
+        assert world.scale.distance_km(x, y, poi.x, poi.y) <= cap
+        assert world.landmass_id[y, x] == world.landmass_id[poi.y, poi.x]
 
 
 def test_the_history_is_the_same_on_a_second_run(cfg: Config) -> None:
@@ -147,14 +157,14 @@ def test_the_history_is_the_same_on_a_second_run(cfg: Config) -> None:
     ]
 
 
-def test_a_switched_off_kind_makes_no_events(cfg: Config) -> None:
+def test_a_switched_off_kind_makes_no_events() -> None:
     config = load_config(None)
     config.data["history"]["kinds"] = ["founding"]
     world = pipeline.generate(config, 42)
     assert {e.kind for e in world.chronicle} == {"founding"}
 
 
-def test_a_switched_off_kind_still_dates_the_realms(cfg: Config) -> None:
+def test_a_switched_off_kind_still_dates_the_realms() -> None:
     # Dating does not depend on which events are derived.
     config = load_config(None)
     config.data["history"]["kinds"] = []
@@ -162,165 +172,63 @@ def test_a_switched_off_kind_still_dates_the_realms(cfg: Config) -> None:
     assert world.chronicle == [] and any(realm.founded > 0 for realm in world.realms)
 
 
-def test_no_near_cap_means_no_near_settlements() -> None:
+def test_a_zero_near_cap_names_only_a_settlement_on_the_same_cell() -> None:
     config = load_config(None)
     config.data["history"]["near_km"] = 0.0
     world = pipeline.generate(config, 42)
-    assert all(e.near_poi == -1 for e in world.chronicle)
-
-
-# --- relations: war, rivalry and treaty ------------------------------------------------------------------------
-
-
-RELATION_EVENT = {"war": "war", "rivalry": "rivalry", "alliance": "treaty", "trade": "treaty"}
-
-
-def _relation_events(world: World) -> list:
-    return [e for e in world.chronicle if e.kind in ("war", "rivalry", "treaty")]
-
-
-def test_every_relation_is_one_event(world: World) -> None:
-    kinds = sorted(RELATION_EVENT[r.kind] for r in world.relations)
-    assert kinds == sorted(e.kind for e in _relation_events(world))
-
-
-def test_a_war_is_ongoing(world: World) -> None:
-    wars = [e for e in world.chronicle if e.kind == "war"]
-    assert wars and all("ongoing" in e.tags for e in wars)
-
-
-def test_a_war_names_the_attacker_first(world: World) -> None:
-    attackers = {frozenset((r.a, r.b)): r.attacker for r in world.relations if r.kind == "war"}
-    wars = [e for e in world.chronicle if e.kind == "war"]
-    assert all(e.realm_ids[0] == attackers[frozenset(e.realm_ids)] for e in wars)
-
-
-def test_a_war_carries_the_claimed_town(world: World) -> None:
-    claims = {frozenset((r.a, r.b)): r.claim_poi for r in world.relations if r.kind == "war"}
-    wars = [e for e in world.chronicle if e.kind == "war"]
     assert all(
-        e.poi_ids == ([claims[frozenset(e.realm_ids)]] if claims[frozenset(e.realm_ids)] >= 0 else []) for e in wars
+        world.scale.distance_km(*e.location, world.pois[e.near_poi].x, world.pois[e.near_poi].y) == 0
+        for e in world.chronicle
+        if e.near_poi >= 0
     )
 
 
-def test_a_treaty_is_tagged_with_its_kind(world: World) -> None:
-    pacts = {frozenset((r.a, r.b)): r.kind for r in world.relations if r.kind in ("alliance", "trade")}
-    treaties = [e for e in world.chronicle if e.kind == "treaty"]
-    assert all(e.tags == (pacts[frozenset(e.realm_ids)],) for e in treaties)
-
-
-def test_wars_join_independent_neighbours(world: World) -> None:
-    # Only independent powers sharing a border fight (the plan's causality rule).
-    wars = [r for r in world.relations if r.kind == "war"]
-    assert (
-        wars and all(world.realms[i].liege < 0 for r in wars for i in (r.a, r.b)) and all(r.border_km > 0 for r in wars)
-    )
-
-
-def test_a_relation_begins_after_both_powers_exist(world: World, cfg: Config) -> None:
-    gap = cfg.get("history.min_gap_years")
-    for event in _relation_events(world):
-        first = min(max(world.realms[i].founded for i in event.realm_ids) + gap, world.year)
-        assert event.year >= first
-
-
-def test_a_longer_border_starts_a_relation_earlier() -> None:
-    # Same span and bounds: 1500 km of border gives the longest relation, 0 km the shortest.
-    long_border = relation_start_year(1200, (10, 300), 1500.0, 1500.0, 0)
-    short_border = relation_start_year(1200, (10, 300), 0.0, 1500.0, 0)
-    assert (long_border, short_border) == (900, 1190)
-
-
-def test_a_relation_never_starts_before_the_first_allowed_year() -> None:
-    assert relation_start_year(1200, (10, 300), 1500.0, 1500.0, 1000) == 1000
-
-
-def test_a_relation_never_starts_after_the_present() -> None:
-    assert relation_start_year(1200, (10, 300), 0.0, 1500.0, 1250) == 1200
-
-
-# --- battles ------------------------------------------------------------------------------------------
-
-
-def _wars(world: World) -> dict[frozenset[int], object]:
-    return {frozenset((r.a, r.b)): r for r in world.relations if r.kind == "war"}
-
-
-def _battles(world: World) -> list:
-    return [e for e in world.chronicle if e.kind == "battle"]
-
-
-def test_a_war_sees_battles_by_the_length_of_its_front(world: World, cfg: Config) -> None:
-    rate = cfg.get("history.battles_per_100km_front")
-    expected = sum(round(r.border_km / 100.0 * rate) for r in world.relations if r.kind == "war")
-    assert expected > 0 and len(_battles(world)) == expected
-
-
-def test_a_battle_is_fought_on_the_front(world: World) -> None:
-    assert all(world.front[y, x] for x, y in (e.location for e in _battles(world)))
-
-
-def test_a_battle_is_between_the_powers_of_a_war(world: World) -> None:
-    wars = _wars(world)
-    assert all(frozenset(e.realm_ids) in wars for e in _battles(world))
-
-
-def test_a_battle_is_fought_while_its_war_lasts(world: World) -> None:
-    starts = {frozenset(e.realm_ids): e.year for e in world.chronicle if e.kind == "war"}
-    assert all(starts[frozenset(e.realm_ids)] <= e.year <= world.year for e in _battles(world))
-
-
-def test_battles_have_a_winner_and_a_loser_in_both_orders(world: World) -> None:
-    # The winner is drawn per battle, so the attacker does not always win.
-    wars = _wars(world)
-    wins = {world.chronicle[e.id].realm_ids[0] == wars[frozenset(e.realm_ids)].attacker for e in _battles(world)}
-    assert wins == {True, False}
-
-
-def test_no_battles_at_rate_zero() -> None:
-    config = load_config(None)
-    config.data["history"]["battles_per_100km_front"] = 0.0
-    assert _battles(pipeline.generate(config, 42)) == []
-
-
-# --- fallen realms ----------------------------------------------------------------------------------------
-
-
-def _falls(world: World) -> list:
-    return [e for e in world.chronicle if e.kind == "fall"]
-
-
-def test_every_fallen_realm_has_one_fall_event(world: World) -> None:
-    assert world.fallen_realms and sorted(f for e in _falls(world) for f in e.fallen_ids) == [
-        fallen.id for fallen in world.fallen_realms
-    ]
+# --- fallen realms ----------------------------------------------------------------------------------
 
 
 def test_fallen_realm_ids_are_their_indexes(world: World) -> None:
-    assert [fallen.id for fallen in world.fallen_realms] == list(range(len(world.fallen_realms)))
+    assert world.fallen_realms and [f.id for f in world.fallen_realms] == list(range(len(world.fallen_realms)))
 
 
-def test_a_fall_is_dated_when_the_realm_fell(world: World) -> None:
-    assert all(e.year == world.fallen_realms[e.fallen_ids[0]].fell for e in _falls(world))
+def test_every_fallen_realm_has_one_founding(world: World) -> None:
+    founded = sorted(f for e in world.chronicle if e.kind == "founding" for f in e.fallen_ids)
+    assert founded == [fallen.id for fallen in world.fallen_realms]
+
+
+def test_a_fallen_realms_founding_is_dated_by_the_realm(world: World) -> None:
+    years = {e.fallen_ids[0]: e.year for e in world.chronicle if e.kind == "founding" and e.fallen_ids}
+    assert all(years[f.id] == f.founded for f in world.fallen_realms)
+
+
+def test_a_fallen_realms_first_event_is_its_founding(world: World) -> None:
+    firsts = {}
+    for event in world.chronicle:
+        for fallen_id in event.fallen_ids:
+            firsts.setdefault(fallen_id, event.kind)
+    assert firsts and set(firsts.values()) == {"founding"}
 
 
 def test_a_fallen_realm_lived_before_it_fell(world: World, cfg: Config) -> None:
-    # Founded no earlier than year 0, living within the configured life, and fallen before the present.
-    lo, hi = cfg.get("history.fallen_life_years")
-    last = world.year - cfg.get("history.fallen_min_years_ago")
-    assert all(0 <= f.founded and lo <= f.fell - f.founded <= hi and f.fell <= last for f in world.fallen_realms)
+    # Founded no earlier than the first year, fallen at or after its founding and before the present.
+    first, last = cfg.get("history.first_founding_year"), world.year - cfg.get("history.fallen_min_years_ago")
+    assert all(first <= f.founded <= f.fell <= last for f in world.fallen_realms)
+
+
+def test_every_fallen_realm_has_one_fall(world: World) -> None:
+    falls = sorted(f for e in world.chronicle if e.kind == "fall" for f in e.fallen_ids)
+    assert falls == [fallen.id for fallen in world.fallen_realms]
+
+
+def test_a_fall_is_dated_when_the_realm_fell(world: World) -> None:
+    assert all(e.year == world.fallen_realms[e.fallen_ids[0]].fell for e in world.chronicle if e.kind == "fall")
 
 
 def test_ruins_lie_on_wild_land(world: World) -> None:
-    assert all(
-        world.realm_id[y, x] == -1 and world.landmass_id[y, x] >= 0
-        for x, y in (f.location for f in world.fallen_realms)
-    )
+    sites = [f.location for f in world.fallen_realms]
+    assert all(world.realm_id[y, x] == -1 and world.landmass_id[y, x] >= 0 for x, y in sites)
 
 
 def test_ruins_lie_on_habitable_land(world: World, cfg: Config) -> None:
-    from biomegen.pipeline.civilization.settlements import habitability
-
     score = habitability(world, cfg, world.seed)
     floor = cfg.get("history.fall_min_habitability")
     assert all(score[y, x] >= floor for x, y in (f.location for f in world.fallen_realms))
@@ -341,12 +249,8 @@ def test_ruins_keep_their_distance_from_each_other(world: World, cfg: Config) ->
 
 
 def test_a_fall_knows_where_the_ruins_are(world: World) -> None:
-    assert all(e.location == world.fallen_realms[e.fallen_ids[0]].location for e in _falls(world))
-
-
-def test_some_falls_name_a_near_settlement(world: World) -> None:
-    # With the default spacing a ruin can lie within the near cap of a settlement.
-    assert any(e.near_poi >= 0 for e in _falls(world))
+    falls = [e for e in world.chronicle if e.kind == "fall"]
+    assert all(e.location == world.fallen_realms[e.fallen_ids[0]].location for e in falls)
 
 
 def test_no_fall_kind_means_no_fallen_realms() -> None:

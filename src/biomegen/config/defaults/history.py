@@ -14,19 +14,28 @@ VALUES: Dict[str, Any] = {
     "start": "present",
     "span_years": 1200,  # the present year of a "present" world
     # The event kinds to derive (any of world.entities.EVENT_KINDS); leave one out to switch it off.
-    "kinds": ["founding", "settling", "conquest", "war", "rivalry", "treaty", "battle", "fall"],
+    "kinds": ["founding", "settling", "conquest", "war", "rivalry", "treaty", "battle", "peace", "fall"],
     # Founding: a realm's age is a share of span_years drawn from its kind's range, pulled toward the oldest end by
     # larger area by ``age_area_weight`` (0 = pure draw, 1 = rank only).
     "age_range": {"major": [0.6, 1.0], "city_state": [0.3, 0.8], "tribal": [0.7, 1.0]},
     "age_area_weight": 0.5,
     "settle_kinds": ["city", "town"],  # settlement kinds that get a settling event (others are only dated)
     "min_gap_years": 20,  # least time between a realm existing and its next event (conquest, war, treaty)
-    # Relations: a relation lasts a number of years between the two ends of its range, longer for a longer shared
-    # border (``border_km_for_full_span`` km or more gives the top end). A war is ongoing at the present.
-    "war_years": [10, 500],
-    "other_years": [20, 600],
-    "border_km_for_full_span": 1500.0,
-    "battles_per_100km_front": 0.5,  # battles fought along a war's border, per 100 km of it
+    "first_founding_year": 10,  # the oldest realm is founded this year; every founding is shifted to match
+    # Relations. A pair sharing a border may have had an older war first (``past_war_chance``, lasting
+    # ``past_war_years``) that ended in peace; the relation itself then begins at any later year. A war's front sees
+    # ``battles_per_100km_front`` battles per 100 km of border (at least one for an older war).
+    "past_war_chance": 0.4,
+    "past_war_years": [5, 60],
+    "battles_per_100km_front": 0.25,
+    # Strength of a faction (the odds of a battle): a realm starts at its area over the mean realm area, within
+    # ``start_strength_range``; a fallen realm draws from ``fallen_strength``. A victory multiplies it by
+    # ``1 + victory_gain``, a defeat by ``1 - defeat_loss``, never below ``min_strength``.
+    "start_strength_range": [0.25, 4.0],
+    "fallen_strength": [0.3, 1.0],
+    "victory_gain": 0.15,
+    "defeat_loss": 0.2,
+    "min_strength": 0.05,
     # Fallen realms: wild land (no realm) habitable enough to have held a realm, away from each other and from
     # settlements. They lasted ``fallen_life_years`` and fell at least ``fallen_min_years_ago`` before the present.
     "fallen_realms_per_million_km2": 1.0,
@@ -34,6 +43,13 @@ VALUES: Dict[str, Any] = {
     "fall_spacing_km": 200.0,
     "fallen_life_years": [100, 500],
     "fallen_min_years_ago": 50,
+    # Each fallen realm fights ``fallen_wars`` wars (a [min, max] count) against its ``fallen_neighbours`` nearest
+    # living realms; after a lost battle that leaves its strength under ``fall_strength`` it is conquered
+    # ``fall_delay_years`` on.
+    "fallen_wars": [0, 4],
+    "fallen_neighbours": 3,
+    "fall_strength": 0.3,
+    "fall_delay_years": [2, 25],
     # A place named in an event ({near}) must be a settlement on the same landmass within this distance.
     "near_km": 250.0,
 }

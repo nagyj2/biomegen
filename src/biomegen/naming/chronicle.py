@@ -39,12 +39,15 @@ def name_fallen_realms(world: World, config: Config, seed: int) -> None:
 def _tokens(world: World, config: Config, event: ChronicleEvent, relations: dict[tuple[int, int], Relation]) -> dict:
     """Return every token an event's wording may use (a superset: a template uses only its row's)."""
     realms = [world.realms[i] for i in event.realm_ids]
+    fallen = world.fallen_realms[event.fallen_ids[0]] if event.fallen_ids else None
     pair = relations.get((min(event.realm_ids), max(event.realm_ids))) if len(event.realm_ids) == 2 else None
     tokens: dict[str, object] = {
         "year": event.year,
         "near": world.pois[event.near_poi].name if event.near_poi >= 0 else "",
         "reason": pair.why if pair else "",
     }
+    if fallen is not None:
+        tokens.update(fallen=fallen.name, founded=fallen.founded)
     if event.kind in ("founding", "settling", "conquest") and realms:
         realm = realms[0]
         seat = world.pois[realm.seat_poi].name if realm.seat_poi >= 0 else realm.short
@@ -54,6 +57,14 @@ def _tokens(world: World, config: Config, event: ChronicleEvent, relations: dict
         if event.kind == "conquest":
             liege = realms[1]
             tokens.update(liege=liege.name, liege_short=liege.short, ruler=liege.ruler)
+    elif fallen is not None and realms:
+        realm = realms[0]
+        tokens.update(victor=realm.name, victor_short=realm.short)
+        sides = {"realm": (realm.name, realm.short), "fallen": (fallen.name, fallen.name)}
+        attacker, defender = ("fallen", "realm") if "attacker:fallen" in event.tags else ("realm", "fallen")
+        winner, loser = ("fallen", "realm") if "won_by_fallen" in event.tags else ("realm", "fallen")
+        for prefix, side in (("attacker", attacker), ("defender", defender), ("winner", winner), ("loser", loser)):
+            tokens[prefix], tokens[f"{prefix}_short"] = sides[side]
     elif len(realms) == 2:
         first, second = realms
         town = (
@@ -76,9 +87,6 @@ def _tokens(world: World, config: Config, event: ChronicleEvent, relations: dict
             b_short=second.short,
             town=town,
         )
-    if event.kind == "fall":
-        fallen = world.fallen_realms[event.fallen_ids[0]]
-        tokens.update(fallen=fallen.name, founded=fallen.founded)
     return tokens
 
 
