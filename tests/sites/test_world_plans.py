@@ -15,7 +15,9 @@ from biomegen.world.world import World
 
 VOID = int(Cell.VOID)
 OVER_WATER = {int(Cell.BRIDGE), int(Cell.BRIDGE_WALL)}
-AFLOAT = {int(Cell.FLOOR), int(Cell.HULL), int(Cell.CARGO), int(Cell.WHEEL)}  # a harbour's boats and a mill's wheel
+AFLOAT = {
+    int(c) for c in (Cell.FLOOR, Cell.HULL, Cell.CARGO, Cell.WHEEL, Cell.AXLE_H, Cell.AXLE_V)
+}  # boats, wheel, axle
 _PASSABLE = np.array(sorted(PASSABLE))
 
 
@@ -48,7 +50,7 @@ def test_nearly_every_site_has_a_plan(world: World, cfg: Config) -> None:
 
 def test_no_structure_stands_on_water(world: World, cfg: Config) -> None:
     # Away from boats and underground floors, every non-void plan cell is dry ground, except bridge decks and railings
-    # (and a settlement's moored boats and mill wheel).
+    # (and a settlement's moored boats and its mill's wheel and axle).
     for poi, geometry, plan in _plans(world, cfg):
         if poi.kind == "boat" or plan.floor < 0:
             continue  # a boat floats; an underground floor is rock and has no surface to be on

@@ -311,36 +311,82 @@ def test_moored_boats_lie_on_open_water(config: Config) -> None:
     assert boat.any() and patch.still[boat].all()
 
 
-def test_a_river_settlement_builds_a_mill_with_a_wheel_in_the_river(config: Config) -> None:
+WHEEL = int(Cell.WHEEL)
+AXLES = [int(Cell.AXLE_H), int(Cell.AXLE_V)]
+
+
+def _wheel_parts(config: Config):
+    world, plan = _riverside(config, ("river",))
     from biomegen.sites import read_patch, site_geometry
 
-    world, plan = _riverside(config, ("river",))
     patch = read_patch(world.pois[0], site_geometry(world.pois[0], config), world, config)
-    wheel = plan.cells == int(Cell.WHEEL)
-    assert wheel.any() and patch.river[wheel].all()
+    return plan, patch
+
+
+def test_a_river_settlement_builds_a_wheel_of_many_cells_in_the_river(config: Config) -> None:
+    plan, patch = _wheel_parts(config)
+    wheel = plan.cells == WHEEL
+    assert wheel.sum() >= 8 and patch.river[wheel].all()
+
+
+def test_the_axle_ends_at_the_hub_in_the_middle_of_the_wheel(config: Config) -> None:
+    # Along the axle's own direction its far end lies inside the wheel's span, not short of it and not past it.
+    plan, _ = _wheel_parts(config)
+    wheel = np.argwhere(plan.cells == WHEEL)
+    axle = np.argwhere(np.isin(plan.cells, AXLES))
+    axis = 1 if (plan.cells == int(Cell.AXLE_H)).any() else 0
+    along = axle[:, axis]
+    far = (
+        along.max()
+        if abs(along.max() - wheel[:, axis].mean()) < abs(along.min() - wheel[:, axis].mean())
+        else along.min()
+    )
+    assert wheel[:, axis].min() < far < wheel[:, axis].max()
+
+
+def test_the_wheel_stands_a_cell_out_in_the_water(config: Config) -> None:
+    # Every neighbour of a wheel cell is river: it is not on the bank.
+    plan, patch = _wheel_parts(config)
+    wheel = plan.cells == WHEEL
+    near = ndimage.binary_dilation(wheel, structure=np.ones((3, 3), bool))
+    assert patch.river[near].all()
+
+
+def test_an_axle_joins_the_wheel_to_a_wall_of_the_mill(config: Config) -> None:
+    # The axle and the wheel are one piece, and the axle's far end touches a wall cell of a building.
+    plan, _ = _wheel_parts(config)
+    parts = np.isin(plan.cells, AXLES + [WHEEL])
+    labels, _ = ndimage.label(parts)
+    wheel_label = labels[plan.cells == WHEEL][0]
+    piece = labels == wheel_label
+    axle = piece & np.isin(plan.cells, AXLES)
+    touching = ndimage.binary_dilation(axle, structure=ndimage.generate_binary_structure(2, 1)) & (plan.cells == WALL)
+    assert axle.any() and touching.any() and set(labels[plan.cells == WHEEL].tolist()) == {int(wheel_label)}
+
+
+def test_the_axle_runs_straight(config: Config) -> None:
+    # An axle is one row (east-west) or one column (north-south) of cells, never both kinds.
+    plan, _ = _wheel_parts(config)
+    horizontal, vertical = plan.cells == int(Cell.AXLE_H), plan.cells == int(Cell.AXLE_V)
+    assert horizontal.any() != vertical.any()
+    cells = horizontal if horizontal.any() else vertical
+    ys, xs = np.nonzero(cells)
+    assert (len(set(ys.tolist())) == 1) if horizontal.any() else (len(set(xs.tolist())) == 1)
 
 
 def test_a_settlement_without_the_river_tag_has_no_wheel(config: Config) -> None:
     _, plan = _riverside(config, ())
-    assert int(Cell.WHEEL) not in plan.cells
+    assert WHEEL not in plan.cells and not np.isin(plan.cells, AXLES).any()
 
 
 def test_no_wheel_without_a_river_in_the_extent(config: Config) -> None:
     _, plan = _riverside(config, ("river",), column=10)
-    assert int(Cell.WHEEL) not in plan.cells
-
-
-def test_the_mill_is_a_roofed_building_beside_the_wheel(config: Config) -> None:
-    # The wheel turns beside a building: some roof cell lies within a few cells of it.
-    _, plan = _riverside(config, ("river",))
-    wheel = np.argwhere(plan.cells == int(Cell.WHEEL))[0]
-    near = plan.outside[max(0, wheel[0] - 6) : wheel[0] + 7, max(0, wheel[1] - 14) : wheel[1] + 15]
-    assert (near == ROOF).any()
+    assert WHEEL not in plan.cells
 
 
 def test_the_mill_door_opens_onto_a_street(config: Config) -> None:
     _, plan = _riverside(config, ("river",))
-    wheel = np.argwhere(plan.cells == int(Cell.WHEEL))[0]
+    wheel = np.argwhere(np.isin(plan.cells, AXLES))[0]
     doors = np.argwhere(plan.cells[max(0, wheel[0] - 8) : wheel[0] + 9, max(0, wheel[1] - 16) : wheel[1] + 17] == DOOR)
     assert len(doors) > 0
     padded = np.pad(plan.cells == PATH, 1)

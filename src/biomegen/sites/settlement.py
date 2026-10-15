@@ -585,12 +585,70 @@ def _harbour(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, centre: Point)
             moored += moor_boat(grid, still, left, top, boat_rows, boat_cols, stream)
 
 
+_AXLE = {(1, 0): int(Cell.AXLE_H), (-1, 0): int(Cell.AXLE_H), (0, 1): int(Cell.AXLE_V), (0, -1): int(Cell.AXLE_V)}
+
+
+def _wheel_geometry(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    river: np.ndarray,
+    rect: tuple[int, int, int, int],
+    side: Point,
+    wheel_rows: int,
+    gap: int,
+) -> Optional[tuple[list[Point], list[Point]]]:
+    """Plan a water wheel for the house ``rect`` ``(x, y, width, height)`` on its ``side``: ``(axle cells, rim cells)``.
+
+    The axle runs from just outside the middle of that wall, over at most ``gap`` cells of free bank, into the river
+    and on to the hub, which lies far enough in for the whole wheel to stand in the water with a cell of river between
+    it and the bank. The wheel is an ellipse ``wheel_rows`` rows tall and as many columns as make it round; its rim is
+    the cells on its edge, the rest is left as water. ``None`` when the bank, the river or the free cells do not allow.
+    """
+    x0, y0, width, height = rect
+    dx, dy = side
+    start = (x0 + width // 2, y0 + height) if dy > 0 else (x0 + width // 2, y0 - 1) if dy < 0 else None
+    if start is None:
+        start = (x0 + width, y0 + height // 2) if dx > 0 else (x0 - 1, y0 + height // 2)
+    rows, cols = grid.shape
+    wheel_cols = round(wheel_rows * ctx.aspect)
+    reach_x, reach_y = wheel_cols / 2.0, wheel_rows / 2.0
+    inset = (wheel_cols // 2 if dx else wheel_rows // 2) + 1
+    k = 0
+    while True:  # the bank: free dry cells up to the river
+        x, y = start[0] + dx * k, start[1] + dy * k
+        if not (0 <= x < cols and 0 <= y < rows):
+            return None
+        if river[y, x]:
+            break
+        if k >= gap or not (dry[y, x] and grid[y, x] == _VOID):
+            return None
+        k += 1
+    hub = (start[0] + dx * (k + inset), start[1] + dy * (k + inset))
+    disc = []
+    for y in range(hub[1] - wheel_rows, hub[1] + wheel_rows + 1):
+        for x in range(hub[0] - wheel_cols, hub[0] + wheel_cols + 1):
+            if ((x - hub[0]) / reach_x) ** 2 + ((y - hub[1]) / reach_y) ** 2 <= 1.0:
+                disc.append((x, y))
+    if any(not (0 <= x < cols and 0 <= y < rows and river[y, x] and grid[y, x] == _VOID) for x, y in disc):
+        return None
+    axle = [(start[0] + dx * i, start[1] + dy * i) for i in range(k + inset + 1)]
+    if any(
+        not (0 <= x < cols and 0 <= y < rows) or grid[y, x] != _VOID or not (river[y, x] or dry[y, x]) for x, y in axle
+    ):
+        return None
+    inside = set(disc)
+    rim = [(x, y) for x, y in disc if any((x + i, y + j) not in inside for i in (-1, 0, 1) for j in (-1, 0, 1))]
+    return axle, rim
+
+
 def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarray, centre: Point) -> Optional[Lot]:
-    """Build a mill for a river settlement: a house beside the river and a water wheel turning in it.
+    """Build a mill for a river settlement: a house beside the river, a water wheel set into it and an axle between.
 
     The house goes on the free ground nearest the plaza within ``mill.reach`` rows of the river, its door joined to the
-    nearest street. Returns it as a lot (so it is roofed and may have storeys), or None when the extent has no river
-    beside free ground.
+    nearest street, and the wheel turns in the river on whichever side of the house the bank allows (see
+    :func:`_wheel_geometry`). Returns the house as a lot (so it is roofed and may have storeys), or None when the extent
+    has no river beside free ground that takes a wheel.
     """
     river = ctx.patch.river
     streets = np.isin(grid, _STREET)
@@ -599,6 +657,7 @@ def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarra
     cfg = ctx.config.get("sites.settlement.mill")
     height = int(ctx.setting("building_rows")[0])
     width = round(height * ctx.aspect * float(cfg["width"]))
+    wheel_rows = int(cfg["wheel_rows"])
     free = ground & dry & (grid == _VOID)
     sampling = (1.0, 1.0 / ctx.aspect)
     near_river = ndimage.distance_transform_edt(~river, sampling=sampling)
@@ -613,6 +672,15 @@ def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarra
     spec = _spec(ctx)
     for _, mid_y, mid_x in spots:
         x0, y0 = mid_x - width // 2, mid_y - height // 2
+        rect = (x0, y0, width, height)
+        plans = []
+        for side in _STEPS:
+            gap = max(1, round(float(cfg["reach"]) * (ctx.aspect if side[0] else 1.0)))
+            found = _wheel_geometry(ctx, grid, dry, river, rect, side, wheel_rows, gap)
+            if found is not None:
+                plans.append((len(found[0]), side, found))
+        if not plans:
+            continue
         street = (int(street_at[1][mid_y, mid_x]), int(street_at[0][mid_y, mid_x]))
         shape_seed = stream.getrandbits(32)
         building = build_building(
@@ -629,16 +697,15 @@ def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarra
         trial[front[1], front[0]] = _PATH
         if lay_street(trial, dry, front, street, ctx.street_rules, ground | np.isin(trial, _STREET)) is None:
             continue
-        house = np.zeros(grid.shape, dtype=bool)
-        house[y0 : y0 + height, x0 : x0 + width] = True
-        distance = ndimage.distance_transform_edt(~house, sampling=sampling)
-        beside = np.argwhere(river & (distance <= float(cfg["reach"]) + 1.0)).tolist()
-        if not beside:
-            continue
-        _, wheel_y, wheel_x = min((float(distance[row, col]), row, col) for row, col in beside)
-        trial[wheel_y, wheel_x] = _WHEEL
-        grid[:] = trial
-        return Lot(x0, y0, width, height, shape_seed, building)
+        for _, side, (axle, rim) in sorted(plans, key=lambda p: (p[0], _STEPS.index(p[1]))):
+            if any(trial[y, x] != _VOID for x, y in axle + rim):
+                continue  # the street or the door's approach is in the way: try another side
+            for x, y in rim:
+                trial[y, x] = _WHEEL
+            for x, y in axle:
+                trial[y, x] = _AXLE[side]
+            grid[:] = trial
+            return Lot(x0, y0, width, height, shape_seed, building)
     return None
 
 

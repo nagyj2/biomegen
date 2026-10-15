@@ -40,9 +40,11 @@ VALUES: Dict[str, Any] = {
         # plaza: a pier ``pier_rows`` rows long (columns scale with the cell aspect) from the dry shore nearest the
         # plaza, joined to it by a street, with up to ``boats`` boats of ``boat_length`` by ``boat_beam`` rows moored
         # beside it. A river settlement with a river in its extent builds a mill: a house ``width`` times as wide as
-        # the shortest building on free ground within ``reach`` rows of the river, with a water wheel in the water.
+        # the shortest building on free ground within ``reach`` rows of the river. A water wheel ``wheel_rows`` rows
+        # tall (as wide as the cell aspect makes it round) turns in the river, set a cell into the water, and an axle
+        # runs from the middle of the house's wall to its hub.
         "harbour": {"pier_rows": 6, "boats": 2, "boat_length": 5, "boat_beam": 4, "reach_rows": 45},
-        "mill": {"reach": 1.5, "width": 1.2},
+        "mill": {"reach": 2.0, "width": 1.2, "wheel_rows": 3},
     },
     "extra_corridors": {"dungeon": 0.34, "tower": 0.15, "ruin": 0.2},  # extra room-to-room links per room, by layout
     "furnish": {
