@@ -107,7 +107,9 @@ def _tokens(
     return tokens, where
 
 
-def _render(template: str, tokens: dict[str, object], where: Where) -> tuple[str, list[tuple[int, int, str, int]]]:
+def render_template(
+    template: str, tokens: dict[str, object], where: Where
+) -> tuple[str, list[tuple[int, int, str, int]]]:
     """Fill ``template`` and return the text with the ``(start, end, what, id)`` span of every name in it."""
     out: list[str] = []
     refs: list[tuple[int, int, str, int]] = []
@@ -133,5 +135,5 @@ def describe_events(world: World, config: Config, seed: int) -> None:
     name_fallen_realms(world, config, seed)
     relations = {(r.a, r.b): r for r in world.relations}
     for event in world.chronicle:
-        text, event.refs = _render(event.template, *_tokens(world, config, event, relations))
+        text, event.refs = render_template(event.template, *_tokens(world, config, event, relations))
         event.text = text[:1].upper() + text[1:]

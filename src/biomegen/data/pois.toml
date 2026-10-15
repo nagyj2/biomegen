@@ -18,6 +18,10 @@
 #   wild, seat_remoteness   (optional) score weights favouring wild land (no realm holds it) and distance from every
 #                     realm's seat: bandit country
 #   purpose           (optional) a camp's purpose (POI.purpose): its site row is `<kind>_<purpose>` in sites.toml
+#   names             name patterns: `{n}` (a root made in the culture, exactly once) and `{fort}` (a fort word of it)
+#   names_fallen      (optional) patterns for a fallen realm's capital ruin: `{fallen}` is the realm's name
+#   hooks             (optional, needed by a kind placed by location) one-sentence story texts: `{name}` is the POI
+#   hooks_near        (optional) texts that also name a settlement nearby (`{near}`), used only when one qualifies
 #   floors            storeys: a count, or a [min, max] range drawn per POI (a dungeon descends, the rest rise)
 #
 # History (the rule table, pipeline/story/poi_rules.py): which chronicle events make the kind
@@ -64,6 +68,9 @@ dynamic = false
 connect = true
 bandit_strength = 50
 bandit_radius_km = 120.0
+names = ["{n} {fort}", "{fort} of {n}"]
+hooks = ["{name} stands alone on the heights, and none will say who raised it.", "Bandits are said to keep {name}, and the road past it is not safe."]
+hooks_near = ["{name} looks out over the lands round {near}.", "Travellers from {near} speak of {name} in lowered voices."]
 
 [pois.dungeon]
 priority = 20
@@ -86,6 +93,9 @@ dynamic = false
 connect = true
 bandit_strength = 80
 bandit_radius_km = 150.0
+names = ["{n} Depths", "{n} Catacombs", "Tomb of {n}", "{n} Deep"]
+hooks = ["{name} lies deep under the hills; those who go down seldom return.", "Whatever was buried at {name} was buried to stay."]
+hooks_near = ["Folk of {near} warn their children away from {name}.", "{name}, a day from {near}, has swallowed more than one hunting party."]
 
 [pois.ruin]
 priority = 30
@@ -105,6 +115,10 @@ dynamic = false
 connect = true
 bandit_strength = 20
 bandit_radius_km = 60.0
+names = ["Ruins of {n}", "{n} Ruins", "Old {n}"]
+names_fallen = ["Ruins of {fallen}", "Remains of {fallen}"]
+hooks = ["{name} is all that is left of a people no one remembers.", "Grass grows through the broken floors of {name}."]
+hooks_near = ["The shepherds of {near} avoid {name} after dark.", "{name} was a proud place once; now {near} takes its stones for walls."]
 
 [pois.camp]
 priority = 40
@@ -118,6 +132,9 @@ floors = 1
 owner = "wild"
 dynamic = true
 connect = false
+names = ["{n} Camp", "{n} Hollow", "{n} Rest"]
+hooks = ["The fire at {name} is never quite out.", "{name} is a rough camp where the road bends."]
+hooks_near = ["Drovers from {near} rest at {name}.", "{name} is a camp a few days from {near}, and nothing is asked of its guests."]
 
 [pois.boat]
 priority = 50
@@ -130,6 +147,8 @@ floors = 1
 owner = "wild"
 dynamic = false
 connect = false
+names = ["The {n}", "{n}"]
+hooks = ["{name} drifts here, her crew minding their own business.", "{name} rides at anchor, and her cargo is nobody's concern."]
 
 # Made by history only (no km2_per_poi): the location pass never places them.
 [pois.battlefield]
@@ -147,6 +166,7 @@ floors = 1
 owner = "wild"
 dynamic = false
 connect = false
+names = ["{n} Field", "Field of {n}", "{n} Moor"]
 
 [pois.watchtower]
 priority = 70
@@ -163,6 +183,7 @@ owner = "realm"
 dynamic = true
 lifespan = 150
 connect = true
+names = ["{n} Watch", "Watch of {n}", "{n} {fort}"]
 
 # The site of a shrine comes from `poi_sites` (a row's `connect` replaces this one).
 [pois.shrine]
@@ -176,6 +197,7 @@ floors = 1
 owner = "realm"
 dynamic = true
 connect = true
+names = ["{n} Shrine", "Shrine of {n}", "{n} Chapel"]
 
 # What becomes of a fallen realm's ruins (a `fated` kind draws one per POI). `sim_only` fates are returned only to a later
 # simulation (`poi_for_event(..., simulated=True)`): generation cannot show them, the living realms being final.

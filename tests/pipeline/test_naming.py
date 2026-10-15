@@ -112,3 +112,54 @@ def test_form_without_placeholder_is_rejected():
     bad["tables"]["geo_names"]["peak"]["forms"] = ["Mount Doom"]
     with pytest.raises(ConfigError, match="geo_names.peak.forms"):
         validate(bad)
+
+
+# --------------------------------------------------------------------------- POI names and hooks
+SEEDS = (42, 7)
+
+
+@pytest.fixture(scope="module", params=SEEDS)
+def story(request, cfg):
+    return pipeline.generate(cfg, request.param)
+
+
+def test_no_poi_name_or_hook_keeps_an_unfilled_token(story):
+    assert all("{" not in p.name and "}" not in p.name and "{" not in p.hook for p in story.pois)
+
+
+def test_a_poi_placed_by_location_has_a_hook(story):
+    assert all(p.hook for p in story.pois if not p.event_ids and not p.civilized)
+
+
+def test_a_poi_an_event_made_takes_that_events_text_as_its_hook(story):
+    made = [p for p in story.pois if p.event_ids]
+    assert made and all(p.hook == story.chronicle[p.event_ids[0]].text for p in made)
+
+
+def test_a_settlement_with_a_founding_event_has_its_hook(story):
+    seats = [story.pois[r.seat_poi] for r in story.realms if r.seat_poi >= 0]
+    assert seats and all(seat.hook == story.chronicle[seat.event_ids[0]].text for seat in seats)
+
+
+def test_a_hooks_name_spans_cut_out_the_names(story):
+    for p in story.pois:
+        for start, end, kind, ident in p.hook_refs:
+            if not p.event_ids and kind == "poi":
+                assert p.hook[start:end] == story.pois[ident].name
+
+
+def test_a_capital_ruin_is_named_for_its_fallen_realm(story):
+    for fallen in story.fallen_realms:
+        ruin = story.pois[int(story.poi_index[fallen.location[1], fallen.location[0]])]
+        assert fallen.name.removeprefix("The ") in ruin.name
+
+
+def test_a_holding_is_not_named_for_the_fallen_realm(story):
+    capitals = {fallen.location for fallen in story.fallen_realms}
+    for p in story.pois:
+        if p.kind == "ruin" and p.event_ids and (p.x, p.y) not in capitals:
+            assert all(f.name.removeprefix("The ") not in p.name for f in story.fallen_realms)
+
+
+def test_a_shrine_name_uses_a_shrine_word(story):
+    assert all("Shrine" in p.name or "Chapel" in p.name for p in story.pois if p.kind == "shrine")

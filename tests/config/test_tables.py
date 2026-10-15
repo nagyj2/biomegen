@@ -380,3 +380,34 @@ def test_a_history_kind_without_events_is_rejected() -> None:
     del cfg["tables"]["pois"]["battlefield"]["events"]
     with pytest.raises(ConfigError, match=r"tables\.pois\.battlefield: a history kind needs events"):
         validate(cfg)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("names", ["{n} {castle}"], r"tables\.pois\.tower\.names: unknown token \{castle\}"),
+        ("names_fallen", ["Ruins of {n}"], r"tables\.pois\.ruin\.names_fallen: 'Ruins of \{n\}' must use \{fallen\}"),
+        ("hooks", ["{name} watches {near}."], r"tables\.pois\.ruin\.hooks: unknown token \{near\}"),
+        ("hooks_near", ["{name} stands."], r"tables\.pois\.ruin\.hooks_near: .* must use \{near\}"),
+    ],
+)
+def test_a_poi_text_may_use_only_its_tokens(key: str, value: list, message: str) -> None:
+    cfg = get_defaults()
+    kind = "tower" if key == "names" else "ruin"
+    cfg["tables"]["pois"][kind][key] = value
+    with pytest.raises(ConfigError, match=message):
+        validate(cfg)
+
+
+def test_a_poi_name_pattern_needs_its_root() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["pois"]["tower"]["names"] = ["The Tower"]
+    with pytest.raises(ConfigError, match=r"tables\.pois\.tower\.names: expected forms"):
+        validate(cfg)
+
+
+def test_a_kind_placed_by_location_needs_hooks() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["pois"]["camp"]["hooks"]
+    with pytest.raises(ConfigError, match=r"tables\.pois\.camp: a kind placed by location needs hooks"):
+        validate(cfg)

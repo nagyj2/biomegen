@@ -168,3 +168,7 @@ def run(world: World, config: Config, seed: int) -> None:
     styles = rulers.derive(world, config, seed, span, ledger)
     conflicts.derive(world, config, seed, span, ledger, styles)
     world.chronicle = ledger.finish()
+    for event in world.chronicle:  # a settlement is marked by the event that founded or settled it
+        if event.kind in ("founding", "settling"):
+            for index in event.poi_ids:
+                world.pois[index].event_ids.append(event.id)

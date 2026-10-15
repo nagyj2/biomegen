@@ -154,3 +154,10 @@ def test_events_at_matches_the_poi_on_the_cell() -> None:
 
 def test_events_of_lists_the_events_naming_a_realm() -> None:
     assert [e.id for e in _history_world().events_of(1)] == [2]
+
+
+def test_events_at_matches_an_event_the_poi_is_marked_by() -> None:
+    # A POI made by an event lists it in event_ids, so it is found at the POI's cell though the event names no POI.
+    world = _history_world()
+    world.pois[0].event_ids = [2]
+    assert [e.id for e in world.events_at(2, 1)] == [1, 2]

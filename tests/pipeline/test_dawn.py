@@ -143,3 +143,8 @@ def test_a_dawn_world_exports_to_svg(dawn: World, config: Config, tmp_path: Path
     exporting.data["export"]["png"] = False
     paths = export_world(dawn, exporting)
     assert paths and Path(paths[0]).read_text(encoding="utf-8").startswith("<svg")
+
+
+def test_dawn_pois_have_hooks_that_name_no_settlement(dawn: World) -> None:
+    # No settlement exists at year 0, so a hook can only come from a row's plain templates.
+    assert dawn.pois and all(poi.hook and not poi.hook_refs[1:] for poi in dawn.pois)

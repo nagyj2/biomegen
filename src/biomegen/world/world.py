@@ -197,7 +197,8 @@ class World:
     def events_at(self, x: int, y: int) -> list[ChronicleEvent]:
         """Return the events located at cell ``(x, y)`` or naming the POI anchored there, oldest first."""
         poi = int(self.poi_index[y, x])
-        return [e for e in self.chronicle if e.location == (x, y) or (poi >= 0 and poi in e.poi_ids)]
+        marked = set(self.pois[poi].event_ids) if poi >= 0 else set()
+        return [e for e in self.chronicle if e.location == (x, y) or poi in e.poi_ids or e.id in marked]
 
     def events_of(self, realm_id: int) -> list[ChronicleEvent]:
         """Return the events that name realm ``realm_id``, oldest first."""

@@ -95,6 +95,10 @@ _POI_ROW = {
     "seat_remoteness": "nonneg",
     "event_spacing_km": "positive",
     "floors": "floors",
+    "names": "forms",
+    "names_fallen": "text_list",
+    "hooks": "text_list",
+    "hooks_near": "text_list",
     "owner": "owner",
     "dynamic": "bool",
     "connect": "bool",
@@ -187,6 +191,9 @@ _POI_OPTIONAL = frozenset(
         "wild",
         "seat_remoteness",
         "event_spacing_km",
+        "names_fallen",
+        "hooks",
+        "hooks_near",
         "bandit_strength",
         "bandit_radius_km",
         "lifespan",
@@ -226,6 +233,10 @@ _REASON_TOKENS = {
     "alliance": frozenset(),
     "trade": frozenset({"goods_a", "goods_b", "short_a", "short_b"}),
 }
+
+#: The tokens a POI kind's names and hooks may use (``names_fallen`` adds ``fallen``, ``hooks_near`` adds ``near``).
+_NAME_TOKENS = frozenset({"n", "fort"})
+_HOOK_TOKENS = frozenset({"name"})
 
 #: The tokens each chronicle row may use besides {year}; a "near" sentence may also use {near} (and must).
 _CHRONICLE_TOKENS = {
@@ -475,29 +486,47 @@ def _validate_polity(tables: Dict[str, Any], errors: List[str]) -> None:
         errors.append("tables.reason_tokens must have the rows town, river, range and sea")
 
 
-def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
-    """Check the history keys of the POI kinds: known event kinds, known styles in `to:` / `from:` tags, a history kind
-    with events, and every kind with sites covering both tempers."""
+def _listed(row: Dict[str, Any], key: str) -> List[Any]:
+    """The list under ``key`` of a row, or an empty list when it is absent or not a list."""
+    value = row.get(key)
+    return value if isinstance(value, list) else []
+
+
+def _validate_poi_history(kind: str, row: Dict[str, Any], styles: Dict[str, Any], errors: List[str]) -> None:
+    """Check one POI row's history keys: known event kinds, known styles in ``to:`` / ``from:`` tags, events present."""
     from ..world.entities import EVENT_KINDS  # local import: avoids import-order coupling
 
-    pois, styles = tables.get("pois", {}), tables.get("ruling_styles", {})
-    if not isinstance(pois, dict) or not isinstance(styles, dict):
-        return
-    for kind in sorted(pois):
-        row = pois[kind]
-        if not isinstance(row, dict):
-            continue
-        where = f"tables.pois.{kind}"
-        for event in row.get("events", []) if isinstance(row.get("events"), list) else []:
-            if event not in EVENT_KINDS:
-                errors.append(f"{where}.events: unknown event kind {event!r} (valid: {', '.join(EVENT_KINDS)})")
-        for tag in row.get("tags", []) if isinstance(row.get("tags"), list) else []:
-            side, _, style = str(tag).partition(":")
-            if side in ("to", "from") and style not in styles:
-                errors.append(f"{where}.tags: {tag!r} names no ruling style")
-        if row.get("source") == "history" and not row.get("events"):
-            errors.append(f"{where}: a history kind needs events")
-    sites = tables.get("poi_sites", {})
+    where = f"tables.pois.{kind}"
+    for event in _listed(row, "events"):
+        if event not in EVENT_KINDS:
+            errors.append(f"{where}.events: unknown event kind {event!r} (valid: {', '.join(EVENT_KINDS)})")
+    for tag in _listed(row, "tags"):
+        side, _, style = str(tag).partition(":")
+        if side in ("to", "from") and style not in styles:
+            errors.append(f"{where}.tags: {tag!r} names no ruling style")
+    if row.get("source") == "history" and not row.get("events"):
+        errors.append(f"{where}: a history kind needs events")
+
+
+def _validate_poi_text(kind: str, row: Dict[str, Any], errors: List[str]) -> None:
+    """Check one POI row's name patterns and hook texts: only their tokens, and the token each variant exists for."""
+    where = f"tables.pois.{kind}"
+    if row.get("source") in ("location", "both") and not row.get("hooks"):
+        errors.append(f"{where}: a kind placed by location needs hooks")
+    for key, allowed, needs in (
+        ("names", _NAME_TOKENS, None),
+        ("names_fallen", _NAME_TOKENS | {"fallen"}, "fallen"),
+        ("hooks", _HOOK_TOKENS, None),
+        ("hooks_near", _HOOK_TOKENS | {"near"}, "near"),
+    ):
+        for text in _listed(row, key):
+            _check_tokens(text, allowed, f"{where}.{key}", errors)
+            if needs and isinstance(text, str) and needs not in (_tokens(text) or set()):
+                errors.append(f"{where}.{key}: {text!r} must use {{{needs}}}")
+
+
+def _validate_poi_sites(sites: Any, pois: Dict[str, Any], errors: List[str]) -> None:
+    """Check the ``poi_sites`` rows: a known kind, a band that runs outward, and every kind covering both tempers."""
     if not isinstance(sites, dict):
         return
     tempers: Dict[str, set] = {}
@@ -507,13 +536,25 @@ def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
             continue
         if row.get("kind") not in pois:
             errors.append(f"tables.poi_sites.{name}.kind: no POI kind named {row.get('kind')!r}")
-        if isinstance(row.get("min_km"), (int, float)) and isinstance(row.get("max_km"), (int, float)):
-            if row["min_km"] >= row["max_km"]:
-                errors.append(f"tables.poi_sites.{name}: min_km must be below max_km")
+        near, far = row.get("min_km"), row.get("max_km")
+        if isinstance(near, (int, float)) and isinstance(far, (int, float)) and near >= far:
+            errors.append(f"tables.poi_sites.{name}: min_km must be below max_km")
         tempers.setdefault(str(row.get("kind")), set()).add(row.get("temper"))
     for kind in sorted(tempers):
         if tempers[kind] != set(TEMPERS):
             errors.append(f"tables.poi_sites: kind {kind!r} needs a site for each temper ({', '.join(TEMPERS)})")
+
+
+def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check the POI kinds' history keys, name patterns and hook texts, and the shrine-like sites."""
+    pois, styles = tables.get("pois", {}), tables.get("ruling_styles", {})
+    if not isinstance(pois, dict) or not isinstance(styles, dict):
+        return
+    for kind in sorted(pois):
+        if isinstance(pois[kind], dict):
+            _validate_poi_history(kind, pois[kind], styles, errors)
+            _validate_poi_text(kind, pois[kind], errors)
+    _validate_poi_sites(tables.get("poi_sites", {}), pois, errors)
 
 
 def _validate_chronicle(chronicle: Any, errors: List[str]) -> None:

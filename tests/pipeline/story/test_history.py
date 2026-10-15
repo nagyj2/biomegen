@@ -264,3 +264,14 @@ def test_no_fallen_realms_at_rate_zero() -> None:
     config = load_config(None)
     config.data["history"]["fallen_realms_per_million_km2"] = 0.0
     assert pipeline.generate(config, 42).fallen_realms == []
+
+
+def test_a_seat_is_marked_by_its_realms_founding(world: World) -> None:
+    for realm in world.realms:
+        if realm.seat_poi >= 0:
+            assert world.chronicle[world.pois[realm.seat_poi].event_ids[0]].kind == "founding"
+
+
+def test_a_settlement_is_marked_by_the_event_that_settled_it(world: World) -> None:
+    settled = [e for e in world.chronicle if e.kind == "settling"]
+    assert settled and all(e.id in world.pois[e.poi_ids[0]].event_ids for e in settled)

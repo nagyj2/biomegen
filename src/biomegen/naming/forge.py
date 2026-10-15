@@ -9,6 +9,7 @@ pattern (settlement suffixes, "Ruins of X", "Lake X", a region's geographic word
 from __future__ import annotations
 
 import random
+from collections.abc import Mapping, Sequence
 from typing import Dict, Optional, Tuple
 
 from ..config.model import Config
@@ -81,7 +82,8 @@ def name_entity(
     culture_name: str,
     generators_cfg: Optional[Dict[str, str]],
     naming_cfg: Optional[Config],
-    kind: Optional[str] = None,
+    forms: Optional[Sequence[str]] = None,
+    extra: Optional[Mapping[str, str]] = None,
     civilized: bool = False,
 ) -> str:
     """Return a finished name for one entity.
@@ -90,6 +92,9 @@ def name_entity(
     ----------
     category : 'island' | 'realm' | 'ruler' | 'poi' | 'river' | 'lake'
     key      : a tuple of ints uniquely + stably identifying the entity (realm id, POI (x,y), ...).
+    forms    : for a wild POI, its kind's name patterns (``tables.pois.<kind>.names``): ``{n}`` is the root and
+               ``{fort}`` a fort word of the culture; without them the bare root is the name.
+    extra    : more tokens for the patterns (a fallen realm's ruin names ``{fallen}``).
     """
     r = rng.derive(seed, "naming", category, *key)
     profile = CULTURES.get(culture_name, CULTURES["common"])
@@ -111,14 +116,7 @@ def name_entity(
     # POIs.
     if civilized:
         return f"{root}{r.choice(profile.settlement)}".capitalize()
-    if kind == "tower":
-        return r.choice([f"{root} {r.choice(profile.fort)}", f"{profile.fort[0]} of {root}"])
-    if kind == "dungeon":
-        return r.choice([f"{root} Depths", f"{root} Catacombs", f"Tomb of {root}", f"{root} Deep"])
-    if kind == "ruin":
-        return r.choice([f"Ruins of {root}", f"{root} Ruins", f"Old {root}"])
-    if kind == "camp":
-        return r.choice([f"{root} Camp", f"{root} Hollow", f"{root} Rest"])
-    if kind == "boat":
-        return r.choice([f"The {root}", f"{root}"])
+    if forms:
+        tokens = {"n": root, "fort": r.choice(profile.fort), **(extra or {})}
+        return str(r.choice(list(forms))).format(**tokens)
     return root
