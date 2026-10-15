@@ -9,12 +9,15 @@ from biomegen.config.model import Config
 from biomegen.explorer.state import (
     MODE_FIT,
     MODE_ONE_TO_ONE,
+    PAN_CENTRE,
+    PAN_EDGE,
     ViewState,
     clamp,
     cycle_floor,
     edge_pan,
     initial_cursor,
     move_cursor,
+    pan,
     poi_under_cursor,
     step_in,
     step_out,
@@ -77,6 +80,23 @@ def test_camera_stays_inside_the_world() -> None:
 
 def test_a_world_smaller_than_the_viewport_is_centred() -> None:
     assert edge_pan(0, 3, 20, 10) == -5
+
+
+def test_centre_panning_holds_still_inside_the_margin() -> None:
+    assert pan(10, 15, 20, 100, 1, PAN_CENTRE) == 10
+
+
+def test_centre_panning_jumps_half_a_screen_at_the_edge() -> None:
+    # The cursor at the right margin (29) is re-centred: the camera moves 9 tiles, not 1.
+    assert pan(10, 29, 20, 100, 1, PAN_CENTRE) == 19
+
+
+def test_centre_panning_stays_inside_the_world() -> None:
+    assert pan(78, 99, 20, 100, 1, PAN_CENTRE) == 80
+
+
+def test_edge_panning_steps_like_edge_pan() -> None:
+    assert pan(10, 29, 20, 100, 1, PAN_EDGE) == edge_pan(10, 29, 20, 100)
 
 
 def test_message_log_keeps_only_the_latest() -> None:

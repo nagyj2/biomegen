@@ -59,6 +59,13 @@ def test_validate_rejects_malformed_size_km(size_km: object) -> None:
         validate(cfg)
 
 
+def test_validate_rejects_an_unknown_pan_mode() -> None:
+    cfg = get_defaults()
+    cfg["controls"]["pan"] = "sideways"
+    with pytest.raises(ConfigError, match="controls.pan"):
+        validate(cfg)
+
+
 def test_validate_clamps_center_lat() -> None:
     # An out-of-range latitude is clamped, not fatal.
     cfg = get_defaults()

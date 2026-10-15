@@ -52,6 +52,23 @@ def edge_pan(cam: int, cursor: int, view: int, world_size: int, margin: int = 1)
     return clamp(cam, 0, world_size - view)
 
 
+PAN_EDGE = "edge"  # controls.pan: scroll one step as the cursor reaches the margin
+PAN_CENTRE = "centre"  # controls.pan: jump to centre the cursor when it reaches the margin
+
+
+def pan(cam: int, cursor: int, view: int, world_size: int, margin: int, mode: str) -> int:
+    """Return the camera origin after the cursor moved, following ``controls.pan`` (``mode``).
+
+    Both modes hold the camera still while the cursor stays ``margin`` inside the viewport. At the margin, ``"edge"``
+    scrolls just enough (:func:`edge_pan`); ``"centre"`` re-centres the cursor, moving about half a screen, so a pan
+    redraws the whole screen once per half screen of travel instead of on every step.
+    """
+    inside = cam + margin <= cursor <= cam + view - 1 - margin
+    if mode != PAN_CENTRE or world_size <= view or inside:
+        return edge_pan(cam, cursor, view, world_size, margin)
+    return clamp(cursor - view // 2, 0, world_size - view)
+
+
 @dataclass
 class ViewState:
     """Mutable explorer state driven by the input loop.

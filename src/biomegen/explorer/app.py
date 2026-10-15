@@ -33,9 +33,9 @@ from .state import (
     ViewState,
     clamp,
     cycle_floor,
-    edge_pan,
     initial_cursor,
     move_cursor,
+    pan,
     step_in,
     step_out,
     sync_floor,
@@ -97,6 +97,7 @@ def _reverse(grid: CellGrid, rows: slice, cols: slice) -> None:
 def _map_sampler(world: World, config: Config, state: ViewState, area: Size) -> Sampler:
     """Return the sampler for the current scale and mode, moving the camera as the cursor needs."""
     cols, rows = area
+    mode = str(config.get("controls.pan"))
     if state.is_detail:
         cell_w, cell_h = detail_cell_size(state.scale, config, cols, rows)
         tiles_w, tiles_h = max(1, cols // cell_w), max(1, rows // cell_h)
@@ -104,8 +105,8 @@ def _map_sampler(world: World, config: Config, state: ViewState, area: Size) -> 
             state.cam_x = centre_camera(state.cx, tiles_w, world.width)
             state.cam_y = centre_camera(state.cy, tiles_h, world.height)
         else:
-            state.cam_x = edge_pan(state.cam_x, state.cx, tiles_w, world.width)
-            state.cam_y = edge_pan(state.cam_y, state.cy, tiles_h, world.height)
+            state.cam_x = pan(state.cam_x, state.cx, tiles_w, world.width, 1, mode)
+            state.cam_y = pan(state.cam_y, state.cy, tiles_h, world.height, 1, mode)
         state.recenter = False
         return DetailSampler(world, config, cell_w, cell_h, state.cam_x, state.cam_y, tiles_w, tiles_h, state.scale)
     if state.mode == MODE_ONE_TO_ONE:
@@ -113,8 +114,8 @@ def _map_sampler(world: World, config: Config, state: ViewState, area: Size) -> 
             state.cam_x = centre_camera(state.cx, cols, world.width)
             state.cam_y = centre_camera(state.cy, rows, world.height)
         else:
-            state.cam_x = edge_pan(state.cam_x, state.cx, cols, world.width)
-            state.cam_y = edge_pan(state.cam_y, state.cy, rows, world.height)
+            state.cam_x = pan(state.cam_x, state.cx, cols, world.width, 1, mode)
+            state.cam_y = pan(state.cam_y, state.cy, rows, world.height, 1, mode)
         state.recenter = False
         return Sampler.viewport(world, rows, cols, x0=float(state.cam_x), y0=float(state.cam_y))
     state.recenter = False
@@ -159,8 +160,9 @@ def _site_view(
         state.site_cam_x = centre_camera(state.px, cols, geometry.cols)
         state.site_cam_y = centre_camera(state.py, rows, geometry.rows)
     else:
-        state.site_cam_x = edge_pan(state.site_cam_x, state.px, cols, geometry.cols, margin)
-        state.site_cam_y = edge_pan(state.site_cam_y, state.py, rows, geometry.rows, margin)
+        mode = str(config.get("controls.pan"))
+        state.site_cam_x = pan(state.site_cam_x, state.px, cols, geometry.cols, margin, mode)
+        state.site_cam_y = pan(state.site_cam_y, state.py, rows, geometry.rows, margin, mode)
     state.recenter = False
     view = CellGrid(rows, cols)
     src_rows = slice(max(0, state.site_cam_y), min(geometry.rows, state.site_cam_y + rows))

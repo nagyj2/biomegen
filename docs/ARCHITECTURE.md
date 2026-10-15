@@ -510,7 +510,8 @@ The only place that reads keys or writes the screen. `explorer.app.run` is **eve
 frame, diff-writes it, blocks on a key, and repeats, so an idle explorer uses no CPU.
 
 - **Frame.** `compose_frame` builds the map for the current scale and mode (the sampler, with the camera
-  edge-panned so it scrolls only when the cursor reaches a viewport edge), reverses the cursor's cell (its
+  still until the cursor reaches a viewport edge, then re-centred on it, about half a screen at a time
+  (`controls.pan = "centre"`, one full redraw per half screen of travel), or stepped along with it (`"edge"`)), reverses the cursor's cell (its
   whole tile block at zoom and local), and pastes the info panel under it into one terminal-sized grid.
   `e` exports the map grid *without* the cursor.
 - **Writer.** `DiffWriter` compares the grid with the last frame (numpy) and sends a cursor move and the

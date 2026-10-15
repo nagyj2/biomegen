@@ -170,6 +170,8 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
         _clamp(roads, key, 0.0, 1.0, errors, "roads")
 
     _validate_render_views(cfg.get("render", {}), errors)
+    if cfg.get("controls", {}).get("pan") not in (None, "edge", "centre"):
+        errors.append("controls.pan must be 'edge' or 'centre'")
 
     # --- every biome name referenced anywhere in config must be a real Biome enum member ---
     _validate_biome_names(cfg, errors)
