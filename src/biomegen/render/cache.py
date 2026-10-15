@@ -23,7 +23,7 @@ from __future__ import annotations
 import math
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Iterator, Optional
 
 import numpy as np
 
@@ -281,9 +281,7 @@ class RenderCache:
         layers = [LAYERS.get(name) for name in per_frame]  # resolve first so a typo fails before any work
         surface = self._surface(world, view, sampler, ascii_only, color, floor)
         # The sampler's cells within the surface's grid.
-        col0 = (sampler.cam_x - surface.cam_x) * sampler.cell_w + sampler.col0
-        row0 = (sampler.cam_y - surface.cam_y) * sampler.cell_h + sampler.row0
-        rect = (col0, row0, sampler.cols, sampler.rows)
+        rect = self._rect(surface, sampler)
         span = self._chunk_span(rect)
         missing = [(c, r) for r in span[1] for c in span[0] if (surface, c, r) not in self._chunks]
         if missing:
@@ -302,6 +300,63 @@ class RenderCache:
         for layer in layers:
             layer(context, grid)
         return grid
+
+    def prefetch(
+        self,
+        world: World,
+        config: Config,
+        view: View,
+        sampler: Sampler,
+        overlay: Optional[Overlay] = None,
+        ascii_only: bool = False,
+        color: bool = True,
+        floor: int = 0,
+    ) -> Iterator[None]:
+        """Draw the missing chunks round ``sampler``'s screen, nearest first, one per step of the iterator.
+
+        For idle time: the explorer advances it while no key is waiting, so the ground a pan or a re-centre brings into
+        view is usually drawn already. The area is the screen widened by ``render.cache.prefetch_screens`` screens on
+        every side, inside the scale's grid; it stops early rather than push drawn chunks out of the cache. Drawing a
+        chunk also builds the plans of the sites in it.
+        """
+        screens = max(0.0, float(config.get("render.cache.prefetch_screens")))
+        cached, _ = split_layers(view.layers_for(True))
+        if not isinstance(sampler, DetailSampler) or not cached or screens == 0.0:
+            return
+        self._check(world, config, overlay)
+        surface = self._surface(world, view, sampler, ascii_only, color, floor)
+        col0, row0, cols, rows = self._rect(surface, sampler)
+        pad_cols, pad_rows = round(cols * screens), round(rows * screens)
+        left, top = max(0, col0 - pad_cols), max(0, row0 - pad_rows)
+        right = min(surface.tiles_w * surface.cell_w, col0 + cols + pad_cols)
+        bottom = min(surface.tiles_h * surface.cell_h, row0 + rows + pad_rows)
+        if right <= left or bottom <= top:
+            return
+        span = self._chunk_span((left, top, right - left, bottom - top))
+        middle = (col0 + cols / 2.0, row0 + rows / 2.0)
+        missing = [(col, row) for row in span[1] for col in span[0] if (surface, col, row) not in self._chunks]
+        missing.sort(
+            key=lambda chunk: (
+                ((chunk[0] + 0.5) * self.chunk_cols - middle[0]) ** 2
+                + ((chunk[1] + 0.5) * self.chunk_rows - middle[1]) ** 2,
+                chunk[1],
+                chunk[0],
+            )
+        )
+        for col, row in missing:
+            if self._cells + self.chunk_cols * self.chunk_rows > self.max_cells:
+                return
+            if (surface, col, row) not in self._chunks:
+                self._build(
+                    world, config, view, surface, cached, overlay, ascii_only, color, "all", floor, [(col, row)]
+                )
+            yield
+
+    def _rect(self, surface: _Surface, sampler: DetailSampler) -> tuple[int, int, int, int]:
+        """Return the sampler's cells within the surface's grid as ``(col0, row0, cols, rows)``."""
+        col0 = (sampler.cam_x - surface.cam_x) * sampler.cell_w + sampler.col0
+        row0 = (sampler.cam_y - surface.cam_y) * sampler.cell_h + sampler.row0
+        return col0, row0, sampler.cols, sampler.rows
 
     def _chunk_span(self, rect: tuple[int, int, int, int]) -> tuple[range, range]:
         """Return the chunk columns and rows that a ``(col0, row0, cols, rows)`` rectangle of cells overlaps."""

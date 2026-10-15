@@ -151,3 +151,28 @@ def test_a_site_geometry_is_found_for_the_fixture_world(world: World, config: Co
     # Guards the site tests above: the fixture world has a settlement with a plan window.
     poi, geometry = _settlement_site(world, config)
     assert site_geometry(poi, config) is not None and geometry.cols > 30
+
+
+def test_prefetch_draws_the_ground_a_re_centre_brings_into_view(world: World, config: Config) -> None:
+    # After the prefetch has run, moving the view half a screen needs no new chunk.
+    view = resolve_view(config, "terrain")
+    cache = RenderCache(config)
+    cache.draw(world, config, view, _zoom(world, config, (30, 20)))
+    for _ in cache.prefetch(world, config, view, _zoom(world, config, (30, 20))):
+        pass
+    prepared = cache.cells
+    cache.draw(world, config, view, _zoom(world, config, (36, 23)))
+    assert cache.cells == prepared
+
+
+def test_prefetch_never_pushes_out_drawn_chunks(world: World) -> None:
+    # A cache nearly full after one frame prefetches nothing, so the frame's chunks stay.
+    small = load_config(None)
+    small.data["render"]["cache"]["max_cells"] = 9000
+    view = resolve_view(small, "terrain")
+    cache = RenderCache(small)
+    cache.draw(world, small, view, _zoom(world, small, (30, 20)))
+    drawn = cache.cells
+    for _ in cache.prefetch(world, small, view, _zoom(world, small, (30, 20))):
+        pass
+    assert drawn <= cache.cells <= 9000

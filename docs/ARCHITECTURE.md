@@ -507,7 +507,10 @@ A new kind is a row in `data/sites.toml` and, if it needs a new pattern, a `@lay
 ## Explorer (`explorer/`)
 
 The only place that reads keys or writes the screen. `explorer.app.run` is **event driven**: it composes a
-frame, diff-writes it, blocks on a key, and repeats, so an idle explorer uses no CPU.
+frame, diff-writes it, blocks on a key, and repeats. Before blocking it spends idle time preparing the next frames
+(`explorer/prefetch.py`): the render cache's chunks round the screen (`render.cache.prefetch_screens`), then the
+ground-floor plans of the sites within `render.cache.prefetch_site_km` of the cursor, one small step at a time,
+stopping when a key is waiting. Once that is done an idle explorer uses no CPU.
 
 - **Frame.** `compose_frame` builds the map for the current scale and mode (the sampler, with the camera
   still until the cursor reaches a viewport edge, then re-centred on it, about half a screen at a time

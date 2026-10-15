@@ -114,6 +114,8 @@ chunk_cols = 32                 # the explorer draws terrain once, in chunks of 
 chunk_rows = 16                 # and this many down, and reuses them while panning
 max_cells = 4000000             # cells kept (about 14 bytes each); the least recently shown go first
 map_frames = 8                  # whole map-scale frames kept
+prefetch_screens = 1.0          # while waiting for a key, draw the terrain this many screens round the view (0 = off)
+prefetch_site_km = 600.0        # and build the plans of the sites within this many km of the cursor
 
 [export]
 dir = "./images"

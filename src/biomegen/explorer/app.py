@@ -1,6 +1,8 @@
 """The interactive explorer: compose a frame from the layered renderer, diff-write it, read a key, repeat.
 
-``run`` is event driven: it blocks on a key and redraws only after input, so an idle explorer uses no CPU. The
+``run`` is event driven: it redraws only after input. While it waits it prepares the next frames in small steps
+(:mod:`~biomegen.explorer.prefetch`: nearby terrain chunks and site plans), stopping as soon as a key arrives, then
+blocks, so an idle explorer soon uses no CPU. The
 frame is a terminal-sized :class:`~biomegen.render.grid.CellGrid` (the map on top, the info panel below) that the
 :class:`~biomegen.explorer.writer.DiffWriter` sends as minimal updates. Everything outside ``run`` is pure, so the
 whole loop is tested with a scripted key source and an in-memory terminal.
@@ -27,6 +29,7 @@ from ..world.world import World
 from .exports import export_screen, export_world
 from .input import Action, KeyReader, make_reader, resolve_action
 from .panel import build_panel, draw_help, panel_color
+from .prefetch import idle_work
 from .state import (
     MODE_FIT,
     MODE_ONE_TO_ONE,
@@ -54,11 +57,13 @@ class Frame:
         screen: The whole terminal: map, cursor, panel and any help overlay.
         map_grid: The map as drawn, without the cursor (what ``e`` exports).
         view_name: The view that was drawn.
+        sampler: The sampler the map was drawn through (``None`` when nothing was drawn), for idle-time prefetch.
     """
 
     screen: CellGrid
     map_grid: CellGrid
     view_name: str
+    sampler: Optional[Sampler] = None
 
 
 def _draw(
@@ -148,8 +153,8 @@ def _site_view(
     color: bool,
     ascii_only: bool,
     cache: Optional[RenderCache] = None,
-) -> tuple[CellGrid, CellGrid]:
-    """Draw the part of the open site's window that fits ``area``; return ``(map grid, shown grid)``.
+) -> tuple[CellGrid, CellGrid, Optional[Sampler]]:
+    """Draw the part of the open site's window that fits ``area``; return ``(map grid, shown grid, sampler)``.
 
     The camera, in cells, scrolls over the window as the cursor nears an edge; only the visible cells are drawn. A
     window smaller than the area is centred, the outside left blank. The cursor is one cell.
@@ -165,6 +170,7 @@ def _site_view(
         state.site_cam_y = pan(state.site_cam_y, state.py, rows, geometry.rows, margin, mode)
     state.recenter = False
     view = CellGrid(rows, cols)
+    sampler: Optional[Sampler] = None
     src_rows = slice(max(0, state.site_cam_y), min(geometry.rows, state.site_cam_y + rows))
     src_cols = slice(max(0, state.site_cam_x), min(geometry.cols, state.site_cam_x + cols))
     dst_rows = slice(src_rows.start - state.site_cam_y, src_rows.stop - state.site_cam_y)
@@ -198,7 +204,7 @@ def _site_view(
     cursor_row, cursor_col = state.py - state.site_cam_y, state.px - state.site_cam_x
     if 0 <= cursor_row < rows and 0 <= cursor_col < cols:
         _reverse(shown, slice(cursor_row, cursor_row + 1), slice(cursor_col, cursor_col + 1))
-    return view, shown
+    return view, shown, sampler
 
 
 def compose_frame(
@@ -229,7 +235,7 @@ def compose_frame(
     seen = Seen()
     geometry = site_geometry(state.poi, config) if state.scale == SCALE_SITE and state.poi is not None else None
     if geometry is not None:
-        map_grid, shown = _site_view(
+        map_grid, shown, sampler = _site_view(
             world, config, view_name, state, overlay, (cols, map_rows), seen, geometry, color, ascii_only, cache
         )
     else:
@@ -254,7 +260,7 @@ def compose_frame(
     _paste(screen, build_panel(world, config, state, view_name, seen, cols, panel_height, ascii_only), map_rows)
     if help_open:
         draw_help(screen, config)
-    return Frame(screen, map_grid, view_name)
+    return Frame(screen, map_grid, view_name, sampler)
 
 
 def _export(world: World, config: Config, state: ViewState, overlay: Overlay, frame: Frame, target: str) -> None:
@@ -327,6 +333,21 @@ def run(
                     world, config, state, overlay, size_of(), color_mode != "none", ascii_only, help_open, cache
                 )
                 writer.draw(frame.screen)
+                if queued is None:  # nothing to do yet: prepare the next frames until a key arrives
+                    work = idle_work(
+                        world,
+                        config,
+                        state,
+                        cache,
+                        frame.view_name,
+                        frame.sampler,
+                        overlay,
+                        color_mode != "none",
+                        ascii_only,
+                    )
+                    for _ in work:
+                        if reader.pending():
+                            break
                 action = queued if queued is not None else resolve_action(reader.read_key(), config)
                 queued = None
                 if help_open and action[0] != "resize":

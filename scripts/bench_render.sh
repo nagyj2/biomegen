@@ -125,6 +125,9 @@ print(f"{'site':>6} {compose:9.1f} {full:11.1f} {step:11.1f} {compose + step:7.1
 # The pan sweep: cold caches, the cursor stepped right one tile (one cell inside a site) per frame across the world on
 # the starting cursor's row, each frame composed and diff-written. Best-of timings hide the cost of new ground coming
 # into view (a camera scroll repaints the screen, a site's plan is built the first time it shows); this does not.
+# A held key leaves the explorer no idle time; the "tap" rows give it up to TAP_MS of idle work between steps (a key
+# tapped about ten times a second), which is when it prepares nearby chunks and site plans.
+from biomegen.explorer.prefetch import idle_work
 from biomegen.explorer.state import move_cursor
 from biomegen.render.cache import RenderCache
 from biomegen.sites import clear_cache
@@ -135,7 +138,10 @@ def percentile(values: list[float], share: float) -> float:
     return ordered[min(len(ordered) - 1, int(len(ordered) * share))]
 
 
-def sweep(state: ExplorerState, steps: int) -> None:
+TAP_MS = 100.0
+
+
+def sweep(state: ExplorerState, steps: int, tap: bool = False) -> None:
     clear_cache()
     cache = RenderCache(config)  # a fresh one, as the explorer starts with
     sink = io.StringIO()
@@ -151,11 +157,16 @@ def sweep(state: ExplorerState, steps: int) -> None:
         composes.append((middle - start) * 1000.0)
         writes.append((time.perf_counter() - middle) * 1000.0)
         sizes.append((sink.tell() - before) / 1024.0)
+        if tap:
+            deadline = time.perf_counter() + TAP_MS / 1000.0
+            for _ in idle_work(world, config, state, cache, frame.view_name, frame.sampler, overlay):
+                if time.perf_counter() > deadline:
+                    break
         move_cursor(world, config, state, 1, 0)
-    label = state.scale if state.poi is None else "site"
+    label = (state.scale if state.poi is None else "site") + ("-tap" if tap else "")
     total = sum(composes) + sum(writes)
     print(
-        f"{label:>6} {steps:6d} {percentile(composes, 0.5):7.1f} {percentile(composes, 0.95):7.1f} {max(composes):7.1f}"
+        f"{label:>9} {steps:6d} {percentile(composes, 0.5):7.1f} {percentile(composes, 0.95):7.1f} {max(composes):7.1f}"
         f" {percentile(writes, 0.5):7.1f} {max(writes):7.1f} {percentile(sizes, 0.5):7.1f} {max(sizes):7.1f}"
         f" {total / steps:7.1f}"
     )
@@ -163,15 +174,16 @@ def sweep(state: ExplorerState, steps: int) -> None:
 
 print()
 print(f"pan sweep, cold caches, {area_w}x{area_h + 12} terminal: compose and write ms, KiB written per frame")
-print(f"{'scale':>6} {'frames':>6} {'cmp p50':>7} {'cmp p95':>7} {'cmp max':>7} {'wr p50':>7} {'wr max':>7}"
+print(f"{'scale':>9} {'frames':>6} {'cmp p50':>7} {'cmp p95':>7} {'cmp max':>7} {'wr p50':>7} {'wr max':>7}"
       f" {'KiB p50':>7} {'KiB max':>7} {'mean ms':>7}")
 start_x, start_y = initial_cursor(world, config)
-for scale in ("zoom", "local"):
-    sweep(ExplorerState(scale=scale, cx=0, cy=start_y, recenter=True, view_index=view_index), world.width)
-clear_cache()
-state = ExplorerState(scale="zoom", cx=biggest.x, cy=biggest.y, recenter=True, view_index=view_index)
-step_in(world, config, state)
-geometry = site_geometry(biggest, config)
-state.px = 0
-sweep(state, geometry.cols - 1)
+for tap in (False, True):
+    for scale in ("zoom", "local"):
+        sweep(ExplorerState(scale=scale, cx=0, cy=start_y, recenter=True, view_index=view_index), world.width, tap)
+    clear_cache()
+    state = ExplorerState(scale="zoom", cx=biggest.x, cy=biggest.y, recenter=True, view_index=view_index)
+    step_in(world, config, state)
+    geometry = site_geometry(biggest, config)
+    state.px = 0
+    sweep(state, geometry.cols - 1, tap)
 PY

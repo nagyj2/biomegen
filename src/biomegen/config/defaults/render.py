@@ -79,6 +79,10 @@ VALUES: Dict[str, Any] = {
         "chunk_rows": 16,
         "max_cells": 4_000_000,
         "map_frames": 8,
+        # While it waits for a key the explorer draws the chunks round the screen, out to this many screens on every
+        # side (0 = off), and builds the ground-floor plans of the sites within prefetch_site_km of the cursor.
+        "prefetch_screens": 1.0,
+        "prefetch_site_km": 600.0,
     },
     "show_legend": True,
     # Layered renderer (phase 4). A view is an ordered list of layer names (see render.layers) for the map
