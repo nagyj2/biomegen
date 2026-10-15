@@ -210,3 +210,26 @@ def test_the_legend_has_a_swatch_for_free_settlements(config) -> None:
 
 def test_the_legend_has_no_free_swatch_when_every_settlement_is_held(config) -> None:
     assert "Free settlement" not in _free_text(config, 0)
+
+
+def _origin_text(config, **fields) -> str:
+    from biomegen.world.entities import Predecessor
+
+    world = _political_world()
+    world.realms[1].founded = 480
+    for name, value in fields.items():
+        setattr(world.realms[1], name, value)
+    world.predecessors = [Predecessor(id=0, founded=20, split_year=480, name="Old Kingdom")]
+    return " ".join(to_plain(build_legend(world, config, POLITICAL, 100, False)).split())  # the legend wraps lines
+
+
+def test_an_offshoot_is_listed_with_the_realm_it_broke_from(config) -> None:
+    assert "Broke from" in _origin_text(config, origin="offshoot", parent=0)
+
+
+def test_a_realm_of_a_split_is_listed_with_the_old_realm(config) -> None:
+    assert "Came of the split of Old Kingdom in year 480" in _origin_text(config, origin="split", predecessor=0)
+
+
+def test_a_realm_founded_outright_has_no_origin_line(config) -> None:
+    assert "Broke from" not in _origin_text(config) and "split of" not in _origin_text(config)

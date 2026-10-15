@@ -8,6 +8,7 @@ from typing import Optional
 import numpy as np
 
 from ...config.model import Config
+from ...world.entities import Realm
 from ...world.tile import BIOME_NAME, WaterType
 from ...world.world import World
 from ..colors import biome_style, mix_colors
@@ -172,6 +173,15 @@ def _population(count: int) -> str:
     return f"{count / 1e6:.1f} million" if count >= 1_000_000 else f"{count:,}"
 
 
+def _origin(world: World, realm: Realm) -> str:
+    """The sentence on how a realm began, when it came of a secession (``""`` for a realm founded outright)."""
+    if realm.origin == "offshoot":
+        return f" Broke from {world.realms[realm.parent].name} in year {realm.founded}."
+    if realm.origin == "split":
+        return f" Came of the split of {world.predecessors[realm.predecessor].name} in year {realm.founded}."
+    return ""
+
+
 def _realms(text: _Text, world: World, config: Config, ascii_only: bool) -> None:
     """The REALMS section: every independent realm with its vassals nested below, then the unclaimed land."""
     if not world.realms:
@@ -205,7 +215,7 @@ def _realms(text: _Text, world: World, config: Config, ascii_only: bool) -> None
         )
         text.para(
             f"Ruled by {realm.ruler} {seat}. {_area(realm.area_km2, ascii_only)}, pop. ~{_population(realm.pop)}, "
-            f"{count} settlement{'' if count == 1 else 's'}.",
+            f"{count} settlement{'' if count == 1 else 's'}.{_origin(world, realm)}",
             text.dim_fg,
             len(pad) + 2,
         )

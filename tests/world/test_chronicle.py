@@ -105,3 +105,77 @@ def test_stats_count_the_events_by_kind(generated: World) -> None:
 
 def test_stats_count_the_fallen_realms(generated: World) -> None:
     assert pipeline.stats(generated)["fallen_realms"] == len(generated.fallen_realms)
+
+
+# --- rulers, predecessors and origins in the JSON -------------------------------------------------------------------
+
+
+def _with_secession() -> World:
+    from biomegen.world.entities import Predecessor, Ruler
+
+    world = _tiny()
+    world.realms[0].origin, world.realms[0].predecessor, world.realms[0].ruler = "split", 0, "King Bran"
+    world.realms.append(Realm(id=1, kind="major", name="Kingdom of B", founded=100, origin="offshoot", parent=0))
+    world.predecessors = [
+        Predecessor(id=0, founded=20, split_year=100, children=[0], name="Old Kingdom", culture="common")
+    ]
+    world.rulers = [
+        Ruler(
+            id=0,
+            realm_id=0,
+            from_year=100,
+            to_year=None,
+            style="martial",
+            traits={"trust": 0.5123456},
+            name="King Bran",
+        )
+    ]
+    world.chronicle[0].predecessor_ids = [0]
+    return world
+
+
+def test_the_json_lists_the_rulers_of_a_realm() -> None:
+    (ruler,) = chronicle_data(_with_secession())["rulers"]
+    assert (ruler["realm_id"], ruler["name"], ruler["from_year"], ruler["to_year"]) == (0, "King Bran", 100, None)
+
+
+def test_the_json_rounds_a_rulers_traits() -> None:
+    assert chronicle_data(_with_secession())["rulers"][0]["traits"] == {"trust": 0.512}
+
+
+def test_the_json_lists_the_predecessors_and_their_children() -> None:
+    (predecessor,) = chronicle_data(_with_secession())["predecessors"]
+    assert (predecessor["name"], predecessor["split_year"], predecessor["children"]) == ("Old Kingdom", 100, [0])
+
+
+def test_the_json_gives_each_realm_its_origin() -> None:
+    realms = chronicle_data(_with_secession())["realms"]
+    assert [(r["origin"], r["parent"], r["predecessor"]) for r in realms] == [("split", None, 0), ("offshoot", 0, None)]
+
+
+def test_a_realm_founded_outright_has_no_origin_in_the_json(generated: World) -> None:
+    assert all(
+        r["origin"] is None
+        for r in chronicle_data(generated)["realms"]
+        if r["parent"] is None and r["predecessor"] is None
+    )
+
+
+def test_an_event_names_its_predecessors_in_the_json() -> None:
+    assert chronicle_data(_with_secession())["events"][0]["predecessor_ids"] == [0]
+
+
+def test_the_json_with_secession_is_still_json() -> None:
+    assert json.loads(chronicle_json(_with_secession()))["predecessors"][0]["id"] == 0
+
+
+def test_every_ruler_of_a_generated_world_is_in_the_json(generated: World) -> None:
+    rulers = chronicle_data(generated)["rulers"]
+    assert len(rulers) == len(generated.rulers) and all(r["name"] for r in rulers)
+
+
+def test_stats_count_rulers_predecessors_origins_and_free_settlements(generated: World) -> None:
+    stats = pipeline.stats(generated)
+    assert stats["rulers"] == len(generated.rulers) and stats["predecessors"] == len(generated.predecessors)
+    assert stats["free_settlements"] == sum(1 for p in generated.pois if p.free)
+    assert sum(stats["realm_origins"].values()) == len([r for r in generated.realms if r.origin])  # type: ignore[attr-defined]
