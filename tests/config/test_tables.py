@@ -447,3 +447,10 @@ def test_a_ruin_share_pair_must_be_two_shares(key: str) -> None:
     cfg["tables"]["sites"]["town"][key] = [0.5, 1.5]
     with pytest.raises(ConfigError, match=rf"tables\.sites\.town\.{key}: expected unit_pair"):
         validate(cfg)
+
+
+def test_a_free_marker_colour_must_be_a_colour() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["tiers"]["town"]["free_fg"] = "teal-ish"
+    with pytest.raises(ConfigError, match=r"tables\.tiers\.town\.free_fg"):
+        validate(cfg)

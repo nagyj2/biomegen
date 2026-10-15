@@ -194,3 +194,19 @@ def test_the_political_legend_uses_an_ascii_swatch(config) -> None:
 
 def test_other_views_have_no_realms_section(config) -> None:
     assert "REALMS" not in to_plain(build_legend(_political_world(), config, TERRAIN, 100, False))
+
+
+def _free_text(config, realm_id: int) -> str:
+    from biomegen.world.entities import POI
+
+    world = _world()
+    world.pois.append(POI(kind="village", x=8, y=5, interior_seed=3, civilized=True, realm_id=realm_id))
+    return to_plain(build_legend(world, config, TERRAIN, 100, False))
+
+
+def test_the_legend_has_a_swatch_for_free_settlements(config) -> None:
+    assert "Free settlement" in _free_text(config, -1)
+
+
+def test_the_legend_has_no_free_swatch_when_every_settlement_is_held(config) -> None:
+    assert "Free settlement" not in _free_text(config, 0)

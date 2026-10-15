@@ -183,3 +183,24 @@ def test_hamlet_marker_is_hidden_at_the_map_scale(config) -> None:
 def test_hamlet_marker_is_drawn_at_the_zoom_scale(config) -> None:
     grid = _draw_detail(_world_with_town("hamlet"), config)
     assert int((grid.glyph == config.get("tables.tiers.hamlet.glyph")).sum()) == 1
+
+
+def _town_in_realm(realm_id: int):
+    world = make_world(3, 3, Biome.GRASS)
+    world.pois.append(POI(kind="town", x=1, y=1, interior_seed=5, civilized=True, realm_id=realm_id))
+    world.poi_index[1, 1] = 0
+    return world
+
+
+def test_a_free_settlement_is_drawn_in_its_free_colour(config) -> None:
+    grid = _draw(_town_in_realm(-1), config)
+    assert grid.fg[1, 1].tolist() == config.get("tables.tiers.town.free_fg")
+
+
+def test_a_held_settlement_keeps_its_ordinary_colour(config) -> None:
+    grid = _draw(_town_in_realm(0), config)
+    assert grid.fg[1, 1].tolist() == config.get("tables.tiers.town.fg")
+
+
+def test_a_free_settlement_keeps_its_glyph(config) -> None:
+    assert _draw(_town_in_realm(-1), config).glyph[1, 1] == config.get("tables.tiers.town.glyph")

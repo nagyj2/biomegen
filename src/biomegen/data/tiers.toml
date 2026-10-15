@@ -19,6 +19,7 @@
 #   dynamic       (optional, default false) true for a tier a later simulation mints: the settlements stage places none
 #   connect       (optional, default true) false for a tier the roads stage does not link
 #   map_marker    (optional, default true) false to hide the marker at the map scale (it still shows at the zoom scale)
+#   free_fg       (optional) marker colour of a settlement no realm holds (a free settlement); omit to keep `fg`
 
 [tiers.capital]
 label = "Capital"
@@ -45,6 +46,7 @@ floors = [2, 3]
 spacing_km = 420.0
 land_per_settlement_km2 = 800000.0
 backbone = true
+free_fg = [150, 200, 205]
 
 [tiers.town]
 label = "Town"
@@ -57,6 +59,7 @@ floors = [1, 2]
 spacing_km = 300.0
 land_per_settlement_km2 = 480000.0
 backbone = true
+free_fg = [150, 200, 205]
 
 [tiers.village]
 label = "Village"
@@ -69,6 +72,7 @@ floors = [1, 1]
 spacing_km = 230.0
 land_per_settlement_km2 = 300000.0
 backbone = false
+free_fg = [150, 200, 205]
 
 # A hamlet is minted by a later simulation, never placed by the settlements stage (`dynamic`), and roads do not link it
 # (`connect = false`). Its marker is hidden on the map and drawn from the zoom scale down (`map_marker = false`).
@@ -86,3 +90,4 @@ backbone = false
 dynamic = true
 connect = false
 map_marker = false
+free_fg = [150, 200, 205]

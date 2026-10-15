@@ -74,3 +74,15 @@ def test_poi_link_lists_are_not_shared() -> None:
     first.event_ids.append(7)
     first.hook_refs.append((0, 1, "poi", 0))
     assert second.event_ids == [] and second.hook_refs == []
+
+
+def test_a_civilized_poi_no_realm_holds_is_free() -> None:
+    assert POI(kind="town", x=0, y=0, interior_seed=1, civilized=True, realm_id=-1).free
+
+
+def test_a_held_settlement_is_not_free() -> None:
+    assert not POI(kind="town", x=0, y=0, interior_seed=1, civilized=True, realm_id=2).free
+
+
+def test_a_wild_poi_is_not_free() -> None:
+    assert not POI(kind="tower", x=0, y=0, interior_seed=1, realm_id=-1).free

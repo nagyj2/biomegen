@@ -18,19 +18,25 @@ def _rgb(value: list) -> RGB:
     return int(value[0]), int(value[1]), int(value[2])
 
 
-def poi_marker(config: Config, kind: str, ascii_only: bool = False) -> tuple[str, RGB, Optional[RGB]]:
+def poi_marker(
+    config: Config, kind: str, ascii_only: bool = False, free: bool = False
+) -> tuple[str, RGB, Optional[RGB]]:
     """Return ``(glyph, fg, bg)`` for a POI of ``kind``; ``bg`` is None to keep the terrain background.
 
-    Looked up once per config and kind: the markers layer asks for every POI on every frame.
+    ``free`` is a settlement no realm holds: its tier's ``free_fg`` replaces the colour when the row has one. Looked up
+    once per config, kind and state: the markers layer asks for every POI on every frame.
     """
-    return config.cached((__name__, kind, bool(ascii_only)), lambda: _marker(config, kind, ascii_only))
+    return config.cached(
+        (__name__, kind, bool(ascii_only), bool(free)), lambda: _marker(config, kind, ascii_only, free)
+    )
 
 
-def _marker(config: Config, kind: str, ascii_only: bool) -> tuple[str, RGB, Optional[RGB]]:
+def _marker(config: Config, kind: str, ascii_only: bool, free: bool) -> tuple[str, RGB, Optional[RGB]]:
     tier = config.get(f"tables.tiers.{kind}", None)
     if tier is not None:
         bg = tier.get("bg")
-        return tier["ascii" if ascii_only else "glyph"], _rgb(tier["fg"]), _rgb(bg) if bg is not None else None
+        fg = tier["free_fg"] if free and "free_fg" in tier else tier["fg"]
+        return tier["ascii" if ascii_only else "glyph"], _rgb(fg), _rgb(bg) if bg is not None else None
     style = config.get("render.marker_style")
     return config.get("render.markers").get(kind, _UNKNOWN), _rgb(style["fg"]), _rgb(style["bg"])
 

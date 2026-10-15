@@ -65,6 +65,11 @@ class POI:
     tags: Tuple[str, ...] = ()  # site traits, e.g. "port", "river"
     extra: dict = field(default_factory=dict)  # kind-specific data (e.g. boat cargo type)
 
+    @property
+    def free(self) -> bool:
+        """Whether this is a settlement no realm holds; derived from ``realm_id``, so an owner change needs no flag."""
+        return self.civilized and self.realm_id < 0
+
 
 @dataclass
 class Realm:

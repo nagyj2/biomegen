@@ -69,6 +69,7 @@ _TIER_ROW = {
     "dynamic": "bool",
     "connect": "bool",
     "map_marker": "bool",
+    "free_fg": "color",
 }
 _SITE_ROW = {
     "layout": "text",
@@ -272,7 +273,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "relief": (_RELIEF_ROW, frozenset({"min_elevation_m"})),
     "detail": (_DETAIL_ROW, frozenset()),
     "detail_relief": (_DETAIL_RELIEF_ROW, frozenset()),
-    "tiers": (_TIER_ROW, frozenset({"bg", "dynamic", "connect", "map_marker"})),
+    "tiers": (_TIER_ROW, frozenset({"bg", "dynamic", "connect", "map_marker", "free_fg"})),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
     "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled", "ruin_standing", "ruin_wall_fall", "ruin_extent_share"})),

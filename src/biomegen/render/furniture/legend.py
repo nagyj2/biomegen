@@ -101,6 +101,11 @@ def _swatches(world: World, config: Config, view: View, ascii_only: bool) -> lis
     for kind in sorted({poi.kind for poi in world.pois}):
         glyph, fg, bg = poi_marker(config, kind, ascii_only)
         items.append((glyph, fg, bg, kind.title()))
+    free = {poi.kind for poi in world.pois if poi.free}
+    if free:  # one swatch for the colour a settlement no realm holds is drawn in, shown on its biggest tier
+        biggest = min(free, key=lambda kind: int(config.get(f"tables.tiers.{kind}.rank")))
+        glyph, fg, bg = poi_marker(config, biggest, ascii_only, True)
+        items.append((glyph, fg, bg, "Free settlement"))
     return items
 
 
