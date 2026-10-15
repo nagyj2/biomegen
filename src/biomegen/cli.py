@@ -321,7 +321,7 @@ def _print_stats(stats: dict[str, Any]) -> None:
     print(f"cell: {stats['cell_km'][0]} x {stats['cell_km'][1]} km  top-left: {stats['lat_top']}, {stats['lon_left']}")
     print(f"terrain: {stats['terrain_style']}  elevation_m: {stats['elevation_m']}")
     print(
-        f"regions={stats['regions']}  rivers={stats['rivers']} ({stats['river_tiles']} tiles)  "
+        f"realms={stats['realms']}  rivers={stats['rivers']} ({stats['river_tiles']} tiles)  "
         f"lakes={stats['lakes']} ({stats['lake_tiles']} tiles)  "
         f"roads={stats['road_tiles']} tiles  bridge_tiles={stats.get('bridge_tiles', 0)}"
     )

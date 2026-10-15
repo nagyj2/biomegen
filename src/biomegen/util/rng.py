@@ -47,7 +47,6 @@ LABELS: frozenset[str] = frozenset(
     {
         "hydrology",  # hydrology general
         "hydrology.rivers",  # river source selection / meander
-        "regions",  # region colour jitter / tie-breaks
         "biomeblend.x",  # detail-view biome-boundary blend warp (x component)
         "biomeblend.y",  # detail-view biome-boundary blend warp (y component)
         "poi",  # POI placement sampling
@@ -61,7 +60,7 @@ LABELS: frozenset[str] = frozenset(
         "roads",  # road graph edge selection
         "roads.meander",  # per-edge road meander noise
         "naming",  # name/lore generation
-        "naming.culture",  # per-region culture assignment (mixed-culture naming)
+        "naming.culture",  # per-realm culture assignment (mixed-culture naming)
         "regen",  # perturbed master seed for a regeneration attempt after the land-fraction gate
         # Stages of the redesigned pipeline (docs/redesign_plan.md 4.1), registered ahead of their
         # phase so no earlier stage can claim the name. Each stage adds its own suffixes when it lands.

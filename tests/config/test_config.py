@@ -40,13 +40,6 @@ def test_deep_merge_is_sparse() -> None:
     assert base["terrain"]["base_octaves"] == original["terrain"]["base_octaves"]
 
 
-def test_validate_coerces_hex_color() -> None:
-    cfg = get_defaults()
-    cfg["render"]["palette"]["deep"] = "#102030"
-    validate(cfg)
-    assert cfg["render"]["palette"]["deep"] == [16, 32, 48]
-
-
 def test_validate_collects_errors() -> None:
     cfg = get_defaults()
     cfg["world"]["width"] = -5

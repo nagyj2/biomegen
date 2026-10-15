@@ -13,10 +13,10 @@ def test_world_allocates_expected_shapes_and_dtypes() -> None:
     w = World(width=8, height=5, seed=1)
     assert w.elevation_m.shape == (5, 8)
     assert w.biome.dtype == np.uint8
-    assert w.region_id.dtype == np.int32
-    # Defaults: all deep ocean, no region, no POI.
+    assert w.realm_id.dtype == np.int16
+    # Defaults: all deep ocean, no realm, no POI.
     assert (w.biome == int(Biome.DEEP)).all()
-    assert (w.region_id == -1).all()
+    assert (w.realm_id == -1).all()
     assert (w.poi_index == -1).all()
 
 

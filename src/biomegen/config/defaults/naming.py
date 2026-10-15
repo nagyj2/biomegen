@@ -1,4 +1,4 @@
-"""Defaults for the ``naming`` section (naming / lore)."""
+"""Defaults for the ``naming`` section (names)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ VALUES: Dict[str, Any] = {
     # "markov" (order-2 chain over a per-culture corpus; organic but rougher with affixes).
     "generators": {
         "island": "syllable",
-        "region": "syllable",
         "realm": "syllable",
         "ruler": "syllable",
         "poi": "syllable",
@@ -23,6 +22,4 @@ VALUES: Dict[str, Any] = {
         "peak": "syllable",
         "sea": "syllable",
     },
-    "lore_min": 1,
-    "lore_max": 4,
 }

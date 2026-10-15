@@ -124,22 +124,18 @@ def _pick(
 
 
 def _commit(world: World, seed: int, kind: str, x: int, y: int, floors: tuple[int, int]) -> None:
-    """Append one POI and write it into ``poi_index`` and its region."""
-    region_id = int(world.region_id[y, x])
+    """Append one POI and write it into ``poi_index``."""
     poi = POI(
         kind=kind,
         x=x,
         y=y,
         interior_seed=rng.derive_int(seed, "poi_interior", x, y),
-        region_id=region_id,
         floor_count=floors[0],
         lowest_floor=floors[1],
     )
     index = len(world.pois)
     world.pois.append(poi)
     world.poi_index[y, x] = index
-    if 0 <= region_id < len(world.regions):
-        world.regions[region_id].poi_indices.append(index)
 
 
 def run(world: World, config: Config, seed: int) -> None:

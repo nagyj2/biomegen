@@ -1,4 +1,4 @@
-"""Tests for the naming stage (island/region names, lore, order invariance)."""
+"""Tests for the naming stage (island, realm and place names, order invariance)."""
 
 from __future__ import annotations
 

@@ -3,8 +3,8 @@
 :func:`generate` runs the stages in a fixed order, each consuming only fields produced by earlier
 stages so there is no backtracking:
 
-    terrain -> climate -> hydrology -> biomes -> geography -> regions -> settlements
-    -> pois -> roads -> realms -> diplomacy -> naming
+    terrain -> climate -> hydrology -> biomes -> geography -> settlements -> pois -> roads
+    -> realms -> diplomacy -> naming
 
 Roads end at every POI's anchor. A POI's site plan (:mod:`biomegen.sites`) is built lazily and finds the roads
 that reach it from the world arrays, so no stage records anything for it.
@@ -28,11 +28,7 @@ from ..util import rng
 from ..util.units import grid_scale
 from ..world.tile import BIOME_NAME, RELIEF_NAME, WATER_BIOMES, WaterType
 from ..world.world import World
-from . import (
-    naming,
-    pois,
-    regions,
-)
+from . import naming, pois
 from .civilization import diplomacy, realms, roads, settlements
 from .physical import biomes, climate, geography, hydrology, terrain
 
@@ -86,7 +82,6 @@ def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = No
         ("hydrology", hydrology.run),
         ("biomes", biomes.run),
         ("geography", geography.run),
-        ("regions", regions.run),
         ("settlements", settlements.run),
         ("pois", pois.run),
         ("roads", roads.run),
@@ -128,7 +123,6 @@ def stats(world: World) -> Dict[str, object]:
         "terrain_style": world.terrain_style,
         "land_fraction": round(float(land.mean()), 4),
         "biomes": dict(sorted(biome_counts.items())),
-        "regions": len(world.regions),
         "realms": len(world.realms),
         "relations": len(world.relations),
         "rivers": len(world.rivers),

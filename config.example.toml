@@ -49,10 +49,6 @@ min_landmass_km2 = 140000.0      # smaller islands get a landmass_id but no land
 max_named_rivers = 5             # the largest rivers (at least min_river_km long) become features
 min_river_km = 150.0
 
-[regions]
-min_region_size = 22
-color_jitter = 28
-
 [politics]
 city_state_far_km = 540.0        # a city this far from every capital is likely a city-state (realm kinds: data/polity.toml)
 tribe_max = 6                    # tribes claiming the largest unclaimed areas

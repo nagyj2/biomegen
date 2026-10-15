@@ -16,10 +16,9 @@ from ..util import rng
 from . import markov, syllables
 from .cultures import CULTURES
 
-# Syllable-count ranges per category (roots are shorter for settlements, longer for regions).
+# Syllable-count ranges per category (roots are shorter for settlements, longer for islands).
 _SYLL = {
     "island": (2, 3),
-    "region": (2, 3),
     "realm": (1, 2),
     "ruler": (1, 2),
     "poi": (1, 2),
@@ -84,15 +83,13 @@ def name_entity(
     naming_cfg: Optional[Config],
     kind: Optional[str] = None,
     civilized: bool = False,
-    descriptor: Optional[str] = None,
 ) -> str:
     """Return a finished name for one entity.
 
     Parameters
     ----------
-    category : 'island' | 'region' | 'realm' | 'ruler' | 'poi' | 'river' | 'lake'
-    key      : a tuple of ints uniquely + stably identifying the entity (region id, POI (x,y), ...).
-    descriptor : optional geographic word for regions (e.g. 'Wood', 'Peaks').
+    category : 'island' | 'realm' | 'ruler' | 'poi' | 'river' | 'lake'
+    key      : a tuple of ints uniquely + stably identifying the entity (realm id, POI (x,y), ...).
     """
     r = rng.derive(seed, "naming", category, *key)
     profile = CULTURES.get(culture_name, CULTURES["common"])
@@ -104,11 +101,6 @@ def name_entity(
 
     if category == "island":
         return root if r.random() < 0.5 else f"{root} Isle"
-
-    if category == "region":
-        if descriptor and r.random() < 0.75:
-            return f"{root} {descriptor}"
-        return root
 
     if category == "river":
         return f"{root}{r.choice(profile.nature)}".capitalize() if r.random() < 0.5 else f"{root} River"

@@ -149,8 +149,7 @@ def run(world: World, config: Config, seed: int) -> None:
 def _commit(
     world: World, reach: dict[str, np.ndarray], seed: int, tier: str, x: int, y: int, population: int, floors: int
 ) -> None:
-    """Append one settlement POI, tagged by the water in reach, and register it with its region."""
-    region_id = int(world.region_id[y, x])
+    """Append one settlement POI, tagged by the water in reach."""
     tags = tuple(tag for tag, key in _TAGS if reach[key][y, x])
     poi = POI(
         kind=tier,
@@ -158,7 +157,6 @@ def _commit(
         y=y,
         interior_seed=rng.derive_int(seed, "poi_interior", x, y),
         civilized=True,
-        region_id=region_id,
         pop=population,
         floor_count=max(1, floors),
         tags=tags,
@@ -166,5 +164,3 @@ def _commit(
     index = len(world.pois)
     world.pois.append(poi)
     world.poi_index[y, x] = index
-    if 0 <= region_id < len(world.regions):
-        world.regions[region_id].poi_indices.append(index)

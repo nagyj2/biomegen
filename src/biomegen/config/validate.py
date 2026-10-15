@@ -70,14 +70,6 @@ def _validate_biome_names(cfg: Dict[str, Any], errors: List[str]) -> None:
     if "peak_biome" in biomes:
         check(biomes["peak_biome"], "biomes.peak_biome")
 
-    render = cfg.get("render", {})
-    for name in render.get("palette", {}) or {}:
-        check(name, "render.palette")
-
-    for gi, group in enumerate(cfg.get("regions", {}).get("similarity_groups", []) or []):
-        for name in group:
-            check(name, f"regions.similarity_groups[{gi}]")
-
     for kind, rule in (cfg.get("poi", {}).get("types", {}) or {}).items():
         for name in rule.get("biomes", []) or []:
             check(name, f"poi.types.{kind}.biomes")
@@ -177,16 +169,7 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     for key in ("civilized_connect_prob", "uncivilized_connect_prob", "extra_edge_prob", "road_discount"):
         _clamp(roads, key, 0.0, 1.0, errors, "roads")
 
-    # --- colour coercion for the render palette ---
-    render = cfg.get("render", {})
-    palette = render.get("palette", {})
-    for name, value in list(palette.items()):
-        try:
-            palette[name] = list(_coerce_color(value))
-        except ValueError as exc:
-            errors.append(f"render.palette.{name}: {exc}")
-
-    _validate_render_views(render, errors)
+    _validate_render_views(cfg.get("render", {}), errors)
 
     # --- every biome name referenced anywhere in config must be a real Biome enum member ---
     _validate_biome_names(cfg, errors)

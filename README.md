@@ -1,8 +1,8 @@
 # biomegen
 
 A seed-reproducible **procedural island generator and explorer** that runs in your terminal. It
-builds a realistic island — terrain, climate, rivers and lakes, natural biomes grouped into named
-regions with generated lore, points of interest (villages, towns, cities, capitals, towers, dungeons, ruin,
+builds a realistic island — terrain, climate, rivers and lakes, natural biomes, realms with
+rulers, vassals, wars and alliances, points of interest (villages, towns, cities, capitals, towers, dungeons, ruin,
 camps, boats) connected by meandering roads — and lets you explore it in a colour terminal UI,
 zoom in to see structure detail, and export the view to SVG/PNG.
 
@@ -10,7 +10,8 @@ zoom in to see structure detail, and export the view to SVG/PNG.
 > `docs/redesign_plan.md`). One layer stack draws the interactive explorer, static maps, zoomed views and
 > the SVG/PNG exports, so they all look alike. Every POI archetype renders an interior embedded in the
 > terrain at the zoom (shell) and local (full, furnished) scales, with floor cycling for towers and dungeons.
-> Settlements, politics and the chronicle are the next phases.
+> Settlements and politics (realms, vassals, relations and a political view with borders and war fronts) are in; the
+> chronicle is the next phase.
 
 ---
 
@@ -166,12 +167,18 @@ The authoritative defaults and inline documentation are in
 
 Relief (hills, mountains, peaks) comes from the `min_elevation_m` column of `[tables.relief.*]`.
 
-#### `[regions]`
+#### `[politics]`
 | Key | Default | Description |
 |-----|---------|-------------|
-| `min_region_size` | `22` | Regions below this tile count are merged into neighbours |
-| `max_region_size` | `100` | Regions above this are split (0 = no limit) |
-| `color_jitter` | `28` | ±RGB jitter per region so same-biome regions look distinct |
+| `city_state_far_km` | `540.0` | A city this far from every capital is likely to be a city-state (`city_state_far_chance` 0.7, else `city_state_chance` 0.25) |
+| `tribe_max` / `tribe_min_area_km2` | `6` / `40000.0` | Tribes claim up to this many of the largest unclaimed areas, each at least this big |
+| `claim_budget_km` | `1500.0` | How far (cost in km) a realm of strength 1 reaches over flat land |
+| `river_cost` / `coastal_hop_km` / `coastal_hop_cost` | `3.0` / `60.0` / `6.0` | Extra cost of a river cell; how far from land a realm may hop over water, and at what cost |
+| `vassal_area_ratio` | `2.0` | A major swears fealty only to a major at least this many times larger |
+| `habitats` | dry / cold / wood | Biome groups that favour a realm name form |
+
+Realm kinds (strength, rural population, vassal chance), name and ruler forms, relation weights and realm colours are
+in `src/biomegen/data/polity.toml`; reason texts for wars, rivalries, alliances and trade in `reasons.toml`.
 
 #### `[poi]`
 | Key | Default | Description |
@@ -215,10 +222,10 @@ weights in `furniture.toml`.
 | `default_view` | `"fit"` | Starting biome-map view: `"fit"` · `"onetoone"` |
 | `status_height` | `12` | Terminal rows reserved for the info panel |
 | `views.*` | — | Layer lists per view (`layers` for the map, `detail_layers` for zoom and local) and its tint ramp |
-| `ramps.*` | — | Colour ramps for the elevation, temperature and rainfall views |
+| `ramps.*` | — | Colour ramps for the elevation, temperature and rainfall views (the political view tints by realm) |
 | `markers.*` | — | Per-POI display character |
 | `detail_colors.*` | — | Colours of the road bed and bridges at zoom and local |
-| `palette.*` | — | Biome base colours the region stage reads (the renderer uses `tables.biomes`) |
+| `realm_tint.*` / `borders.*` | — | The political view: realm colour mixing, border and war-front colours |
 
 #### `[export]`
 | Key | Default | Description |
@@ -254,7 +261,7 @@ including any open POI interior. `--save FILE` writes the same images without th
 #### `[tables]`
 Per-name attribute tables loaded from `src/biomegen/data/*.toml`: `tables.biomes` and `tables.relief`
 (`biomes.toml`: glyphs, colours, habitability, move cost, goods) and `tables.tiers` (`tiers.toml`:
-settlement markers, population, spacing and density in km). Override one attribute of one row in your
+settlement markers, population, spacing and density in km), plus the political tables of `polity.toml` and `reasons.toml`. Override one attribute of one row in your
 config, e.g. `[tables.biomes.desert]` with `goods = "glass"`; each file documents its keys.
 
 ---
@@ -264,8 +271,8 @@ config, e.g. `[tables.biomes.desert]` with `goods = "glass"`; each file document
 The world is built by an ordered, fully seed-reproducible pipeline:
 
 ```
-terrain → climate → hydrology → biomes → geography → regions → settlements
-         → pois → roads → naming
+terrain → climate → hydrology → biomes → geography → settlements → pois → roads
+         → realms → diplomacy → naming
 ```
 
 All algorithms are industry-standard and most are swappable via config (see `docs/ARCHITECTURE.md`).
@@ -273,7 +280,6 @@ Reproducibility is guaranteed by `blake2b`-derived named RNG sub-streams — eve
 own independent stream, so changing one stage cannot shift another's output.
 
 For full details on algorithms and design decisions, see **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
-The naming and lore grammar is documented in **[docs/GRAMMAR.md](docs/GRAMMAR.md)**.
 
 ---
 
@@ -283,7 +289,7 @@ The naming and lore grammar is documented in **[docs/GRAMMAR.md](docs/GRAMMAR.md
 - [x] Phase 1 — utilities (noise, geometry) + tests
 - [x] Phase 2 — generation core (heightmap → regions) + headless stats
 - [x] Phase 3 — terminal explorer — playable map (now the ANSI explorer of redesign phase 4)
-- [x] Phase 4 — POIs, meandering A\* roads + bridges, mixed-culture names & region lore
+- [x] Phase 4 — POIs, meandering A\* roads + bridges, mixed-culture names
 - [x] Phase 5 — detail interiors, clutter, multi-floor POIs, overlay
   - [x] Infrastructure: lazy/LRU-cached interior builders, registry, embedded detail rendering
         (zoom outline / local full interior), signed multi-floor cycling, overlay compositing

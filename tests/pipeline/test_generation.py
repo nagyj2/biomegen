@@ -53,16 +53,18 @@ def test_different_seeds_produce_different_worlds(cfg: Config) -> None:
     assert len(fps) == 5
 
 
-def test_world_has_land_and_ocean_and_regions(cfg: Config) -> None:
+def test_world_has_land_and_ocean_and_realms(cfg: Config) -> None:
     world = pipeline.generate(cfg, 777)
     land = world.water_type == int(WaterType.NONE)
     ocean = world.water_type == int(WaterType.SALT)
     assert land.mean() >= float(cfg.get("world.min_land_fraction"))
     assert ocean.any()
-    assert len(world.regions) > 0
-    # Every land tile carries a valid region id except none should be left at the ocean sentinel
-    # unless it is genuinely water.
-    assert (world.region_id[land] >= 0).all()
+    assert len(world.realms) > 0
+    # Realms claim only solid land (a river keeps its land biome): no water-cover cell carries a realm id, and the
+    # realms hold most of the land.
+    water = np.isin(world.biome, list(WATER_BIOMES))
+    assert (world.realm_id[water] == -1).all()
+    assert (world.realm_id[~water] >= 0).mean() > 0.5
 
 
 def test_water_classification_salt_vs_fresh(cfg: Config) -> None:
@@ -99,7 +101,7 @@ def test_small_world_generates(cfg: Config) -> None:
 
 def test_stats_reports_expected_keys(cfg: Config) -> None:
     st = pipeline.stats(pipeline.generate(cfg, 1))
-    for key in ("size", "land_fraction", "biomes", "regions", "rivers", "lakes", "fingerprint"):
+    for key in ("size", "land_fraction", "biomes", "realms", "relations", "rivers", "lakes", "fingerprint"):
         assert key in st
 
 
@@ -197,6 +199,20 @@ def test_timings_cover_every_stage_without_changing_the_world() -> None:
     small.data["world"].update({"width": 48, "height": 24})
     timings: dict[str, float] = {}
     timed = pipeline.generate(small, 3, timings)
-    stages = {"terrain", "climate", "hydrology", "biomes", "geography", "regions"}
+    stages = {"terrain", "climate", "hydrology", "biomes", "geography", "realms", "diplomacy"}
     assert stages <= set(timings) and all(v >= 0 for v in timings.values())
     assert timed.fingerprint() == pipeline.generate(small, 3).fingerprint()
+
+
+def test_politics_stages_are_cheap_at_the_default_size(cfg: Config) -> None:
+    # Generation time budget: realms, diplomacy and naming together take a small share of the default 240x60 world
+    # (about 0.1 s today); a generous bound still catches an accidental per-cell Python loop.
+    timings: dict[str, float] = {}
+    pipeline.generate(cfg, 42, timings)
+    assert timings["realms"] + timings["diplomacy"] + timings["naming"] < 3.0
+
+
+def test_whole_generation_fits_its_budget_at_the_default_size(cfg: Config) -> None:
+    timings: dict[str, float] = {}
+    pipeline.generate(cfg, 42, timings)
+    assert sum(timings.values()) < 20.0

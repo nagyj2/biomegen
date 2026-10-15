@@ -1,7 +1,7 @@
 """Schema validation for the attribute tables under ``tables`` (see ``config/defaults/tables.py``).
 
 Rows are checked against a per-table schema: every key known, every required key present, and each
-value of the right kind. Colours are coerced to ``[r, g, b]`` in place, as for ``render.palette``.
+value of the right kind. Colours are coerced to ``[r, g, b]`` in place.
 Problems are appended to the caller's error list so validation still reports everything at once.
 """
 

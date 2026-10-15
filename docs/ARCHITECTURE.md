@@ -38,6 +38,8 @@ src/biomegen/
   data/                 User-overridable attribute tables, keyed by name (see data/CLAUDE.md)
     biomes.toml         One row per Biome member + one per Relief member (relief has min_elevation_m)
     tiers.toml          Settlement tiers: marker, population, spacing and density in km
+    polity.toml         Realm kinds, name and ruler forms, relation weights, realm colours
+    reasons.toml        Reason templates for wars, rivalries, alliances and trade; fallback place words
     terrain.toml        Terrain styles (continents, pangaea, archipelago, islands)
     geography.toml      Name patterns per geographic feature kind
   util/
@@ -49,7 +51,7 @@ src/biomegen/
     tile.py             Biome / Relief / WaterType / Cell enums + TileView accessor
     world.py            Immutable World (parallel numpy arrays) + fingerprint()
     overlay.py          Mutable Overlay (runtime edits, composited at read time)
-    entities.py         POI / Region / River / Lake / GeoFeature dataclasses
+    entities.py         POI / Realm / Relation / River / Lake / GeoFeature dataclasses
   sites/                Lazy, deterministic, cached site plans: what you see zooming into a POI
     geometry.py         Extent, window and plan resolution of a POI's site, in world tiles
     patch.py            The terrain under a site (read through the render sampler) and the road gates
@@ -68,7 +70,6 @@ src/biomegen/
       hydrology.py      Stage 3 — rivers, lakes, flow accumulation
       biomes.py         Stage 4 — biome from °C / mm / m, relief, volcanoes
       geography.py      Stage 5 — landmass_id; landmass, range, peak, lake, sea, river features
-    regions.py          Stage 6 — region segmentation + colour
     pois.py             Stage 8 — wild POI placement (interim until phase 8)
     civilization/
       settlements.py    Stage 7 — habitability, capital / city / town / village placement
@@ -76,38 +77,35 @@ src/biomegen/
       realms.py         Stage 9b — realm seeds, strength-weighted claiming, tribes, realm_id
       diplomacy.py      Stage 9c — vassal tree, colours, relations, war fronts
     story/
-    naming.py           Stage 10 — names and lore for all entities
+    naming.py           Stage 10 — names for all entities, realms and relation reasons
   naming/
     cultures.py         Culture profiles + biome-biased culture assignment
     syllables.py        Syllable-assembly name generator
     markov.py           Order-N character Markov name generator
     forge.py            Name-generation facade (root → dressed name)
-    grammar.py          Tracery-style grammar expander
-    grammar_rules.toml  Lore sentence templates (machine-readable; mirrored in docs/GRAMMAR.md)
-    lore.py             Region fact extraction + lore assembly
+    polity.py           Realm names, ruler styles and the wording of relation reasons
   sampling/             How a grid cell reads the world, shared by render and the site plans
     sampler.py          Sampler: one cell per tile, or a strided viewport
     detail.py           DetailSampler: magnified scales, warped continuous lookup; camera helpers
   render/               Pure frame building (no terminal I/O); layer stack shared by every output
     grid.py             CellGrid IR (glyph, fg, bg, bold arrays) and the Document / Span form for static text
     fit.py              FitSampler: fit-to-screen map, each cell shows its block's most salient tile
-    views.py            View: layer lists per scale family + tint ramp, from render.views
+    views.py            View: layer lists per scale family + tint (a ramp or the realm tint), from render.views
     colors.py           Colour maths and per-biome / relief / detail / interior lookup arrays from the tables
     scatter.py          Stable per-cell decoration keyed on tile and sub-cell
     static.py           render_static (framed map + legend) and render_detail (zoom/local grid)
     colortest.py        --color-test swatches
-    layers/             terrain relief tint water clutter roads sites markers names(labels) compass
+    layers/             terrain relief tint water clutter borders roads sites markers names(labels) compass
     furniture/          frame, graticule, scale bar, legend for static maps
     backends/           ansi plain html svg png (a grid or document -> text or image)
   explorer/             Interactive terminal app (the only place that reads keys or writes the screen)
     state.py            ViewState, edge-pan camera, cursor start, floor sync and cycling, scale and mode steps
     input.py            Key readers (termios / msvcrt), key tokens, rebindable key -> action table
     writer.py           ANSI diff writer: alternate screen, writes only changed runs of cells
-    panel.py            Info panel (tile, region, POI, legend, controls) and the ? help overlay
+    panel.py            Info panel (tile, realm, POI, legend, controls) and the ? help overlay
     exports.py          e / E: SVG (and PNG) of the screen's map or the whole world
     app.py              compose_frame (map + cursor + panel) and the event-driven loop
 tests/                  pytest suite mirroring src/: golden-world hash, RNG determinism, config, overlay, renderer, explorer …
-docs/GRAMMAR.md         Naming/lore grammar reference
 config.example.toml     Sparse-overlay example (every key with its default value)
 ```
 
@@ -130,14 +128,15 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `relief` | uint8 | `Relief` enum int | biomes |
 | `landmass_id` | int32 | 0..L-1 largest first, -1=water | geography |
 | `water_type` | uint8 | `WaterType` enum int | terrain, hydrology |
-| `region_id` | int32 | 0..R-1, -1=ocean | regions |
+| `realm_id` | int16 | 0..R-1, -1=wild / water | realms |
+| `front` | bool | war border cells of two warring powers | diplomacy |
 | `poi_index` | int32 | 0..P-1, -1=none | settlements, pois |
 | `road` | uint8 | 0 / 1 | roads |
 | `road_tier` | uint8 | 0=none, 1=trunk, 2=spur | roads |
 | `dist_to_ocean` | float32 | ≥ 0 km (aspect-aware) | terrain |
 | `flow_accum` | float64 | km², wetness-weighted catchment | hydrology |
 
-Sparse entity lists: `pois`, `regions`, `rivers`, `lakes`, `features` (`GeoFeature`), `island_name`.
+Sparse entity lists: `pois`, `realms` (`Realm`), `relations` (`Relation`), `rivers`, `lakes`, `features` (`GeoFeature`), `island_name`.
 
 Scale metadata: `World.scale` is a `util.units.GridScale` built by `generate()` from `world.size_km`
 and `world.center_lat` / `center_lon` (`center_lat = "seed"` draws it per generation attempt from the
@@ -168,8 +167,8 @@ backtracking. A **land-exists gate** wraps the cheap terrain stage: if a seed yi
 rank, so the gate only trips when a style's land fraction is configured below the minimum.
 
 ```
-terrain → climate → hydrology → biomes → geography → regions → settlements
-         → pois → roads → realms → diplomacy → naming
+terrain → climate → hydrology → biomes → geography → settlements → pois → roads
+         → realms → diplomacy → naming
 ```
 
 Roads end at every POI's anchor. A POI's site plan (`sites/`) is built lazily and finds the roads that reach
@@ -248,26 +247,6 @@ Writes `landmass_id` (every 8-connected component of solid land, largest first) 
 list of `GeoFeature` (`landmass`, `range`, `peak`, `lake`, `sea`, `river`), ported from the reference
 `_regions` with km / km² thresholds (`geography.*`). Peaks are the distinct summits of ranges and
 landmasses; rivers record the lake or nearest sea they flow `into`. Names are filled by the naming stage.
-
-### Stage 6 — Regions (`pipeline/regions.py`)
-
-Groups tiles into named regions — contiguous zones of biologically similar cover:
-
-1. **Similarity grouping**: each biome is mapped to a group (e.g. forest + jungle + taiga + swamp
-   share one group, configurable in `regions.similarity_groups`).
-2. **Connected components**: 4-connected components of equal group id, labelled with
-   `scipy.ndimage.label` or in-house BFS.
-3. **Small-region merging**: components below `min_region_size` tiles are merged into their
-   largest-border neighbour, iterating to stability (max 64 passes). Processed smallest-first so
-   slivers dissolve into substantial regions.
-4. **Large-region splitting**: if `max_region_size` is set, oversized regions are Voronoi-split via
-   farthest-point-seeded BFS until all are within the limit. Farthest-point sampling gives good
-   spatial separation of the sub-region seeds.
-5. **Coastal extension**: ocean tiles within `coastal_ocean_depth` steps of land are assigned to
-   the nearest land region (nearest-region BFS), giving shallow coastal water a region identity for
-   naming purposes.
-6. **Per-region colour**: each region gets its dominant biome's palette colour ± a per-region
-   `color_jitter` drawn from a seeded RNG, so adjacent same-biome regions remain visually distinct.
 
 ### Stage 7 — Settlements (`pipeline/civilization/settlements.py`)
 
@@ -411,8 +390,11 @@ explorer, `--view`, `--scale` and the SVG/PNG exports all run the same stack, so
   `priority` columns of `tables.biomes` / `tables.relief` and `render.fit_priority`, so a lone lake, a river
   or a road survives); `DetailSampler` is the zoom and local scales.
 - **Views** (`render.views`) list the layers per scale family: `layers` for the map and `detail_layers` for
-  zoom and local, plus an optional tint ramp (elevation, temperature, rainfall). `v` cycles them.
-- **Layers** (`render/layers/`): `terrain`, `relief`, `tint`, `water`, `clutter`, `roads`, `bridges`,
+  zoom and local, plus an optional tint: a ramp (elevation, temperature, rainfall) or `realm`, the political view, which
+  mixes realm colours into the land, draws a one-cell `borders` line (red on war fronts, fainter between a vassal and its
+  overlord) through the biome-blend warp so borders match at every scale, names the big realms and lists them with their
+  relations in the legend. `v` cycles terrain, political, elevation, temperature, rainfall.
+- **Layers** (`render/layers/`): `terrain`, `relief`, `tint`, `water`, `clutter`, `borders`, `roads`, `bridges`,
   `sites`, `markers`, `labels`, `compass`. Colours and glyphs come from `tables.biomes`, `tables.relief`,
   `tables.detail` and `tables.detail_relief` (`data/*.toml`), and the `render.*` config; none are literals.
 - **Back-ends** (`render/backends/`) turn a grid or document into ANSI, plain text, HTML, SVG or PNG.

@@ -1,6 +1,6 @@
 """The explorer's info panel and help overlay, drawn as cell grids (pure: no terminal I/O).
 
-The panel sits under the map: the island line, the tile under the cursor, its region and point of interest, a
+The panel sits under the map: the island line, the tile under the cursor, its realm and point of interest, a
 legend of what is on screen, and the controls with the latest message. The help overlay lists every key.
 """
 

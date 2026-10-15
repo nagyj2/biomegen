@@ -1,10 +1,10 @@
-"""Culture profiles + biome-biased culture assignment for mixed-per-region naming.
+"""Culture profiles + biome-biased culture assignment for mixed-per-realm naming.
 
 Each :class:`Culture` carries the phonetic building blocks (onsets / nuclei / codas) and the affixes
-used to turn a bare root into a settlement, fort, or water name, plus flavour adjectives for lore.
+used to turn a bare root into a settlement, fort, or water name.
 ``BIOME_CULTURE_WEIGHTS`` biases which cultures appear in which terrain (elves in forests, dwarves in
-mountains, a southern people in deserts, ...), and :func:`culture_for_region` makes the choice
-deterministically from the region's stable id.
+mountains, a southern people in deserts, ...), and :func:`culture_for_realm` makes the choice
+deterministically from the realm's stable id.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import random
 from dataclasses import dataclass
 from typing import Dict, List
 
-from ..world.entities import Realm, Region
+from ..world.entities import Realm
 from ..world.tile import Biome
 
 
@@ -26,7 +26,6 @@ class Culture:
     settlement: List[str]  # suffixes for civilized POIs (city/town/village)
     nature: List[str]  # suffixes for rivers/lakes
     fort: List[str]  # words for towers/keeps/ruin
-    adjectives: List[str]  # flavour adjectives for lore
 
 
 CULTURES: Dict[str, Culture] = {
@@ -38,7 +37,6 @@ CULTURES: Dict[str, Culture] = {
         settlement=["ton", "ham", "ford", "bury", "field", "wick", "stead", "borough"],
         nature=["water", "brook", "run", "mere", "bourne"],
         fort=["Keep", "Hold", "Watch", "Tower"],
-        adjectives=["rolling", "settled", "old", "quiet", "green"],
     ),
     "norse": Culture(
         "norse",
@@ -48,7 +46,6 @@ CULTURES: Dict[str, Culture] = {
         settlement=["vik", "by", "stad", "heim", "fjord", "ness"],
         nature=["foss", "elv", "vatn"],
         fort=["Barrow", "Hall", "Howe", "Hold"],
-        adjectives=["windswept", "frozen", "storm-wracked", "grim", "northern"],
     ),
     "elvish": Culture(
         "elvish",
@@ -58,7 +55,6 @@ CULTURES: Dict[str, Culture] = {
         settlement=["loth", "riel", "wyn", "las", "dor", "mar", "thel"],
         nature=["sil", "wen", "loth", "fae"],
         fort=["Spire", "Bower", "Court", "Tower"],
-        adjectives=["ancient", "silver", "whispering", "fair", "moonlit"],
     ),
     "dwarvish": Culture(
         "dwarvish",
@@ -68,7 +64,6 @@ CULTURES: Dict[str, Culture] = {
         settlement=["delf", "forge", "hold", "dim", "barim", "dum"],
         nature=["kal", "durin", "zir"],
         fort=["Forge", "Vault", "Gate", "Tower"],
-        adjectives=["deep", "stony", "iron-veined", "ancient", "delved"],
     ),
     "southern": Culture(
         "southern",
@@ -78,7 +73,6 @@ CULTURES: Dict[str, Culture] = {
         settlement=["abad", "kar", "mir", "zah", "pur", "bad"],
         nature=["wadi", "ain", "nahr"],
         fort=["Citadel", "Ribat", "Tower", "Qasr"],
-        adjectives=["sun-baked", "golden", "scorched", "far-flung", "shimmering"],
     ),
 }
 
@@ -113,14 +107,6 @@ def weighted_choice(rng: random.Random, weights: Dict[str, float]) -> str:
         if r < cum:
             return key
     return items[-1][0]  # float-slack guard
-
-
-def culture_for_region(seed: int, region: Region) -> str:
-    """Assign a culture to a region: biome-biased weighted choice seeded on the region's id."""
-    from ..util import rng as rngmod
-
-    weights = BIOME_CULTURE_WEIGHTS.get(int(region.biome_class), _UNIFORM)
-    return weighted_choice(rngmod.derive(seed, "naming.culture", region.id), weights)
 
 
 def culture_for_realm(seed: int, realm: Realm) -> str:

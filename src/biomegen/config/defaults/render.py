@@ -46,8 +46,8 @@ VALUES: Dict[str, Any] = {
     # A road over water is a bridge, drawn from the same bed: a ``deck`` where the bed lies over water and ``wall``
     # railings in the band as wide again beside it.
     "bridge_glyphs": {"deck": ":", "wall": "#"},
-    # Colours of the road bed and bridges at the detail scales (the layered renderer's replacement for the
-    # ``palette`` road / bridge entries). ``*_bg`` fills the cell (shaded by the hillshade), ``*_fg`` the glyph.
+    # Colours of the road bed and bridges at the detail scales. ``*_bg`` fills the cell (shaded by the hillshade),
+    # ``*_fg`` the glyph.
     "detail_colors": {
         "road_bg": [122, 102, 70],
         "road_fg": [92, 74, 48],
@@ -59,24 +59,6 @@ VALUES: Dict[str, Any] = {
     "default_view": "fit",  # "fit" (whole map downsampled) or "onetoone" (1:1 panning)
     "status_height": 12,  # rows reserved below the map for the status/legend panel
     "show_legend": True,
-    # Biome -> RGB base colour (0-255), read by the region stage for each region's base colour (until realms
-    # replace regions in phase 6). The renderer's colours come from tables.biomes, not from here.
-    "palette": {
-        "deep": [28, 70, 140],
-        "shallow": [52, 104, 172],
-        "seaice": [200, 214, 230],
-        "lake": [60, 120, 205],
-        "beach": [240, 226, 165],
-        "grass": [120, 190, 92],
-        "savanna": [200, 196, 110],
-        "forest": [46, 135, 60],
-        "jungle": [24, 110, 44],
-        "taiga": [96, 142, 112],
-        "desert": [226, 200, 124],
-        "tundra": [176, 184, 174],
-        "swamp": [82, 110, 84],
-        "snow": [244, 246, 250],
-    },
     # Layered renderer (phase 4). A view is an ordered list of layer names (see render.layers) for the map
     # scale, an optional ``detail_layers`` list for the zoom and local scales (empty = the map list), and the
     # name of the colour ramp its ``tint`` layer applies ("" = no tint). Drop or reorder layers freely.

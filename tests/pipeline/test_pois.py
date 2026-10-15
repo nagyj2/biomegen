@@ -1,4 +1,4 @@
-"""Tests for wild POI placement: counts, km spacing, surfaces, elevation, floors, region refs and determinism."""
+"""Tests for wild POI placement: counts, km spacing, surfaces, elevation, floors and determinism."""
 
 from __future__ import annotations
 
@@ -57,16 +57,9 @@ def test_only_wild_kinds_come_from_the_poi_stage(world: World, cfg: Config) -> N
     assert set(cfg.get("poi.types")) == set(WILD)
 
 
-def test_poi_index_and_region_refs_consistent(world: World) -> None:
-    for i, p in enumerate(world.pois):
-        assert int(world.poi_index[p.y, p.x]) == i  # anchor points back at the POI
-        if p.region_id >= 0:
-            assert i in world.regions[p.region_id].poi_indices  # region knows its POI
-
-
-def test_no_duplicate_region_poi_indices(world: World) -> None:
-    for r in world.regions:
-        assert len(r.poi_indices) == len(set(r.poi_indices))  # single-writer => no dupes
+def test_poi_index_refs_are_consistent(world: World) -> None:
+    # Every POI's anchor cell points back at it.
+    assert all(int(world.poi_index[p.y, p.x]) == i for i, p in enumerate(world.pois))
 
 
 def test_land_pois_on_land_boats_on_water(world: World) -> None:

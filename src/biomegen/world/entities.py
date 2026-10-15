@@ -1,10 +1,10 @@
 """Sparse world objects that do not belong in a per-tile array.
 
-POIs, regions, realms, rivers, lakes and geographic features are few in number but rich in attributes, so they
+POIs, realms, rivers, lakes and geographic features are few in number but rich in attributes, so they
 live in plain dataclasses held in lists on the :class:`~biomegen.world.world.World`. Tiles reference them by index
-(e.g. ``world.poi_index[y, x]`` -> ``world.pois[i]``; ``world.region_id[y, x]`` -> ``world.regions[i]``;
-``world.realm_id[y, x]`` -> ``world.realms[i]``) and the objects reference back via coordinates. Keeping the heavy
-attributes here keeps the per-tile arrays small and cache-friendly.
+(e.g. ``world.poi_index[y, x]`` -> ``world.pois[i]``; ``world.realm_id[y, x]`` -> ``world.realms[i]``) and the
+objects reference back via coordinates. Keeping the heavy attributes here keeps the per-tile arrays small and
+cache-friendly.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ RELATION_KINDS: Tuple[str, ...] = ("war", "rivalry", "alliance", "trade")
 class POI:
     """A point of interest (village, town, city, capital, tower, dungeon, ruin, camp, boat, ...).
 
-    Placement fills the location, kind, region and floors; the plan of each floor is generated lazily from
-    ``interior_seed`` (see :mod:`biomegen.sites`) and never stored here.
+    Placement fills the location, kind and floors, the realms stage the realm; the plan of each floor is generated
+    lazily from ``interior_seed`` (see :mod:`biomegen.sites`) and never stored here.
     """
 
     kind: str  # "capital", "city", "town", "village", "tower", "dungeon", ...
@@ -30,32 +30,12 @@ class POI:
     interior_seed: int  # per-POI seed minted at placement; deterministic lazy interiors
     name: str = ""
     civilized: bool = False  # towns/villages/cities are "civilized"; towers/dungeons/etc. are not
-    region_id: int = -1
     realm_id: int = -1  # the realm holding the anchor cell (-1 = wild); set by the realms stage
     floor_count: int = 1  # >1 for towers (above ground) and dungeons (below ground)
     lowest_floor: int = 0  # 0 for ground-level; negative for dungeons going underground
     pop: int = 0  # population (settlements only)
     tags: Tuple[str, ...] = ()  # site traits, e.g. "port", "river"
     extra: dict = field(default_factory=dict)  # kind-specific data (e.g. boat cargo type)
-
-
-@dataclass
-class Region:
-    """A contiguous group of similar-biome tiles, named and given lore.
-
-    ``base_color`` is the per-region colour (a biome base hue perturbed deterministically by region
-    id) used for SVG/PNG export and the curses ``init_color`` attempt.
-    """
-
-    id: int
-    biome_class: int  # the representative Biome (int) of this region
-    size: int = 0  # number of tiles
-    base_color: Tuple[int, int, int] = (0, 0, 0)  # RGB 0-255
-    name: str = ""
-    lore: List[str] = field(default_factory=list)  # 1-4 generated lore sentences
-    poi_indices: List[int] = field(default_factory=list)
-    bbox: Tuple[int, int, int, int] = (0, 0, 0, 0)  # (x0, y0, x1, y1) inclusive
-    centroid: Tuple[float, float] = (0.0, 0.0)
 
 
 @dataclass

@@ -11,8 +11,8 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   `random` or `numpy.random` seeded by hand, never builtin `hash()`.
 - Iterate collections in a defined order (`sorted()`); dict and set order is not a contract.
 - Every tunable comes from `config.get(...)`, not a literal (see `config/CLAUDE.md`).
-- Folders say what a stage models: `physical/` (land and water), `civilization/` (settlements, roads). Flat modules
-  still to be reorganised (`regions`, `pois`, `naming`) stay in `pipeline/` until the phase that replaces them.
+- Folders say what a stage models: `physical/` (land and water), `civilization/` (settlements, roads, realms, diplomacy).
+  Flat modules still to be reorganised (`pois`, `naming`) stay in `pipeline/` until the phase that replaces them.
 
 ## Physical stages (`physical/`)
 
@@ -33,7 +33,7 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 
 ## Civilization stages (`civilization/`, `pois.py`)
 
-- Order: regions -> settlements -> pois -> roads -> naming. Settlements are placed first and
+- Order: settlements -> pois -> roads -> realms -> diplomacy -> naming. Settlements are placed first and
   every later stage counts them (spacing, remoteness, road endpoints).
 - Tiers are data (`data/tiers.toml`): placement order is `rank`, count is land km² over `land_per_settlement_km2`,
   separation is `spacing_km`, and `backbone` says whether roads join the tier into the trunk. A new tier is a row,
@@ -47,6 +47,25 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   out); villages and wild POIs branch off as spurs to the nearest road tile. A step costs its km length, over the
   biome and relief `move_cost` rows.
 - Wild POIs (`pois.py`) are interim: counts are area over `km2_per_poi`, and phase 8 replaces them with data rows.
+
+## Politics stages (`civilization/realms.py`, `diplomacy.py`)
+
+- Realms exist only after roads: nothing before the realms stage reads `realm_id`, and naming reads it last. POIs and
+  settlements take their `realm_id` by grid lookup after realms.
+- **Realm partition.** A solid cell (any non-water biome; a river keeps its land biome) belongs to at most one realm and
+  water never does; `realm_id` is -1 on wild land. Realms are claimed by a strength-weighted Dijkstra over the move-cost
+  surface in km, with salt water within `coastal_hop_km` as unclaimed stepping stones.
+- **One seat per major realm.** Every capital founds exactly one major realm, seated in it; a city-state is seated in its
+  city; a tribe takes its area's most populous settlement or none (`seat_poi` -1).
+- **Deterministic Dijkstra tie-breaks.** The heap orders by (cost, cell, realm) and a cell is taken only by a strictly
+  cheaper claim, so ties go to the earlier row-major frontier cell. Tribe areas sort by size, then first cell.
+- **Acyclic vassal tree.** Only a realm with no vassals swears fealty (majors, smallest first, to a larger independent major;
+  city-states and tribes to any neighbouring major), so a chain never loops and `World.top_realm` terminates.
+- **Relations only between independent powers.** Borders are summed over each vassal tree and a relation joins two tops
+  (`a < b`, at most one per pair); at least one war when any border exists. `front` marks the border cells of a war's two
+  powers only. A relation's `why` is a raw template from `tables.reasons`; naming fills its tokens last.
+- Every draw is a `diplomacy` or `realms` sub-stream drawn in a fixed order (always draw, then test, so the stream stays
+  aligned); `World.realms[i].id == i`.
 
 ## Adding a stage
 
