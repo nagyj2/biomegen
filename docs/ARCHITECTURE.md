@@ -354,11 +354,15 @@ Partitions solid land (any cell whose biome is not water; a river keeps its land
 
 ### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 
-Assigns names and generates lore for all entities:
+Assigns names to all entities; region lore is gone (phase 7's chronicle replaces it):
 
-- **Culture assignment**: each region draws its culture from a biome-biased weighted distribution
-  seeded on `(master_seed, "naming.culture", region_id)`. POIs, rivers, and lakes inherit their
-  region's culture. The island name uses its largest region's culture.
+- **Culture assignment**: each realm draws its culture from a biome-biased weighted distribution seeded on
+  `(master_seed, "naming.culture", "realm", realm_id)`; a vassal keeps its own. POIs, rivers, lakes and features take the
+  culture of the realm holding them, wild land and open water `common`. The island name uses the largest realm's culture.
+- **Realms and relations** (`naming/polity.py`): a realm's form (name pattern and ruler styles) is a weighted draw among its
+  kind's `tables.realm_forms` rows, favoured by the habitat of its land; its base word and ruler's name are made in its
+  culture. A city-state is short-named after its seat. Last, each relation's reason template gets its tokens: the claimed
+  or a nearby town, the longest river, the largest range and sea, and the realms' trade goods.
 - **Root generation** (per-entity RNG keyed on `(category, *stable_key)`):
   - *Syllable assembly* (default): draws `onset + nucleus + coda` from the culture's phoneme sets
     with a vowel-collision guard and syllable-boundary length cap.
@@ -367,10 +371,7 @@ Assigns names and generates lore for all entities:
     `naming.generators.<category> = "markov"`.
 - **Dressing**: roots are dressed per entity category — settlements append a culture suffix
   (`-ton`, `-vik`, `-loth`, …), dungeons/ruin/towers get evocative patterns (`Ruins of X`,
-  `X Catacombs`), regions append a geographic descriptor (`Wood`, `Peaks`, `Sands`).
-- **Lore**: 1–4 sentences per region drawn from a Tracery-style grammar in `grammar_rules.toml`.
-  `#token#` expands to another symbol or to a pre-bound region fact (`region_name`, `biome`,
-  `size`, `culture_adj`, `settlement_phrase`, `water_phrase`). Facts always have safe defaults.
+  `X Catacombs`).
 
 ---
 

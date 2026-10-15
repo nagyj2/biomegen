@@ -175,8 +175,11 @@ def test_a_war_is_forced_when_the_draw_gives_none() -> None:
     assert [r.kind for r in world.relations] == ["war"]
 
 
-def test_a_relation_names_a_reason_template(generated: World, cfg: Config) -> None:
-    assert all(r.why in cfg.get(f"tables.reasons.{r.kind}.templates") for r in generated.relations)
+def test_a_relation_names_a_reason_template() -> None:
+    # The stage stores a raw template of the relation's kind; naming fills its tokens later.
+    config = _config(war=1.0, rivalry=1.0, alliance=1.0, trade=1.0)
+    world = _run(_land([3, 3, 3, 3], ["major"] * 4), config)
+    assert world.relations and all(r.why in config.get(f"tables.reasons.{r.kind}.templates") for r in world.relations)
 
 
 def test_far_apart_majors_may_pact_across_the_sea() -> None:

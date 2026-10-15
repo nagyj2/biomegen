@@ -13,6 +13,8 @@ VALUES: Dict[str, Any] = {
     "generators": {
         "island": "syllable",
         "region": "syllable",
+        "realm": "syllable",
+        "ruler": "syllable",
         "poi": "syllable",
         "river": "syllable",
         "lake": "syllable",

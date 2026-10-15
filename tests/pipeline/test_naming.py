@@ -21,31 +21,36 @@ def world(cfg):
     return pipeline.generate(cfg, 9999)
 
 
-# --------------------------------------------------------------------------- naming + lore
-def test_island_and_regions_named(world):
+# --------------------------------------------------------------------------- naming
+def test_island_is_named(world):
     assert world.island_name
-    assert all(r.name for r in world.regions)
 
 
-def test_region_lore_nonempty(world, cfg):
-    lore_min = int(cfg.get("naming.lore_min"))
-    for r in world.regions:
-        assert len(r.lore) >= lore_min
+def test_every_realm_is_named_and_ruled(world):
+    assert world.realms and all(r.name and r.short and r.ruler and r.culture for r in world.realms)
+
+
+def test_no_reason_keeps_an_unfilled_token(world):
+    assert world.relations and all("{" not in r.why for r in world.relations)
 
 
 def test_every_poi_has_a_name(world):
     assert all(p.name for p in world.pois)
 
 
-def test_naming_is_order_invariant(cfg):
-    """Shuffling the entity lists before naming must not change any name (identity-keyed)."""
+def test_a_city_state_is_short_named_after_its_seat(world):
+    states = [r for r in world.realms if r.kind == "city_state"]
+    assert states and all(r.short == world.pois[r.seat_poi].name for r in states)
+
+
+def test_poi_names_do_not_depend_on_poi_order(cfg):
+    """Shuffling the POI list before naming must not change any POI name (identity-keyed)."""
     w = pipeline.generate(cfg, 777)
-    before = (w.island_name, {r.id: r.name for r in w.regions}, {(p.x, p.y): p.name for p in w.pois})
+    before = (w.island_name, {(p.x, p.y): p.name for p in w.pois})
     w2 = pipeline.generate(cfg, 777)
-    random.Random(1).shuffle(w2.regions)
     random.Random(2).shuffle(w2.pois)
     naming.run(w2, cfg, w2.seed)
-    after = (w2.island_name, {r.id: r.name for r in w2.regions}, {(p.x, p.y): p.name for p in w2.pois})
+    after = (w2.island_name, {(p.x, p.y): p.name for p in w2.pois})
     assert before == after
 
 

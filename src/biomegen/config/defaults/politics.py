@@ -40,4 +40,6 @@ VALUES: Dict[str, Any] = {
     # Trade goods when a realm's biome (or relief) names none: the first for the first realm, the second for the
     # other, the third when the two would otherwise trade the same good.
     "fallback_goods": ["wool", "wine", "copper"],
+    # The kinds of settlement a reason such as "the border town of {town}" may name when no town is claimed.
+    "reason_town_kinds": ["town", "village"],
 }

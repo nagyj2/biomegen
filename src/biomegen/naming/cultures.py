@@ -13,7 +13,7 @@ import random
 from dataclasses import dataclass
 from typing import Dict, List
 
-from ..world.entities import Region
+from ..world.entities import Realm, Region
 from ..world.tile import Biome
 
 
@@ -121,3 +121,11 @@ def culture_for_region(seed: int, region: Region) -> str:
 
     weights = BIOME_CULTURE_WEIGHTS.get(int(region.biome_class), _UNIFORM)
     return weighted_choice(rngmod.derive(seed, "naming.culture", region.id), weights)
+
+
+def culture_for_realm(seed: int, realm: Realm) -> str:
+    """Assign a culture to a realm: biome-biased weighted choice seeded on the realm's id."""
+    from ..util import rng as rngmod
+
+    weights = BIOME_CULTURE_WEIGHTS.get(int(realm.dominant_biome), _UNIFORM)
+    return weighted_choice(rngmod.derive(seed, "naming.culture", "realm", realm.id), weights)

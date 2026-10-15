@@ -11,8 +11,8 @@ from biomegen.explorer.state import MODE_ONE_TO_ONE, ViewState
 from biomegen.render.grid import CellGrid
 from biomegen.render.layers import Seen
 from biomegen.sampling.detail import SCALE_LOCAL, SCALE_ZOOM
-from biomegen.world.entities import POI, Region
-from biomegen.world.tile import Biome, Cell
+from biomegen.world.entities import POI, Realm
+from biomegen.world.tile import Biome, Cell, WaterType
 from tests.render.conftest import make_world
 
 
@@ -41,16 +41,24 @@ def test_cursor_line_gives_coordinates_and_biome(config: Config) -> None:
     assert "cursor (2,1)" in line and "biome forest" in line and "elev 100 m" in line
 
 
-def test_open_ocean_when_there_is_no_region(config: Config) -> None:
-    assert "open ocean" in _panel(make_world(6, 3), config)[3]
+def test_unclaimed_land_has_no_realm(config: Config) -> None:
+    assert "none (wild land)" in _panel(make_world(6, 3), config)[3]
 
 
-def test_region_line_names_the_region_and_its_lore(config: Config) -> None:
+def test_water_has_no_realm(config: Config) -> None:
+    world = make_world(6, 3)
+    world.water_type[:] = int(WaterType.SALT)
+    assert "open water" in _panel(world, config)[3]
+
+
+def test_realm_line_names_the_realm_its_ruler_and_size(config: Config) -> None:
     world = make_world(6, 3, Biome.FOREST)
-    world.regions.append(Region(id=0, biome_class=int(Biome.FOREST), size=18, name="Greenwood", lore=["Old trees."]))
-    world.region_id[:] = 0
+    world.realms.append(
+        Realm(id=0, kind="major", name="Kingdom of Aldor", ruler="Queen Mara", area_km2=12000.0, pop=345678)
+    )
+    world.realm_id[:] = 0
     lines = _panel(world, config)
-    assert "Greenwood" in lines[3] and "18 tiles" in lines[3] and "Old trees." in lines[4]
+    assert "Kingdom of Aldor" in lines[3] and "Queen Mara" in lines[3] and "12,000 km2, pop. ~345,678" in lines[4]
 
 
 def test_poi_line_names_the_poi_under_the_cursor(config: Config) -> None:

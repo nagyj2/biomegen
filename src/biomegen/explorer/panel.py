@@ -149,14 +149,13 @@ def build_panel(
         f" cursor ({state.cx},{state.cy})  biome {tile.biome_name}{relief}  water {tile.water_type.name.lower()}"
         f"  elev {tile.elevation_m:.0f} m  temp {tile.temperature_c:.1f} C  moist {tile.moisture:.2f}",
     )
-    region = world.region_at(state.cx, state.cy)
-    if region is not None:
-        name = region.name or f"region #{region.id}"
-        canvas.text(3, 0, f" {name}  (mostly {BIOME_NAME[region.biome_class]}, {region.size} tiles)")
-        if region.lore:
-            canvas.text(4, 1, region.lore[0], dim)
+    realm = world.realm_at(state.cx, state.cy)
+    if realm is not None:
+        kind = config.get(f"tables.realm_kinds.{realm.kind}.label")
+        canvas.text(3, 0, f" {realm.name or f'realm #{realm.id}'}  ({kind}, ruled by {realm.ruler or 'no one'})")
+        canvas.text(4, 1, f"{realm.area_km2:,.0f} km2, pop. ~{realm.pop:,}", dim)
     else:
-        canvas.text(3, 0, " region: open ocean")
+        canvas.text(3, 0, " realm: open water" if tile.is_water else " realm: none (wild land)")
     poi = poi_under_cursor(world, config, state)
     canvas.text(5, 0, _poi_line(poi))
     last = height - 1

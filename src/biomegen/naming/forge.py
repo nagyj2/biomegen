@@ -17,7 +17,15 @@ from . import markov, syllables
 from .cultures import CULTURES
 
 # Syllable-count ranges per category (roots are shorter for settlements, longer for regions).
-_SYLL = {"island": (2, 3), "region": (2, 3), "poi": (1, 2), "river": (2, 2), "lake": (2, 2)}
+_SYLL = {
+    "island": (2, 3),
+    "region": (2, 3),
+    "realm": (1, 2),
+    "ruler": (1, 2),
+    "poi": (1, 2),
+    "river": (2, 2),
+    "lake": (2, 2),
+}
 
 
 def _root(
@@ -82,7 +90,7 @@ def name_entity(
 
     Parameters
     ----------
-    category : 'island' | 'region' | 'poi' | 'river' | 'lake'
+    category : 'island' | 'region' | 'realm' | 'ruler' | 'poi' | 'river' | 'lake'
     key      : a tuple of ints uniquely + stably identifying the entity (region id, POI (x,y), ...).
     descriptor : optional geographic word for regions (e.g. 'Wood', 'Peaks').
     """
@@ -90,6 +98,9 @@ def name_entity(
     profile = CULTURES.get(culture_name, CULTURES["common"])
     order, min_len, max_len = _lengths(naming_cfg)
     root = _root(r, profile.name, category, generators_cfg, order, min_len, max_len)
+
+    if category in ("realm", "ruler"):
+        return root  # the realm's base word, or a ruler's personal name; the form is picked by naming.polity
 
     if category == "island":
         return root if r.random() < 0.5 else f"{root} Isle"
