@@ -262,7 +262,10 @@ VALUES: Dict[str, Any] = {
     "marker_style": {"fg": [255, 130, 255], "bg": [70, 20, 70]},
     # Geography labels. ``mode`` of a draw is set by the caller ("all" or "none"). Landmass names are drawn
     # in capitals, letter-spaced unless that would exceed a third of the map width. ``candidates`` is how many
-    # positions near a feature's centre (or deepest inland cells) are tried before the label is dropped.
+    # positions near a feature's centre (or deepest inland cells) are tried before the label is dropped. In the
+    # political view the landmass and range names give way to realm names: the short name in capitals of each
+    # realm of a kind in ``realm_kinds`` and of at least ``realm_min_area_km2``, largest first, in the realm's colour
+    # lightened toward white by ``realm_lighten``, tried at ``realm_candidates`` positions near the realm's centre.
     "labels": {
         "landmass_fg": [255, 236, 180],
         "range_fg": [235, 222, 205],
@@ -275,6 +278,10 @@ VALUES: Dict[str, Any] = {
         "range_candidates": 40,
         "lake_candidates": 10,
         "fill_scale": 0.5,  # label cells use the terrain fill darkened by this factor
+        "realm_kinds": ["major", "tribal"],
+        "realm_min_area_km2": 25000.0,
+        "realm_candidates": 80,
+        "realm_lighten": 0.6,
     },
     # Legend and gazetteer text for a static map: colours, the swatch column width, and how many features
     # of each kind are listed. ``continent_km2`` is the area above which a landmass is called a continent.
@@ -287,6 +294,17 @@ VALUES: Dict[str, Any] = {
         "max_ranges": 5,
         "max_lakes": 3,
         "continent_km2": 1500000.0,
+        # The realms and diplomacy sections of a political legend: the swatch glyph before each realm name, the
+        # width the relation tag is padded to, and each relation kind's tag and colour.
+        "realm_swatch": "■",
+        "realm_swatch_ascii": "#",
+        "relation_tag_width": 11,
+        "relations": {
+            "war": {"tag": "WAR", "fg": [255, 90, 80]},
+            "rivalry": {"tag": "RIVALRY", "fg": [255, 170, 80]},
+            "alliance": {"tag": "ALLIANCE", "fg": [120, 220, 120]},
+            "trade": {"tag": "TRADE PACT", "fg": [120, 200, 255]},
+        },
     },
     # Frame furniture around a static map. ``margin`` is the width of the latitude gutter. Graticule ticks
     # use the first step in ``lat_steps`` / ``lon_steps`` (degrees) that leaves at least ``lat_tick_rows``

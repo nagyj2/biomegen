@@ -57,6 +57,11 @@ def test_data_view_prints_its_ramp(capsys):
     assert "RAINFALL, MEAN ANNUAL" in _run_view(capsys, "--view", "rainfall")
 
 
+def test_political_view_prints_the_realms_and_diplomacy(capsys):
+    out = _run_view(capsys, "--view", "political")
+    assert "REALMS" in out and "DIPLOMACY" in out and "{" not in out
+
+
 def test_forced_colour_emits_escape_codes(capsys):
     assert "\x1b[" in _run_view(capsys, "--view", "terrain", "--color", "truecolor", "--no-legend")
 

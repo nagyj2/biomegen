@@ -163,6 +163,97 @@ def _geography(text: _Text, world: World, config: Config, ascii_only: bool) -> N
         text.para(f"{bullet} {sea.name} - depths to {abs(sea.elevation_m):,.0f} m")
 
 
+def _population(count: int) -> str:
+    return f"{count / 1e6:.1f} million" if count >= 1_000_000 else f"{count:,}"
+
+
+def _realms(text: _Text, world: World, config: Config, ascii_only: bool) -> None:
+    """The REALMS section: every independent realm with its vassals nested below, then the unclaimed land."""
+    if not world.realms:
+        return
+    cfg = config.get("render.legend")
+    swatch = cfg["realm_swatch_ascii" if ascii_only else "realm_swatch"]
+    members = {realm.id: 0 for realm in world.realms}
+    free = 0
+    for poi in world.pois:
+        if poi.civilized and poi.realm_id >= 0:
+            members[poi.realm_id] += 1
+        elif poi.civilized:
+            free += 1
+    text.header("REALMS")
+
+    def entry(realm_id: int, depth: int) -> None:
+        realm = world.realms[realm_id]
+        pad = "  " + "    " * depth
+        label = config.get(f"tables.realm_kinds.{realm.kind}.label")
+        tag = f"vassal {label}" if realm.liege >= 0 else label
+        seat_poi = world.pois[realm.seat_poi] if realm.seat_poi >= 0 else None
+        seat = (
+            f"from {seat_poi.name} ({_position(world, seat_poi.x, seat_poi.y, ascii_only)})"
+            if seat_poi
+            else "with no fixed seat"
+        )
+        count = members[realm.id]
+        text.lines.append(
+            [Span(pad), Span(swatch, realm.color, None, True), Span(f" {realm.name}", realm.color, None, True)]
+            + [Span(f"  [{tag}]", text.dim_fg)]
+        )
+        text.para(
+            f"Ruled by {realm.ruler} {seat}. {_area(realm.area_km2, ascii_only)}, pop. ~{_population(realm.pop)}, "
+            f"{count} settlement{'' if count == 1 else 's'}.",
+            text.dim_fg,
+            len(pad) + 2,
+        )
+        for vassal in sorted(realm.vassals, key=lambda v: (-world.realms[v].area_km2, v)):
+            entry(vassal, depth + 1)
+
+    for realm in sorted((r for r in world.realms if r.liege < 0), key=lambda r: (-r.area_km2, r.id)):
+        entry(realm.id, 0)
+    land = ~biome_style(config).water[world.biome]
+    wild_km2 = float((land & (world.realm_id < 0)).sum()) * world.scale.cell_area_km2
+    holding = f", holding {free} free settlement{'' if free == 1 else 's'}." if free else "."
+    text.para(f"Unclaimed wilds: {_area(wild_km2, ascii_only)}{holding}", text.dim_fg)
+
+
+def _diplomacy(text: _Text, world: World, config: Config, ascii_only: bool) -> None:
+    """The DIPLOMACY section: wars first, then rivalries, alliances and trade pacts."""
+    if not world.relations:
+        return
+    cfg = config.get("render.legend")
+    kinds = list(cfg["relations"])
+    realms = world.realms
+    width = int(cfg["relation_tag_width"])
+    text.header("DIPLOMACY")
+    for relation in sorted(world.relations, key=lambda r: (kinds.index(r.kind), -r.border_km, r.a, r.b)):
+        style = cfg["relations"][relation.kind]
+        tag_fg = _color(style["fg"])
+        a, b = realms[relation.a], realms[relation.b]
+        sea = relation.border_km == 0
+        if relation.kind == "war":
+            attacker = realms[relation.attacker]
+            defender = b if relation.attacker == relation.a else a
+            body = f"{attacker.name} vs {defender.name} over {relation.why}; front {relation.border_km:,.0f} km."
+            if relation.claim_poi >= 0:
+                body += f" {attacker.short} claims {world.pois[relation.claim_poi].name}."
+        else:
+            body = f"{a.name} & {b.name} - {relation.why}"
+            if sea:
+                body += " (by sea)." if relation.kind == "trade" else " (across the sea)."
+            elif relation.kind == "trade":
+                body += "."
+            else:
+                body += f"; shared border {relation.border_km:,.0f} km."
+        for index, line in enumerate(textwrap.wrap(body, max(20, text.width - width - 3))):
+            tag = style["tag"].ljust(width) if index == 0 else " " * width
+            text.lines.append(
+                [
+                    Span("  "),
+                    Span(tag, tag_fg if index == 0 else None, None, index == 0),
+                    Span(" " + line, text.text_fg),
+                ]
+            )
+
+
 def _climate(text: _Text, world: World, config: Config, ascii_only: bool) -> None:
     land = ~biome_style(config).water[world.biome]
     if not land.any():
@@ -205,4 +296,7 @@ def build_legend(world: World, config: Config, view: View, width: int, ascii_onl
         _ramp_bar(text, config, view, ascii_only)
     _geography(text, world, config, ascii_only)
     _climate(text, world, config, ascii_only)
+    if view.political:
+        _realms(text, world, config, ascii_only)
+        _diplomacy(text, world, config, ascii_only)
     return text.lines

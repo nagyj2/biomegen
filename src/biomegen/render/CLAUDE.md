@@ -18,6 +18,9 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   instead of replacing the fill with a ramp; the `borders` layer then lightens the line between realms and reddens war
   fronts. Both read realms through `ctx.realm`, which uses the sampler's warped tile like the biome blend, so a border is the
   same line at the zoom and local scales. A view's `tint` is a `render.ramps` entry or `"realm"` (`View.ramp`, `View.political`).
+- **Political labels and legend.** In the political view the `labels` layer names the big realms (`render.labels.realm_*`)
+  instead of landmasses and ranges; the legend appends REALMS (each independent realm, vassals nested, with ruler, seat, area,
+  population, settlements) and DIPLOMACY (wars first, with front length and claimed town). Other views' legends have neither.
 - **Tinted views at detail scales** draw the same ground as terrain (`clutter`, `roads`, `markers`, `sites`): clutter sits
   under the tint (a ramp's `keep_clutter` keeps its glyphs, dimmed; the floor glyph is blanked) and roads and sites are drawn
   over it, so inside a site the ground round the plan is tinted and the plan keeps its own colours.

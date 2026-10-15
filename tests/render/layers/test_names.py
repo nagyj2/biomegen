@@ -69,3 +69,61 @@ def test_unnamed_features_are_skipped(config) -> None:
     world = _island()
     world.features[0].name = ""
     assert "O R L O" not in _text(_draw(world, config))
+
+
+# --- realm names in the political view ---------------------------------------------------------------------------
+
+POLITICAL = View("p", ("terrain", "tint", "markers", "labels"), "realm")
+
+
+def _realms(*specs):
+    """The island with realms over its land: each spec is (kind, short name, area km2, column range)."""
+    from biomegen.world.entities import Realm
+
+    world = _island()
+    for index, (kind, short, area, columns) in enumerate(specs):
+        world.realms.append(Realm(id=index, kind=kind, short=short, area_km2=area, color=(200, 40, 40)))
+        world.realm_id[3:9, columns[0] : columns[1]] = index
+    return world
+
+
+def _draw_political(world, config, **kwargs):
+    return build_grid(world, config, POLITICAL, Sampler.viewport(world, world.height, world.width), **kwargs)
+
+
+def test_a_political_view_names_a_realm_in_capitals(config) -> None:
+    assert "ALDOR" in _text(_draw_political(_realms(("major", "Aldor", 100000.0, (20, 40))), config))
+
+
+def test_a_political_view_leaves_the_landmass_name_out(config) -> None:
+    assert "O R L O" not in _text(_draw_political(_realms(("major", "Aldor", 100000.0, (20, 40))), config))
+
+
+def test_a_terrain_view_does_not_name_realms(config) -> None:
+    assert "ALDOR" not in _text(_draw(_realms(("major", "Aldor", 100000.0, (20, 40))), config))
+
+
+def test_a_small_realm_is_not_named(config) -> None:
+    assert "ALDOR" not in _text(_draw_political(_realms(("major", "Aldor", 1000.0, (20, 40))), config))
+
+
+def test_a_city_state_is_not_named(config) -> None:
+    assert "ALDOR" not in _text(_draw_political(_realms(("city_state", "Aldor", 100000.0, (20, 40))), config))
+
+
+def test_each_big_realm_is_named_near_its_own_land(config) -> None:
+    text = _text(
+        _draw_political(_realms(("major", "Aldor", 100000.0, (20, 30)), ("major", "Brek", 90000.0, (30, 40))), config)
+    )
+    row = next(line for line in text.splitlines() if "ALDOR" in line)
+    assert "BREK" in text and row.index("ALDOR") < next(line for line in text.splitlines() if "BREK" in line).index(
+        "BREK"
+    )
+
+
+def test_a_realm_label_takes_a_lightened_realm_colour(config) -> None:
+    grid = _draw_political(_realms(("major", "Aldor", 100000.0, (20, 40))), config)
+    row = next(r for r, line in enumerate(grid.glyph.tolist()) if "ALDOR" in "".join(line))
+    col = "".join(grid.glyph[row].tolist()).index("ALDOR")
+    red, green, _ = grid.fg[row, col].astype(int)
+    assert red > green > 40

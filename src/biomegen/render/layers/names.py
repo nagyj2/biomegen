@@ -1,4 +1,4 @@
-"""The labels layer: names of landmasses, ranges, seas and lakes placed on open cells.
+"""The labels layer: names of landmasses (or realms), ranges, seas and lakes placed on open cells.
 
 The module is called ``names`` so it does not shadow the ``labels`` argument used elsewhere in this package.
 """
@@ -10,7 +10,7 @@ import math
 import numpy as np
 
 from ...world.entities import GeoFeature
-from ..colors import scale_colors
+from ..colors import mix_colors, scale_colors
 from ..grid import CellGrid
 from . import LAYERS, LayerContext
 
@@ -58,9 +58,27 @@ def _around(feature: GeoFeature, text: str, count: int, aspect: float) -> list[t
     return [(x - len(text) // 2, y) for x, y in nearest[:count]]
 
 
+def _realm_labels(ctx: LayerContext, placer: _Placer, cfg: dict) -> None:
+    """Name the realms in capitals near their centres, largest first, in a lightened shade of their colour."""
+    world = ctx.world
+    kinds = set(cfg["realm_kinds"])
+    big = [r for r in world.realms if r.short and r.kind in kinds and r.area_km2 >= float(cfg["realm_min_area_km2"])]
+    aspect = world.scale.aspect
+    for realm in sorted(big, key=lambda r: (-r.area_km2, r.id)):
+        ys, xs = np.nonzero(world.realm_id == realm.id)
+        text = realm.short.upper()
+        nearest = np.lexsort((xs, ys, np.hypot(xs - xs.mean(), (ys - ys.mean()) * aspect)))
+        starts = [(int(xs[i]) - len(text) // 2, int(ys[i])) for i in nearest[: int(cfg["realm_candidates"])]]
+        colour = mix_colors(realm.color, (255, 255, 255), float(cfg["realm_lighten"]))
+        placer.place(text, starts, tuple(int(c) for c in colour))
+
+
 @LAYERS.register("labels")
 def labels_layer(ctx: LayerContext, grid: CellGrid) -> None:
-    """Name the largest landmasses and ranges, the seas and the lakes (``render.labels``) when ``labels`` is all."""
+    """Name the largest landmasses and ranges (the realms in a political view), seas and lakes when ``labels`` is all.
+
+    Settings are ``render.labels``.
+    """
     if ctx.labels != "all":
         return
     cfg = ctx.config.get("render.labels")
@@ -75,20 +93,23 @@ def labels_layer(ctx: LayerContext, grid: CellGrid) -> None:
         features = [f for f in by_kind.get(kind, []) if f.name]
         return sorted(features, key=lambda f: (-f.area_km2, f.id))[:limit]
 
-    for landmass in largest("landmass", int(cfg["max_landmasses"])):
-        text = " ".join(landmass.name.upper())
-        if len(text) > grid.cols // 3:
-            text = landmass.name.upper()
-        inland = sorted(landmass.cells, key=lambda c: (-float(world.dist_to_ocean[c[1], c[0]]), c[1], c[0]))
-        starts = [(x - len(text) // 2, y) for x, y in inland[: int(cfg["landmass_candidates"])]]
-        placer.place(text, starts, tuple(cfg["landmass_fg"]))
-    for mountains in largest("range", int(cfg["max_ranges"])):
-        if mountains.cells:
-            placer.place(
-                mountains.name,
-                _around(mountains, mountains.name, int(cfg["range_candidates"]), aspect),
-                tuple(cfg["range_fg"]),
-            )
+    if ctx.view.political:
+        _realm_labels(ctx, placer, cfg)
+    else:
+        for landmass in largest("landmass", int(cfg["max_landmasses"])):
+            text = " ".join(landmass.name.upper())
+            if len(text) > grid.cols // 3:
+                text = landmass.name.upper()
+            inland = sorted(landmass.cells, key=lambda c: (-float(world.dist_to_ocean[c[1], c[0]]), c[1], c[0]))
+            starts = [(x - len(text) // 2, y) for x, y in inland[: int(cfg["landmass_candidates"])]]
+            placer.place(text, starts, tuple(cfg["landmass_fg"]))
+        for mountains in largest("range", int(cfg["max_ranges"])):
+            if mountains.cells:
+                placer.place(
+                    mountains.name,
+                    _around(mountains, mountains.name, int(cfg["range_candidates"]), aspect),
+                    tuple(cfg["range_fg"]),
+                )
     for sea in sorted((f for f in by_kind.get("sea", []) if f.name), key=lambda f: f.id):
         x, y = sea.anchor
         starts = [(x - len(sea.name) // 2 + dx, y + dy) for dy in (0, 1, -1, 2, -2) for dx in (0, -4, 4)]

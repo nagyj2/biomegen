@@ -77,3 +77,120 @@ def test_legend_wraps_within_the_width(config) -> None:
 def test_a_political_legend_has_no_ramp_bar_but_lists_relief(config) -> None:
     text = _text(config, View("political", ("terrain", "tint"), "realm"))
     assert config.get("tables.relief.mountain.label") in text and "ELEVATION" not in text
+
+
+# --- the political legend -----------------------------------------------------------------------------------------
+
+POLITICAL = View("political", ("terrain", "tint"), "realm")
+
+
+def _political_world():
+    from biomegen.world.entities import POI, Realm, Relation
+
+    world = _world()
+    world.pois.append(
+        POI(kind="capital", x=12, y=5, interior_seed=1, civilized=True, name="Aldoria", realm_id=0, pop=900)
+    )
+    world.pois.append(POI(kind="town", x=14, y=5, interior_seed=2, civilized=True, name="Dunmere", realm_id=2, pop=90))
+    world.pois.append(
+        POI(kind="village", x=7, y=5, interior_seed=3, civilized=True, name="Nowhere Hamlet", realm_id=-1)
+    )
+    world.realms = [
+        Realm(
+            id=0,
+            kind="major",
+            name="Kingdom of Aldor",
+            short="Aldor",
+            ruler="Queen Mara",
+            seat_poi=0,
+            area_km2=1_200_000.0,
+            pop=3_400_000,
+            vassals=[1],
+            color=(200, 40, 40),
+        ),
+        Realm(
+            id=1,
+            kind="tribal",
+            name="The Hill Holds",
+            short="Hills",
+            ruler="the Moot",
+            liege=0,
+            area_km2=20_000.0,
+            pop=2_500,
+            color=(220, 120, 120),
+        ),
+        Realm(
+            id=2,
+            kind="major",
+            name="Duchy of Brek",
+            short="Brek",
+            ruler="Duke Orn",
+            seat_poi=1,
+            area_km2=800_000.0,
+            pop=700_000,
+            color=(40, 40, 200),
+        ),
+    ]
+    world.realm_id[:, 5:12] = 0
+    world.realm_id[:, 12:] = 2
+    world.relations = [
+        Relation(a=0, b=2, kind="war", border_km=450.0, why="an assassinated envoy", attacker=2, claim_poi=0),
+        Relation(a=0, b=2, kind="trade", border_km=0.0, why="grain from Aldor for timber from Brek"),
+    ]
+    return world
+
+
+def _political_text(config, ascii_only=False) -> str:
+    return to_plain(build_legend(_political_world(), config, POLITICAL, 100, ascii_only))
+
+
+def test_the_political_legend_lists_each_realm_with_its_ruler(config) -> None:
+    text = _political_text(config)
+    assert "Kingdom of Aldor" in text and "Ruled by Queen Mara from Aldoria" in text and "Duchy of Brek" in text
+
+
+def test_a_realm_without_a_seat_has_no_fixed_seat(config) -> None:
+    assert "Ruled by the Moot with no fixed seat" in _political_text(config)
+
+
+def test_a_vassal_is_listed_below_its_overlord_and_tagged(config) -> None:
+    lines = _political_text(config).splitlines()
+    overlord = next(i for i, line in enumerate(lines) if "Kingdom of Aldor" in line)
+    vassal = next(i for i, line in enumerate(lines) if "The Hill Holds" in line)
+    assert (
+        vassal > overlord
+        and "[vassal tribal lands]" in lines[vassal]
+        and lines[vassal].index("■") > lines[overlord].index("■")
+    )
+
+
+def test_a_realm_line_gives_area_population_and_settlements(config) -> None:
+    assert "1.2 million km²" in _political_text(config) and "pop. ~3.4 million" in _political_text(config)
+
+
+def test_free_settlements_are_counted_with_the_wilds(config) -> None:
+    assert "holding 1 free settlement." in _political_text(config)
+
+
+def test_a_war_names_the_sides_the_reason_and_the_claimed_town(config) -> None:
+    text = " ".join(_political_text(config).split())
+    assert (
+        "WAR Duchy of Brek vs Kingdom of Aldor over an assassinated envoy; front 450 km. Brek claims Aldoria." in text
+    )
+
+
+def test_a_pact_across_the_sea_is_marked(config) -> None:
+    assert "(by sea)." in _political_text(config)
+
+
+def test_wars_are_listed_before_trade(config) -> None:
+    text = _political_text(config)
+    assert text.index("WAR") < text.index("TRADE PACT")
+
+
+def test_the_political_legend_uses_an_ascii_swatch(config) -> None:
+    assert "# Kingdom of Aldor" in _political_text(config, ascii_only=True)
+
+
+def test_other_views_have_no_realms_section(config) -> None:
+    assert "REALMS" not in to_plain(build_legend(_political_world(), config, TERRAIN, 100, False))
