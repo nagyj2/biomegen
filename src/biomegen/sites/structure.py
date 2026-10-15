@@ -374,6 +374,7 @@ def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     ]
     for cx, cy in stream.sample(plants, min(len(plants), len(plants) // 8)):
         grid[cy, cx] = int(Cell.TREE) if stream.random() < 0.5 else int(Cell.BUSH)
+    keep_reachable(grid, sorted((x + dx, y + dy) for dx, dy in building.doors))  # a tree never walls a door in
     _approach(ctx, grid, building, rect)
     outside = grid.copy()
     outside[outside == _WALL] = _STONE

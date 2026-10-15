@@ -112,3 +112,22 @@ def test_dungeon_stairs_meet_between_floors(config: Config) -> None:
         assert set(zip(*np.nonzero(above.cells == DOWN), strict=True)) == set(
             zip(*np.nonzero(below.cells == UP), strict=True)
         )
+
+
+def test_no_tree_walls_a_ruin_door_in(config: Config) -> None:
+    # Trees and bushes grow only where they leave every door of the ruin reachable from the others (40 ruin seeds).
+    from scipy import ndimage
+
+    from biomegen.sites import PASSABLE
+
+    passable = np.array(sorted(PASSABLE))
+    split = []
+    for index in range(40):
+        world = flat_world(14, 10)
+        poi = add_poi(world, "ruin", 7, 5, floor_count=1, interior_seed=1000 + index)
+        plan = site_plan(poi, 0, config, world)
+        labels, _ = ndimage.label(np.isin(plan.cells, passable))
+        doors = {int(labels[y, x]) for y, x in np.argwhere(plan.cells == DOOR).tolist()}
+        if len(doors - {0}) > 1:
+            split.append(index)
+    assert split == []

@@ -1,8 +1,9 @@
 # Settlement tier table, keyed by tier name. Loaded into the config tree as `tables.tiers`; override
 # with e.g. `[tables.tiers.town]` + `spacing_km = 200.0` in a user config.
 #
-# Distances and areas are km / km². They are the reference generator's column-based values converted
-# at its 201-column, 6000 km default (29.85 km per column); phase 5 re-tunes them.
+# Distances and areas are km / km². They started as the reference generator's column-based values converted
+# at its 201-column, 6000 km default (29.85 km per column); phase 5 re-tuned them and a later pass widened the
+# spacing of cities, towns and villages and thinned the towns and villages (the map felt crowded).
 #
 # Keys:
 #   label         display name
@@ -38,7 +39,7 @@ fg = [255, 245, 200]
 bg = [60, 40, 30]
 pop = [9000, 40000]
 floors = [2, 3]
-spacing_km = 390.0
+spacing_km = 420.0
 land_per_settlement_km2 = 800000.0
 backbone = true
 
@@ -50,8 +51,8 @@ ascii = "o"
 fg = [250, 240, 220]
 pop = [1500, 8000]
 floors = [1, 2]
-spacing_km = 240.0
-land_per_settlement_km2 = 400000.0
+spacing_km = 300.0
+land_per_settlement_km2 = 480000.0
 backbone = true
 
 [tiers.village]
@@ -62,6 +63,6 @@ ascii = "+"
 fg = [245, 235, 215]
 pop = [80, 1200]
 floors = [1, 1]
-spacing_km = 150.0
-land_per_settlement_km2 = 200000.0
+spacing_km = 230.0
+land_per_settlement_km2 = 300000.0
 backbone = false
