@@ -232,13 +232,14 @@ VALUES: Dict[str, Any] = {
     # Roads layer: a road cell draws the glyph for which of its eight neighbours are also road. With only
     # orthogonal neighbours (north 1, east 2, south 4, west 8) ``glyphs`` / ``ascii`` are indexed by that 0..15
     # mask (box drawing, U+2500 block). With only diagonal neighbours ``diagonal`` gives a rising line, a falling
-    # line and a crossing (U+2571-2573). With both kinds, ``junction`` marks three or more meeting neighbours.
+    # line and a crossing (U+2571-2573). With both kinds, ``junction`` marks three or more meeting neighbours; it is the
+    # box-drawing cross, the same small glyph as an orthogonal crossroads, so the set stays cohesive.
     "roads": {
         "fg": [96, 58, 30],
         "glyphs": ["·", "│", "─", "╰", "│", "│", "╭", "├", "─", "╯", "─", "┴", "╮", "┤", "┬", "┼"],
         "ascii": ["+", "|", "-", "+", "|", "|", "+", "+", "-", "+", "-", "+", "+", "+", "+", "+"],
         "diagonal": {"glyphs": ["╱", "╲", "╳"], "ascii": ["/", "\\", "X"]},
-        "junction": {"glyphs": "✱", "ascii": "*"},
+        "junction": {"glyphs": "┼", "ascii": "+"},
     },
     # Markers layer: points of interest draw their ``markers`` glyph (below) in bold with this colour pair.
     "marker_style": {"fg": [255, 130, 255], "bg": [70, 20, 70]},

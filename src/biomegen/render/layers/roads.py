@@ -48,9 +48,9 @@ def road_glyph_table(config: Config, ascii_only: bool) -> np.ndarray:
     """Return the glyph for each of the 256 eight-neighbour masks, so every way two roads can join is drawable.
 
     No diagonal neighbour: the box-drawing glyph for the cardinal mask (``render.roads.glyphs``), so an orthogonal
-    junction is drawn as the matching tee or cross. Any diagonal neighbour: the junction glyph (an asterisk) wherever
-    three or more links meet. Fewer than three: ``╱`` or ``╲`` along a line, ``╳`` where two diagonals bend, and the
-    slant of the diagonal when a single diagonal link joins an orthogonal one.
+    junction is drawn as the matching tee or cross. Any diagonal neighbour: the junction glyph (the box-drawing cross)
+    wherever three or more links meet. Fewer than three: ``╱`` or ``╲`` along a line, ``╳`` where two diagonals bend,
+    and the slant of the diagonal when a single diagonal link joins an orthogonal one.
     """
     cfg = config.get("render.roads")
     key = "ascii" if ascii_only else "glyphs"
