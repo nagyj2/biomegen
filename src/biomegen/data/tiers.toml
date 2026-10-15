@@ -20,6 +20,8 @@
 #   connect       (optional, default true) false for a tier the roads stage does not link
 #   map_marker    (optional, default true) false to hide the marker at the map scale (it still shows at the zoom scale)
 #   free_fg       (optional) marker colour of a settlement no realm holds (a free settlement); omit to keep `fg`
+#   hooks_free    (optional) one-sentence story texts of a free settlement: `{name}` is the settlement
+#   hooks_remnant (optional) texts of a free settlement that is a remnant of a fallen realm: `{name}` and `{fallen}` (needed)
 
 [tiers.capital]
 label = "Capital"
@@ -47,6 +49,8 @@ spacing_km = 420.0
 land_per_settlement_km2 = 800000.0
 backbone = true
 free_fg = [150, 200, 205]
+hooks_free = ["{name} answers to no crown, and its council means to keep it so.", "No banner flies over {name}; the great houses of the city keep the peace themselves.", "Neither king nor emperor claims {name}, though many have wished to."]
+hooks_remnant = ["{name} outlived the fall of {fallen} and still keeps the old customs.", "When {fallen} fell, {name} stayed on, and nobody came to rule it.", "{name} is a remnant of {fallen}; its walls remember a crown that is gone."]
 
 [tiers.town]
 label = "Town"
@@ -60,6 +64,8 @@ spacing_km = 300.0
 land_per_settlement_km2 = 480000.0
 backbone = true
 free_fg = [150, 200, 205]
+hooks_free = ["{name} answers to no crown, and its people like it so.", "No banner flies over {name}; its elders settle matters themselves.", "Neither king nor council claims {name}."]
+hooks_remnant = ["{name} outlived the fall of {fallen} and has gone its own way since.", "When {fallen} fell, {name} stayed on without a lord.", "The market of {name} is all that is left of the days of {fallen}."]
 
 [tiers.village]
 label = "Village"
@@ -73,6 +79,8 @@ spacing_km = 230.0
 land_per_settlement_km2 = 300000.0
 backbone = false
 free_fg = [150, 200, 205]
+hooks_free = ["{name} answers to no lord and pays tribute to none.", "No tax collector has come to {name} in living memory.", "The people of {name} keep their own laws."]
+hooks_remnant = ["{name} outlived the fall of {fallen}; its people still tell of the old rulers.", "When {fallen} fell, the people of {name} simply carried on.", "{name} is a remnant of {fallen}, forgotten by everyone but itself."]
 
 # A hamlet is minted by a later simulation, never placed by the settlements stage (`dynamic`), and roads do not link it
 # (`connect = false`). Its marker is hidden on the map and drawn from the zoom scale down (`map_marker = false`).
@@ -91,3 +99,4 @@ dynamic = true
 connect = false
 map_marker = false
 free_fg = [150, 200, 205]
+hooks_free = ["{name} is a handful of houses that answer to no one.", "No one has ever claimed {name}; it is too small to be worth the trouble."]

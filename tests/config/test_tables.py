@@ -36,6 +36,7 @@ def test_shipped_tables_load_and_validate() -> None:
         "chronicle",
         "detail",
         "detail_relief",
+        "free_fates",
         "furniture",
         "geo_names",
         "poi_fates",
@@ -170,6 +171,7 @@ def test_loader_combines_the_shipped_files() -> None:
         "chronicle",
         "detail",
         "detail_relief",
+        "free_fates",
         "furniture",
         "geo_names",
         "poi_fates",
@@ -453,4 +455,33 @@ def test_a_free_marker_colour_must_be_a_colour() -> None:
     cfg = get_defaults()
     cfg["tables"]["tiers"]["town"]["free_fg"] = "teal-ish"
     with pytest.raises(ConfigError, match=r"tables\.tiers\.town\.free_fg"):
+        validate(cfg)
+
+
+def test_a_free_text_may_use_only_the_settlements_name() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["tiers"]["town"]["hooks_free"] = ["{name} and {fallen}."]
+    with pytest.raises(ConfigError, match=r"tables\.tiers\.town\.hooks_free"):
+        validate(cfg)
+
+
+def test_a_remnant_text_must_name_the_fallen_realm() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["tiers"]["town"]["hooks_remnant"] = ["{name} stands."]
+    with pytest.raises(ConfigError, match=r"tables\.tiers\.town\.hooks_remnant: .* must use \{fallen\}"):
+        validate(cfg)
+
+
+def test_every_free_fate_is_simulation_only() -> None:
+    assert all(row["sim_only"] for row in get_defaults()["tables"]["free_fates"].values())
+
+
+def test_the_free_fates_are_join_found_and_bandit() -> None:
+    assert sorted(get_defaults()["tables"]["free_fates"]) == ["bandit", "found", "join"]
+
+
+def test_a_free_fate_without_factors_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["free_fates"]["join"]["factors"] = []
+    with pytest.raises(ConfigError, match=r"tables\.free_fates\.join\.factors: expected text_list"):
         validate(cfg)

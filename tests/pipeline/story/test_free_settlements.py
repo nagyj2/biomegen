@@ -98,3 +98,18 @@ def test_a_free_settlement_is_named_in_its_event_text(world: World) -> None:
         if "free" in event.tags:
             poi: POI = world.pois[event.poi_ids[0]]
             assert poi.name in event.text
+
+
+def test_every_free_settlement_of_a_hooked_tier_has_a_free_hook(world: World, cfg: Config) -> None:
+    free = [p for p in world.pois if p.free and cfg.get(f"tables.tiers.{p.kind}.hooks_free", None)]
+    assert free and all(p.hook for p in free)
+
+
+def test_a_remnants_hook_names_the_fallen_realm_it_outlived(world: World) -> None:
+    for index, event in _remnants(world):
+        assert world.fallen_realms[event.fallen_ids[0]].name.removeprefix("The ") in world.pois[index].hook
+
+
+def test_a_held_settlement_keeps_its_event_text_as_the_hook(world: World) -> None:
+    held = [p for p in world.pois if p.civilized and not p.free and p.event_ids]
+    assert held and all(p.hook == world.chronicle[p.event_ids[0]].text for p in held)

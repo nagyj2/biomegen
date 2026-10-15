@@ -7,7 +7,7 @@ import pytest
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.naming.hooks import describe_hook, describe_hooks
-from biomegen.world.entities import POI, ChronicleEvent
+from biomegen.world.entities import POI, ChronicleEvent, FallenRealm
 from biomegen.world.world import World
 
 
@@ -73,6 +73,8 @@ def test_a_near_template_is_never_used_without_a_settlement(world: World, cfg: C
 
 
 def test_a_kind_with_no_row_has_an_empty_hook(world: World, cfg: Config) -> None:
+    # A town some realm holds: a free one would take its tier's free text.
+    world.pois[0].realm_id = 0
     describe_hook(world, cfg, 5, 0, -1)
     assert world.pois[0].hook == ""
 
@@ -88,3 +90,59 @@ def test_describe_hooks_asks_for_each_pois_near_settlement(world: World, cfg: Co
     cfg.data["tables"]["pois"]["tower"]["hooks"] = []
     describe_hooks(world, cfg, 5, lambda index: 0 if index == 1 else -1)
     assert world.pois[1].hook == "Dest Tower watches Aldburg."
+
+
+# --- free settlements ----------------------------------------------------------------------------------------------
+def _free_cfg(cfg: Config) -> Config:
+    cfg.data["tables"]["tiers"]["town"].update(
+        hooks_free=["{name} owes nothing to anyone."], hooks_remnant=["{name} outlived {fallen}."]
+    )
+    return cfg
+
+
+def test_a_free_settlement_takes_a_free_text(world: World, cfg: Config) -> None:
+    describe_hook(world, _free_cfg(cfg), 5, 0, -1)
+    assert world.pois[0].hook == "Aldburg owes nothing to anyone."
+
+
+def test_a_free_text_marks_the_settlement_name(world: World, cfg: Config) -> None:
+    describe_hook(world, _free_cfg(cfg), 5, 0, -1)
+    assert world.pois[0].hook_refs == [(0, 7, "poi", 0)]
+
+
+def test_a_held_settlement_takes_no_free_text(world: World, cfg: Config) -> None:
+    world.pois[0].realm_id = 0
+    describe_hook(world, _free_cfg(cfg), 5, 0, -1)
+    assert world.pois[0].hook == ""
+
+
+def test_a_remnant_names_the_fallen_realm_it_outlived(world: World, cfg: Config) -> None:
+    world.fallen_realms = [FallenRealm(id=0, location=(5, 5), founded=10, fell=200, name="Kingdom of Naesiael")]
+    world.chronicle = [ChronicleEvent(0, 50, "settling", fallen_ids=[0], tags=("town", "free", "remnant"))]
+    world.pois[0].event_ids = [0]
+    describe_hook(world, _free_cfg(cfg), 5, 0, -1)
+    assert world.pois[0].hook == "Aldburg outlived Kingdom of Naesiael."
+
+
+def test_the_fallen_realm_in_a_hook_is_a_fallen_ref(world: World, cfg: Config) -> None:
+    world.fallen_realms = [FallenRealm(id=0, location=(5, 5), founded=10, fell=200, name="Kingdom of Naesiael")]
+    world.chronicle = [ChronicleEvent(0, 50, "settling", fallen_ids=[0], tags=("town", "free", "remnant"))]
+    world.pois[0].event_ids = [0]
+    describe_hook(world, _free_cfg(cfg), 5, 0, -1)
+    assert world.pois[0].hook_refs[-1] == (17, 36, "fallen", 0)
+
+
+def test_a_fallen_name_with_the_is_lowered_mid_sentence(world: World, cfg: Config) -> None:
+    world.fallen_realms = [FallenRealm(id=0, location=(5, 5), founded=10, fell=200, name="The Than Republic")]
+    world.chronicle = [ChronicleEvent(0, 50, "settling", fallen_ids=[0], tags=("town", "free", "remnant"))]
+    world.pois[0].event_ids = [0]
+    describe_hook(world, _free_cfg(cfg), 5, 0, -1)
+    assert world.pois[0].hook == "Aldburg outlived the Than Republic."
+
+
+def test_a_tier_with_no_free_text_falls_back_to_its_event_text(world: World, cfg: Config) -> None:
+    del cfg.data["tables"]["tiers"]["town"]["hooks_free"]
+    world.chronicle = [ChronicleEvent(0, 50, "settling", text="Aldburg is raised.", tags=("town", "free"))]
+    world.pois[0].event_ids = [0]
+    describe_hook(world, cfg, 5, 0, -1)
+    assert world.pois[0].hook == "Aldburg is raised."

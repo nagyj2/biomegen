@@ -70,6 +70,8 @@ _TIER_ROW = {
     "connect": "bool",
     "map_marker": "bool",
     "free_fg": "color",
+    "hooks_free": "text_list",
+    "hooks_remnant": "text_list",
 }
 _SITE_ROW = {
     "layout": "text",
@@ -128,6 +130,7 @@ _POI_ROW = {
     "holding_origins": "weights",
 }
 _POI_FATE_ROW = {"weight": "positive", "sim_only": "bool", "bandits": "bool"}
+_FREE_FATE_ROW = {"weight": "positive", "sim_only": "bool", "factors": "text_list"}
 _POI_SITE_ROW = {
     "kind": "text",
     "temper": "temper",
@@ -275,12 +278,16 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "relief": (_RELIEF_ROW, frozenset({"min_elevation_m"})),
     "detail": (_DETAIL_ROW, frozenset()),
     "detail_relief": (_DETAIL_RELIEF_ROW, frozenset()),
-    "tiers": (_TIER_ROW, frozenset({"bg", "dynamic", "connect", "map_marker", "free_fg"})),
+    "tiers": (
+        _TIER_ROW,
+        frozenset({"bg", "dynamic", "connect", "map_marker", "free_fg", "hooks_free", "hooks_remnant"}),
+    ),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
     "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled", "ruin_standing", "ruin_wall_fall", "ruin_extent_share"})),
     "pois": (_POI_ROW, _POI_OPTIONAL),
     "poi_fates": (_POI_FATE_ROW, frozenset()),
+    "free_fates": (_FREE_FATE_ROW, frozenset()),
     "poi_sites": (_POI_SITE_ROW, frozenset()),
     "realm_kinds": (_REALM_KIND_ROW, frozenset()),
     "realm_forms": (_REALM_FORM_ROW, frozenset()),
@@ -591,6 +598,22 @@ def _validate_ruin_origins(
                     errors.append(f"tables.sites.{name}: needs {key} (it can be a ruin's origin)")
 
 
+def _validate_tier_hooks(tiers: Dict[str, Any], errors: List[str]) -> None:
+    """Check a free settlement's texts: ``hooks_free`` uses only {name}, ``hooks_remnant`` also needs {fallen}."""
+    for tier in sorted(tiers):
+        row = tiers[tier]
+        if not isinstance(row, dict):
+            continue
+        for key, allowed, needs in (
+            ("hooks_free", _HOOK_TOKENS, None),
+            ("hooks_remnant", _HOOK_TOKENS | {"fallen"}, "fallen"),
+        ):
+            for text in _listed(row, key):
+                _check_tokens(text, allowed, f"tables.tiers.{tier}.{key}", errors)
+                if needs and isinstance(text, str) and needs not in (_tokens(text) or set()):
+                    errors.append(f"tables.tiers.{tier}.{key}: {text!r} must use {{{needs}}}")
+
+
 def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
     """Check the POI kinds' history keys, name patterns and hook texts, and the shrine-like sites."""
     pois, styles = tables.get("pois", {}), tables.get("ruling_styles", {})
@@ -600,6 +623,8 @@ def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
         if isinstance(pois[kind], dict):
             _validate_poi_history(kind, pois[kind], styles, errors)
             _validate_poi_text(kind, pois[kind], errors)
+    if isinstance(tables.get("tiers"), dict):
+        _validate_tier_hooks(tables["tiers"], errors)
     if isinstance(pois.get("ruin"), dict) and isinstance(tables.get("tiers"), dict):
         _validate_ruin_origins(pois["ruin"], tables["tiers"], tables.get("sites", {}), errors)
     _validate_poi_sites(tables.get("poi_sites", {}), pois, errors)

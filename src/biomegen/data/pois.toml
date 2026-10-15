@@ -236,6 +236,28 @@ weight = 1.0
 sim_only = true
 bandits = false
 
+# What becomes of a free settlement (a civilized POI no realm holds, `POI.free`). Data only: a later simulation draws one on a
+# settlement's own check; generation reads none of it (these are state changes, not answers to an event, so no rule of
+# the event table uses them). Every fate is `sim_only`.
+#   weight     relative chance of the fate before the factors tilt it
+#   sim_only   true: generation never draws it
+#   factors    the quantities the simulation reads to tilt the chance (documented names, not keys of this file):
+#              proximity (to a faction), relations, prosperity, size, leader, remoteness, weak_control, danger
+[free_fates.join]
+weight = 3.0
+sim_only = true
+factors = ["proximity", "relations", "prosperity"]
+
+[free_fates.found]
+weight = 1.0
+sim_only = true
+factors = ["size", "leader", "remoteness"]
+
+[free_fates.bandit]
+weight = 1.0
+sim_only = true
+factors = ["weak_control", "danger", "remoteness"]
+
 # Where a kind with several sites is built; the previous ruler's `temper` (rulers.toml) picks the row.
 #   kind                the pois.toml kind
 #   temper              "aggressive" or "passive"

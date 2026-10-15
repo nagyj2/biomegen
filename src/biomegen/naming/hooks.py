@@ -13,15 +13,47 @@ from collections.abc import Callable
 
 from ..config.model import Config
 from ..util import rng
-from ..world.entities import POI, REF_POI
+from ..world.entities import POI, REF_FALLEN, REF_POI
 from ..world.world import World
 from .render import render_template
+
+
+def _remnant_of(world: World, poi: POI) -> int:
+    """The id of the fallen realm a free settlement outlived (named by an event that marks it), or -1."""
+    return next((fid for e in (world.chronicle[i] for i in poi.event_ids) for fid in e.fallen_ids), -1)
+
+
+def _describe_free(world: World, config: Config, seed: int, index: int) -> bool:
+    """Write the hook of a free settlement from its tier's ``hooks_free`` (``hooks_remnant`` for a remnant).
+
+    Returns False when the tier has no such text, so the ordinary hook is written instead.
+    """
+    poi = world.pois[index]
+    tier = config.get(f"tables.tiers.{poi.kind}", None) or {}
+    fallen_id = _remnant_of(world, poi)
+    pool = list(tier.get("hooks_remnant", [])) if fallen_id >= 0 else []
+    pool = pool or list(tier.get("hooks_free", []))
+    if not pool:
+        return False
+    fallen = world.fallen_realms[fallen_id].name if fallen_id >= 0 else ""
+    tokens: dict[str, object] = {
+        "name": poi.name,
+        "fallen": "the " + fallen[4:] if fallen.startswith("The ") else fallen,
+    }
+    where = {"name": (REF_POI, index)}
+    if fallen_id >= 0:
+        where["fallen"] = (REF_FALLEN, fallen_id)
+    stream = rng.derive(seed, "naming", "hook", poi.x, poi.y)
+    poi.hook, poi.hook_refs = render_template(str(stream.choice(pool)), tokens, where)
+    return True
 
 
 def describe_hook(world: World, config: Config, seed: int, index: int, near_index: int) -> None:
     """Fill ``hook`` and ``hook_refs`` of ``world.pois[index]``; ``near_index`` is its qualifying settlement or -1."""
     poi: POI = world.pois[index]
     poi.hook, poi.hook_refs = "", []
+    if poi.free and _describe_free(world, config, seed, index):
+        return
     if poi.event_ids:
         event = world.chronicle[poi.event_ids[0]]
         poi.hook, poi.hook_refs = event.text, list(event.refs)

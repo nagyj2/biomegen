@@ -132,7 +132,8 @@ def test_a_poi_placed_by_location_has_a_hook(story):
 
 
 def test_a_poi_an_event_made_takes_that_events_text_as_its_hook(story):
-    made = [p for p in story.pois if p.event_ids]
+    # A free settlement has its own text (hooks_free), not the event's.
+    made = [p for p in story.pois if p.event_ids and not p.free]
     assert made and all(p.hook == story.chronicle[p.event_ids[0]].text for p in made)
 
 
