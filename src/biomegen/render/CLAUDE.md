@@ -12,7 +12,8 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   it uses `ctx.sampler` (`nearest`, `blended`, `bilinear`, `coverage_mask`, `biome()`). That is what lets one
   layer run on the map, fit, zoom and local scales. A sampler is a pure function of world position.
 - **Layer order** is data: `render.views.<name>.layers` (map) and `.detail_layers` (zoom, local). Default order:
-  terrain, relief, [tint], water, [clutter], [borders], roads, [bridges], sites, markers, labels, compass. A layer
+  terrain, relief, [tint], water, [clutter], [borders], roads, [bridges], sites, markers, labels, compass. At the detail
+  scales `markers` comes after `sites` and draws POI markers only at the scales in `render.detail_marker_scales` (zoom). A layer
   that only makes sense at one scale (`clutter`, `bridges`) returns early on the other.
 - **Political view.** `tint = "realm"` makes the tint layer mix each land cell toward its realm's colour (`render.realm_tint`)
   instead of replacing the fill with a ramp; the `borders` layer then lightens the line between realms and reddens war

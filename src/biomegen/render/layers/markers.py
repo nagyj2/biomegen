@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ...sampling.detail import SCALE_SITE, DetailSampler
 from ..grid import CellGrid
 from ..poi_style import poi_marker
 from . import LAYERS, LayerContext
@@ -14,11 +15,15 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
     """Draw each POI anchor with its marker (:func:`~biomegen.render.poi_style.poi_marker`), then apply overlay edits.
 
     A tile is drawn once: at a detail scale only the centre cell of its block carries the glyph. A marker with no
-    background colour keeps the terrain's.
+    background colour keeps the terrain's. A detail scale draws POI markers only when it is listed in
+    ``render.detail_marker_scales`` (the zoom scale); the others show the plan itself. Surface edits from the overlay
+    draw at every scale but the site scale, where the plan covers the ground.
     """
     world = ctx.world
     poi_index = ctx.sampler.nearest(world.poi_index)
-    if world.pois:
+    sampler = ctx.sampler
+    shown = not isinstance(sampler, DetailSampler) or sampler.scale in ctx.config.get("render.detail_marker_scales")
+    if world.pois and shown:
         styles = [poi_marker(ctx.config, poi.kind, ctx.ascii_only) for poi in world.pois]
         glyphs = np.array([glyph for glyph, _fg, _bg in styles], dtype="U1")
         fgs = np.array([fg for _glyph, fg, _bg in styles], dtype=np.uint8)
@@ -28,7 +33,7 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
         anchored = ctx.sampler.inside & ctx.sampler.anchor & (poi_index >= 0)
         grid.put(anchored, glyph=glyphs[at], fg=fgs[at], bold=True)
         grid.put(anchored & has_bg[at], bg=bgs[at])
-    if ctx.overlay is not None:
+    if ctx.overlay is not None and not (isinstance(sampler, DetailSampler) and sampler.scale == SCALE_SITE):
         for (x, y), attrs in ctx.overlay.surface_edits():
             if "glyph" in attrs:
                 at_tile = (

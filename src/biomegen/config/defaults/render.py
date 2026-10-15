@@ -65,7 +65,7 @@ VALUES: Dict[str, Any] = {
     "views": {
         "terrain": {
             "layers": ["terrain", "relief", "water", "roads", "sites", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "markers", "sites"],
+            "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "sites", "markers"],
             "tint": "",
         },
         "political": {
@@ -81,22 +81,22 @@ VALUES: Dict[str, Any] = {
                 "labels",
                 "compass",
             ],
-            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "borders", "roads", "markers", "sites"],
+            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "borders", "roads", "sites", "markers"],
             "tint": "realm",
         },
         "elevation": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "roads", "markers", "sites"],
+            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "roads", "sites", "markers"],
             "tint": "elevation",
         },
         "temperature": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "roads", "markers", "sites"],
+            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "roads", "sites", "markers"],
             "tint": "temperature",
         },
         "rainfall": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
-            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "roads", "markers", "sites"],
+            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "roads", "sites", "markers"],
             "tint": "rainfall",
         },
     },
@@ -241,8 +241,11 @@ VALUES: Dict[str, Any] = {
         "diagonal": {"glyphs": ["╱", "╲", "╳"], "ascii": ["/", "\\", "X"]},
         "junction": {"glyphs": "┼", "ascii": "+"},
     },
-    # Markers layer: points of interest draw their ``markers`` glyph (below) in bold with this colour pair.
+    # Markers layer: points of interest draw their ``markers`` glyph (below) in bold with this colour pair. At the
+    # detail scales only those listed in ``detail_marker_scales`` draw it: the zoom scale shows the POI's kind over
+    # its small plan, while the local and site scales show the plan itself, so a marker would only cover it.
     "marker_style": {"fg": [255, 130, 255], "bg": [70, 20, 70]},
+    "detail_marker_scales": ["zoom"],
     # Geography labels. ``mode`` of a draw is set by the caller ("all" or "none"). Landmass names are drawn
     # in capitals, letter-spaced unless that would exceed a third of the map width. ``candidates`` is how many
     # positions near a feature's centre (or deepest inland cells) are tried before the label is dropped. In the
