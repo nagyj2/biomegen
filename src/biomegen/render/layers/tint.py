@@ -23,13 +23,18 @@ def _realm_tint(ctx: LayerContext, grid: CellGrid) -> None:
     """
     cfg = ctx.config.get("render.realm_tint")
     realm = ctx.realm
-    grey = grid.bg.astype(np.float64).mean(axis=-1, keepdims=True)
-    muted = mix_colors(grid.bg, np.broadcast_to(grey, grid.bg.shape), float(cfg["desaturate"]))
     claimed = ctx.land & (realm >= 0)
     wild = ctx.land & (realm < 0)
-    dull = np.clip(grey * float(cfg["wild_scale"]) + float(cfg["wild_offset"]), 0, 255)
-    grid.put(claimed, bg=mix_colors(muted, realm_colors(ctx)[realm], float(cfg["mix"])))
-    grid.put(wild, bg=np.broadcast_to(np.rint(dull).astype(np.uint8), grid.bg.shape))
+    # Worked out on the land cells only; the per-cell arithmetic is the same as over the whole grid.
+    if claimed.any():
+        fill = grid.bg[claimed]
+        grey = fill.astype(np.float64).mean(axis=-1, keepdims=True)
+        muted = mix_colors(fill, np.broadcast_to(grey, fill.shape), float(cfg["desaturate"]))
+        grid.bg[claimed] = mix_colors(muted, realm_colors(ctx)[realm[claimed]], float(cfg["mix"]))
+    if wild.any():
+        grey = grid.bg[wild].astype(np.float64).mean(axis=-1, keepdims=True)
+        dull = np.clip(grey * float(cfg["wild_scale"]) + float(cfg["wild_offset"]), 0, 255)
+        grid.bg[wild] = np.rint(dull).astype(np.uint8)
 
 
 @LAYERS.register("tint")
@@ -52,15 +57,16 @@ def tint_layer(ctx: LayerContext, grid: CellGrid) -> None:
     bg = ramp_colors(ramp["stops"], values)
     water = inside & ~ctx.land
     if ramp.get("shade"):
-        bg = np.where(ctx.land[..., np.newaxis], scale_colors(bg, ctx.shade), bg)
+        bg[ctx.land] = scale_colors(bg[ctx.land], ctx.shade[ctx.land])
     if "water_scale" in ramp:
-        bg = np.where(water[..., np.newaxis], scale_colors(bg, float(ramp["water_scale"])), bg)
+        bg[water] = scale_colors(bg[water], float(ramp["water_scale"]))
     if "water_color" in ramp:
-        bg = np.where(water[..., np.newaxis], np.asarray(ramp["water_color"], dtype=np.uint8), bg)
+        bg[water] = np.asarray(ramp["water_color"], dtype=np.uint8)
 
     kept = ctx.land & (ctx.relief != int(Relief.NONE)) if ramp.get("keep_relief") else np.zeros_like(inside)
     if ramp.get("keep_clutter") and ctx.sampler.detailed:
         kept = kept | (ctx.land & (grid.glyph != ctx.detail_floor) & (grid.glyph != " "))
     glyph = np.where(kept, grid.glyph, " ")
-    fg = np.where(kept[..., np.newaxis], scale_colors(bg, float(ctx.config.get("render.tint_relief_fg"))), grid.fg)
+    fg = grid.fg.copy()
+    fg[kept] = scale_colors(bg[kept], float(ctx.config.get("render.tint_relief_fg")))
     grid.put(inside, glyph=glyph, fg=fg, bg=bg)

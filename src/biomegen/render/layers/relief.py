@@ -26,24 +26,27 @@ def relief_layer(ctx: LayerContext, grid: CellGrid) -> None:
     bg = grid.bg.copy()
     fg = style.fg[relief]
 
+    # Each tint is worked out on its own cells only; the per-cell arithmetic is the same as over the whole grid.
     hills = raised & (relief == int(Relief.HILLS))
-    bg = np.where(hills[..., np.newaxis], scale_colors(bg, float(tints["hills"]["scale"])), bg)
+    bg[hills] = scale_colors(bg[hills], float(tints["hills"]["scale"]))
 
     mountain_cfg = tints["mountain"]
     mountain = raised & (relief == int(Relief.MOUNTAIN))
-    rocky = mix_colors(bg, mountain_cfg["mix"], float(mountain_cfg["mix_t"]))
-    snowy = mountain & (ctx.sampler.nearest(ctx.world.temperature_c) < float(mountain_cfg["snow_below_c"]))
-    capped = mix_colors(rocky, mountain_cfg["snow_mix"], float(mountain_cfg["snow_t"]))
-    bg = np.where(mountain[..., np.newaxis], np.where(snowy[..., np.newaxis], capped, rocky), bg)
-    fg = np.where(snowy[..., np.newaxis], np.asarray(mountain_cfg["snow_fg"], dtype=np.uint8), fg)
+    if mountain.any():
+        snowy = mountain & (ctx.sampler.nearest(ctx.world.temperature_c) < float(mountain_cfg["snow_below_c"]))
+        rocky = mix_colors(bg[mountain], mountain_cfg["mix"], float(mountain_cfg["mix_t"]))
+        capped = snowy[mountain]
+        rocky[capped] = mix_colors(rocky[capped], mountain_cfg["snow_mix"], float(mountain_cfg["snow_t"]))
+        bg[mountain] = rocky
+        fg[snowy] = np.asarray(mountain_cfg["snow_fg"], dtype=np.uint8)
 
     for name, relief_value in (("peak", Relief.PEAK), ("volcano", Relief.VOLCANO)):
         cell = raised & (relief == int(relief_value))
         row = tints[name]
         if "bg" in row:
-            bg = np.where(cell[..., np.newaxis], np.asarray(row["bg"], dtype=np.uint8), bg)
+            bg[cell] = np.asarray(row["bg"], dtype=np.uint8)
         if "fg" in row:
-            fg = np.where(cell[..., np.newaxis], np.asarray(row["fg"], dtype=np.uint8), fg)
+            fg[cell] = np.asarray(row["fg"], dtype=np.uint8)
 
     if ctx.sampler.detailed:  # the rocky floor from the terrain layer stays; only the colours change
         grid.put(raised, fg=fg, bg=bg, bold=False)

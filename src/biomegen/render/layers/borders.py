@@ -42,7 +42,15 @@ def borders_layer(ctx: LayerContext, grid: CellGrid) -> None:
             target[second] |= mask & ~larger_is_first
     soft &= ~hard
     front = ctx.sampler.blended(world.front) & hard
-    lines = np.where(hard[..., np.newaxis], mix_colors(grid.bg, (255, 255, 255), float(cfg["lighten"])), grid.bg)
-    lines = np.where(soft[..., np.newaxis], mix_colors(grid.bg, (255, 255, 255), float(cfg["vassal_lighten"])), lines)
-    war = mix_colors(grid.bg, np.asarray(cfg["front_color"], dtype=np.uint8), float(cfg["front_mix"]))
-    grid.put(hard | soft, bg=np.where(front[..., np.newaxis], war, lines))
+    # Each line colour is mixed on its own cells only, from the fill the earlier layers left there.
+    fill = grid.bg
+    lines = {
+        "hard": (hard & ~front, mix_colors(fill[hard & ~front], (255, 255, 255), float(cfg["lighten"]))),
+        "soft": (soft, mix_colors(fill[soft], (255, 255, 255), float(cfg["vassal_lighten"]))),
+        "front": (
+            front,
+            mix_colors(fill[front], np.asarray(cfg["front_color"], dtype=np.uint8), float(cfg["front_mix"])),
+        ),
+    }
+    for mask, colours in lines.values():
+        fill[mask] = colours

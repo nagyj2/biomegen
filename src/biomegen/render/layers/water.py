@@ -19,5 +19,5 @@ def water_layer(ctx: LayerContext, grid: CellGrid) -> None:
         return
     cfg = ctx.config.get("render.water")
     strength = float(cfg["river_mix_t_tinted" if ctx.view.tint else "river_mix_t"])
-    bg = mix_colors(grid.bg, cfg["river_mix"], strength)
-    grid.put(river, glyph=cfg["river_ascii" if ctx.ascii_only else "river_glyph"], fg=tuple(cfg["river_fg"]), bg=bg)
+    grid.put(river, glyph=cfg["river_ascii" if ctx.ascii_only else "river_glyph"], fg=tuple(cfg["river_fg"]))
+    grid.bg[river] = mix_colors(grid.bg[river], cfg["river_mix"], strength)
