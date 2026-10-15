@@ -155,6 +155,7 @@ def stats(world: World) -> Dict[str, object]:
         "road_tiles": int((world.road != 0).sum()),
         "pois": len(world.pois),
         "poi_kinds": dict(sorted(Counter(p.kind for p in world.pois).items())),
+        "ruin_origins": dict(sorted(Counter(p.ruin_of for p in world.pois if p.kind == "ruin").items())),
         "bridge_tiles": int(((world.road != 0) & (world.water_type != int(WaterType.NONE))).sum()),
         "elevation_m": {
             "min": round(float(world.elevation_m.min()), 1),

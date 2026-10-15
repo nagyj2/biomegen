@@ -75,8 +75,14 @@ def _place_ruins(
     if plan.count > 1:
         cells += _holdings(world, config, seed, row, event, plan.count - 1, score)
     stream = rng.derive(seed, "poi", "ruin", "floors", *event_key(event))
-    for (x, y), fate in zip(cells, plan.fates, strict=False):
+    for number, ((x, y), fate) in enumerate(zip(cells, plan.fates, strict=False)):
         held = bool(config.get(f"tables.poi_fates.{fate}.bandits"))
+        capital = number == 0  # the first cell is the capital ruin, the rest are holdings
+        ruin_of, pop = (
+            pois.ruin_origin(config, seed, x, y, tier=str(row["fall_origin"]))
+            if capital
+            else pois.ruin_origin(config, seed, x, y, weights="holding_origins")
+        )
         pois.commit(
             world,
             seed,
@@ -89,6 +95,8 @@ def _place_ruins(
             fell=fallen.fell,
             bandit_strength=int(row.get("bandit_strength", 0)) if held else 0,
             event_ids=[event.id],
+            ruin_of=ruin_of,
+            pop=pop,
         )
 
 

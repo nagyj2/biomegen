@@ -130,6 +130,30 @@ def pick_blue_noise(
     return picked
 
 
+def ruin_origin(
+    config: Config, seed: int, x: int, y: int, *, tier: str = "", weights: str = "origins"
+) -> tuple[str, int]:
+    """Return ``(ruin_of, pop)`` for a ruin at ``(x, y)``: the tier it was and its peak population.
+
+    ``tier`` fixes the origin (a fallen realm's capital); otherwise it is drawn by weight from the ruin row's
+    ``weights`` table (``origins`` or ``holding_origins``). The population is drawn from the tier's ``pop`` range. The
+    stream is keyed on the cell, so it never meets another draw.
+    """
+    stream = rng.derive(seed, "poi", "ruin", "origin", x, y)
+    table = config.get(f"tables.pois.ruin.{weights}")
+    names = sorted(table)
+    pick = stream.random() * sum(float(table[name]) for name in names)  # always drawn, so the stream stays aligned
+    chosen = names[-1]
+    for name in names:
+        pick -= float(table[name])
+        if pick < 0:
+            chosen = name
+            break
+    origin = tier or chosen
+    lo, hi = (int(v) for v in config.get(f"tables.tiers.{origin}.pop"))
+    return origin, stream.randint(lo, hi)
+
+
 def commit(
     world: World,
     seed: int,
@@ -144,6 +168,8 @@ def commit(
     fell: int | None = None,
     bandit_strength: int = 0,
     event_ids: Sequence[int] = (),
+    ruin_of: str = "",
+    pop: int = 0,
 ) -> int:
     """Append one POI, write it into ``poi_index`` and return its index; it takes its realm from the map."""
     poi = POI(
@@ -160,6 +186,8 @@ def commit(
         fell=fell,
         bandit_strength=bandit_strength,
         event_ids=list(event_ids),
+        ruin_of=ruin_of,
+        pop=pop,
     )
     index = len(world.pois)
     world.pois.append(poi)
@@ -239,6 +267,7 @@ def place_by_location(world: World, config: Config, seed: int, sources: Collecti
 
         stream = rng.derive(seed, "poi", kind, "floors")
         for x, y in pick_blue_noise(score, count, float(row["min_spacing_km"]), placed, world):
+            ruin_of, pop = ruin_origin(config, seed, x, y) if kind == "ruin" else ("", 0)
             commit(
                 world,
                 seed,
@@ -249,5 +278,7 @@ def place_by_location(world: World, config: Config, seed: int, sources: Collecti
                 purpose=purpose,
                 connect=bool(row.get("connect", True)),
                 bandit_strength=0 if row.get("fated") else int(row.get("bandit_strength", 0)),
+                ruin_of=ruin_of,
+                pop=pop,
             )
             placed.append((x, y))

@@ -41,6 +41,12 @@
 #   max_per_event     (optional) ... at most this many
 #   front_setback_km  (optional) [min, max] km a front POI stands back from the front, inside the territory of the power
 #                     it guards
+#
+# Ruins by origin (the ruin row only): a ruin is what a settlement of some tier became, `POI.ruin_of`, with a peak
+# population `POI.pop` drawn from that tier's `pop` range in tiers.toml:
+#   origins           tier name -> weight: the origin of a ruin placed by location (ancient, dawn start); skewed small
+#   fall_origin       the tier a fallen realm's capital ruin was
+#   holding_origins   tier name -> weight: the origin of a fallen realm's other (holding) ruins
 
 # Simulation seams (data only until a later simulation reads them):
 #   owner             "realm" (held by the realm that owns its cell) or "wild"
@@ -107,6 +113,9 @@ holdings = [0, 2]
 fated = true
 holding_km = [30.0, 150.0]
 holding_spacing_km = 80.0
+origins = { hamlet = 3.0, village = 4.0, town = 2.0, city = 1.0, capital = 0.5 }
+fall_origin = "capital"
+holding_origins = { village = 3.0, town = 2.0, city = 1.0 }
 km2_per_poi = 1400000.0
 min_spacing_km = 350.0
 biomes = ["grass", "forest", "desert", "savanna", "tundra", "jungle"]

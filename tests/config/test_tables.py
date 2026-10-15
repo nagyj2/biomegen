@@ -411,3 +411,24 @@ def test_a_kind_placed_by_location_needs_hooks() -> None:
     del cfg["tables"]["pois"]["camp"]["hooks"]
     with pytest.raises(ConfigError, match=r"tables\.pois\.camp: a kind placed by location needs hooks"):
         validate(cfg)
+
+
+def test_a_ruin_origin_must_be_a_settlement_tier() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["pois"]["ruin"]["holding_origins"] = {"fortress": 1.0}
+    with pytest.raises(ConfigError, match=r"tables\.pois\.ruin: origin 'fortress' is no settlement tier"):
+        validate(cfg)
+
+
+def test_ruin_origin_weights_need_one_above_zero() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["pois"]["ruin"]["origins"] = {"village": 0.0}
+    with pytest.raises(ConfigError, match=r"tables\.pois\.ruin\.origins: expected weights"):
+        validate(cfg)
+
+
+def test_the_ruin_row_needs_its_origins() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["pois"]["ruin"]["fall_origin"]
+    with pytest.raises(ConfigError, match=r"tables\.pois\.ruin: needs fall_origin"):
+        validate(cfg)

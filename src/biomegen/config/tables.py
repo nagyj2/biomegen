@@ -119,6 +119,9 @@ _POI_ROW = {
     "per_km_of_front": "positive",
     "max_per_event": "count",
     "front_setback_km": "span",
+    "origins": "weights",
+    "fall_origin": "text",
+    "holding_origins": "weights",
 }
 _POI_FATE_ROW = {"weight": "positive", "sim_only": "bool", "bandits": "bool"}
 _POI_SITE_ROW = {
@@ -210,6 +213,9 @@ _POI_OPTIONAL = frozenset(
         "per_km_of_front",
         "max_per_event",
         "front_setback_km",
+        "origins",
+        "fall_origin",
+        "holding_origins",
     }
 )
 
@@ -329,6 +335,12 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "pair": lambda v: isinstance(v, list) and len(v) == 2 and all(_is_number(n) and n > 0.0 for n in v),
         "forms": lambda v: (
             isinstance(v, list) and len(v) > 0 and all(isinstance(f, str) and f.count("{n}") == 1 for f in v)
+        ),
+        "weights": lambda v: (
+            isinstance(v, dict)
+            and len(v) > 0
+            and all(isinstance(k, str) and _is_number(w) and w >= 0.0 for k, w in v.items())
+            and any(w > 0.0 for w in v.values())
         ),
         "span": lambda v: isinstance(v, list) and len(v) == 2 and all(_is_number(n) for n in v) and 0.0 <= v[0] <= v[1],
         "text_list": lambda v: isinstance(v, list) and len(v) > 0 and all(isinstance(t, str) for t in v),
@@ -545,6 +557,21 @@ def _validate_poi_sites(sites: Any, pois: Dict[str, Any], errors: List[str]) -> 
             errors.append(f"tables.poi_sites: kind {kind!r} needs a site for each temper ({', '.join(TEMPERS)})")
 
 
+def _validate_ruin_origins(row: Dict[str, Any], tiers: Dict[str, Any], errors: List[str]) -> None:
+    """Check the ruin row's origins: every key present, and every named origin a settlement tier."""
+    where = "tables.pois.ruin"
+    for key in ("origins", "fall_origin", "holding_origins"):
+        if key not in row:
+            errors.append(f"{where}: needs {key}")
+    named = [row["fall_origin"]] if isinstance(row.get("fall_origin"), str) else []
+    for key in ("origins", "holding_origins"):
+        if isinstance(row.get(key), dict):
+            named += sorted(row[key])
+    for name in named:
+        if name not in tiers:
+            errors.append(f"{where}: origin {name!r} is no settlement tier")
+
+
 def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
     """Check the POI kinds' history keys, name patterns and hook texts, and the shrine-like sites."""
     pois, styles = tables.get("pois", {}), tables.get("ruling_styles", {})
@@ -554,6 +581,8 @@ def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
         if isinstance(pois[kind], dict):
             _validate_poi_history(kind, pois[kind], styles, errors)
             _validate_poi_text(kind, pois[kind], errors)
+    if isinstance(pois.get("ruin"), dict) and isinstance(tables.get("tiers"), dict):
+        _validate_ruin_origins(pois["ruin"], tables["tiers"], errors)
     _validate_poi_sites(tables.get("poi_sites", {}), pois, errors)
 
 

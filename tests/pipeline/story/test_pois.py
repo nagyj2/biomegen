@@ -378,3 +378,30 @@ def test_switching_off_events_that_make_no_poi_leaves_the_pois_alone(cfg: Config
     full, trimmed = pipeline.generate(cfg, 42), pipeline.generate(quiet, 42)
     assert len(trimmed.chronicle) < len(full.chronicle)
     assert [(p.kind, p.x, p.y) for p in trimmed.pois] == [(p.kind, p.x, p.y) for p in full.pois]
+
+
+def test_a_fallen_realms_first_ruin_was_a_capital(world: World, cfg: Config) -> None:
+    # The capital ruin sits on the fallen realm's site and was a capital of the row's fall_origin tier.
+    origin = cfg.get("tables.pois.ruin.fall_origin")
+    assert all(
+        _fall_ruins(world, fallen.id)[0].ruin_of == origin
+        for fallen in world.fallen_realms
+        if _fall_ruins(world, fallen.id)
+    )
+
+
+def test_a_fallen_realms_holdings_were_one_of_the_holding_origins(world: World, cfg: Config) -> None:
+    allowed = set(cfg.get("tables.pois.ruin.holding_origins"))
+    holdings = [p for f in world.fallen_realms for p in _fall_ruins(world, f.id)[1:]]
+    assert holdings and all(p.ruin_of in allowed for p in holdings)
+
+
+def test_a_ruin_held_the_peak_population_of_its_origin_tier(world: World, cfg: Config) -> None:
+    for poi in world.pois:
+        if poi.kind == "ruin":
+            lo, hi = cfg.get(f"tables.tiers.{poi.ruin_of}.pop")
+            assert lo <= poi.pop <= hi
+
+
+def test_no_other_kind_has_an_origin(world: World) -> None:
+    assert all(poi.ruin_of == "" for poi in world.pois if poi.kind != "ruin")

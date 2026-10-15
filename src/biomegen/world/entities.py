@@ -48,7 +48,8 @@ class POI:
     realm_id: int = -1  # the realm holding the anchor cell (-1 = wild); set by the realms stage
     floor_count: int = 1  # >1 for towers (above ground) and dungeons (below ground)
     lowest_floor: int = 0  # 0 for ground-level; negative for dungeons going underground
-    pop: int = 0  # population (settlements only)
+    pop: int = 0  # population (a settlement's, or a ruin's at its peak)
+    ruin_of: str = ""  # a ruin's origin: the settlement tier it was (a tables.tiers row); empty for every other kind
     founded: int = 0  # chronicle year the settlement was founded (set by the history stage; 0 = not dated)
     fell: int | None = None  # year it fell or was dismantled (None while it stands); set by a later simulation
     event_ids: List[int] = field(
