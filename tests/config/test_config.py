@@ -82,3 +82,22 @@ def test_validate_rejects_malformed_center_lat_range(lat_range: object) -> None:
     cfg["world"]["center_lat_range_deg"] = lat_range
     with pytest.raises(ConfigError, match="center_lat_range_deg"):
         validate(cfg)
+
+
+def test_cached_builds_a_value_once_per_key() -> None:
+    # A second lookup of the same key returns the first build without calling the builder again.
+    config = load_config(None)
+    calls: list[int] = []
+
+    def build() -> int:
+        calls.append(1)
+        return len(calls)
+
+    assert (config.cached("key", build), config.cached("key", build), calls) == (1, 1, [1])
+
+
+def test_cached_values_belong_to_one_config() -> None:
+    # Two configs never share a cached value, even for the same key.
+    first, second = load_config(None), load_config(None)
+    first.cached("key", lambda: "first")
+    assert second.cached("key", lambda: "second") == "second"

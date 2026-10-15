@@ -16,8 +16,14 @@ from .sampler import Sampler
 
 
 def water_biomes(config: Config) -> np.ndarray:
-    """Return a bool lookup by biome value: True where the cover is water (``tables.biomes.*.water``)."""
-    return config.table_array("biomes", "water", BIOME_NAME) > 0.5
+    """Return a bool lookup by biome value: True where the cover is water (``tables.biomes.*.water``); read-only."""
+
+    def build() -> np.ndarray:
+        water = config.table_array("biomes", "water", BIOME_NAME) > 0.5
+        water.flags.writeable = False
+        return water
+
+    return config.cached((__name__, "water_biomes"), build)
 
 
 def land_mask(sampler: Sampler, biome: np.ndarray, water: np.ndarray) -> np.ndarray:

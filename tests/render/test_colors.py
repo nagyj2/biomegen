@@ -79,3 +79,10 @@ def test_subtle_clutter_is_the_floor_colour_with_a_faint_glyph() -> None:
     style = interior_style(load_config(None))
     rubble, floor = int(Cell.RUBBLE), int(Cell.FLOOR)
     assert (style.bg[rubble] == style.bg[floor]).all() and (style.fg[rubble] < style.fg[floor]).all()
+
+
+def test_style_tables_are_built_once_and_read_only() -> None:
+    # Every frame asks for the tables; they are built once per config, and no caller can change them.
+    config = load_config(None)
+    style = biome_style(config)
+    assert biome_style(config) is style and not style.bg.flags.writeable

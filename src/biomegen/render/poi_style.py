@@ -19,7 +19,14 @@ def _rgb(value: list) -> RGB:
 
 
 def poi_marker(config: Config, kind: str, ascii_only: bool = False) -> tuple[str, RGB, Optional[RGB]]:
-    """Return ``(glyph, fg, bg)`` for a POI of ``kind``; ``bg`` is None to keep the terrain background."""
+    """Return ``(glyph, fg, bg)`` for a POI of ``kind``; ``bg`` is None to keep the terrain background.
+
+    Looked up once per config and kind: the markers layer asks for every POI on every frame.
+    """
+    return config.cached((__name__, kind, bool(ascii_only)), lambda: _marker(config, kind, ascii_only))
+
+
+def _marker(config: Config, kind: str, ascii_only: bool) -> tuple[str, RGB, Optional[RGB]]:
     tier = config.get(f"tables.tiers.{kind}", None)
     if tier is not None:
         bg = tier.get("bg")

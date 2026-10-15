@@ -9,11 +9,12 @@ reproducibility.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Callable, Dict, Hashable, TypeVar
 
 import numpy as np
 
 _MISSING = object()
+T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,18 @@ class Config:
     """
 
     data: Dict[str, Any] = field(default_factory=dict)
+    _memo: Dict[Hashable, Any] = field(default_factory=dict, compare=False, repr=False)
+
+    def cached(self, key: Hashable, build: Callable[[], T]) -> T:
+        """Return the value ``build()`` made for ``key`` on this config, building it the first time it is asked for.
+
+        For lookups derived only from the configuration (style tables, glyph tables) that would otherwise be rebuilt
+        on every frame. The config is treated as final once it is in use: a value is never rebuilt, so mutating
+        ``data`` after a lookup was cached leaves the old lookup in place.
+        """
+        if key not in self._memo:
+            self._memo[key] = build()
+        return self._memo[key]
 
     def get(self, path: str, default: Any = _MISSING) -> Any:
         """Resolve a dotted path (``"a.b.c"``) through the nested tree.

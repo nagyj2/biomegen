@@ -8,7 +8,8 @@ and ``tables.relief`` rows (``data/biomes.toml``), never from literals here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
+from typing import Any, Callable
 
 import numpy as np
 
@@ -75,7 +76,7 @@ def _glyph(row: dict, ascii_only: bool) -> str:
     return text if text else " "
 
 
-def biome_style(config: Config, ascii_only: bool = False) -> BiomeStyle:
+def _build_biome_style(config: Config, ascii_only: bool = False) -> BiomeStyle:
     """Build the biome lookup arrays from ``tables.biomes``."""
     rows = config.get("tables.biomes")
     count = max(int(b) for b in Biome) + 1
@@ -95,7 +96,7 @@ def biome_style(config: Config, ascii_only: bool = False) -> BiomeStyle:
     return BiomeStyle(glyph, fg, bg, sparse, water)
 
 
-def relief_style(config: Config, ascii_only: bool = False) -> ReliefStyle:
+def _build_relief_style(config: Config, ascii_only: bool = False) -> ReliefStyle:
     """Build the relief lookup arrays from ``tables.relief``."""
     rows = config.get("tables.relief")
     count = max(int(r) for r in Relief) + 1
@@ -140,7 +141,7 @@ class DetailStyle:
     biome_count: int
 
 
-def detail_style(config: Config, ascii_only: bool = False) -> DetailStyle:
+def _build_detail_style(config: Config, ascii_only: bool = False) -> DetailStyle:
     """Build the detail lookup arrays from ``tables.detail`` and ``tables.detail_relief``."""
     suffix = "_ascii" if ascii_only else ""
     biome_rows = config.get("tables.detail")
@@ -187,13 +188,13 @@ class InteriorStyle:
     bg: np.ndarray
 
 
-def wall_glyph_table(config: Config, ascii_only: bool) -> np.ndarray:
+def _build_wall_glyph_table(config: Config, ascii_only: bool = False) -> np.ndarray:
     """Return the 16 line glyphs a thin wall draws, indexed by its wall-neighbour mask (``render.interior_walls``)."""
     table = config.get("render.interior_walls")
     return np.array(table["ascii" if ascii_only else "glyphs"], dtype="U1")
 
 
-def interior_style(config: Config, ascii_only: bool = False) -> InteriorStyle:
+def _build_interior_style(config: Config, ascii_only: bool = False) -> InteriorStyle:
     """Build the interior lookup arrays from ``render.interior_glyphs`` and ``render.interior_palette``.
 
     Cells named in ``render.interior_subtle`` (rubble and small clutter) take the floor colour, so they barely show.
@@ -227,3 +228,41 @@ def interior_style(config: Config, ascii_only: bool = False) -> InteriorStyle:
             bg[index] = palette[name]
             fg[index] = scale_colors(palette[name], boost)
     return InteriorStyle(glyph, fg, bg)
+
+
+def _read_only(value: Any) -> Any:
+    """Mark every array of a cached lookup read-only, so a caller cannot change it under the other frames."""
+    arrays = [value] if isinstance(value, np.ndarray) else [getattr(value, f.name) for f in fields(value)]
+    for array in arrays:
+        if isinstance(array, np.ndarray):
+            array.flags.writeable = False
+    return value
+
+
+def _cached(config: Config, name: str, ascii_only: bool, build: Callable[[Config, bool], Any]) -> Any:
+    return config.cached((__name__, name, bool(ascii_only)), lambda: _read_only(build(config, ascii_only)))
+
+
+def biome_style(config: Config, ascii_only: bool = False) -> BiomeStyle:
+    """The biome lookup arrays from ``tables.biomes`` (built once per config; read-only)."""
+    return _cached(config, "biome_style", ascii_only, _build_biome_style)
+
+
+def relief_style(config: Config, ascii_only: bool = False) -> ReliefStyle:
+    """The relief lookup arrays from ``tables.relief`` (built once per config; read-only)."""
+    return _cached(config, "relief_style", ascii_only, _build_relief_style)
+
+
+def detail_style(config: Config, ascii_only: bool = False) -> DetailStyle:
+    """The detail floor and clutter lookups (built once per config; read-only)."""
+    return _cached(config, "detail_style", ascii_only, _build_detail_style)
+
+
+def interior_style(config: Config, ascii_only: bool = False) -> InteriorStyle:
+    """The interior lookup arrays (built once per config; read-only)."""
+    return _cached(config, "interior_style", ascii_only, _build_interior_style)
+
+
+def wall_glyph_table(config: Config, ascii_only: bool = False) -> np.ndarray:
+    """The 16 thin-wall line glyphs (built once per config; read-only)."""
+    return _cached(config, "wall_glyph_table", ascii_only, _build_wall_glyph_table)

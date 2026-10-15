@@ -45,6 +45,20 @@ def connection_mask8(road: np.ndarray) -> np.ndarray:
 
 
 def road_glyph_table(config: Config, ascii_only: bool) -> np.ndarray:
+    """Return the glyph for each of the 256 eight-neighbour masks (see :func:`_build_road_glyph_table`), read-only.
+
+    Built once per config: the map scale draws roads on every frame.
+    """
+
+    def build() -> np.ndarray:
+        table = _build_road_glyph_table(config, ascii_only)
+        table.flags.writeable = False
+        return table
+
+    return config.cached((__name__, "road_glyph_table", bool(ascii_only)), build)
+
+
+def _build_road_glyph_table(config: Config, ascii_only: bool) -> np.ndarray:
     """Return the glyph for each of the 256 eight-neighbour masks, so every way two roads can join is drawable.
 
     No diagonal neighbour: the box-drawing glyph for the cardinal mask (``render.roads.glyphs``), so an orthogonal
