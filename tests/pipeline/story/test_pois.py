@@ -164,3 +164,67 @@ def test_a_battlefield_stands_on_dry_land(fields: World) -> None:
 def test_the_default_chance_leaves_fewer_fields_than_decisive_battles(world: World) -> None:
     decisive = [e for e in world.chronicle if e.kind == "battle" and "decisive" in e.tags]
     assert len(_battlefields(world)) <= len(decisive)
+
+
+# --- watchtowers -------------------------------------------------------------------------------------
+
+
+def _towers(world: World) -> list[POI]:
+    return [p for p in world.pois if p.kind == "watchtower"]
+
+
+def test_every_watchtower_stands_for_an_ongoing_war(world: World) -> None:
+    for tower in _towers(world):
+        event = world.chronicle[tower.event_ids[0]]
+        assert event.kind == "war" and "ongoing" in event.tags
+
+
+def test_a_war_gets_at_most_the_rows_cap_of_towers(world: World, cfg: Config) -> None:
+    cap = cfg.get("tables.pois.watchtower.max_per_event")
+    per_war: dict[int, int] = {}
+    for tower in _towers(world):
+        per_war[tower.event_ids[0]] = per_war.get(tower.event_ids[0], 0) + 1
+    assert all(count <= cap for count in per_war.values())
+
+
+def test_a_watchtower_stands_on_its_wars_front(world: World) -> None:
+    from biomegen.pipeline.civilization.diplomacy import front_cells
+
+    for tower in _towers(world):
+        cells = front_cells(world, *world.chronicle[tower.event_ids[0]].realm_ids)
+        assert tower.y * world.width + tower.x in set(cells.tolist())
+
+
+def test_a_watchtower_belongs_to_a_realm_of_its_war(world: World) -> None:
+    for tower in _towers(world):
+        powers = set(world.chronicle[tower.event_ids[0]].realm_ids)
+        assert tower.realm_id >= 0 and world.top_realm(tower.realm_id) in powers
+
+
+def test_a_watchtower_is_newer_than_its_lifespan_and_its_war(world: World, cfg: Config) -> None:
+    lifespan = cfg.get("tables.pois.watchtower.lifespan")
+    for tower in _towers(world):
+        assert max(world.chronicle[tower.event_ids[0]].year, world.year - lifespan) <= tower.founded <= world.year
+
+
+def test_watchtowers_of_one_war_keep_their_spacing(world: World, cfg: Config) -> None:
+    spacing = cfg.get("tables.pois.watchtower.kind_spacing_km")
+    towers = _towers(world)
+    for i, tower in enumerate(towers):
+        assert all(world.scale.distance_km(tower.x, tower.y, q.x, q.y) >= spacing - 1e-6 for q in towers[:i])
+
+
+def test_a_watchtower_keeps_its_spacing_from_the_pois_before_it(world: World, cfg: Config) -> None:
+    spacing = cfg.get("tables.pois.watchtower.min_spacing_km")
+    for index, p in enumerate(world.pois):
+        if p.kind == "watchtower":
+            assert all(world.scale.distance_km(p.x, p.y, q.x, q.y) >= spacing - 1e-6 for q in world.pois[:index])
+
+
+def test_watchtowers_are_dynamic_and_stand(cfg: Config) -> None:
+    # The row marks them dynamic with a lifespan for the simulation; generation never dismantles one.
+    assert cfg.get("tables.pois.watchtower.dynamic") is True and cfg.get("tables.pois.watchtower.lifespan") > 0
+
+
+def test_no_watchtower_has_fallen(world: World) -> None:
+    assert all(tower.fell is None for tower in _towers(world))

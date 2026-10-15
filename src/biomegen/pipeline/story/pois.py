@@ -11,6 +11,9 @@ realm by grid lookup. History placement comes first: every event of the finished
 - **battlefield** (a ``decisive`` battle that passed its chance and age): the nearest free cell round the battle within
   ``offset_km``, at least ``min_spacing_km`` from every POI and ``kind_spacing_km`` from every other battlefield.
 
+- **watchtower** (an ongoing ``war``): up to ``max_per_event`` towers on the war's front, one per ``per_km_of_front``
+  of it, on high ground and ``kind_spacing_km`` apart, each held by the realm owning its cell.
+
 The location pass (:func:`biomegen.pipeline.pois.place_by_location`) then fills the rest by score. With
 ``history.start = "dawn"`` there are no realms and no events, so only the kinds whose ``source`` is "both" are placed,
 by location: a few ruins, towers and dungeons already stand at year 0.
@@ -26,6 +29,7 @@ from ...util import rng
 from ...world.entities import ChronicleEvent
 from ...world.world import World
 from .. import pois
+from ..civilization.diplomacy import front_cells
 from ..civilization.settlements import habitability
 from .poi_rules import PoiPlan, poi_for_event
 
@@ -79,6 +83,19 @@ def _place_ruins(
         )
 
 
+def _clear_of_pois(world: World, config: Config, row: dict) -> np.ndarray:
+    """Bool grid: where a POI of ``row`` keeps its ``min_spacing_km`` from every POI placed so far."""
+    anywhere = np.zeros((world.height, world.width), dtype=bool)
+    for poi in world.pois:
+        anywhere[poi.y, poi.x] = True
+    if not anywhere.any():
+        return np.ones_like(anywhere)
+    distance = geo.distance_to(
+        anywhere, backend=config.get("compute.backend"), metric="euclidean", sampling=world.scale.sampling
+    )
+    return distance >= float(row["min_spacing_km"])
+
+
 def _near_free_cell(world: World, config: Config, kind: str, event: ChronicleEvent) -> tuple[int, int] | None:
     """Return the free cell nearest the event's cell where a ``kind`` POI may stand, or None.
 
@@ -95,20 +112,14 @@ def _near_free_cell(world: World, config: Config, kind: str, event: ChronicleEve
     )
     mask = pois.eligible_mask(world, row, pois.max_footprint(config, kind), float(config.get("poi.min_footprint_land")))
     mask &= km <= float(row["offset_km"])
-    backend, sampling = config.get("compute.backend"), scale.sampling
-    anywhere = np.zeros(mask.shape, dtype=bool)
+    mask &= _clear_of_pois(world, config, row)
     same = np.zeros(mask.shape, dtype=bool)
     for poi in world.pois:
-        anywhere[poi.y, poi.x] = True
         same[poi.y, poi.x] |= poi.kind == kind
-    if anywhere.any():
-        mask &= geo.distance_to(anywhere, backend=backend, metric="euclidean", sampling=sampling) >= float(
-            row["min_spacing_km"]
-        )
     if same.any() and "kind_spacing_km" in row:
-        mask &= geo.distance_to(same, backend=backend, metric="euclidean", sampling=sampling) >= float(
-            row["kind_spacing_km"]
-        )
+        mask &= geo.distance_to(
+            same, backend=config.get("compute.backend"), metric="euclidean", sampling=scale.sampling
+        ) >= float(row["kind_spacing_km"])
     if not mask.any():
         return None
     ys, xs = np.nonzero(mask)
@@ -135,6 +146,42 @@ def _place_battlefield(world: World, config: Config, seed: int, event: Chronicle
     )
 
 
+def _place_watchtowers(world: World, config: Config, seed: int, event: ChronicleEvent, plan: PoiPlan) -> None:
+    """Place a war's watchtowers on its front, on high ground, spread ``kind_spacing_km`` apart.
+
+    A tower belongs to the realm that owns its cell. It is built within the last ``lifespan`` years (and not before the
+    war began), since a later simulation dismantles towers that outlive it.
+    """
+    row = config.get("tables.pois.watchtower")
+    front = np.zeros((world.height, world.width), dtype=bool)
+    cells = front_cells(world, *event.realm_ids)
+    front[cells // world.width, cells % world.width] = True
+    mask = front & pois.eligible_mask(
+        world, row, pois.max_footprint(config, "watchtower"), float(config.get("poi.min_footprint_land"))
+    )
+    mask &= _clear_of_pois(world, config, row)
+    rise = world.elevation_m / max(1.0, float(world.elevation_m.max()))
+    noise = rng.derive_numpy(seed, "poi", "watchtower", event.id).random(mask.shape) * float(config.get("poi.jitter"))
+    placed = [(p.x, p.y) for p in world.pois if p.kind == "watchtower"]
+    picks = pois.pick_blue_noise(
+        np.where(mask, 1.0 + rise + noise, -np.inf), plan.count, float(row["kind_spacing_km"]), placed, world
+    )
+    stream = rng.derive(seed, "poi", "watchtower", "built", event.id)
+    for x, y in picks:
+        age = stream.randint(0, min(int(row["lifespan"]), world.year - event.year))
+        pois.commit(
+            world,
+            seed,
+            "watchtower",
+            x,
+            y,
+            pois.draw_floors("watchtower", row, stream),
+            connect=bool(row.get("connect", True)),
+            founded=world.year - age,
+            event_ids=[event.id],
+        )
+
+
 def run(world: World, config: Config, seed: int) -> None:
     """Place the POIs of the world, mutating ``world`` in place."""
     dawn = config.get("history.start") == "dawn"
@@ -146,4 +193,6 @@ def run(world: World, config: Config, seed: int) -> None:
                     _place_ruins(world, config, seed, event, plan, score)
                 elif plan.kind == "battlefield":
                     _place_battlefield(world, config, seed, event)
+                elif plan.kind == "watchtower":
+                    _place_watchtowers(world, config, seed, event, plan)
     pois.place_by_location(world, config, seed, ("both",) if dawn else ("location", "both"))
