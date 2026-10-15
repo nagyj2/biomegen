@@ -76,7 +76,17 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     """Return the plan of ``poi``'s ``floor`` (clamped to its floors), or None if its kind has no site or no room."""
     floor = max(poi.lowest_floor, min(int(floor), poi.lowest_floor + poi.floor_count - 1))
     cache = _cache(world, config)
-    key = (poi.kind, poi.x, poi.y, poi.interior_seed, poi.pop, poi.floor_count, poi.lowest_floor, floor)
+    key = (
+        poi.kind,
+        poi.x,
+        poi.y,
+        poi.interior_seed,
+        poi.pop,
+        poi.floor_count,
+        poi.lowest_floor,
+        tuple(poi.tags),
+        floor,
+    )
     if key in cache:
         return cache[key]
     geometry = site_geometry(poi, config)
@@ -98,6 +108,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         plaza_rows=round(float(row.get("plaza_tiles", 0.0)) * int(row["rows_per_tile"])),
         walled=bool(row.get("walled", False)),
         config=config,
+        tags=tuple(poi.tags),
     )
     built = LAYOUTS[row["layout"]](context)
     plan = None

@@ -264,3 +264,136 @@ def test_the_ground_layer_can_be_switched_off(config: Config) -> None:
     quiet = copy.deepcopy(config)
     quiet.data["sites"]["settlement"]["ground_above"] = False
     assert _floors(quiet, "city", 3, 12000)[1].ground is None
+
+
+# --- harbours and mills --------------------------------------------------------------------------------------------
+
+
+def _coast(config: Config, tags: tuple[str, ...], water_from: int = 6):
+    """A town at (5, 6) with open sea from column ``water_from`` on; returns the world and the plan."""
+    world = flat_world(16, 12)
+    world.biome[:, water_from:] = int(Biome.DEEP)
+    world.water_type[:, water_from:] = int(WaterType.SALT)
+    poi = add_poi(world, "town", 5, 6, pop=2000, tags=tags)
+    plan = site_plan(poi, 0, config, world)
+    assert plan is not None
+    return world, plan
+
+
+def _riverside(config: Config, tags: tuple[str, ...], column: int = 7):
+    """A town at (6, 6) with a one-tile river down column ``column``."""
+    world = flat_world(16, 12)
+    world.water_type[:, column] = int(WaterType.FRESH)
+    poi = add_poi(world, "town", 6, 6, pop=2000, tags=tags)
+    plan = site_plan(poi, 0, config, world)
+    assert plan is not None
+    return world, plan
+
+
+def test_a_port_builds_a_pier_into_open_water(config: Config) -> None:
+    _, plan = _coast(config, ("port",))
+    assert int(Cell.BRIDGE) in plan.cells
+
+
+def test_a_town_without_the_port_tag_builds_no_pier(config: Config) -> None:
+    _, plan = _coast(config, ())
+    assert int(Cell.BRIDGE) not in plan.cells
+
+
+def test_a_port_with_no_open_water_in_its_extent_builds_no_pier(config: Config) -> None:
+    _, plan = _coast(config, ("port",), water_from=12)
+    assert int(Cell.BRIDGE) not in plan.cells
+
+
+def test_a_pier_stands_over_the_water_and_starts_on_the_shore(config: Config) -> None:
+    from biomegen.sites import read_patch, site_geometry
+
+    world, plan = _coast(config, ("port",))
+    patch = read_patch(world.pois[0], site_geometry(world.pois[0], config), world, config)
+    deck = plan.cells == int(Cell.BRIDGE)
+    landing = np.argwhere(deck & ~patch.still)
+    assert (deck & patch.still).any() and len(landing) <= 1 + (deck & ~patch.still).sum()
+
+
+def test_a_pier_is_joined_to_the_plaza_by_a_street(config: Config) -> None:
+    # Walking the path and deck cells from the pier reaches every street cell: the harbour is not cut off.
+    _, plan = _coast(config, ("port",))
+    walkable = np.isin(plan.cells, [PATH, int(Cell.BRIDGE)])
+    labels, _ = ndimage.label(walkable)
+    pier = labels[plan.cells == int(Cell.BRIDGE)]
+    streets = labels[plan.cells == PATH]
+    assert set(pier.tolist()) <= set(streets.tolist())
+
+
+def test_a_port_moors_boats_beside_its_pier(config: Config) -> None:
+    _, plan = _coast(config, ("port",))
+    assert int(Cell.HULL) in plan.cells
+
+
+def test_moored_boats_lie_on_open_water(config: Config) -> None:
+    from biomegen.sites import read_patch, site_geometry
+
+    world, plan = _coast(config, ("port",))
+    patch = read_patch(world.pois[0], site_geometry(world.pois[0], config), world, config)
+    boat = np.isin(plan.cells, [int(Cell.HULL), int(Cell.CARGO)])
+    assert boat.any() and patch.still[boat].all()
+
+
+def test_a_river_settlement_builds_a_mill_with_a_wheel_in_the_river(config: Config) -> None:
+    from biomegen.sites import read_patch, site_geometry
+
+    world, plan = _riverside(config, ("river",))
+    patch = read_patch(world.pois[0], site_geometry(world.pois[0], config), world, config)
+    wheel = plan.cells == int(Cell.WHEEL)
+    assert wheel.any() and patch.river[wheel].all()
+
+
+def test_a_settlement_without_the_river_tag_has_no_wheel(config: Config) -> None:
+    _, plan = _riverside(config, ())
+    assert int(Cell.WHEEL) not in plan.cells
+
+
+def test_no_wheel_without_a_river_in_the_extent(config: Config) -> None:
+    _, plan = _riverside(config, ("river",), column=10)
+    assert int(Cell.WHEEL) not in plan.cells
+
+
+def test_the_mill_is_a_roofed_building_beside_the_wheel(config: Config) -> None:
+    # The wheel turns beside a building: some roof cell lies within a few cells of it.
+    _, plan = _riverside(config, ("river",))
+    wheel = np.argwhere(plan.cells == int(Cell.WHEEL))[0]
+    near = plan.outside[max(0, wheel[0] - 6) : wheel[0] + 7, max(0, wheel[1] - 14) : wheel[1] + 15]
+    assert (near == ROOF).any()
+
+
+def test_the_mill_door_opens_onto_a_street(config: Config) -> None:
+    _, plan = _riverside(config, ("river",))
+    wheel = np.argwhere(plan.cells == int(Cell.WHEEL))[0]
+    doors = np.argwhere(plan.cells[max(0, wheel[0] - 8) : wheel[0] + 9, max(0, wheel[1] - 16) : wheel[1] + 17] == DOOR)
+    assert len(doors) > 0
+    padded = np.pad(plan.cells == PATH, 1)
+    window_y, window_x = max(0, wheel[0] - 8), max(0, wheel[1] - 16)
+    assert any(
+        padded[window_y + y + 1 + dy, window_x + x + 1 + dx]
+        for y, x in doors.tolist()
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1))
+    )
+
+
+def test_tags_change_the_plan_even_for_one_poi_and_seed(config: Config) -> None:
+    # The plan cache is keyed on the tags, so tagging a POI does not return the plan cached for it untagged.
+    world = flat_world(16, 12)
+    world.biome[:, 6:] = int(Biome.DEEP)
+    world.water_type[:, 6:] = int(WaterType.SALT)
+    poi = add_poi(world, "town", 5, 6, pop=2000)
+    plain = site_plan(poi, 0, config, world)
+    poi.tags = ("port",)
+    ported = site_plan(poi, 0, config, world)
+    assert plain is not None and ported is not None and not np.array_equal(plain.cells, ported.cells)
+
+
+def test_harbour_and_mill_are_deterministic(config: Config) -> None:
+    _, first = _coast(config, ("port",))
+    clear_cache()
+    _, second = _coast(config, ("port",))
+    assert np.array_equal(first.cells, second.cells)

@@ -86,3 +86,41 @@ def test_a_boat_is_cut_by_the_shore(config: Config) -> None:
 def test_a_boat_is_open_air_so_both_views_agree(config: Config) -> None:
     _poi, _world, plan = _boat(config)
     assert np.array_equal(plan.cells, plan.outside)
+
+
+def test_a_moored_boat_is_stamped_on_open_water() -> None:
+    import random
+
+    import numpy as np
+
+    from biomegen.sites.boat import moor_boat
+    from biomegen.world.tile import Cell
+
+    grid = np.zeros((12, 24), dtype=np.uint8)
+    water = np.ones(grid.shape, dtype=bool)
+    assert moor_boat(grid, water, 6, 4, 4, 10, random.Random(1)) and int(Cell.HULL) in grid and int(Cell.FLOOR) in grid
+
+
+def test_a_moored_boat_is_refused_where_there_is_land() -> None:
+    import random
+
+    import numpy as np
+
+    from biomegen.sites.boat import moor_boat
+
+    grid = np.zeros((12, 24), dtype=np.uint8)
+    water = np.ones(grid.shape, dtype=bool)
+    water[5, 8] = False
+    assert not moor_boat(grid, water, 6, 4, 4, 10, random.Random(1)) and not grid.any()
+
+
+def test_a_moored_boat_is_refused_over_existing_cells() -> None:
+    import random
+
+    import numpy as np
+
+    from biomegen.sites.boat import moor_boat
+
+    grid = np.zeros((12, 24), dtype=np.uint8)
+    grid[5, 8] = 7
+    assert not moor_boat(grid, np.ones(grid.shape, dtype=bool), 6, 4, 4, 10, random.Random(1))

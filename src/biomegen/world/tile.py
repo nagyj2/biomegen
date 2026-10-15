@@ -116,6 +116,7 @@ class Cell(IntEnum):
     ROOF = 28  # the top of a building seen from outside
     STONE = 29  # a wall seen from outside (a city wall, a ruin's stub), drawn solid
     HULL = 30  # a boat's planked side
+    WHEEL = 31  # a mill's water wheel, standing in the river beside it
 
 
 # Convenient lookup tables for config parsing and HUD display. Names are lower-case so they read

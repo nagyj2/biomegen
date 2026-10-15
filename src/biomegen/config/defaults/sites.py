@@ -36,6 +36,13 @@ VALUES: Dict[str, Any] = {
         "rings": [0.4, 0.72],  # ring streets, each at this share of the way from the plaza to the outline
         "ring_gap": 0.3,  # chance a ring street leaves out one of its arcs
         "max_lanes": 80,  # most lanes laid into ground too far from a street
+        # A port (a POI tagged ``port``) builds a harbour when open water lies within ``reach_rows`` rows of the
+        # plaza: a pier ``pier_rows`` rows long (columns scale with the cell aspect) from the dry shore nearest the
+        # plaza, joined to it by a street, with up to ``boats`` boats of ``boat_length`` by ``boat_beam`` rows moored
+        # beside it. A river settlement with a river in its extent builds a mill: a house ``width`` times as wide as
+        # the shortest building on free ground within ``reach`` rows of the river, with a water wheel in the water.
+        "harbour": {"pier_rows": 6, "boats": 2, "boat_length": 5, "boat_beam": 4, "reach_rows": 45},
+        "mill": {"reach": 1.5, "width": 1.2},
         "ground_above": True,  # upper floors show the ground-level streets, trees and walls round the buildings, dimmed
     },
     "extra_corridors": {"dungeon": 0.34, "tower": 0.15, "ruin": 0.2},  # extra room-to-room links per room, by layout

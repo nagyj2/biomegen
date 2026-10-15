@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from typing import Optional
 
 import numpy as np
@@ -56,6 +57,30 @@ def _deckhouse(grid: np.ndarray, ctx: SiteContext, share: float) -> None:
     if building is not None:
         inside = building.cells != _VOID
         window[inside] = building.cells[inside]
+
+
+def moor_boat(grid: np.ndarray, water: np.ndarray, x: int, y: int, rows: int, cols: int, stream: random.Random) -> bool:
+    """Stamp a small moored boat with its top-left cell at ``(x, y)``: a lens of deck, a hull and one cargo cell.
+
+    The boat and a one-cell margin round it must lie wholly on open ``water`` that is still void in ``grid``; otherwise
+    nothing is drawn and ``False`` comes back.
+    """
+    height, width = grid.shape
+    if x < 1 or y < 1 or x + cols + 1 > width or y + rows + 1 > height:
+        return False
+    window = (slice(y - 1, y + rows + 1), slice(x - 1, x + cols + 1))
+    if not (water[window].all() and (grid[window] == _VOID).all()):
+        return False
+    deck = np.zeros(grid.shape, dtype=bool)
+    deck[y : y + rows, x : x + cols] = _hull(rows, cols)
+    if int(deck.sum()) < 3:
+        return False
+    grid[deck] = _FLOOR
+    grid[ndimage.binary_dilation(deck, structure=np.ones((3, 3), bool)) & ~deck & water & (grid == _VOID)] = _HULL
+    cells = sorted((int(cx), int(cy)) for cy, cx in np.argwhere(deck))
+    cargo_x, cargo_y = stream.choice(cells)
+    grid[cargo_y, cargo_x] = int(Cell.CARGO)
+    return True
 
 
 @layout("boat")

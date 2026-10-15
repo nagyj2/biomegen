@@ -48,6 +48,8 @@ class SitePatch:
     Attributes:
         dry: Dry ground inside the world: where a structure can stand.
         water: Water of any kind (sea, lake or river): where a bridge or a hull goes.
+        still: Open water (sea or lake), where a pier and moored boats go.
+        river: River cells (water over a land biome), where a mill's wheel turns.
         elevation_m: Height above sea level, bilinear.
         road: Cells on the road bed (dry or over water), as the renderer draws it.
         rail: Cells in the railing band beside the bed (a bridge's railings where it lies over water).
@@ -56,6 +58,8 @@ class SitePatch:
 
     dry: np.ndarray
     water: np.ndarray
+    still: np.ndarray
+    river: np.ndarray
     elevation_m: np.ndarray
     road: np.ndarray
     rail: np.ndarray
@@ -130,8 +134,10 @@ def read_patch(poi: POI, geometry: SiteGeometry, world: World, config: Config) -
     box = (slice(row0, row1), slice(col0, col1))
     dry = (land & ~river)[box]
     water = (sampler.inside & ~(land & ~river))[box]
+    still = (sampler.inside & ~land)[box]
     elevation = sampler.bilinear(world.elevation_m)[box].astype(np.float32)
     found = road_bed(sampler, world, config)
     road = found.bed[box] if found is not None else np.zeros(dry.shape, dtype=bool)
     rail = found.rail[box] if found is not None else np.zeros(dry.shape, dtype=bool)
-    return SitePatch(dry, water, elevation, road, rail, _find_gates(road, int(config.get("sites.max_gates"))))
+    gates = _find_gates(road, int(config.get("sites.max_gates")))
+    return SitePatch(dry, water, still, river[box], elevation, road, rail, gates)

@@ -7,7 +7,8 @@ street into any ground still too far from one. Then **lots** are packed along th
 each lot is a free rectangle a gap from the street it faces, filled by a thin-walled building (:mod:`.building`) whose
 street door faces that street. A building no street can be joined to is not built. A settlement with a wall
 (``walled`` in its row) is ringed along its outline, with a gate wherever a spoke or the road reaches it. Trees and
-bushes fill free ground.
+bushes fill free ground. A port builds a harbour (a pier, boats and a street to the plaza) where open water lies by the
+town, and a river settlement a mill with a water wheel in the river (``sites.settlement.harbour`` and ``mill``).
 
 Seen from outside every building is a roof and the wall is solid stone; the streets and trees are as they are. An upper
 floor shows the storey of each building that reaches it and the roof of each that does not, with the ground-level
@@ -27,6 +28,7 @@ from scipy import ndimage
 
 from ..util import rng
 from ..world.tile import Cell
+from .boat import moor_boat
 from .building import Building, Spec, build_building
 from .carve import Point, nearest_true
 from .layout import SiteContext, layout
@@ -44,6 +46,9 @@ _STREET = (_PATH, _BRIDGE)
 _ROLES = ("hall", "kitchen", "bedroom", "storage")
 _MIN_TOWN = 0.2  # a footprint smaller than this share of the extent falls back to the whole extent
 _RING_STEP = 0.5  # radians between the sample points of a ring street
+_WHEEL = int(Cell.WHEEL)
+_STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1))
+_MILL_TRIES = 40  # candidate spots tried for a mill before giving up
 
 
 @dataclass(frozen=True)
@@ -325,9 +330,17 @@ def _fit_lot(
 
 
 def _lots(
-    ctx: SiteContext, grid: np.ndarray, ground: np.ndarray, centre: Point, stream: random.Random
+    ctx: SiteContext,
+    grid: np.ndarray,
+    ground: np.ndarray,
+    centre: Point,
+    stream: random.Random,
+    preplaced: Optional[list[Lot]] = None,
 ) -> tuple[np.ndarray, list[Lot]]:
-    """Pack buildings along the streets; return ``(roof mask, the lots)``."""
+    """Pack buildings along the streets; return ``(roof mask, the lots)``.
+
+    ``preplaced`` are lots already stamped into ``grid`` (a mill): they count as built and keep their gap clear.
+    """
     settings = ctx.config.get("sites.settlement")
     gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
     rows_lo, rows_hi = (int(v) for v in ctx.setting("building_rows"))
@@ -340,7 +353,13 @@ def _lots(
     roofs = np.zeros(grid.shape, dtype=bool)
     target = float(settings["fill"]) * int(ground.sum())
     covered = 0
-    placed: list[Lot] = []
+    placed: list[Lot] = list(preplaced or [])
+    for lot in placed:
+        roofs[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width] |= lot.building.footprint
+        blocked[
+            max(0, lot.y - gap_y) : lot.y + lot.height + gap_y, max(0, lot.x - gap_x) : lot.x + lot.width + gap_x
+        ] = True
+        covered += int(lot.building.footprint.sum())
     stride = max(1, round(aspect))
     street = np.argwhere(np.isin(grid, _STREET))
     order = sorted(
@@ -485,6 +504,144 @@ def _join(grid: np.ndarray, front: Point, street: Point, side: Point) -> bool:
     return True
 
 
+def _shore(still: np.ndarray, free: np.ndarray, step: Point) -> np.ndarray:
+    """Return the free cells whose neighbour one ``step`` away is open water."""
+    dx, dy = step
+    beyond = np.roll(still, (-dy, -dx), axis=(0, 1))
+    if dy == 1:
+        beyond[-1, :] = False
+    elif dy == -1:
+        beyond[0, :] = False
+    if dx == 1:
+        beyond[:, -1] = False
+    elif dx == -1:
+        beyond[:, 0] = False
+    return free & beyond
+
+
+def _harbour(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, centre: Point) -> None:
+    """Build a harbour for a port: a pier into open water from the shore nearest the plaza, boats moored beside it.
+
+    The pier starts on the dry shore nearest the plaza and its landing is joined to the plaza by a street. Nothing is
+    built when no open water lies within ``harbour.reach_rows`` of the plaza (the tag is about the coast within reach in
+    the world, not within the extent).
+    """
+    still = ctx.patch.still
+    if "port" not in ctx.tags or not still.any():
+        return
+    cfg = ctx.config.get("sites.settlement.harbour")
+    free = dry & (grid == _VOID)
+    cx, cy = centre
+    options = []
+    for index, step in enumerate(_STEPS):
+        for y, x in np.argwhere(_shore(still, free, step)).tolist():
+            options.append((((x - cx) / ctx.aspect) ** 2 + (y - cy) ** 2, y, x, index))
+    if not options:
+        return
+    nearest, y, x, index = min(options)
+    if nearest > float(cfg["reach_rows"]) ** 2:
+        return
+    dx, dy = _STEPS[index]
+    rows, cols = grid.shape
+    horizontal = dy == 0
+    length = round(int(cfg["pier_rows"]) * (ctx.aspect if horizontal else 1.0))
+    width = 1 if horizontal else max(1, round(ctx.aspect))
+    reached = 0
+    for i in range(1, length + 1):
+        px, py = x + dx * i, y + dy * i
+        if not (0 <= px < cols and 0 <= py < rows and still[py, px] and grid[py, px] == _VOID):
+            break
+        for extra in range(1 if horizontal else width):
+            qx = px + extra
+            if qx < cols and still[py, qx] and grid[py, qx] == _VOID:
+                grid[py, qx] = _BRIDGE
+        reached = i
+    if reached == 0:
+        return
+    grid[y, x] = _PATH
+    if not horizontal:
+        for extra in range(1, width):
+            if x + extra < cols and dry[y, x + extra] and grid[y, x + extra] == _VOID:
+                grid[y, x + extra] = _PATH
+    lay_street(grid, dry, (x, y), centre, ctx.street_rules, dry)
+    stream = rng.derive(ctx.seed, "site.layout", "harbour")
+    length_rows, beam = int(cfg["boat_length"]), int(cfg["boat_beam"])
+    boat_rows, boat_cols = (
+        (beam, round(length_rows * ctx.aspect)) if horizontal else (length_rows, round(beam * ctx.aspect))
+    )
+    sides = [1, -1]
+    stream.shuffle(sides)
+    moored = 0
+    for fraction in (0.4, 0.85, 0.65, 0.2):
+        for side in sides:
+            if moored >= int(cfg["boats"]):
+                return
+            along = round(fraction * reached)
+            if horizontal:
+                top, left = y + side * (boat_rows // 2 + 2) - boat_rows // 2, x + dx * along - boat_cols // 2
+            else:
+                clear = boat_cols // 2 + 2 + (width - 1 if side > 0 else 0)
+                top, left = y + dy * along - boat_rows // 2, x + side * clear - boat_cols // 2
+            moored += moor_boat(grid, still, left, top, boat_rows, boat_cols, stream)
+
+
+def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarray, centre: Point) -> Optional[Lot]:
+    """Build a mill for a river settlement: a house beside the river and a water wheel turning in it.
+
+    The house goes on the free ground nearest the plaza within ``mill.reach`` rows of the river, its door joined to the
+    nearest street. Returns it as a lot (so it is roofed and may have storeys), or None when the extent has no river
+    beside free ground.
+    """
+    river = ctx.patch.river
+    streets = np.isin(grid, _STREET)
+    if "river" not in ctx.tags or not river.any() or not streets.any():
+        return None
+    cfg = ctx.config.get("sites.settlement.mill")
+    height = int(ctx.setting("building_rows")[0])
+    width = round(height * ctx.aspect * float(cfg["width"]))
+    free = ground & dry & (grid == _VOID)
+    sampling = (1.0, 1.0 / ctx.aspect)
+    near_river = ndimage.distance_transform_edt(~river, sampling=sampling)
+    fits = ndimage.minimum_filter(free.astype(np.uint8), size=(height, width), mode="constant", cval=0) > 0
+    touches = ndimage.minimum_filter(near_river, size=(height, width), mode="nearest") <= float(cfg["reach"])
+    cx, cy = centre
+    spots = sorted(
+        (((x - cx) / ctx.aspect) ** 2 + (y - cy) ** 2, y, x) for y, x in np.argwhere(fits & touches).tolist()
+    )[:_MILL_TRIES]
+    _, street_at = ndimage.distance_transform_edt(~streets, sampling=sampling, return_indices=True)
+    stream = rng.derive(ctx.seed, "site.layout", "mill")
+    spec = _spec(ctx)
+    for _, mid_y, mid_x in spots:
+        x0, y0 = mid_x - width // 2, mid_y - height // 2
+        street = (int(street_at[1][mid_y, mid_x]), int(street_at[0][mid_y, mid_x]))
+        shape_seed = stream.getrandbits(32)
+        building = build_building(
+            height, width, stream, spec, (street[0] - x0, street[1] - y0), random.Random(shape_seed)
+        )
+        if building is None or building.front is None:
+            continue
+        front = (x0 + building.front[0], y0 + building.front[1])
+        if not (0 <= front[0] < grid.shape[1] and 0 <= front[1] < grid.shape[0]) or grid[front[1], front[0]] != _VOID:
+            continue
+        trial = grid.copy()
+        inside = building.cells != _VOID
+        trial[y0 : y0 + height, x0 : x0 + width][inside] = building.cells[inside]
+        trial[front[1], front[0]] = _PATH
+        if lay_street(trial, dry, front, street, ctx.street_rules, ground | np.isin(trial, _STREET)) is None:
+            continue
+        house = np.zeros(grid.shape, dtype=bool)
+        house[y0 : y0 + height, x0 : x0 + width] = True
+        distance = ndimage.distance_transform_edt(~house, sampling=sampling)
+        beside = np.argwhere(river & (distance <= float(cfg["reach"]) + 1.0)).tolist()
+        if not beside:
+            continue
+        _, wheel_y, wheel_x = min((float(distance[row, col]), row, col) for row, col in beside)
+        trial[wheel_y, wheel_x] = _WHEEL
+        grid[:] = trial
+        return Lot(x0, y0, width, height, shape_seed, building)
+    return None
+
+
 def _wall(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, town: np.ndarray, ends: list[Point]) -> None:
     """Ring the footprint with a thin wall; the road and each spoke crossing it make a gate. Water leaves a gap."""
     ring = ndimage.binary_dilation(town, structure=np.ones((3, 3), bool)) & ~town & dry
@@ -534,7 +691,9 @@ def build_settlement(
     ends = _spokes(ctx, grid, town, dry, centre, stream)
     _rings(ctx, grid, town, dry, centre, stream)
     _lanes(ctx, grid, ground, town, stream)
-    roofs, lots = _lots(ctx, grid, ground, centre, stream)
+    _harbour(ctx, grid, dry, centre)
+    mill = _mill(ctx, grid, dry, ground, centre)
+    roofs, lots = _lots(ctx, grid, ground, centre, stream, [mill] if mill is not None else [])
     uppers = _storeys(ctx, grid, lots, centre, stream)
     if ctx.walled:
         _wall(ctx, grid, dry, town, ends)

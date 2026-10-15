@@ -357,9 +357,10 @@ VALUES: Dict[str, Any] = {
         "roof": "░",
         "stone": "▓",
         "hull": "=",
+        "wheel": "◎",
     },
     # ASCII output replaces any interior glyph that is not 7-bit with the entry here.
-    "interior_glyphs_ascii": {"roof": "^", "stone": "#"},
+    "interior_glyphs_ascii": {"roof": "^", "stone": "#", "wheel": "O"},
     # Thin walls: a wall cell draws the line glyph for which of its four neighbours (north 1, east 2, south 4, west 8)
     # are also wall or door, so adjoining walls join into box-drawing lines.
     "interior_walls": {
@@ -406,5 +407,6 @@ VALUES: Dict[str, Any] = {
         "roof": [120, 74, 58],
         "stone": [118, 112, 104],
         "hull": [128, 92, 58],
+        "wheel": [150, 104, 64],
     },
 }

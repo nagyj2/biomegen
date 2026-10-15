@@ -12,7 +12,9 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
   plan is `rows_per_tile` rows and `render.cell_aspect` times as many columns per tile.
 - The terrain comes from the renderer's own sampler (`patch.read_patch`; `sampling/terrain.py` defines land and river
   once), so a layout never disagrees with the water drawn beside it. A layout builds only on `patch.dry`; the only
-  cells it puts over water are bridge decks and railings, and a boat's hull.
+  cells it puts over water are bridge decks and railings, a boat's hull, and for a settlement a harbour's pier and moored
+  boats (`port` tag, open water by the town) and a mill's water wheel (`river` tag, a river in the extent): the plan
+  context carries the POI's `tags` and `SitePatch.still` / `.river` say where each goes.
 - The road is the world's: `patch.road` is the bed from `sampling/roads.py` (what the renderer draws) and a **gate** is
   a run of it meeting the extent's edge. A layout calls `streets.lay_roads` to build round and onto it; `site_plan`
   clears those cells again (`clear_roads`), so a plan never draws the road itself, only lanes, buildings and walls.

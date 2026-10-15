@@ -49,6 +49,7 @@ class SiteContext:
         plaza_rows: A settlement's plaza radius in rows (0 for none).
         walled: Whether a settlement has a wall.
         config: The merged configuration, for the tunables of the ``sites`` section.
+        tags: The POI's site traits (``port``, ``river``, ``lake``): a settlement builds a harbour or a mill for them.
     """
 
     kind: str
@@ -61,6 +62,7 @@ class SiteContext:
     plaza_rows: int
     walled: bool
     config: Config
+    tags: tuple[str, ...] = ()
 
     def weights(self, role: str) -> list[tuple[Cell, float]]:
         """The furniture weights of a room role (empty: the role is left bare)."""
