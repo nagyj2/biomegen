@@ -8,7 +8,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.util import geometry as geo
-from biomegen.world.tile import WaterType
+from biomegen.world.tile import Biome, WaterType
 
 
 @pytest.fixture(scope="module")
@@ -149,3 +149,20 @@ def test_every_backbone_town_is_joined_into_one_network():
     labels, _count = ndimage.label(world.road > 0, structure=np.ones((3, 3)))
     towns = {int(labels[y, x]) for x, y in ((1, 1), (17, 1), (1, 7), (17, 7))}
     assert len(towns) == 1 and 0 not in towns
+
+
+def test_a_diagonal_crossing_of_a_river_puts_no_road_on_the_river():
+    # A one-tile river runs corner to corner between two towns: the road steps across it diagonally and records
+    # nothing on the water (the diagonal link is the bridge), so no L of road tiles forms.
+    from biomegen.pipeline.civilization import roads
+
+    cfg = load_config(None)
+    cfg.data["roads"]["meander_strength"] = 0.0
+    world = _flat_world(10, 10)
+    for i in range(10):
+        world.water_type[9 - i, i] = int(WaterType.FRESH)
+    world.biome[world.water_type == int(WaterType.FRESH)] = int(Biome.LAKE)
+    _add_poi(world, "town", 2, 2)
+    _add_poi(world, "town", 7, 7)
+    roads.run(world, cfg, 1)
+    assert world.road.any() and not (world.road.astype(bool) & (world.water_type == int(WaterType.FRESH))).any()

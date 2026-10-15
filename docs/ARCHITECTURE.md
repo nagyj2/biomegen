@@ -298,8 +298,8 @@ Connects POIs with meandering least-cost roads:
    - **Spur phase**: isolated POIs connect to the nearest existing road tile (not to a distant POI),
      preventing parallel-road artefacts.
 4. **Bridges are not recorded.** A road tile over water is a bridge; the renderer and the site plans draw it from the
-   road alone (`sampling/roads.py`). A diagonal step between two land tiles that passes between two freshwater
-   corners also flags one corner as road, so the crossing is a continuous span.
+   road alone (`sampling/roads.py`). A diagonal step between two land tiles that passes between two water corners
+   records nothing on the water: the diagonal link itself is the bridge (no L of road tiles, no box with a cross).
 
 ### Stage 9b — Realms (`pipeline/civilization/realms.py`)
 

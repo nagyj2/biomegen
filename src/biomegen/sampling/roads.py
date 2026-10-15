@@ -87,7 +87,9 @@ def road_bed(sampler: DetailSampler, world: World, config: Config) -> Optional[R
 
     The bed is the cells within ``render.road_half_width`` tiles (at least ``render.road_min_rows`` rows) of a link
     between two neighbouring road tiles (eight directions), measured at the road-warped position
-    (``render.road_warp``). A road tile with no link is a disc at its centre. Road tiles over water are road too:
+    (``render.road_warp``). A diagonal link is left out when either orthogonal tile between the two is road, since the
+    two already join through it and the link would cut the corner (the same rule as the map scale's glyph mask). A
+    road tile with no link is a disc at its centre. Road tiles over water are road too:
     where the bed lies over water a caller draws a bridge.
     """
     half = bed_half_width(config, sampler)
@@ -117,6 +119,8 @@ def road_bed(sampler: DetailSampler, world: World, config: Config) -> Optional[R
         for (step_x, step_y), link_kind in _FORWARD:
             nx, ny = tx + step_x, ty + step_y
             if 0 <= nx < world.width and 0 <= ny < world.height and road[ny, nx]:
+                if step_x and step_y and (road[ty, nx] or road[ny, tx]):
+                    continue  # a corner cut: the orthogonal corner tile already joins the two
                 _mark_segment(sampler, nearest, kind, warped, (tx, ty), (nx, ny), reach, rail_half, link_kind)
     bed = nearest <= half
     return RoadBed(bed, kind, (nearest > half) & (nearest <= rail_half)) if bed.any() else None

@@ -1,7 +1,9 @@
 """Stage 9: roads.
 
 Connects POIs with meandering least-cost roads. A road tile over water is a bridge: the renderer and the site
-plans draw it from the road alone, so no bridge is recorded. The design has four parts:
+plans draw it from the road alone, so no bridge is recorded. A diagonal step between two land tiles that passes
+between two water corners records nothing on the water: the diagonal link itself is drawn as the bridge. The
+design has three parts:
 
 1. **Landmass grouping.** A "landmass" is everything that is not open saltwater (``water_type != SALT``)
    - i.e. land plus the rivers/lakes embedded in it. Components of that mask are the islands. POIs are
@@ -17,8 +19,6 @@ plans draw it from the road alone, so no bridge is recorded. The design has four
    meander). Step lengths are km, so a north-south step costs more than an east-west one on a tall cell. The
    search is confined to the component's mask and a padded bounding box and capped, with a straight-line
    fallback, so it stays fast on the non-monotone cost.
-4. **Fords.** A diagonal step between two land tiles that passes between two freshwater corners also flags
-   one of those corners as road, so the crossing reads as a continuous bridged span.
 """
 
 from __future__ import annotations
@@ -351,24 +351,6 @@ def _straighten_coastal_detours(world: World, path: List[Coord]) -> List[Coord]:
     return result
 
 
-def _flag_diagonal_fords(world: World, path: List[Coord], tier: int) -> None:
-    """Flag the water corner of each diagonal land-to-land step that visually crosses a waterway as road.
-
-    A step ``(x0, y0) -> (x1, y1)`` with ``dx = dy = +-1`` passes between corners ``(x1, y0)`` and ``(x0, y1)``;
-    when both are freshwater the path spans a waterway diagonally without visiting a water tile. Only freshwater
-    triggers this - saltwater never does.
-    """
-    for (x0, y0), (x1, y1) in zip(path, path[1:], strict=False):
-        if abs(x1 - x0) != 1 or abs(y1 - y0) != 1:
-            continue
-        if not (world.in_bounds(x1, y0) and world.in_bounds(x0, y1)):
-            continue
-        if world.water_type[y0, x1] == int(WaterType.FRESH) and world.water_type[y1, x0] == int(WaterType.FRESH):
-            world.road[y0, x1] = 1
-            if world.road_tier[y0, x1] == 0:
-                world.road_tier[y0, x1] = tier
-
-
 def run(world: World, config: Config, seed: int) -> None:
     """Build the road network, mutating ``world`` in place."""
     backend = config.get("compute.backend")
@@ -437,7 +419,6 @@ def run(world: World, config: Config, seed: int) -> None:
                 world.road[y, x] = 1
                 if world.road_tier[y, x] == 0:
                     world.road_tier[y, x] = 1
-            _flag_diagonal_fords(world, path, tier=1)
 
         # Spur phase: connect each isolated POI to the nearest existing road tile.
         # Routing after the trunk means spurs branch off the closest point on the network,
@@ -463,4 +444,3 @@ def run(world: World, config: Config, seed: int) -> None:
                 world.road[y, x] = 1
                 if world.road_tier[y, x] == 0:
                     world.road_tier[y, x] = 2
-            _flag_diagonal_fords(world, path, tier=2)

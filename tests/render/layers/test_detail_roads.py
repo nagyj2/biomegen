@@ -9,7 +9,7 @@ from biomegen.config.model import Config
 from biomegen.render.layers import build_grid
 from biomegen.render.views import View
 from biomegen.sampling.detail import SCALE_LOCAL, DetailSampler
-from biomegen.world.tile import Biome
+from biomegen.world.tile import Biome, WaterType
 from tests.render.conftest import make_world
 
 ROADS = View("t", ("terrain", "roads"))
@@ -190,3 +190,16 @@ def test_the_bed_is_never_thicker_than_the_cap_in_rows() -> None:
     grid, _, config = _draw(world, ROADS, cell=(60, 30))
     rows = np.nonzero(_is_color(grid, config.get("render.detail_colors.road_bg"))[:, 150])[0]
     assert len(rows) <= int(config.get("render.road_max_rows"))
+
+
+def test_a_diagonal_road_over_a_diagonal_river_draws_the_bridge_on_the_diagonal() -> None:
+    # Two road tiles meet across the corner of two river tiles: the bridge deck is the diagonal link, a thin line, not
+    # a box round the corner.
+    world = make_world(2, 2, Biome.GRASS)
+    world.road[0, 0] = world.road[1, 1] = 1
+    world.biome[0, 1] = world.biome[1, 0] = int(Biome.LAKE)
+    world.water_type[0, 1] = world.water_type[1, 0] = int(WaterType.FRESH)
+    grid, sampler, config = _draw(world, BRIDGES, _crisp_config())
+    deck = _is_color(grid, config.get("render.detail_colors.deck_bg"))
+    off_line = np.abs(sampler.fx - sampler.fy) / np.sqrt(2.0)
+    assert deck.any() and (off_line[deck] <= 0.15).all()

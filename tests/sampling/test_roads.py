@@ -73,3 +73,22 @@ def test_a_coarser_grid_shows_the_same_road_over_the_same_ground() -> None:
         rows = np.nonzero(found.bed.any(axis=1))[0]
         centres.append((rows.min() + rows.max() + 1) / 2 / cell_h)
     assert abs(centres[0] - centres[1]) < 0.15
+
+
+def test_a_diagonal_link_across_water_corners_is_kept() -> None:
+    # Two land road tiles joined across the corner of two river tiles: the diagonal is the only link, so it is drawn.
+    world = make_world(2, 2)
+    world.road[0, 0] = world.road[1, 1] = 1
+    world.water_type[0, 1] = world.water_type[1, 0] = 2
+    config = _config()
+    found = road_bed(_sampler(world, config), world, config)
+    assert found is not None and KIND_NAMES.index("falling") in set(np.unique(found.kind[found.bed]))
+
+
+def test_a_diagonal_link_is_left_out_when_an_orthogonal_corner_is_road() -> None:
+    # An L of three road tiles: the diagonal between its ends would cut the corner, so only the two straight links draw.
+    world = make_world(2, 2)
+    world.road[0, 0] = world.road[0, 1] = world.road[1, 1] = 1
+    config = _config()
+    found = road_bed(_sampler(world, config), world, config)
+    assert found is not None and KIND_NAMES.index("falling") not in set(np.unique(found.kind[found.bed]))
