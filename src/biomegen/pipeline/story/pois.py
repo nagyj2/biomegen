@@ -13,8 +13,9 @@ realm by grid lookup. History placement comes first: every event of the finished
 
 - **tower**, **dungeon** (a ``fall``, a dungeon only a conquered one, each at its ``chance``): placed like a field,
   and bandit-held from the start (the row's ``bandit_strength``): what a fallen realm's land comes to.
-- **watchtower** (an ongoing ``war``): up to ``max_per_event`` towers on the war's front, one per ``per_km_of_front``
-  of it, on high ground and ``kind_spacing_km`` apart, each held by the realm owning its cell.
+- **watchtower** (an ongoing ``war``): up to ``max_per_event`` towers along the war's front, one per ``per_km_of_front``
+  of it, each ``front_setback_km`` back from the line in the land of one of the two powers (the one that owns its cell),
+  on high ground and ``kind_spacing_km`` apart.
 
 - **shrine** (a ``succession`` into a devout style): the best cell, by freshwater and remoteness weights, in the
   ``poi_sites`` band round the realm's seat; the previous ruler's temper picks the site (an aggressive one a quiet
@@ -160,7 +161,7 @@ def _place_near_event(world: World, config: Config, seed: int, event: ChronicleE
 
 
 def _place_watchtowers(world: World, config: Config, seed: int, event: ChronicleEvent, plan: PoiPlan) -> None:
-    """Place a war's watchtowers on its front, on high ground, spread ``kind_spacing_km`` apart.
+    """Place a war's watchtowers a little behind its front, on high ground, spread ``kind_spacing_km`` apart.
 
     A tower belongs to the realm that owns its cell. It is built within the last ``lifespan`` years (and not before the
     war began), since a later simulation dismantles towers that outlive it.
@@ -169,7 +170,16 @@ def _place_watchtowers(world: World, config: Config, seed: int, event: Chronicle
     front = np.zeros((world.height, world.width), dtype=bool)
     cells = front_cells(world, *event.realm_ids)
     front[cells // world.width, cells % world.width] = True
-    mask = front & pois.eligible_mask(
+    back_km = geo.distance_to(
+        front, backend=config.get("compute.backend"), metric="euclidean", sampling=world.scale.sampling
+    )
+    low, high = (float(v) for v in row["front_setback_km"])
+    tops = np.array([world.top_realm(r.id) for r in world.realms], dtype=np.int32)
+    owner = np.where(world.realm_id >= 0, tops[np.clip(world.realm_id, 0, len(tops) - 1)], -1)
+    mask = (
+        np.isin(owner, event.realm_ids) & (back_km >= low) & (back_km <= high)
+    )  # behind the line, in the owner's land
+    mask &= pois.eligible_mask(
         world, row, pois.max_footprint(config, "watchtower"), float(config.get("poi.min_footprint_land"))
     )
     mask &= _clear_of_pois(world, config, row)

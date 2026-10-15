@@ -39,6 +39,8 @@
 #   holding_spacing_km  (optional) minimum distance between a holding and any other POI
 #   per_km_of_front   (optional) one POI per this many km of a war's front (rounded up) ...
 #   max_per_event     (optional) ... at most this many
+#   front_setback_km  (optional) [min, max] km a front POI stands back from the front, inside the territory of the power
+#                     it guards
 
 # Simulation seams (data only until a later simulation reads them):
 #   owner             "realm" (held by the realm that owns its cell) or "wild"
@@ -175,6 +177,7 @@ events = ["war"]
 tags = ["ongoing"]
 per_km_of_front = 300.0
 max_per_event = 3
+front_setback_km = [25.0, 100.0]
 biomes = ["desert", "savanna", "grass", "forest", "jungle", "swamp", "taiga", "tundra", "snow"]
 min_spacing_km = 60.0
 kind_spacing_km = 120.0

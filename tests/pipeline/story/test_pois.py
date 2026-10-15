@@ -187,12 +187,19 @@ def test_a_war_gets_at_most_the_rows_cap_of_towers(world: World, cfg: Config) ->
     assert all(count <= cap for count in per_war.values())
 
 
-def test_a_watchtower_stands_on_its_wars_front(world: World) -> None:
+def test_a_watchtower_stands_back_from_its_wars_front(world: World, cfg: Config) -> None:
+    # Within the row's setback band behind the line: never on a front cell, never further back than the band.
     from biomegen.pipeline.civilization.diplomacy import front_cells
 
+    low, high = cfg.get("tables.pois.watchtower.front_setback_km")
     for tower in _towers(world):
         cells = front_cells(world, *world.chronicle[tower.event_ids[0]].realm_ids)
-        assert tower.y * world.width + tower.x in set(cells.tolist())
+        nearest = min(
+            world.scale.distance_km(tower.x, tower.y, int(c) % world.width, int(c) // world.width)
+            for c in cells.tolist()
+        )
+        assert tower.y * world.width + tower.x not in set(cells.tolist()) and nearest <= high + 1e-6
+        assert nearest >= low - 1e-6
 
 
 def test_a_watchtower_belongs_to_a_realm_of_its_war(world: World) -> None:

@@ -118,6 +118,7 @@ _POI_ROW = {
     "holding_spacing_km": "positive",
     "per_km_of_front": "positive",
     "max_per_event": "count",
+    "front_setback_km": "span",
 }
 _POI_FATE_ROW = {"weight": "positive", "sim_only": "bool", "bandits": "bool"}
 _POI_SITE_ROW = {
@@ -210,6 +211,7 @@ _POI_OPTIONAL = frozenset(
         "holding_spacing_km",
         "per_km_of_front",
         "max_per_event",
+        "front_setback_km",
     }
 )
 
