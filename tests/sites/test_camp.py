@@ -99,3 +99,30 @@ def test_every_camp_purpose_row_builds_a_plan(config: Config) -> None:
     for purpose in ("founding", "bandit", "army"):
         world = flat_world(14, 10)
         assert site_plan(add_poi(world, "camp", 7, 5, purpose=purpose), 0, config, world) is not None
+
+
+def test_an_army_camp_pitches_more_tents_than_a_bandit_camp(config: Config) -> None:
+    # Same site seed, so only the purpose row differs.
+    world = flat_world(14, 10)
+    counts = {}
+    for purpose in ("army", "bandit"):
+        poi = add_poi(world, "camp", 7, 5, purpose=purpose, interior_seed=9)
+        plan = site_plan(poi, 0, config, world)
+        assert plan is not None
+        counts[purpose] = int((plan.cells == TENT).sum())
+        world.poi_index[5, 7] = -1
+        world.pois.pop()
+    assert counts["army"] > counts["bandit"]
+
+
+def test_a_founding_camp_keeps_fewer_tents_than_a_bandit_camp(config: Config) -> None:
+    world = flat_world(14, 10)
+    counts = {}
+    for purpose in ("founding", "bandit"):
+        poi = add_poi(world, "camp", 7, 5, purpose=purpose, interior_seed=9)
+        plan = site_plan(poi, 0, config, world)
+        assert plan is not None
+        counts[purpose] = int((plan.cells == TENT).sum())
+        world.poi_index[5, 7] = -1
+        world.pois.pop()
+    assert counts["founding"] < counts["bandit"]

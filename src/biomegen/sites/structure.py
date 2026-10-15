@@ -9,7 +9,10 @@ joined by corridors; the deepest of a tall dungeon is a cave. Loot grows with de
 standing in the same column all the way up. Floor 0 has the street door; the top floor is an open lookout.
 
 **Ruin.** A building (rooms, doors, a street door) that has fallen in: stretches of wall are breached, some rooms have
-lost their roof, floors are rubble and trees have grown in. Seen from outside only the standing rooms have a roof.
+lost their roof, floors are rubble and trees have grown in. Seen from outside only the standing rooms have a roof. The
+longer ago it fell (``SiteContext.age_years``) the more has collapsed, up to ``sites.ruin_erosion``.
+
+**Shrine.** One small walled room with a street door and an altar at its middle.
 
 Everything outside a structure is void, so the terrain shows round it; underground floors have no terrain, only rock.
 """
@@ -351,6 +354,15 @@ def _breach(grid: np.ndarray, rect: Rect, stream: random.Random, count: int) -> 
                 grid[ny, nx] = _RUBBLE if stream.random() < 0.6 else _VOID
 
 
+def _erosion(ctx: SiteContext) -> float:
+    """The share of a ruin's walls that have fallen: more the longer ago it fell, the full amount for an undated one."""
+    full = float(ctx.setting("ruin_erosion"))
+    if ctx.age_years is None:
+        return full
+    young = float(ctx.setting("ruin_erosion_young"))
+    return young + (full - young) * min(1.0, ctx.age_years / max(1.0, float(ctx.setting("ruin_erosion_years"))))
+
+
 @layout("ruin")
 def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     """A ruin: a building fallen in, with breaches, rubble, trees and the rooms that kept their roofs."""
@@ -371,7 +383,7 @@ def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
         return None
     grid = np.full((ctx.rows, ctx.cols), _VOID, dtype=np.uint8)
     _stamp(grid, building, rect)
-    erosion = float(ctx.setting("ruin_erosion"))
+    erosion = _erosion(ctx)
     _breach(grid, rect, stream, max(2, round(erosion * len(building.rooms) * 3)))
     floor = grid == _FLOOR
     roll = rng.derive_numpy(ctx.seed, "site.erode").random(grid.shape)
@@ -391,4 +403,30 @@ def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     outside[outside == _WALL] = _STONE
     for rx, ry, rw, rh in standing:
         outside[y + ry : y + ry + rh, x + rx : x + rx + rw] = _ROOF
+    return grid, outside
+
+
+# ---------------------------------------------------------------------------------------------------------- shrine
+@layout("shrine")
+def build_shrine(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+    """A shrine: one small walled room with its door to the road and an altar in it, seen from outside as a roof."""
+    stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
+    rows = max(7, round(ctx.rows * 0.6))
+    rect = _fit(ctx, min(rows, ctx.rows - 2), min(round(rows * ctx.aspect), ctx.cols - 2))
+    if rect is None:
+        return None
+    x, y, w, h = rect
+    spec = _spec(ctx, ("altar",), float(ctx.setting("clutter_density")), shapes=("rect",), subdivide=False)
+    building = build_building(h, w, stream, spec, _gate_target(ctx, rect))
+    if building is None:
+        return None
+    grid = np.full((ctx.rows, ctx.cols), _VOID, dtype=np.uint8)
+    _stamp(grid, building, rect)
+    centre = (x + w // 2, y + h // 2)
+    if grid[centre[1], centre[0]] == _FLOOR:
+        grid[centre[1], centre[0]] = int(Cell.HEARTH)  # the altar, whatever else the room was dressed with
+    keep_reachable(grid, sorted((x + dx, y + dy) for dx, dy in building.doors))
+    _approach(ctx, grid, building, rect)
+    outside = grid.copy()
+    outside[y : y + h, x : x + w][building.footprint] = _ROOF
     return grid, outside

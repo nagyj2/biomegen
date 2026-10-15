@@ -19,7 +19,9 @@ VALUES: Dict[str, Any] = {
     "clutter_density": 0.10,  # fraction of free floor cells that get furniture
     "shape": "mixed",  # outline of solid structures: "rectangle", "blob", "cellular", "drunkard", "diamond", "cross"
     # or "mixed" to pick one per structure
-    "ruin_erosion": 0.45,  # fraction of a ruin's walls that have collapsed
+    "ruin_erosion": 0.45,  # fraction of a ruin's walls that have collapsed once it is old (and of one with no date)
+    "ruin_erosion_young": 0.12,  # the fraction a ruin that has just fallen has lost
+    "ruin_erosion_years": 400,  # years until a fallen ruin has lost the full ``ruin_erosion``
     "coast_margin_rows": 1,  # bare ground kept between a solid structure and any water, in rows
     "street_water_cost": 6.0,  # cost of a street cell over water relative to dry ground (it becomes a bridge)
     "bridge_max_rows": 6,  # the widest water, in rows, a settlement street will bridge
@@ -65,6 +67,13 @@ VALUES: Dict[str, Any] = {
         "tent_area_cells": 90,  # one more tent per this many cleared cells
         "tent_cells": [[4, 2], [6, 2], [4, 3]],  # tent sizes [columns, rows]
     },
+    # A camp's purpose (POI.purpose) overrides keys of ``camp`` with ``camp_<purpose>``: builders keep few tents
+    # and a yard of timber and crates, an army camp is a field of tents, bandits keep the plain camp.
+    "camp_founding": {"clearing": 0.38, "min_tents": 1, "tent_area_cells": 200, "tent_cells": [[4, 2]]},
+    "camp_army": {"clearing": 0.46, "min_tents": 7, "tent_area_cells": 55},
+    # A battlefield: a trampled field (``clearing`` of the plan height) strewn with debris at ``debris_density`` of its
+    # cells, with ``wagons`` [min, max] wrecked carts.
+    "battlefield": {"clearing": 0.46, "debris_density": 0.12, "wagons": [1, 3]},
     "boat": {"cabin_share": 0.25},  # the deckhouse is this share of the deck's length
     "cache_size": 256,  # site plans kept in memory
 }

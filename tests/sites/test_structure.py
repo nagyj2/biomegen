@@ -146,3 +146,29 @@ def test_an_upper_tower_floor_shows_the_floor_below_as_a_roof(config: Config) ->
 def test_the_ground_floor_of_a_tower_has_no_roofs_inside(config: Config) -> None:
     _poi, plans = _floor_plans(config, "tower", floor_count=3)
     assert ROOF not in plans[0].cells
+
+
+# --- ruin erosion by age ----------------------------------------------------------------------------------
+
+
+def _ruin_walls(config: Config, fell: int | None, year: int = 1200) -> int:
+    """The wall cells a ruin that fell in year ``fell`` still has (the same site seed for every age)."""
+    world = flat_world(14, 10)
+    world.year = year
+    poi = add_poi(world, "ruin", 7, 5, fell=fell, interior_seed=3)
+    plan = site_plan(poi, 0, config, world)
+    assert plan is not None
+    return int((plan.cells == WALL).sum())
+
+
+def test_a_young_ruin_keeps_more_of_its_walls_than_an_old_one(config: Config) -> None:
+    assert _ruin_walls(config, fell=1190) > _ruin_walls(config, fell=400)
+
+
+def test_an_undated_ruin_is_as_eroded_as_a_very_old_one(config: Config) -> None:
+    assert _ruin_walls(config, fell=None) == _ruin_walls(config, fell=0)
+
+
+def test_erosion_stops_growing_after_the_rows_years(config: Config) -> None:
+    years = int(config.get("sites.ruin_erosion_years"))
+    assert _ruin_walls(config, fell=1200 - years) == _ruin_walls(config, fell=1200 - 2 * years)

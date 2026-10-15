@@ -47,6 +47,8 @@ class SiteContext:
         walled: Whether a settlement has a wall.
         config: The merged configuration, for the tunables of the ``sites`` section.
         tags: The POI's site traits (``port``, ``river``, ``lake``): a settlement builds a harbour or a mill for them.
+        age_years: Years since the POI fell (a ruin fell in with them); None when it is undated or still stands.
+        purpose: The POI's purpose (a camp's: founding, bandit or army), which a layout may dress differently.
     """
 
     kind: str
@@ -60,6 +62,8 @@ class SiteContext:
     walled: bool
     config: Config
     tags: tuple[str, ...] = ()
+    age_years: Optional[int] = None
+    purpose: str = ""
 
     def weights(self, role: str) -> list[tuple[Cell, float]]:
         """The furniture weights of a room role (empty: the role is left bare)."""

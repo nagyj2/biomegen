@@ -5,7 +5,7 @@
 #
 # Roles a layout uses: homes `hall` (the largest room), `kitchen`, `bedroom`, `storage`; dungeons `hall`, `cell`, `vault`,
 # `passage` (corridors: rubble only); towers `study`, `bedroom`, `storage`, `lookout`; ruins `hall`, `debris`; boats
-# `deck`, `cabin`; camps `supplies`. A role that is missing leaves its rooms bare.
+# `deck`, `cabin`; camps `supplies`; battlefields `debris`; shrines `altar`; watchtowers the tower roles. A role that is missing leaves its rooms bare.
 # Dungeons add depth-scaled chest weight to every role that has `chest` (sites.furnish.chest_depth_gain).
 
 [furniture.home.hall]
@@ -117,3 +117,34 @@ shelf = 1.0
 barrel = 5.0
 crate = 5.0
 chest = 1.0
+
+[furniture.battlefield.debris]
+rubble = 6.0
+rock = 3.0
+crate = 1.0
+barrel = 1.0
+bush = 2.0
+
+[furniture.shrine.altar]
+chest = 1.0
+table = 2.0
+shelf = 1.0
+
+[furniture.watchtower.study]
+table = 6.0
+chair = 5.0
+shelf = 3.0
+
+[furniture.watchtower.bedroom]
+bed = 10.0
+chest = 2.0
+
+[furniture.watchtower.storage]
+barrel = 7.0
+crate = 6.0
+chest = 2.0
+
+[furniture.watchtower.lookout]
+barrel = 4.0
+crate = 2.0
+rock = 2.0

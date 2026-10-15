@@ -5,7 +5,7 @@
 # (capital, city, town, village) match the rows of tiers.toml; the wild kinds match `poi.types`.
 #
 # Keys:
-#   layout           which layout builds the plan: settlement, dungeon, tower, ruin, camp or boat
+#   layout           which layout builds the plan: settlement, dungeon, tower, ruin, shrine, battlefield, camp or boat
 #   furniture        the furniture family (data/furniture.toml) its rooms are dressed from, by role
 #   extent_tiles     [width, height] of the site in world tiles, centred on the anchor; below 1 is a site smaller
 #                    than one tile, above 1 spans several tiles
@@ -116,24 +116,24 @@ extent_tiles = [0.7, 0.6]
 rows_per_tile = 24
 grows_with_pop = false
 
-# History kinds start on an existing layout; phase 8 gives them their own.
+# A battlefield is an open trampled field, a watchtower a small tower in its own furniture, a shrine one walled room.
 [sites.battlefield]
-furniture = "ruin"
-layout = "ruin"
+furniture = "battlefield"
+layout = "battlefield"
 extent_tiles = [1.5, 1.0]
 rows_per_tile = 16
 grows_with_pop = false
 
 [sites.watchtower]
-furniture = "tower"
+furniture = "watchtower"
 layout = "tower"
 extent_tiles = [0.5, 0.5]
 rows_per_tile = 24
 grows_with_pop = false
 
 [sites.shrine]
-furniture = "ruin"
-layout = "ruin"
+furniture = "shrine"
+layout = "shrine"
 extent_tiles = [0.6, 0.5]
 rows_per_tile = 24
 grows_with_pop = false

@@ -18,7 +18,7 @@ from ..config.model import Config
 from ..world.entities import POI
 from ..world.tile import Cell
 from ..world.world import World
-from . import boat, camp, settlement, structure  # noqa: F401  (imported for their @layout registrations)
+from . import battlefield, boat, camp, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
 from .geometry import SiteGeometry, site_geometry, site_row_name
 from .layout import LAYOUTS, SiteContext
@@ -83,6 +83,8 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         poi.floor_count,
         poi.lowest_floor,
         tuple(poi.tags),
+        poi.fell,
+        world.year,
         floor,
     )
     if key in cache:
@@ -107,6 +109,8 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         walled=bool(row.get("walled", False)),
         config=config,
         tags=tuple(poi.tags),
+        age_years=None if poi.fell is None else max(0, world.year - poi.fell),
+        purpose=poi.purpose,
     )
     built = LAYOUTS[row["layout"]](context)
     plan = None

@@ -28,7 +28,7 @@ def build_camp(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
         return None
     cx, cy = centre
     stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
-    settings = ctx.config.get("sites.camp")
+    settings = {**ctx.config.get("sites.camp"), **ctx.config.get(f"sites.camp_{ctx.purpose}", {})}
     radius_y = max(2.0, float(settings["clearing"]) * rows)
     radius_x = min(radius_y * aspect, float(settings["clearing"]) * cols)
     ys, xs = np.ogrid[0:rows, 0:cols]
