@@ -119,6 +119,9 @@ class Cell(IntEnum):
     WHEEL = 31  # the rim of a mill's water wheel, standing in the river
     AXLE_H = 32  # an east-west axle joining a mill's wall to its wheel
     AXLE_V = 33  # a north-south axle
+    GRAVE = 34  # a burial mound
+    BANNER = 35  # a battle standard, standing or fallen
+    BONES = 36  # the remains left on a field
 
 
 # Convenient lookup tables for config parsing and HUD display. Names are lower-case so they read

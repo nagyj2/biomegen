@@ -120,7 +120,7 @@ grows_with_pop = false
 [sites.battlefield]
 furniture = "battlefield"
 layout = "battlefield"
-extent_tiles = [1.5, 1.0]
+extent_tiles = [2.6, 1.8]
 rows_per_tile = 16
 grows_with_pop = false
 

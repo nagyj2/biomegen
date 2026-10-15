@@ -119,11 +119,12 @@ crate = 5.0
 chest = 1.0
 
 [furniture.battlefield.debris]
-rubble = 6.0
-rock = 3.0
+rubble = 5.0
+bones = 5.0
+rock = 2.0
 crate = 1.0
 barrel = 1.0
-bush = 2.0
+bush = 1.0
 
 [furniture.shrine.altar]
 chest = 1.0

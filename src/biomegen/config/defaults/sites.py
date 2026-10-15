@@ -71,9 +71,16 @@ VALUES: Dict[str, Any] = {
     # and a yard of timber and crates, an army camp is a field of tents, bandits keep the plain camp.
     "camp_founding": {"clearing": 0.38, "min_tents": 1, "tent_area_cells": 200, "tent_cells": [[4, 2]]},
     "camp_army": {"clearing": 0.46, "min_tents": 7, "tent_area_cells": 55},
-    # A battlefield: a trampled field (``clearing`` of the plan height) strewn with debris at ``debris_density`` of its
-    # cells, with ``wagons`` [min, max] wrecked carts.
-    "battlefield": {"clearing": 0.46, "debris_density": 0.12, "wagons": [1, 3]},
+    # A battlefield: a trampled field (``clearing`` of the plan height) with a standard at each end, debris thickest
+    # at the centre (``debris_density`` at the rim), ``wagons`` [min, max] wrecked carts, ``graves`` [min, max] mounds.
+    "battlefield": {
+        "clearing": 0.46,
+        "debris_density": 0.09,
+        "centre_boost": 2.5,  # debris is this many times denser at the centre of the field than at its rim
+        "wagons": [2, 4],
+        "graves": [8, 18],  # burial mounds laid out in rows in one corner of the field
+        "banners": 2,  # the armies' standards, one at each end of the field
+    },
     "boat": {"cabin_share": 0.25},  # the deckhouse is this share of the deck's length
     "cache_size": 256,  # site plans kept in memory
 }

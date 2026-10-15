@@ -37,7 +37,7 @@ _WALLISH = (int(Cell.WALL), int(Cell.DOOR))
 OUTSIDE_PRIORITY = np.zeros(256, dtype=np.uint8)
 OUTSIDE_PRIORITY[:_CELLS] = 1
 OUTSIDE_PRIORITY[VOID] = 0
-for _cell in (Cell.PATH, Cell.BRIDGE, Cell.BRIDGE_WALL, Cell.DOOR, Cell.WHEEL, Cell.AXLE_H, Cell.AXLE_V):
+for _cell in (Cell.PATH, Cell.BRIDGE, Cell.BRIDGE_WALL, Cell.DOOR, Cell.WHEEL, Cell.AXLE_H, Cell.AXLE_V, Cell.BANNER):
     OUTSIDE_PRIORITY[int(_cell)] = 2
 for _cell in (Cell.ROOF, Cell.STONE, Cell.WALL, Cell.HULL, Cell.TENT):
     OUTSIDE_PRIORITY[int(_cell)] = 3

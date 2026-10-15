@@ -31,6 +31,33 @@ def test_a_battlefield_is_strewn_with_debris(config: Config) -> None:
     assert int(np.isin(plan.cells, [int(Cell.RUBBLE), int(Cell.ROCK)]).sum()) > 0
 
 
+def test_a_battlefield_has_a_standard_at_each_end(config: Config) -> None:
+    _world, _poi, plan = _field(config)
+    xs = np.nonzero(plan.cells == int(Cell.BANNER))[1]
+    assert len(xs) == config.get("sites.battlefield.banners") and xs.min() < plan.cells.shape[1] // 2 < xs.max()
+
+
+def test_a_battlefield_has_a_burial_ground(config: Config) -> None:
+    _world, _poi, plan = _field(config)
+    low, high = config.get("sites.battlefield.graves")
+    assert 1 <= int((plan.cells == int(Cell.GRAVE)).sum()) <= high and low > 0
+
+
+def test_the_wreckage_is_thickest_at_the_middle(config: Config) -> None:
+    # Debris (anything but floor and the laid-out features) is denser in the middle third than in the outer thirds.
+    _world, _poi, plan = _field(config)
+    cols = plan.cells.shape[1]
+    inside = plan.cells[:, cols // 3 : 2 * cols // 3]
+    outer = np.concatenate([plan.cells[:, : cols // 3], plan.cells[:, 2 * cols // 3 :]], axis=1)
+    debris = [int(Cell.RUBBLE), int(Cell.BONES), int(Cell.ROCK), int(Cell.CRATE), int(Cell.BARREL)]
+    assert np.isin(inside, debris).sum() / inside.size > np.isin(outer, debris).sum() / outer.size
+
+
+def test_a_battlefield_is_larger_than_a_camp(config: Config) -> None:
+    rows = config.get("tables.sites")
+    assert rows["battlefield"]["extent_tiles"][0] > rows["camp"]["extent_tiles"][0] * 2
+
+
 def test_a_battlefield_has_wrecked_wagons_within_the_rows_range(config: Config) -> None:
     _world, _poi, plan = _field(config)
     low, high = config.get("sites.battlefield.wagons")
