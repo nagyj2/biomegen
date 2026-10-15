@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
@@ -36,7 +37,22 @@ def test_text_has_a_title_with_the_present() -> None:
 
 
 def test_text_lists_one_line_per_event() -> None:
-    assert chronicle_text(_tiny()).splitlines()[2:] == ["  100  A is founded.", "   90  Old Realm falls."]
+    assert chronicle_text(_tiny()).splitlines()[2:] == [
+        "  100  founding  A is founded.",
+        "   90  fall      Old Realm falls.",
+    ]
+
+
+def test_text_has_year_kind_and_text_columns(generated: World) -> None:
+    # Every event line is a right-aligned year, a padded event type, then the text.
+    lines = chronicle_text(generated).splitlines()[2:]
+    assert lines and all(re.fullmatch(r" *\d+  [a-z]+ {2,}\S.*", line) for line in lines)
+
+
+def test_json_events_list_the_spans_of_their_names() -> None:
+    world = _tiny()
+    world.chronicle[0].refs = [(0, 1, "realm", 0)]
+    assert chronicle_data(world)["events"][0]["refs"] == [{"start": 0, "end": 1, "type": "realm", "id": 0}]
 
 
 def test_text_of_a_world_without_events_is_just_the_title() -> None:

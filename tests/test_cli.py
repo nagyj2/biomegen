@@ -328,3 +328,30 @@ def test_unknown_chronicle_format_is_rejected(capsys):
     with pytest.raises(SystemExit):
         cli.main(["--seed", "3", "--chronicle", "--chronicle-format", "xml"])
     assert "invalid choice" in capsys.readouterr().err
+
+
+def test_chronicle_text_has_three_columns(capsys):
+    out, _ = _chronicle(capsys)
+    lines = out.splitlines()[2:]
+    assert lines and all(re.fullmatch(r" *\d+  [a-z]+ {2,}\S.*", line) for line in lines)
+
+
+def test_forced_colour_colours_the_chronicle(capsys):
+    out, _ = _chronicle(capsys, "--color", "truecolor")
+    assert "\x1b[0;38;2;" in out
+
+
+def test_no_colour_leaves_the_chronicle_plain(capsys):
+    out, _ = _chronicle(capsys, "--color", "none")
+    assert "\x1b" not in out
+
+
+def test_the_coloured_chronicle_has_the_plain_chronicles_text(capsys):
+    colored, _ = _chronicle(capsys, "--color", "truecolor")
+    plain, _ = _chronicle(capsys, "--color", "none")
+    assert re.sub(r"\x1b\[[0-9;]*m", "", colored).rstrip() == plain.rstrip()
+
+
+def test_json_chronicle_is_never_coloured(capsys):
+    out, _ = _chronicle(capsys, "--chronicle-format", "json", "--color", "truecolor")
+    assert "\x1b" not in out

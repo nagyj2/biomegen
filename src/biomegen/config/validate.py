@@ -133,6 +133,17 @@ def _validate_history(history: Dict[str, Any], errors: List[str]) -> None:
     ):
         errors.append(f"history.age_range needs a [min, max] within 0..1 for each of: {', '.join(REALM_KINDS)}")
     _clamp(history, "age_area_weight", 0.0, 1.0, errors, "history")
+    colors = history.get("colors")
+    if colors is not None:
+        needed = {"year", "poi", "fallen", "ruler", *EVENT_KINDS}
+        if not isinstance(colors, dict) or not needed <= set(colors):
+            errors.append(f"history.colors needs a colour for each of: {', '.join(sorted(needed))}")
+        else:
+            for name in sorted(colors):
+                try:
+                    colors[name] = list(_coerce_color(colors[name]))
+                except (TypeError, ValueError) as exc:
+                    errors.append(f"history.colors.{name}: {exc}")
 
 
 #: The one tint a view may name that is not a ``render.ramps`` entry: realm colours (see ``render/layers/tint.py``).

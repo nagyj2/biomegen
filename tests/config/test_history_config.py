@@ -94,3 +94,24 @@ def test_year_is_a_token_of_every_row() -> None:
     cfg = get_defaults()
     cfg["tables"]["chronicle"]["conquest"]["templates"] = ["In {year}, {liege} conquers {realm}."]
     validate(cfg)
+
+
+def test_history_colours_are_coerced_from_hex() -> None:
+    cfg = get_defaults()
+    cfg["history"]["colors"]["war"] = "#ff0000"
+    validate(cfg)
+    assert cfg["history"]["colors"]["war"] == [255, 0, 0]
+
+
+def test_a_missing_history_colour_is_rejected() -> None:
+    cfg = get_defaults()
+    del cfg["history"]["colors"]["peace"]
+    with pytest.raises(ConfigError, match=r"history\.colors needs a colour"):
+        validate(cfg)
+
+
+def test_a_bad_history_colour_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["history"]["colors"]["war"] = "red"
+    with pytest.raises(ConfigError, match=r"history\.colors\.war"):
+        validate(cfg)

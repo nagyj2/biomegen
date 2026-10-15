@@ -191,3 +191,67 @@ def test_a_conquest_of_a_fallen_realm_names_the_victor(cfg: Config) -> None:
 def test_a_peace_names_winner_and_loser(cfg: Config) -> None:
     event = ChronicleEvent(0, 100, "peace", [1, 0], template="{winner_short} beats {loser_short}.")
     assert _render(_small_world(), event, cfg) == "Wend beats Aldor."
+
+
+# --- the spans of names ---------------------------------------------------------------------------------
+
+
+def _names(event: ChronicleEvent) -> list[tuple[str, str]]:
+    return [(event.text[start:end], kind) for start, end, kind, _ in event.refs]
+
+
+def test_a_founding_marks_the_realm_ruler_and_seat(cfg: Config) -> None:
+    event = ChronicleEvent(0, 100, "founding", [0], [0], template="{realm} under {ruler} at {seat}.")
+    _render(_small_world(), event, cfg)
+    assert _names(event) == [("Kingdom of Aldor", "realm"), ("King Bran", "ruler"), ("Aldburg", "poi")]
+
+
+def test_a_seatless_realms_seat_is_marked_as_the_realm(cfg: Config) -> None:
+    event = ChronicleEvent(0, 100, "founding", [1], template="rises at {seat}")
+    _render(_small_world(), event, cfg)
+    assert _names(event) == [("Wend", "realm")]
+
+
+def test_a_conquest_marks_the_lieges_ruler_as_a_ruler(cfg: Config) -> None:
+    event = ChronicleEvent(0, 100, "conquest", [1, 0], template="{liege} under {ruler} takes {realm}.")
+    _render(_small_world(), event, cfg)
+    assert _names(event) == [("Kingdom of Aldor", "realm"), ("King Bran", "ruler"), ("Duchy of Wend", "realm")]
+
+
+def test_a_near_place_is_marked_as_a_place(cfg: Config) -> None:
+    event = ChronicleEvent(0, 300, "fall", fallen_ids=[0], near_poi=1, template="Ruins near {near}.")
+    _render(_small_world(), event, cfg)
+    assert _names(event) == [("Wendham", "poi")]
+
+
+def test_a_fallen_realm_is_marked_as_fallen(cfg: Config) -> None:
+    world = _small_world()
+    event = ChronicleEvent(0, 300, "fall", fallen_ids=[0], template="{fallen} falls.")
+    _render(world, event, cfg)
+    assert _names(event) == [(world.fallen_realms[0].name, "fallen")]
+
+
+def test_a_span_ids_the_thing_it_names(cfg: Config) -> None:
+    event = ChronicleEvent(0, 100, "settling", [0], [1], template="{short} settles {town}.")
+    _render(_small_world(), event, cfg)
+    assert [(kind, ref) for _, _, kind, ref in event.refs] == [("realm", 0), ("poi", 1)]
+
+
+def test_text_that_names_nothing_has_no_spans(cfg: Config) -> None:
+    event = ChronicleEvent(0, 100, "founding", [0], template="A year passes in {year}.")
+    _render(_small_world(), event, cfg)
+    assert event.refs == []
+
+
+def test_the_capitalised_first_letter_does_not_move_a_span(cfg: Config) -> None:
+    event = ChronicleEvent(0, 100, "founding", [0], template="the {short} rise.")
+    _render(_small_world(), event, cfg)
+    assert event.text[event.refs[0][0] : event.refs[0][1]] == "Aldor"
+
+
+def test_every_span_in_a_generated_world_covers_a_name(world: World) -> None:
+    names = {r.name for r in world.realms} | {r.short for r in world.realms} | {r.ruler for r in world.realms}
+    names |= {p.name for p in world.pois} | {f.name for f in world.fallen_realms}
+    spans = [(e.text[a:b], kind) for e in world.chronicle for a, b, kind, _ in e.refs]
+    lowered = {name.lower() for name in names}  # a ruler's title may be capitalised to open the sentence
+    assert spans and all(text.lower() in lowered for text, _ in spans)

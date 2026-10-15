@@ -315,9 +315,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.chronicle:
-        from biomegen.world.chronicle import chronicle_json, chronicle_text
-
-        print(chronicle_json(world) if args.chronicle_format == "json" else chronicle_text(world))
+        _print_chronicle(world, config, args)
         return 0
 
     if args.at is not None and not (0 <= args.at[0] < world.width and 0 <= args.at[1] < world.height):
@@ -338,6 +336,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     mode = _detect_color() if args.color == "auto" else args.color
     app.run(world, config, mode, args.ascii)
     return 0
+
+
+def _print_chronicle(world: Any, config: Config, args: argparse.Namespace) -> None:
+    """Print the chronicle as JSON, or as three-column text (coloured when the terminal or ``--color`` says so)."""
+    from biomegen.render.backends.ansi import to_ansi
+    from biomegen.render.chronicle import chronicle_document
+    from biomegen.world.chronicle import chronicle_json, chronicle_text
+
+    if args.chronicle_format == "json":
+        print(chronicle_json(world))
+        return
+    mode = _detect_color() if args.color == "auto" else args.color
+    print(chronicle_text(world) if mode == "none" else to_ansi(chronicle_document(world, config), mode))
 
 
 def _print_stats(stats: dict[str, Any]) -> None:

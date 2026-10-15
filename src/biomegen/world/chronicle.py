@@ -10,13 +10,22 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .entities import EVENT_KINDS
 from .world import World
+
+#: Width of the event-type column of the text output.
+KIND_WIDTH = max(len(kind) for kind in EVENT_KINDS)
+
+
+def chronicle_title(world: World) -> str:
+    """Return the title line of the text output."""
+    return f"The Chronicle of {world.island_name or 'the island'} (year {world.year})"
 
 
 def chronicle_text(world: World) -> str:
-    """Return the chronicle as text: a title line, then ``year  event`` for every event, oldest first."""
-    lines = [f"The Chronicle of {world.island_name or 'the island'} (year {world.year})", ""]
-    lines += [f"{event.year:>5}  {event.text}" for event in world.chronicle]
+    """Return the chronicle as text in three columns, ``year  kind  text`` per event, oldest first, under a title."""
+    lines = [chronicle_title(world), ""]
+    lines += [f"{event.year:>5}  {event.kind:<{KIND_WIDTH}}  {event.text}" for event in world.chronicle]
     return "\n".join(lines)
 
 
@@ -38,6 +47,7 @@ def chronicle_data(world: World) -> dict[str, Any]:
                 "poi_ids": e.poi_ids,
                 "fallen_ids": e.fallen_ids,
                 "near_poi": None if e.near_poi < 0 else e.near_poi,
+                "refs": [{"start": a, "end": b, "type": kind, "id": ref} for a, b, kind, ref in e.refs],
             }
             for e in world.chronicle
         ],

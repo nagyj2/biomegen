@@ -26,6 +26,8 @@ EVENT_KINDS: Tuple[str, ...] = (
     "fall",
 )
 NO_LOCATION: Tuple[int, int] = (-1, -1)  # a chronicle event not tied to a cell
+REF_KINDS: Tuple[str, ...] = ("realm", "poi", "fallen", "ruler")  # what a name in an event's text can refer to
+REF_REALM, REF_POI, REF_FALLEN, REF_RULER = REF_KINDS
 
 
 @dataclass
@@ -179,3 +181,6 @@ class ChronicleEvent:
     text: str = ""
     tags: Tuple[str, ...] = ()
     near_poi: int = -1  # the settlement {near} names (same landmass, within history.near_km), -1 when none
+    refs: List[Tuple[int, int, str, int]] = field(
+        default_factory=list
+    )  # (start, end, REF_KINDS entry, id) per name in text
