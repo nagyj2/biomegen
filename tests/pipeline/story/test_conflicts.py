@@ -251,3 +251,51 @@ def test_a_surviving_fallen_realm_falls_at_its_natural_year() -> None:
     timeline.play()
     falls = [e for e in timeline.ledger.finish() if e.kind == "fall"]
     assert [(e.year, e.tags) for e in falls] == [(500, ())]
+
+
+# --- decisive battles --------------------------------------------------------------------------------
+
+
+def _front_battles(world: World, pair: frozenset[int]) -> list[ChronicleEvent]:
+    return [e for e in _events(world, "battle", "front") if frozenset(e.realm_ids) == pair]
+
+
+def test_the_last_battle_of_an_older_war_is_decisive(busy: World) -> None:
+    # Each decisive front battle is followed by its pair's peace with no other battle of that pair in between.
+    peaces = _events(busy, "peace")
+    decisive = _events(busy, "battle", "front", "decisive")
+    assert decisive
+    for battle in decisive:
+        pair = frozenset(battle.realm_ids)
+        later = [p for p in peaces if frozenset(p.realm_ids) == pair and p.year >= battle.year]
+        assert later
+        peace = min(later, key=lambda p: p.year)
+        assert not [b for b in _front_battles(busy, pair) if battle.year < b.year <= peace.year]
+
+
+def test_only_the_last_battle_before_a_peace_is_decisive(busy: World) -> None:
+    # A pair's decisive battles never outnumber its peaces: an older war has one decisive battle at most.
+    for pair in {frozenset(e.realm_ids) for e in _events(busy, "battle", "front", "decisive")}:
+        decisive = [e for e in _front_battles(busy, pair) if "decisive" in e.tags]
+        assert len(decisive) <= len([p for p in _events(busy, "peace") if frozenset(p.realm_ids) == pair])
+
+
+def test_a_battle_of_a_war_still_going_is_never_decisive(busy: World) -> None:
+    # Only a war that ended in peace has a decisive battle; the battles of the ongoing wars come after it.
+    peace_years = {frozenset(p.realm_ids): p.year for p in _events(busy, "peace")}
+    for battle in _events(busy, "battle", "front", "decisive"):
+        assert battle.year <= peace_years[frozenset(battle.realm_ids)]
+
+
+def test_the_battle_that_conquers_a_fallen_realm_is_decisive(busy: World) -> None:
+    conquered = _events(busy, "fall", "conquered")
+    assert conquered
+    for fall in conquered:
+        battles = [b for b in _events(busy, "battle", "ruins", "decisive") if b.fallen_ids == fall.fallen_ids]
+        assert len(battles) == 1 and battles[0].year <= fall.year
+
+
+def test_a_battle_at_ruins_that_does_not_end_the_realm_is_not_decisive(busy: World) -> None:
+    conquered_ids = {e.fallen_ids[0] for e in _events(busy, "fall", "conquered")}
+    for battle in _events(busy, "battle", "ruins", "decisive"):
+        assert battle.fallen_ids[0] in conquered_ids

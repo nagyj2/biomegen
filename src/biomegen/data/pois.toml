@@ -26,6 +26,8 @@
 #   kind_spacing_km   (optional) minimum distance to another POI of the same kind
 #   holdings          (optional) [min, max] extra POIs of the kind made with the first (a fallen realm's outlying ruins)
 #   fated             (optional) true when each POI draws a fate from `poi_fates`
+#   offset_km         (optional) how far from the event's cell the POI may be placed (the nearest free cell that keeps
+#                     the spacing wins)
 #   holding_km        (optional) [min, max] km from the first POI, the band an extra (holding) POI is placed in
 #   holding_spacing_km  (optional) minimum distance between a holding and any other POI
 #   per_km_of_front   (optional) one POI per this many km of a war's front (rounded up) ...
@@ -126,6 +128,8 @@ events = ["battle"]
 tags = ["decisive"]
 chance = 0.25
 min_age_years = 30
+offset_km = 120.0
+biomes = ["desert", "savanna", "grass", "forest", "jungle", "swamp", "taiga", "tundra", "snow"]
 min_spacing_km = 40.0
 kind_spacing_km = 250.0
 floors = 1

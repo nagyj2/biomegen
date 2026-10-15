@@ -100,3 +100,67 @@ def test_the_pois_stage_is_deterministic(cfg: Config) -> None:
     assert [(p.kind, p.x, p.y, p.bandit_strength, p.event_ids) for p in first.pois] == [
         (p.kind, p.x, p.y, p.bandit_strength, p.event_ids) for p in second.pois
     ]
+
+
+# --- battlefields ------------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module", params=SEEDS)
+def fields(request: pytest.FixtureRequest) -> World:
+    """A world with many old, decisive battles that always leave a field, so the rule's results are there to check."""
+    config = load_config(None)
+    config.data["history"].update(past_war_chance=0.8, fallen_wars=[2, 4], fall_strength=0.9)
+    config.data["tables"]["pois"]["battlefield"]["chance"] = 1.0
+    config.data["tables"]["pois"]["battlefield"]["kind_spacing_km"] = 120.0
+    return pipeline.generate(config, request.param)
+
+
+def _battlefields(world: World) -> list[POI]:
+    return [p for p in world.pois if p.kind == "battlefield"]
+
+
+def test_a_battlefield_stands_for_a_decisive_battle(fields: World) -> None:
+    assert _battlefields(fields) and all(
+        "decisive" in fields.chronicle[p.event_ids[0]].tags and fields.chronicle[p.event_ids[0]].kind == "battle"
+        for p in _battlefields(fields)
+    )
+
+
+def test_a_battlefield_is_at_least_thirty_years_old(fields: World, cfg: Config) -> None:
+    age = cfg.get("tables.pois.battlefield.min_age_years")
+    assert all(fields.year - fields.chronicle[p.event_ids[0]].year >= age for p in _battlefields(fields))
+
+
+def test_a_battlefield_is_dated_by_its_battle(fields: World) -> None:
+    assert all(p.founded == fields.chronicle[p.event_ids[0]].year for p in _battlefields(fields))
+
+
+def test_a_battlefield_lies_within_the_offset_of_its_battle(fields: World, cfg: Config) -> None:
+    reach = cfg.get("tables.pois.battlefield.offset_km")
+    for p in _battlefields(fields):
+        assert fields.scale.distance_km(p.x, p.y, *fields.chronicle[p.event_ids[0]].location) <= reach + 1e-6
+
+
+def test_battlefields_keep_their_distance_from_each_other(fields: World) -> None:
+    # Placed with kind_spacing_km 120 in this fixture's config.
+    fields_ = _battlefields(fields)
+    for i, p in enumerate(fields_):
+        assert all(fields.scale.distance_km(p.x, p.y, q.x, q.y) >= 120.0 - 1e-6 for q in fields_[:i])
+
+
+def test_a_battlefield_keeps_its_spacing_from_the_pois_before_it(fields: World, cfg: Config) -> None:
+    spacing = cfg.get("tables.pois.battlefield.min_spacing_km")
+    for index, p in enumerate(fields.pois):
+        if p.kind == "battlefield":
+            assert all(fields.scale.distance_km(p.x, p.y, q.x, q.y) >= spacing - 1e-6 for q in fields.pois[:index])
+
+
+def test_a_battlefield_stands_on_dry_land(fields: World) -> None:
+    from biomegen.world.tile import WaterType
+
+    assert all(fields.water_type[p.y, p.x] == int(WaterType.NONE) for p in _battlefields(fields))
+
+
+def test_the_default_chance_leaves_fewer_fields_than_decisive_battles(world: World) -> None:
+    decisive = [e for e in world.chronicle if e.kind == "battle" and "decisive" in e.tags]
+    assert len(_battlefields(world)) <= len(decisive)

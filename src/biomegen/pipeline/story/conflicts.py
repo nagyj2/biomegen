@@ -12,7 +12,9 @@ timeline is planned first, then played in year order so every result sees the st
 2. **Fallen realms.** Each fights a few wars (``fallen_wars``) against the nearest living realms that exist at the
    time, one decisive battle each at its ruins. A realm whose strength falls below ``fall_strength`` after a lost
    battle is conquered a few years later (``fall_delay_years``); the others fall at their natural year.
-3. **Battles** along a war's front are won with a chance proportional to strength.
+3. **Battles** along a war's front are won with a chance proportional to strength. A battle that changes a border is
+   tagged ``decisive``: the last battle of an older war before its peace, and the battle in which a fallen realm is
+   conquered (a battlefield may mark it).
 
 Every draw is a ``history`` sub-stream keyed on the relation, battle or fallen realm, so the result does not depend on
 dict or set order, and nothing here writes a per-tile array.
@@ -45,7 +47,7 @@ class _Step:
     b: Faction
     key: tuple  # labels of this step's rng stream
     location: tuple[int, int] = (-1, -1)
-    tags: tuple[str, ...] = ()  # a "war" step's tags
+    tags: tuple[str, ...] = ()  # a "war" step's tags, or the tags a realm-pair "battle" adds (``decisive``)
 
 
 class _Timeline:
@@ -159,11 +161,13 @@ class _Timeline:
                 realm_ids=[winner[1], loser[1]],
                 location=step.location,
                 near_poi=near,
-                tags=("front",),
+                tags=("front", *step.tags),
             )
             return
         realm = step.a if step.a[0] == REALM else step.b
         fallen = step.a if step.a[0] == FALLEN else step.b
+        floor = float(self.config.get("history.fall_strength"))
+        conquering = loser == fallen and self.strength[fallen] < floor  # the battle that ends the fallen realm
         self.ledger.add(
             step.year,
             "battle",
@@ -174,10 +178,13 @@ class _Timeline:
             fallen_ids=[fallen[1]],
             location=step.location,
             near_poi=near,
-            tags=("ruins", "won_by_fallen" if winner == fallen else "won_by_realm"),
+            tags=(
+                "ruins",
+                "won_by_fallen" if winner == fallen else "won_by_realm",
+                *(("decisive",) if conquering else ()),
+            ),
         )
-        floor = float(self.config.get("history.fall_strength"))
-        if loser == fallen and self.strength[fallen] < floor:
+        if conquering:
             self._conquer(step, realm, fallen)
 
     def _conquer(self, step: _Step, realm: Faction, fallen: Faction) -> None:
@@ -233,11 +240,17 @@ def _plan_relations(timeline: _Timeline) -> None:
                 timeline.ledger.add(
                     start, "war", "war_ended", ("past", index), seed, realm_ids=[attacker, defender], tags=("ended",)
                 )
+                fought = []
                 for number in range(battles):
                     step_stream = rng.derive(seed, "history", "place", "past", index, number)
                     y, x = divmod(cells[step_stream.randrange(len(cells))], world.width)
-                    year = _draw_year(step_stream.random(), start, end)
-                    timeline.plan(year, "battle", (REALM, attacker), (REALM, defender), ("past", index, number), (x, y))
+                    fought.append((_draw_year(step_stream.random(), start, end), number, (x, y)))
+                last = max(fought)[1] if fought else -1  # the last battle before the peace is the decisive one
+                for year, number, place in fought:
+                    tags = ("decisive",) if number == last else ()
+                    timeline.plan(
+                        year, "battle", (REALM, attacker), (REALM, defender), ("past", index, number), place, tags
+                    )
                 timeline.plan(end, "peace", (REALM, attacker), (REALM, defender), ("past", index))
                 main_first = min(end + gap, span)
         year = _draw_year(roll_main, main_first, span)
