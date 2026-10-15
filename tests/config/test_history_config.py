@@ -115,3 +115,15 @@ def test_a_bad_history_colour_is_rejected() -> None:
     cfg["history"]["colors"]["war"] = "red"
     with pytest.raises(ConfigError, match=r"history\.colors\.war"):
         validate(cfg)
+
+
+def test_every_ruling_style_has_a_label_and_a_weight() -> None:
+    rows = get_defaults()["tables"]["ruling_styles"]
+    assert rows and all(row["label"] and row["weight"] > 0 and row["strength_mul"] > 0 for row in rows.values())
+
+
+def test_a_ruling_style_with_a_bad_weight_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["ruling_styles"]["martial"]["weight"] = 0
+    with pytest.raises(ConfigError, match=r"tables\.ruling_styles\.martial\.weight"):
+        validate(cfg)

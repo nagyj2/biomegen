@@ -33,7 +33,7 @@ from ...world.tile import WaterType
 from ...world.world import World
 from ..civilization.settlements import habitability
 from ..pois import pick_blue_noise
-from . import conflicts
+from . import conflicts, rulers
 from .ledger import Ledger
 from .places import nearest_settlement
 
@@ -165,5 +165,6 @@ def run(world: World, config: Config, seed: int) -> None:
     ledger = Ledger(config)
     _place_fallen_realms(world, config, seed, span, ledger.enabled("fall"))
     _realm_events(world, config, seed, span, ledger)
-    conflicts.derive(world, config, seed, span, ledger)
+    styles = rulers.derive(world, config, seed, span, ledger)
+    conflicts.derive(world, config, seed, span, ledger, styles)
     world.chronicle = ledger.finish()

@@ -4,8 +4,9 @@ Each data file contributes its top-level tables (``biomes`` and ``relief`` from 
 ``detail_relief`` from ``detail.toml``, ``tiers`` from ``tiers.toml``, ``styles`` from ``terrain.toml``, ``geo_names``
 from ``geography.toml``, ``sites`` from ``sites.toml``, ``furniture`` from ``furniture.toml``, ``realm_kinds``,
 ``realm_forms``, ``relation_weights`` and ``realm_colors`` from ``polity.toml``, ``reasons`` and ``reason_tokens`` from
-``reasons.toml``, ``chronicle`` from ``chronicle.toml``) as sub-sections, so a user config overrides one attribute of
-one row with the ordinary deep-merge, e.g. ``[tables.biomes.desert]`` + ``goods = "glass"``. The schema is checked by
+``reasons.toml``, ``ruling_styles`` from ``rulers.toml``, ``chronicle`` from ``chronicle.toml``) as sub-sections, so a
+user config overrides one attribute of one row with the ordinary deep-merge, e.g. ``[tables.biomes.desert]`` +
+``goods = "glass"``. The schema is checked by
 :func:`biomegen.config.tables.validate_tables`.
 """
 
@@ -28,6 +29,7 @@ DATA_FILES: tuple[str, ...] = (
     "furniture.toml",
     "polity.toml",
     "reasons.toml",
+    "rulers.toml",
     "chronicle.toml",
 )
 

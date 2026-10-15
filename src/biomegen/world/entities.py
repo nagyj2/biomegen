@@ -18,6 +18,7 @@ EVENT_KINDS: Tuple[str, ...] = (
     "founding",
     "settling",
     "conquest",
+    "succession",
     "war",
     "rivalry",
     "treaty",
@@ -77,6 +78,7 @@ class Realm:
     vassals: List[int] = field(default_factory=list)
     color: Tuple[int, int, int] = (0, 0, 0)
     founded: int = 0  # chronicle year the realm was founded (set by the history stage)
+    ruling_style: str = ""  # the ruler's style now, a tables.ruling_styles row (set by the history stage)
 
 
 @dataclass

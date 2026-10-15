@@ -11,7 +11,7 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   `tables.detail`, `tables.detail_relief` from `detail.toml`; `tables.tiers`; `tables.styles` from `terrain.toml`;
   `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
   `tables.relation_weights` and `tables.realm_colors` from `polity.toml`; `tables.reasons` and `tables.reason_tokens` from
-  `reasons.toml`; `tables.chronicle` from `chronicle.toml`).
+  `reasons.toml`; `tables.ruling_styles` from `rulers.toml`; `tables.chronicle` from `chronicle.toml`).
 - A user config overrides with the ordinary deep-merge: `[tables.biomes.desert]` + `goods = "glass"`
   changes one attribute and keeps the rest of the row.
 - `config/tables.py` validates every row against its table's schema (`SCHEMAS`): unknown keys, missing
@@ -53,8 +53,12 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 
 ## Chronicle
 
+- `rulers.toml`: `ruling_styles` has one row per ruling style: `label` (the word the text uses), `weight` (the chance it is
+  drawn) and `strength_mul` (a battle multiplier while it holds). A new style is a row; the succession rate is in the
+  `history` section.
+
 - `chronicle.toml`: `chronicle` has one row per kind of event text (`founding`, `founding_fallen`, `settling`, `conquest`,
-  `war`, `war_ended`, `war_fallen`, `rivalry`, `treaty_alliance`, `treaty_trade`, `battle`, `peace`, `fall`,
+  `succession`, `war`, `war_ended`, `war_fallen`, `rivalry`, `treaty_alliance`, `treaty_trade`, `battle`, `peace`, `fall`,
   `fall_conquered`). `templates` are sentences that name no nearby place;
   `templates_near` (optional) are sentences that name one with `{near}` and must contain it. The tokens a row may use are
   listed in the file's header and checked (`{year}` is allowed everywhere); `{near}` is allowed in `templates_near` only.

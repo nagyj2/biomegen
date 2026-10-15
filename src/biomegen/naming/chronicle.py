@@ -57,7 +57,13 @@ def _tokens(
     if fallen is not None:
         tokens.update(fallen=fallen.name, founded=fallen.founded)
         where["fallen"] = (REF_FALLEN, fallen.id)
-    if event.kind in ("founding", "settling", "conquest") and realms:
+    if event.kind == "succession" and realms:
+        realm = realms[0]
+        styles = dict(tag.split(":") for tag in event.tags)
+        label = {key: str(config.get(f"tables.ruling_styles.{name}.label")) for key, name in styles.items()}
+        tokens.update(realm=realm.name, short=realm.short, style=label["to"], old_style=label["from"])
+        where.update(realm=(REF_REALM, realm.id), short=(REF_REALM, realm.id))
+    elif event.kind in ("founding", "settling", "conquest") and realms:
         realm = realms[0]
         seat = world.pois[realm.seat_poi].name if realm.seat_poi >= 0 else realm.short
         tokens.update(realm=realm.name, short=realm.short, ruler=realm.ruler, seat=seat)

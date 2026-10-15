@@ -118,6 +118,7 @@ _REALM_COLOR_ROW = {
 }
 _REASON_ROW = {"templates": "text_list"}
 _REASON_TOKEN_ROW = {"fallback": "text"}
+_RULING_STYLE_ROW = {"label": "text", "weight": "positive", "strength_mul": "positive"}
 _CHRONICLE_ROW = {"templates": "text_list", "templates_near": "text_list"}
 
 DETAIL_FACTORS = ("none", "moisture", "elevation")
@@ -147,6 +148,7 @@ _CHRONICLE_TOKENS = {
     "treaty_trade": frozenset({"a", "a_short", "b", "b_short", "reason"}),
     "battle": frozenset({"winner", "winner_short", "loser", "loser_short", "reason"}),
     "fall": frozenset({"fallen", "founded"}),
+    "succession": frozenset({"realm", "short", "style", "old_style"}),
     "founding_fallen": frozenset({"fallen"}),
     "war_ended": frozenset({"attacker", "attacker_short", "defender", "defender_short"}),
     "war_fallen": frozenset({"attacker", "attacker_short", "defender", "defender_short", "fallen"}),
@@ -170,6 +172,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "realm_colors": (_REALM_COLOR_ROW, frozenset()),
     "reasons": (_REASON_ROW, frozenset()),
     "reason_tokens": (_REASON_TOKEN_ROW, frozenset()),
+    "ruling_styles": (_RULING_STYLE_ROW, frozenset()),
     "chronicle": (_CHRONICLE_ROW, frozenset({"templates_near"})),
 }
 

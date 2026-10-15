@@ -57,6 +57,7 @@ def chronicle_data(world: World) -> dict[str, Any]:
                 "name": r.name,
                 "kind": r.kind,
                 "founded": r.founded,
+                "ruling_style": r.ruling_style,
                 "liege": None if r.liege < 0 else r.liege,
                 "seat_poi": None if r.seat_poi < 0 else r.seat_poi,
             }

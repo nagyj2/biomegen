@@ -14,12 +14,16 @@ VALUES: Dict[str, Any] = {
     "start": "present",
     "span_years": 1200,  # the present year of a "present" world
     # The event kinds to derive (any of world.entities.EVENT_KINDS); leave one out to switch it off.
-    "kinds": ["founding", "settling", "conquest", "war", "rivalry", "treaty", "battle", "peace", "fall"],
+    "kinds": ["founding", "settling", "conquest", "succession", "war", "rivalry", "treaty", "battle", "peace", "fall"],
     # Founding: a realm's age is a share of span_years drawn from its kind's range, pulled toward the oldest end by
     # larger area by ``age_area_weight`` (0 = pure draw, 1 = rank only).
     "age_range": {"major": [0.6, 1.0], "city_state": [0.3, 0.8], "tribal": [0.7, 1.0]},
     "age_area_weight": 0.5,
     "settle_kinds": ["city", "town"],  # settlement kinds that get a settling event (others are only dated)
+    # Ruling styles (data/rulers.toml): a realm's style may change at a succession, one of which falls every
+    # ``succession_years`` years; only a change is an event. Rulers' real lifetimes are abstracted away.
+    "succession_years": [300, 700],
+    "succession_change_chance": 0.5,
     "min_gap_years": 20,  # least time between a realm existing and its next event (conquest, war, treaty)
     "first_founding_year": 10,  # the oldest realm is founded this year; every founding is shifted to match
     # Relations. A pair sharing a border may have had an older war first (``past_war_chance``, lasting
@@ -57,6 +61,7 @@ VALUES: Dict[str, Any] = {
         "founding": [120, 210, 130],
         "settling": [150, 200, 160],
         "conquest": [230, 150, 90],
+        "succession": [200, 180, 120],
         "war": [235, 90, 90],
         "rivalry": [220, 120, 160],
         "treaty": [110, 180, 235],

@@ -38,8 +38,8 @@ def test_text_has_a_title_with_the_present() -> None:
 
 def test_text_lists_one_line_per_event() -> None:
     assert chronicle_text(_tiny()).splitlines()[2:] == [
-        "  100  founding  A is founded.",
-        "   90  fall      Old Realm falls.",
+        "  100  founding    A is founded.",
+        "   90  fall        Old Realm falls.",
     ]
 
 

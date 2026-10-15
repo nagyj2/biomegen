@@ -1,0 +1,39 @@
+# Ruling styles, loaded into the config tree as `tables.ruling_styles`. A realm has one style at a time; it is drawn when
+# the realm is founded and may change at a succession (`history.succession_years`, `succession_change_chance`). The style
+# only colours the chronicle's text and tilts battles; override one attribute with e.g. `[tables.ruling_styles.martial]`
+# + `strength_mul = 1.4` in a user config.
+#
+# ruling_styles, one row per style:
+#   label         the word the chronicle uses for a ruler of this style ("a warlike ruler")
+#   weight        relative chance of the style when one is drawn
+#   strength_mul  multiplies the realm's strength in battle while the style holds (1 = no effect)
+
+[ruling_styles.martial]
+label = "warlike"
+weight = 1.0
+strength_mul = 1.25
+
+[ruling_styles.pious]
+label = "devout"
+weight = 1.0
+strength_mul = 0.95
+
+[ruling_styles.mercantile]
+label = "mercantile"
+weight = 1.0
+strength_mul = 1.0
+
+[ruling_styles.scholarly]
+label = "learned"
+weight = 0.8
+strength_mul = 0.9
+
+[ruling_styles.tyrannical]
+label = "tyrannical"
+weight = 0.8
+strength_mul = 1.1
+
+[ruling_styles.gentle]
+label = "gentle"
+weight = 1.0
+strength_mul = 0.85

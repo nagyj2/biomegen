@@ -45,6 +45,7 @@ def test_shipped_tables_load_and_validate() -> None:
         "reasons",
         "relation_weights",
         "relief",
+        "ruling_styles",
         "sites",
         "styles",
         "tiers",
@@ -159,7 +160,8 @@ def test_duplicate_tier_rank_is_rejected() -> None:
 def test_loader_combines_the_shipped_files() -> None:
     # biomes.toml supplies biomes and relief; detail.toml detail and detail_relief; tiers.toml tiers;
     # terrain.toml styles; geography.toml geo_names; sites.toml sites; furniture.toml furniture; polity.toml the
-    # four realm and relation tables; reasons.toml reasons and reason_tokens; chronicle.toml chronicle.
+    # four realm and relation tables; reasons.toml reasons and reason_tokens; rulers.toml ruling_styles;
+    # chronicle.toml chronicle.
     assert sorted(_load(DATA_DIR, DATA_FILES)) == [
         "biomes",
         "chronicle",
@@ -174,6 +176,7 @@ def test_loader_combines_the_shipped_files() -> None:
         "reasons",
         "relation_weights",
         "relief",
+        "ruling_styles",
         "sites",
         "styles",
         "tiers",

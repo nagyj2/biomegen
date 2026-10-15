@@ -28,6 +28,7 @@ from ...world.world import World
 from ..civilization.diplomacy import front_cells
 from .ledger import Ledger
 from .places import nearest_settlement
+from .rulers import StyleTimeline, style_at
 
 Faction = tuple[str, int]  # ("realm", realm id) or ("fallen", fallen realm id)
 REALM, FALLEN = "realm", "fallen"
@@ -50,8 +51,17 @@ class _Step:
 class _Timeline:
     """The steps planned so far and the strengths and deaths while they are played."""
 
-    def __init__(self, world: World, config: Config, seed: int, span: int, ledger: Ledger) -> None:
+    def __init__(
+        self,
+        world: World,
+        config: Config,
+        seed: int,
+        span: int,
+        ledger: Ledger,
+        styles: dict[int, StyleTimeline] | None = None,
+    ) -> None:
         self.world, self.config, self.seed, self.span, self.ledger = world, config, seed, span, ledger
+        self.styles = styles or {}
         self.steps: list[_Step] = []
         self.dead: set[Faction] = set()
         realms = world.realms
@@ -78,9 +88,16 @@ class _Timeline:
 
     def _result(self, step: _Step) -> tuple[Faction, Faction]:
         """Return ``(winner, loser)`` of ``step``: ``a`` wins with a chance proportional to its strength."""
-        sa, sb = self.strength[step.a], self.strength[step.b]
+        sa, sb = self._odds(step.a, step.year), self._odds(step.b, step.year)
         stream = rng.derive(self.seed, "history", step.kind, *step.key)
         return (step.a, step.b) if stream.random() < sa / (sa + sb) else (step.b, step.a)
+
+    def _odds(self, faction: Faction, year: int) -> float:
+        """A faction's strength in ``year`` times its ruler's style multiplier then (a fallen realm has no style)."""
+        if faction[0] != REALM or faction[1] not in self.styles:
+            return self.strength[faction]
+        style = style_at(self.styles[faction[1]], year)
+        return self.strength[faction] * float(self.config.get(f"tables.ruling_styles.{style}.strength_mul"))
 
     def _settle(self, winner: Faction, loser: Faction) -> None:
         gain, loss = float(self.config.get("history.victory_gain")), float(self.config.get("history.defeat_loss"))
@@ -281,9 +298,11 @@ def _plan_fallen_wars(timeline: _Timeline) -> None:
             timeline.plan(year, "battle", (REALM, realm.id), (FALLEN, fallen.id), key, fallen.location)
 
 
-def derive(world: World, config: Config, seed: int, span: int, ledger: Ledger) -> None:
+def derive(
+    world: World, config: Config, seed: int, span: int, ledger: Ledger, styles: dict[int, StyleTimeline] | None = None
+) -> None:
     """Add the war, peace, battle, rivalry, treaty and fall events of the world to ``ledger``."""
-    timeline = _Timeline(world, config, seed, span, ledger)
+    timeline = _Timeline(world, config, seed, span, ledger, styles)
     _plan_relations(timeline)
     _plan_fallen_wars(timeline)
     timeline.play()

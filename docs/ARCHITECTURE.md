@@ -41,6 +41,7 @@ src/biomegen/
     polity.toml         Realm kinds, name and ruler forms, relation weights, realm colours
     reasons.toml        Reason templates for wars, rivalries, alliances and trade; fallback place words
     chronicle.toml      Wording of the chronicle's events: templates, and templates_near that name a nearby place
+    rulers.toml         Ruling styles: label, draw weight and battle strength multiplier
     terrain.toml        Terrain styles (continents, pangaea, archipelago, islands)
     geography.toml      Name patterns per geographic feature kind
   util/
@@ -81,6 +82,7 @@ src/biomegen/
       diplomacy.py      Stage 9c — vassal tree, colours, relations, war fronts
     story/
       history.py        Stage 9d — the chronicle: dates realms and settlements, places fallen realms, founding/settling/conquest
+      rulers.py         Ruling styles and the successions that change them (abstracted from real lifetimes)
       conflicts.py      Wars, peace, pacts, battles and falls played through time with faction strengths
       ledger.py         Ledger: collects the events, then sorts and numbers them
       places.py         nearest_settlement(): the locality rule for a place named in an event
@@ -365,6 +367,10 @@ and every draw is a `history` sub-stream keyed on the entity.
    oldest is in `history.first_founding_year`. A seated realm's founding is its seat's too (tag `capital`). Every civilized
    POI gets `founded`. Each fallen realm has a founding event too.
 2. **Settling** (`history.settle_kinds`), **conquest** (one per vassal tie, after both realms plus `min_gap_years`).
+   **Ruling styles** (`rulers.py`): each realm is founded under a style from `tables.ruling_styles`; a succession falls every
+   `history.succession_years` and changes the style with `succession_change_chance`. Only a change is a `succession` event
+   (tags `from:` and `to:`); real lifetimes are abstracted away. `Realm.ruling_style` is the present style, and a style's
+   `strength_mul` tilts that realm's battles while it holds.
 3. **Fallen realms**: `FallenRealm`s on wild, habitable land (`fall_min_habitability`) spaced `fall_spacing_km` from each
    other and from settlements, with a founding year and a natural fall year.
 4. **Conflicts** (`conflicts.py`): every faction has a strength (a realm's area over the mean; a draw for a fallen realm)

@@ -76,6 +76,9 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   at least `history.min_gap_years` after both realms exist (or at the present); nothing happens to a fallen realm outside
   its life; a fall is before the present. Wars join independent, bordering powers only (they are `Relation`s), and
   a relation that follows an older war begins after its peace.
+- **Succession is abstract.** `rulers.py` gives a realm a ruling style that may change every `succession_years`; only a
+  change is an event, so the chronicle never lists individual rulers. The style timeline feeds `conflicts` (a battle's odds
+  use the style's `strength_mul` in that year); it is not stored on the entity except the present `Realm.ruling_style`.
 - **Factions through time.** `conflicts.py` plans every battle and peace, then plays them in year order against
   per-faction strengths (a win raises, a loss lowers); a dead (fallen) faction takes no further steps. Strengths are
   tracked in the timeline, not stored on the entities.
