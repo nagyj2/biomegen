@@ -18,7 +18,7 @@ VALUES: Dict[str, Any] = {
     # the cell's move cost (+ ``river_cost`` on a river) divided by the realm's strength. A realm claims a cell
     # while its cost stays within ``claim_budget_km``. A realm may hop across water up to ``coastal_hop_km`` from
     # land at ``coastal_hop_cost`` (a move cost, flat land is 1) so a coast reaches its islets.
-    "claim_budget_km": 4800.0,
+    "claim_budget_km": 1500.0,
     "river_cost": 3.0,
     "coastal_hop_km": 60.0,
     "coastal_hop_cost": 6.0,

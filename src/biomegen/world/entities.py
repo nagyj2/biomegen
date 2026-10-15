@@ -77,6 +77,7 @@ class Realm:
     area_km2: float = 0.0
     pop: int = 0
     dominant_biome: int = 0  # the Biome (int) covering most of the realm's cells
+    highland: bool = False  # more than half of the realm's cells have relief (hills or higher)
     liege: int = -1
     vassals: List[int] = field(default_factory=list)
     color: Tuple[int, int, int] = (0, 0, 0)

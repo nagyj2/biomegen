@@ -4,7 +4,7 @@
 stages so there is no backtracking:
 
     terrain -> climate -> hydrology -> biomes -> geography -> regions -> settlements
-    -> pois -> roads -> naming
+    -> pois -> roads -> realms -> naming
 
 Roads end at every POI's anchor. A POI's site plan (:mod:`biomegen.sites`) is built lazily and finds the roads
 that reach it from the world arrays, so no stage records anything for it.
@@ -33,7 +33,7 @@ from . import (
     pois,
     regions,
 )
-from .civilization import roads, settlements
+from .civilization import realms, roads, settlements
 from .physical import biomes, climate, geography, hydrology, terrain
 
 
@@ -90,6 +90,7 @@ def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = No
         ("settlements", settlements.run),
         ("pois", pois.run),
         ("roads", roads.run),
+        ("realms", realms.run),
         ("naming", naming.run),
     ):
         timed(name, stage, world, gen_seed)

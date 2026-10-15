@@ -73,6 +73,7 @@ src/biomegen/
     civilization/
       settlements.py    Stage 7 — habitability, capital / city / town / village placement
       roads.py          Stage 9 — road network (a road over water is a bridge)
+      realms.py         Stage 9b — realm seeds, strength-weighted claiming, tribes, realm_id
     story/
     naming.py           Stage 10 — names and lore for all entities
   naming/
@@ -167,7 +168,7 @@ rank, so the gate only trips when a style's land fraction is configured below th
 
 ```
 terrain → climate → hydrology → biomes → geography → regions → settlements
-         → pois → roads → naming
+         → pois → roads → realms → naming
 ```
 
 Roads end at every POI's anchor. A POI's site plan (`sites/`) is built lazily and finds the roads that reach
@@ -319,6 +320,22 @@ Connects POIs with meandering least-cost roads:
 4. **Bridges are not recorded.** A road tile over water is a bridge; the renderer and the site plans draw it from the
    road alone (`sampling/roads.py`). A diagonal step between two land tiles that passes between two freshwater
    corners also flags one corner as road, so the crossing is a continuous span.
+
+### Stage 9b — Realms (`pipeline/civilization/realms.py`)
+
+Partitions solid land (any cell whose biome is not water; a river keeps its land biome) into realms; `politics.*` and
+`tables.realm_kinds` hold the numbers (km, km²).
+
+1. **Seeds**: every capital founds a major realm; a city may found a city-state (more likely when far from every
+   capital); each seed draws a claim strength from its kind's span.
+2. **Claiming**: a multi-source Dijkstra over the move-cost surface (biome + relief `move_cost`, plus `river_cost`).
+   A step costs its km length times the cell's cost over the realm's strength; a realm stops at `claim_budget_km`.
+   Salt water within `coastal_hop_km` of land is a stepping stone at `coastal_hop_cost` and is never claimed. Ties break
+   by cost, then row-major cell, then realm.
+3. **Tribes**: the largest unclaimed solid areas (≥ `tribe_min_area_km2`, at most `tribe_max`) each found a tribe seated at
+   the area's most populous settlement (or its most inland cell); claiming then runs again with every seed.
+4. **Record**: `realm_id` (-1 wild), a `Realm` per seed (seat, area, population, dominant biome, highland) and each
+   POI's `realm_id`. Names, rulers and culture come from naming; vassals, colours and relations from diplomacy.
 
 ### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 

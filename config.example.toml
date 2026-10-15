@@ -56,7 +56,7 @@ color_jitter = 28
 [politics]
 city_state_far_km = 540.0        # a city this far from every capital is likely a city-state (realm kinds: data/polity.toml)
 tribe_max = 6                    # tribes claiming the largest unclaimed areas
-claim_budget_km = 4800.0         # how far (cost in km) a realm of strength 1 reaches over flat land
+claim_budget_km = 1500.0         # how far (cost in km) a realm of strength 1 reaches over flat land
 
 [settlements]
 density = 1.0                    # multiplies every tier's settlement count (tiers: data/tiers.toml)
