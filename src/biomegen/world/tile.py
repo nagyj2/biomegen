@@ -159,6 +159,7 @@ class TileView:
     landmass_id: int
     water_type: WaterType
     region_id: int
+    realm_id: int
     road: bool
     road_tier: int
     dist_to_ocean: float

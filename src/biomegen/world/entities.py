@@ -1,10 +1,10 @@
 """Sparse world objects that do not belong in a per-tile array.
 
-POIs, regions, rivers, lakes and geographic features are few in number but rich in attributes, so they live in plain
-dataclasses held in lists on the :class:`~biomegen.world.world.World`. Tiles reference them by index
-(e.g. ``world.poi_index[y, x]`` -> ``world.pois[i]``; ``world.region_id[y, x]`` -> ``world.regions[i]``)
-and the objects reference back via coordinates. Keeping the heavy attributes here keeps the per-tile
-arrays small and cache-friendly.
+POIs, regions, realms, rivers, lakes and geographic features are few in number but rich in attributes, so they
+live in plain dataclasses held in lists on the :class:`~biomegen.world.world.World`. Tiles reference them by index
+(e.g. ``world.poi_index[y, x]`` -> ``world.pois[i]``; ``world.region_id[y, x]`` -> ``world.regions[i]``;
+``world.realm_id[y, x]`` -> ``world.realms[i]``) and the objects reference back via coordinates. Keeping the heavy
+attributes here keeps the per-tile arrays small and cache-friendly.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ class POI:
     name: str = ""
     civilized: bool = False  # towns/villages/cities are "civilized"; towers/dungeons/etc. are not
     region_id: int = -1
+    realm_id: int = -1  # the realm holding the anchor cell (-1 = wild); set by the realms stage
     floor_count: int = 1  # >1 for towers (above ground) and dungeons (below ground)
     lowest_floor: int = 0  # 0 for ground-level; negative for dungeons going underground
     pop: int = 0  # population (settlements only)
@@ -52,6 +53,47 @@ class Region:
     poi_indices: List[int] = field(default_factory=list)
     bbox: Tuple[int, int, int, int] = (0, 0, 0, 0)  # (x0, y0, x1, y1) inclusive
     centroid: Tuple[float, float] = (0.0, 0.0)
+
+
+@dataclass
+class Realm:
+    """A political power: a major realm, a city-state or a tribal land.
+
+    ``seat_poi`` indexes ``World.pois`` (-1 for a tribe with no settlement). ``liege`` is the realm id of the
+    overlord (-1 when independent); ``vassals`` lists the realms that swore fealty to this one. Names, ruler and
+    culture are filled by the naming stage; ``color`` by the diplomacy stage.
+    """
+
+    id: int  # index into World.realms
+    kind: str  # "major" | "city_state" | "tribal"
+    seat_poi: int = -1
+    name: str = ""
+    short: str = ""
+    ruler: str = ""
+    culture: str = ""
+    area_km2: float = 0.0
+    pop: int = 0
+    dominant_biome: int = 0  # the Biome (int) covering most of the realm's cells
+    liege: int = -1
+    vassals: List[int] = field(default_factory=list)
+    color: Tuple[int, int, int] = (0, 0, 0)
+
+
+@dataclass
+class Relation:
+    """A diplomatic tie between two independent powers (realm ids ``a`` < ``b``).
+
+    ``why`` is the reason text. Only a war has an ``attacker`` (a or b) and a ``claim_poi`` (index into
+    ``World.pois``, -1 if none); ``border_km`` is the length of the shared border (0 across the sea).
+    """
+
+    a: int
+    b: int
+    kind: str  # "war" | "rivalry" | "alliance" | "trade"
+    border_km: float = 0.0
+    why: str = ""
+    attacker: int = -1
+    claim_poi: int = -1
 
 
 @dataclass

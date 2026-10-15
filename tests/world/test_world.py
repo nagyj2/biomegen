@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from biomegen.util.units import grid_scale
+from biomegen.world.entities import Realm
 from biomegen.world.tile import Relief
 from biomegen.world.world import World
 
@@ -83,3 +84,37 @@ def test_normalised_legacy_fields_are_gone() -> None:
     world = World(8, 4, seed=1)
     assert not {"elevation", "temperature"} & set(World.FIELDS)
     assert not hasattr(world, "elevation") and not hasattr(world, "temperature")
+
+
+def test_new_world_has_no_realms() -> None:
+    # Before the realms stage every cell is wild and nothing is a war front.
+    world = World(8, 4, seed=1)
+    assert (world.realm_id == -1).all() and not world.front.any()
+
+
+def test_realm_arrays_have_expected_dtypes() -> None:
+    # realm_id is int16 (a few dozen realms at most); front is a bool mask.
+    world = World(8, 4, seed=1)
+    assert (world.realm_id.dtype, world.front.dtype) == (np.dtype(np.int16), np.dtype(bool))
+
+
+@pytest.mark.parametrize("name", ("realm_id", "front"))
+def test_fingerprint_covers_political_field(name: str) -> None:
+    world = World(8, 4, seed=1)
+    before = world.fingerprint()
+    getattr(world, name)[0, 0] = 1
+    assert world.fingerprint() != before
+
+
+def test_realm_at_reads_the_realm_array() -> None:
+    # realm_at returns the Realm indexed by realm_id, and None for wild cells.
+    world = World(8, 4, seed=1)
+    world.realms.append(Realm(id=0, kind="major"))
+    world.realm_id[1, 2] = 0
+    assert (world.realm_at(2, 1), world.realm_at(0, 0)) == (world.realms[0], None)
+
+
+def test_view_reads_realm_id() -> None:
+    world = World(8, 4, seed=1)
+    world.realm_id[1, 2] = 3
+    assert world.view(2, 1).realm_id == 3

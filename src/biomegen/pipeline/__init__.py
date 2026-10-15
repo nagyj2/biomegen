@@ -127,6 +127,8 @@ def stats(world: World) -> Dict[str, object]:
         "land_fraction": round(float(land.mean()), 4),
         "biomes": dict(sorted(biome_counts.items())),
         "regions": len(world.regions),
+        "realms": len(world.realms),
+        "relations": len(world.relations),
         "rivers": len(world.rivers),
         "lakes": len(world.lakes),
         "features": dict(sorted(Counter(f.kind for f in world.features).items())),

@@ -3,7 +3,7 @@
 The pipeline fills a single :class:`World`; renderers and exporters read it. Per-tile data is stored
 as parallel **numpy 2-D arrays** indexed ``[y, x]`` (row-major), which is memory-efficient, fast to
 operate on in bulk, and trivial to fingerprint for the golden-world reproducibility test. Sparse
-objects (POIs, regions, rivers, lakes) live in lists in :mod:`biomegen.world.entities`.
+objects (POIs, regions, realms, rivers, lakes) live in lists in :mod:`biomegen.world.entities`.
 
 "Immutable" here is a contract, not enforced object freezing: once :func:`biomegen.pipeline.generate`
 returns, generation never writes the arrays again. All *runtime* changes (gameplay edits to
@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 
 from ..util.units import GridScale, grid_scale
-from .entities import POI, GeoFeature, Lake, Region, River
+from .entities import POI, GeoFeature, Lake, Realm, Region, Relation, River
 from .tile import Biome, Relief, TileView, WaterType
 
 
@@ -38,6 +38,8 @@ class World:
     ``relief``            uint8      a :class:`Relief` value (orthogonal to the biome)
     ``landmass_id``       int32      connected landmass index (-1 = water or unassigned)
     ``region_id``         int32      index into ``regions`` (-1 = unassigned / ocean)
+    ``realm_id``          int16      index into ``realms`` (-1 = wild, unclaimed or water)
+    ``front``             bool       a war border cell between two warring powers
     ``water_type``        uint8      a :class:`WaterType` value
     ``road``              uint8      0/1 flag: a road passes through this tile
     ``road_tier``         uint8      0=none, 1=trunk (MST backbone), 2=spur (offshoot to trunk)
@@ -62,6 +64,8 @@ class World:
         "relief",
         "landmass_id",
         "region_id",
+        "realm_id",
+        "front",
         "water_type",
         "road",
         "road_tier",
@@ -92,6 +96,8 @@ class World:
         self.relief = np.full(shape, int(Relief.NONE), dtype=np.uint8)
         self.landmass_id = np.full(shape, -1, dtype=np.int32)
         self.region_id = np.full(shape, -1, dtype=np.int32)
+        self.realm_id = np.full(shape, -1, dtype=np.int16)
+        self.front = np.zeros(shape, dtype=bool)
         self.water_type = np.full(shape, int(WaterType.NONE), dtype=np.uint8)
         self.road = np.zeros(shape, dtype=np.uint8)
         self.road_tier = np.zeros(shape, dtype=np.uint8)
@@ -104,6 +110,8 @@ class World:
         # Sparse entities (filled by later stages).
         self.pois: list[POI] = []
         self.regions: list[Region] = []
+        self.realms: list[Realm] = []  # filled by the realms stage
+        self.relations: list[Relation] = []  # filled by the diplomacy stage
         self.rivers: list[River] = []
         self.lakes: list[Lake] = []
         self.features: list[GeoFeature] = []  # filled by the geography stage
@@ -157,6 +165,7 @@ class World:
             landmass_id=int(self.landmass_id[y, x]),
             water_type=WaterType(int(self.water_type[y, x])),
             region_id=int(self.region_id[y, x]),
+            realm_id=int(self.realm_id[y, x]),
             road=bool(self.road[y, x]),
             road_tier=int(self.road_tier[y, x]),
             dist_to_ocean=float(self.dist_to_ocean[y, x]),
@@ -173,6 +182,11 @@ class World:
         """Return the :class:`~biomegen.world.entities.Region` at ``(x, y)``, or None."""
         i = int(self.region_id[y, x])
         return self.regions[i] if 0 <= i < len(self.regions) else None
+
+    def realm_at(self, x: int, y: int) -> Optional[Realm]:
+        """Return the :class:`~biomegen.world.entities.Realm` at ``(x, y)``, or None for wild land and water."""
+        i = int(self.realm_id[y, x])
+        return self.realms[i] if 0 <= i < len(self.realms) else None
 
     # ------------------------------------------------------------------ reproducibility
     def fingerprint(self) -> str:
