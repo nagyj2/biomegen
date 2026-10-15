@@ -258,3 +258,25 @@ def test_running_twice_gives_the_same_relations() -> None:
     first = _run(_land([3, 3, 3], ["major", "major", "major"]), _config(war=1.0, trade=1.0))
     second = _run(_land([3, 3, 3], ["major", "major", "major"]), _config(war=1.0, trade=1.0))
     assert [(r.a, r.b, r.kind, r.why) for r in first.relations] == [(r.a, r.b, r.kind, r.why) for r in second.relations]
+
+
+def test_front_cells_of_a_war_are_marked_on_the_front(generated: World) -> None:
+    # front_cells names the cells a war puts on World.front: every one is marked.
+    wars = [r for r in generated.relations if r.kind == "war"]
+    cells = np.concatenate([diplomacy.front_cells(generated, r.a, r.b) for r in wars])
+    assert cells.size and generated.front.reshape(-1)[cells].all()
+
+
+def test_front_cells_of_all_wars_cover_the_front(generated: World) -> None:
+    # Together the wars' cells are exactly the marked front.
+    wars = [r for r in generated.relations if r.kind == "war"]
+    cells = np.unique(np.concatenate([diplomacy.front_cells(generated, r.a, r.b) for r in wars]))
+    assert cells.tolist() == np.flatnonzero(generated.front.reshape(-1)).tolist()
+
+
+def test_front_cells_do_not_depend_on_the_pair_order(generated: World) -> None:
+    war = next(r for r in generated.relations if r.kind == "war")
+    assert (
+        diplomacy.front_cells(generated, war.a, war.b).tolist()
+        == diplomacy.front_cells(generated, war.b, war.a).tolist()
+    )

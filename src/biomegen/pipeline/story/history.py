@@ -13,6 +13,8 @@ Everything is placed from static quantities, so the same world always gives the 
    the claimed town in ``poi_ids``), a rivalry or a treaty (tagged ``alliance`` or ``trade``). It began some years
    before the present, more for a longer shared border (``history.war_years`` or ``other_years``, up to
    ``history.border_km_for_full_span``), but never before both powers exist plus ``history.min_gap_years``.
+5. **Battles.** A war's front sees ``history.battles_per_100km_front`` battles per 100 km of border, each on a cell
+   of the front between the war's start and the present; ``realm_ids`` is ``[winner, loser]``.
 
 Events are collected in a :class:`Ledger`, sorted by ``(year, kind order, creation order)`` and numbered, so an event's
 ``id`` is its index in ``World.chronicle``. An event holds a raw template picked from ``tables.chronicle`` (its
@@ -26,8 +28,9 @@ from collections.abc import Sequence
 
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import EVENT_KINDS, NO_LOCATION, ChronicleEvent
+from ...world.entities import EVENT_KINDS, NO_LOCATION, ChronicleEvent, Relation
 from ...world.world import World
+from ..civilization.diplomacy import front_cells
 from .places import nearest_settlement
 
 
@@ -165,14 +168,20 @@ def relation_start_year(span: int, years: Sequence[int], border_km: float, full_
     return min(max(span - round(length), first), span)
 
 
+def _relation_year(world: World, config: Config, span: int, relation: Relation) -> int:
+    """Return the year ``relation`` began, from its border length and the founding of both powers."""
+    gap = int(config.get("history.min_gap_years"))
+    first = min(max(world.realms[relation.a].founded, world.realms[relation.b].founded) + gap, span)
+    years = config.get("history.war_years" if relation.kind == "war" else "history.other_years")
+    return relation_start_year(
+        span, years, relation.border_km, float(config.get("history.border_km_for_full_span")), first
+    )
+
+
 def _relation_events(world: World, config: Config, seed: int, span: int, ledger: Ledger) -> None:
     """Add a war, rivalry or treaty event for every relation."""
-    gap = int(config.get("history.min_gap_years"))
-    full_km = float(config.get("history.border_km_for_full_span"))
     for index, relation in enumerate(world.relations):
-        first = min(max(world.realms[relation.a].founded, world.realms[relation.b].founded) + gap, span)
-        years = config.get("history.war_years" if relation.kind == "war" else "history.other_years")
-        year = relation_start_year(span, years, relation.border_km, full_km, first)
+        year = _relation_year(world, config, span, relation)
         pair = [relation.a, relation.b]
         if relation.kind == "war":
             attacker = relation.attacker if relation.attacker >= 0 else relation.a
@@ -193,6 +202,34 @@ def _relation_events(world: World, config: Config, seed: int, span: int, ledger:
             ledger.add(year, "treaty", f"treaty_{relation.kind}", (index,), seed, realm_ids=pair, tags=(relation.kind,))
 
 
+def _battle_events(world: World, config: Config, seed: int, span: int, ledger: Ledger) -> None:
+    """Add the battles fought along every war's front."""
+    rate = float(config.get("history.battles_per_100km_front"))
+    for index, relation in enumerate(world.relations):
+        if relation.kind != "war":
+            continue
+        cells = front_cells(world, relation.a, relation.b).tolist()
+        if not cells:
+            continue
+        began = _relation_year(world, config, span, relation)
+        for number in range(round(relation.border_km / 100.0 * rate)):
+            stream = rng.derive(seed, "history", "battle", index, number)
+            year = min(began + int(stream.random() * (span - began + 1)), span)
+            y, x = divmod(cells[stream.randrange(len(cells))], world.width)
+            first, second = (relation.a, relation.b) if stream.random() < 0.5 else (relation.b, relation.a)
+            ledger.add(
+                year,
+                "battle",
+                "battle",
+                (index, number),
+                seed,
+                realm_ids=[first, second],
+                location=(x, y),
+                near_poi=nearest_settlement(world, config, x, y),
+                tags=("front",),
+            )
+
+
 def run(world: World, config: Config, seed: int) -> None:
     """Date the realms and settlements and derive ``world.chronicle``, mutating ``world`` in place."""
     span = int(config.get("history.span_years"))
@@ -202,4 +239,5 @@ def run(world: World, config: Config, seed: int) -> None:
     ledger = Ledger(config)
     _realm_events(world, config, seed, span, ledger)
     _relation_events(world, config, seed, span, ledger)
+    _battle_events(world, config, seed, span, ledger)
     world.chronicle = ledger.finish()

@@ -212,6 +212,19 @@ def _war(
     relation.claim_poi = min(targets, key=lambda i: (nearest_km(i), i))
 
 
+def front_cells(world: World, a: int, b: int) -> np.ndarray:
+    """Return the sorted flat indices of the cells along the border of independent powers ``a`` and ``b``.
+
+    A cell counts when it is next to a cell of the other power's realms (both sides of the border), so the result is
+    what a war between the two marks on ``World.front``.
+    """
+    tops = np.array([world.top_realm(r.id) for r in world.realms], dtype=np.int32)
+    edges = _edges(world)
+    low, high = tops[edges.low], tops[edges.high]
+    sel = (np.minimum(low, high) == min(a, b)) & (np.maximum(low, high) == max(a, b))
+    return np.unique(np.concatenate([edges.cell_a[sel], edges.cell_b[sel]]))
+
+
 def run(world: World, config: Config, seed: int) -> None:
     """Fill vassals, colours, relations and ``front``, mutating ``world`` in place."""
     realms = world.realms

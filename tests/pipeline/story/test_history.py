@@ -237,3 +237,47 @@ def test_a_relation_never_starts_before_the_first_allowed_year() -> None:
 
 def test_a_relation_never_starts_after_the_present() -> None:
     assert relation_start_year(1200, (10, 300), 0.0, 1500.0, 1250) == 1200
+
+
+# --- battles ------------------------------------------------------------------------------------------
+
+
+def _wars(world: World) -> dict[frozenset[int], object]:
+    return {frozenset((r.a, r.b)): r for r in world.relations if r.kind == "war"}
+
+
+def _battles(world: World) -> list:
+    return [e for e in world.chronicle if e.kind == "battle"]
+
+
+def test_a_war_sees_battles_by_the_length_of_its_front(world: World, cfg: Config) -> None:
+    rate = cfg.get("history.battles_per_100km_front")
+    expected = sum(round(r.border_km / 100.0 * rate) for r in world.relations if r.kind == "war")
+    assert expected > 0 and len(_battles(world)) == expected
+
+
+def test_a_battle_is_fought_on_the_front(world: World) -> None:
+    assert all(world.front[y, x] for x, y in (e.location for e in _battles(world)))
+
+
+def test_a_battle_is_between_the_powers_of_a_war(world: World) -> None:
+    wars = _wars(world)
+    assert all(frozenset(e.realm_ids) in wars for e in _battles(world))
+
+
+def test_a_battle_is_fought_while_its_war_lasts(world: World) -> None:
+    starts = {frozenset(e.realm_ids): e.year for e in world.chronicle if e.kind == "war"}
+    assert all(starts[frozenset(e.realm_ids)] <= e.year <= world.year for e in _battles(world))
+
+
+def test_battles_have_a_winner_and_a_loser_in_both_orders(world: World) -> None:
+    # The winner is drawn per battle, so the attacker does not always win.
+    wars = _wars(world)
+    wins = {world.chronicle[e.id].realm_ids[0] == wars[frozenset(e.realm_ids)].attacker for e in _battles(world)}
+    assert wins == {True, False}
+
+
+def test_no_battles_at_rate_zero() -> None:
+    config = load_config(None)
+    config.data["history"]["battles_per_100km_front"] = 0.0
+    assert _battles(pipeline.generate(config, 42)) == []
