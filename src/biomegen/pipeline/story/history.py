@@ -24,11 +24,13 @@ text. Every draw is a ``history`` sub-stream keyed on the entity, so the result 
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import NO_LOCATION, FallenRealm
+from ...world.entities import NO_LOCATION, POI, FallenRealm
 from ...world.tile import WaterType
 from ...world.world import World
 from ..civilization.diplomacy import faction_color, neutral_colors
@@ -106,6 +108,24 @@ def _place_fallen_realms(world: World, config: Config, seed: int, span: int, ena
         fallen.color = faction_color(config, "fallen", taken, start)
 
 
+def _remnant_of(world: World, config: Config, poi: POI) -> int:
+    """Return the id of the fallen realm ``poi`` is a remnant of, or -1.
+
+    That is the fallen realm whose site is nearest, within ``history.remnant_km`` and on the same landmass; ties go to
+    the lower id.
+    """
+    limit = float(config.get("history.remnant_km"))
+    best = (math.inf, -1)
+    for fallen in world.fallen_realms:
+        fx, fy = fallen.location
+        if world.landmass_id[fy, fx] != world.landmass_id[poi.y, poi.x]:
+            continue
+        km = world.scale.distance_km(poi.x, poi.y, fx, fy)
+        if km <= limit and (km, fallen.id) < best:
+            best = (km, fallen.id)
+    return best[1]
+
+
 def _realm_events(world: World, config: Config, seed: int, span: int, ledger: Ledger) -> None:
     """Add the founding (realms and fallen realms), settling and conquest events."""
     gap = int(config.get("history.min_gap_years"))
@@ -139,6 +159,17 @@ def _realm_events(world: World, config: Config, seed: int, span: int, ledger: Le
         )
     seats = {realm.seat_poi for realm in world.realms}
     for index, poi in enumerate(world.pois):
+        if poi.free and poi.kind in settle_kinds and _remnant_of(world, config, poi) < 0:
+            ledger.add(
+                poi.founded,
+                "settling",
+                "settling_free",
+                ("free", index),
+                seed,
+                poi_ids=[index],
+                location=(poi.x, poi.y),
+                tags=(poi.kind, "free"),
+            )
         if poi.civilized and poi.kind in settle_kinds and poi.realm_id >= 0 and index not in seats:
             ledger.add(
                 poi.founded,
@@ -161,6 +192,38 @@ def _realm_events(world: World, config: Config, seed: int, span: int, ledger: Le
         ledger.add(year, "conquest", "conquest", (realm.id,), seed, realm_ids=[realm.id, liege.id], tags=("vassalage",))
 
 
+def _remnants(world: World, config: Config, seed: int, ledger: Ledger) -> dict[int, int]:
+    """Date every free settlement that is a remnant of a fallen realm inside that realm's life, and return them.
+
+    Runs after the conflicts, so the realm's ``fell`` is final and the settlement is founded before it. A remnant of
+    the ``history.settle_kinds`` gets a ``settling`` event tagged ``free`` and ``remnant``. The result maps the POI
+    index to the fallen realm id.
+    """
+    settle_kinds = set(config.get("history.settle_kinds"))
+    remnants: dict[int, int] = {}
+    for index, poi in enumerate(world.pois):
+        fallen_id = _remnant_of(world, config, poi) if poi.free else -1
+        if fallen_id < 0:
+            continue
+        fallen = world.fallen_realms[fallen_id]
+        roll = rng.derive(seed, "history", "remnant", index).random()
+        poi.founded = fallen.founded + int(roll * max(1, fallen.fell - fallen.founded))
+        remnants[index] = fallen_id
+        if poi.kind in settle_kinds:
+            ledger.add(
+                poi.founded,
+                "settling",
+                "settling_remnant",
+                ("remnant", index),
+                seed,
+                poi_ids=[index],
+                fallen_ids=[fallen_id],
+                location=(poi.x, poi.y),
+                tags=(poi.kind, "free", "remnant"),
+            )
+    return remnants
+
+
 def run(world: World, config: Config, seed: int) -> None:
     """Date the realms and settlements and derive ``world.chronicle``, mutating ``world`` in place."""
     span = int(config.get("history.span_years"))
@@ -172,8 +235,13 @@ def run(world: World, config: Config, seed: int) -> None:
     _realm_events(world, config, seed, span, ledger)
     styles = rulers.derive(world, config, seed, span, ledger)
     conflicts.derive(world, config, seed, span, ledger, styles)
+    remnants = _remnants(world, config, seed, ledger)
     world.chronicle = ledger.finish()
     for event in world.chronicle:  # a settlement is marked by the event that founded or settled it
         if event.kind in ("founding", "settling"):
             for index in event.poi_ids:
                 world.pois[index].event_ids.append(event.id)
+    falls = {event.fallen_ids[0]: event.id for event in world.chronicle if event.kind == "fall"}
+    for index, fallen_id in sorted(remnants.items()):  # a remnant is also marked by the fall it outlived
+        if fallen_id in falls:
+            world.pois[index].event_ids.append(falls[fallen_id])

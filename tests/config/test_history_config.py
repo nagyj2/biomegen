@@ -21,7 +21,7 @@ def test_every_event_kind_is_enabled_by_default() -> None:
 def test_every_event_kind_has_wording() -> None:
     # A kind is worded by the row of its name (the treaty kind by the two treaty rows), plus rows for the variants.
     rows = get_defaults()["tables"]["chronicle"]
-    variants = {"founding_fallen", "war_ended", "war_fallen", "fall_conquered"}
+    variants = {"founding_fallen", "war_ended", "war_fallen", "fall_conquered", "settling_free", "settling_remnant"}
     assert set(rows) == {"treaty_alliance", "treaty_trade"} | variants | (set(EVENT_KINDS) - {"treaty"})
 
 

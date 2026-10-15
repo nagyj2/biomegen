@@ -252,6 +252,8 @@ _HOOK_TOKENS = frozenset({"name"})
 _CHRONICLE_TOKENS = {
     "founding": frozenset({"realm", "short", "ruler", "seat"}),
     "settling": frozenset({"realm", "short", "town"}),
+    "settling_free": frozenset({"town"}),
+    "settling_remnant": frozenset({"town", "fallen"}),
     "conquest": frozenset({"realm", "short", "liege", "liege_short", "ruler"}),
     "war": frozenset({"attacker", "attacker_short", "defender", "defender_short", "reason", "town"}),
     "rivalry": frozenset({"a", "a_short", "b", "b_short", "reason"}),

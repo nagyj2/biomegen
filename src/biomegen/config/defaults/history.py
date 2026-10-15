@@ -20,6 +20,9 @@ VALUES: Dict[str, Any] = {
     "age_range": {"major": [0.6, 1.0], "city_state": [0.3, 0.8], "tribal": [0.7, 1.0]},
     "age_area_weight": 0.5,
     "settle_kinds": ["city", "town"],  # settlement kinds that get a settling event (others are only dated)
+    # A free settlement (no realm holds it) within ``remnant_km`` of a fallen realm's site, on the same landmass, is a
+    # remnant of that realm: it is founded during the realm's life and its settling event names the realm.
+    "remnant_km": 250.0,
     # Ruling styles (data/rulers.toml): a realm's style may change at a succession, one of which falls every
     # ``succession_years`` years; only a change is an event. Rulers' real lifetimes are abstracted away.
     "succession_years": [300, 700],
