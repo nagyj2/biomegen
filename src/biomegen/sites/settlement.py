@@ -9,7 +9,9 @@ street door faces that street. A building no street can be joined to is not buil
 (``walled`` in its row) is ringed along its outline, with a gate wherever a spoke or the road reaches it. Trees and
 bushes fill free ground.
 
-Seen from outside every building is a roof and the wall is solid stone; the streets and trees are as they are. The
+Seen from outside every building is a roof and the wall is solid stone; the streets and trees are as they are. An upper
+floor shows the storey of each building that reaches it and the roof of each that does not, with the ground-level
+streets, trees and walls under them as a dimmed ground. The
 world's road is laid in first (:func:`.streets.lay_roads`), so the town grows round and onto it.
 """
 
@@ -507,8 +509,10 @@ def _plant(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarra
 
 
 @layout("settlement")
-def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
-    """A settlement floor, seen from inside and from outside."""
+def build_settlement(
+    ctx: SiteContext,
+) -> Optional[tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]]:
+    """A settlement floor, seen from inside and from outside; an upper floor also gives the ground to show dimmed."""
     rows, cols = ctx.rows, ctx.cols
     dry = ctx.patch.dry
     ground = ndimage.binary_erosion(dry, structure=np.ones((3, 3), bool), border_value=1)
@@ -537,7 +541,13 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     _plant(ctx, grid, dry, roofs, stream)
     if ctx.floor > 0:
         layer = uppers[ctx.floor - 1] if ctx.floor - 1 < len(uppers) else np.zeros_like(grid)
-        return layer, np.zeros_like(layer)
+        cells = layer.copy()
+        cells[roofs & (layer == _VOID)] = int(Cell.ROOF)  # a building with no storey this high shows its roof
+        ground = None
+        if bool(ctx.config.get("sites.settlement.ground_above")):
+            ground = grid.copy()  # the streets, trees, wall and gates at ground level, seen faintly from above
+            ground[roofs] = _VOID
+        return cells, np.zeros_like(layer), ground
     outside = grid.copy()
     outside[roofs] = int(Cell.ROOF)
     outside[(grid == _WALL) & ~roofs] = int(Cell.STONE)

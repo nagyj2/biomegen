@@ -36,6 +36,7 @@ VALUES: Dict[str, Any] = {
         "rings": [0.4, 0.72],  # ring streets, each at this share of the way from the plaza to the outline
         "ring_gap": 0.3,  # chance a ring street leaves out one of its arcs
         "max_lanes": 80,  # most lanes laid into ground too far from a street
+        "ground_above": True,  # upper floors show the ground-level streets, trees and walls round the buildings, dimmed
     },
     "extra_corridors": {"dungeon": 0.34, "tower": 0.15, "ruin": 0.2},  # extra room-to-room links per room, by layout
     "furnish": {

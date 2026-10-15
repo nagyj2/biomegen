@@ -5,7 +5,9 @@ streets show; the plan is scaled to the block of cells its extent covers, and wh
 of highest priority wins, so a one-cell wall survives. Seen from **inside** (the site scale) every cell is drawn one for
 one, and thin walls join into box-drawing lines. Void cells are skipped, so the terrain shows round an organic outline.
 The world map draws no plan: a POI there is its one-tile marker (the markers layer).
-Outside views show the surface; the inside view shows the chosen floor, with runtime edits from the overlay.
+Outside views show the surface; the inside view shows the chosen floor, with runtime edits from the overlay. A floor
+above the ground of a settlement also carries its ground-level streets, trees and walls (``SitePlan.ground``), drawn
+first and dimmed by ``render.ground_dim`` so the floor's own cells stand out over them.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from ...sites import NO_WALL, OUTSIDE_PRIORITY, SiteGeometry, site_plan, site_po
 from ...sites.blit import sample_rect
 from ...world.entities import POI
 from ...world.tile import Cell
-from ..colors import wall_glyph_table
+from ..colors import scale_colors, wall_glyph_table
 from ..grid import CellGrid
 from . import LAYERS, LayerContext
 
@@ -35,20 +37,23 @@ def _record(ctx: LayerContext, grid: CellGrid, rows: slice, cols: slice, cells: 
     ctx.seen.cell_map[rows, cols][draw] = cells[draw]
 
 
-def _plan_of(ctx: LayerContext, poi: POI, floor: int, inside: bool) -> tuple[np.ndarray, np.ndarray | None] | None:
-    """Return ``poi``'s plan cells (and, inside, the wall line index of each) for ``floor``, or None if it has no plan.
+def _plan_of(
+    ctx: LayerContext, poi: POI, floor: int, inside: bool
+) -> tuple[np.ndarray, np.ndarray | None, np.ndarray | None] | None:
+    """Return ``poi``'s plan cells, their wall line index and the dimmed ground under them, for ``floor``.
 
-    Inside, the overlay's edits are applied; outside is the surface and ignores both the floor and the overlay.
+    ``None`` when the POI has no plan. Inside, the overlay's edits are applied and the walls and the ground (``None``
+    on most floors) come with it; outside is the surface and ignores the floor, the overlay and the ground.
     """
     plan = site_plan(poi, floor, ctx.config, ctx.world)
     if plan is None:
         return None
     if not inside:
-        return plan.outside, None
+        return plan.outside, None, None
     cells = plan.cells
     if ctx.overlay is not None:
         cells = ctx.overlay.apply_interior(cells, poi.interior_seed, plan.floor)
-    return cells, wall_index(cells)
+    return cells, wall_index(cells), plan.ground
 
 
 def _stamp(
@@ -59,16 +64,22 @@ def _stamp(
     cells: np.ndarray,
     draw: np.ndarray,
     walls: np.ndarray | None = None,
+    dim: float | None = None,
 ) -> None:
+    """Paint ``cells`` where ``draw`` holds; with ``dim`` their colours are scaled by it and they are not recorded."""
     style = ctx.interior_style
-    _record(ctx, grid, rows, cols, cells, draw)
+    if dim is None:
+        _record(ctx, grid, rows, cols, cells, draw)
     glyph = style.glyph[cells]
     if walls is not None:
         lines = wall_glyph_table(ctx.config, ctx.ascii_only)
         glyph = np.where(walls != NO_WALL, lines[np.minimum(walls, 15)], glyph)
+    fg, bg = style.fg[cells], style.bg[cells]
+    if dim is not None:
+        fg, bg = scale_colors(fg, dim), scale_colors(bg, dim)
     grid.glyph[rows, cols][draw] = glyph[draw]
-    grid.fg[rows, cols][draw] = style.fg[cells][draw]
-    grid.bg[rows, cols][draw] = style.bg[cells][draw]
+    grid.fg[rows, cols][draw] = fg[draw]
+    grid.bg[rows, cols][draw] = bg[draw]
     grid.bold[rows, cols][draw] = False
 
 
@@ -80,6 +91,20 @@ def _extent_cells(sampler: DetailSampler, geometry: SiteGeometry) -> tuple[int, 
     row0 = round((top - (sampler.cam_y - 0.5)) * sampler.cell_h)
     row1 = round((bottom - (sampler.cam_y - 0.5)) * sampler.cell_h)
     return row0 - sampler.row0, col0 - sampler.col0, row1 - row0, col1 - col0
+
+
+def _stamp_ground(
+    ctx: LayerContext, grid: CellGrid, ground: np.ndarray, extent: tuple[int, int, int, int], sampler: DetailSampler
+) -> None:
+    """Draw an upper floor's ground-level features dimmed, before the floor's own cells are stamped over them."""
+    row0, col0, span_rows, span_cols = extent
+    sampled = sample_rect(ground, row0, col0, span_rows, span_cols, sampler.rows, sampler.cols)
+    if sampled is None:
+        return
+    rows, cols, values = sampled
+    *_, lines = sample_rect(wall_index(ground), row0, col0, span_rows, span_cols, sampler.rows, sampler.cols)  # type: ignore[misc]
+    draw = (values != _VOID) & sampler.inside[rows, cols]
+    _stamp(ctx, grid, rows, cols, values, draw, lines, float(ctx.config.get("render.ground_dim")))
 
 
 @LAYERS.register("sites")
@@ -97,12 +122,14 @@ def sites_layer(ctx: LayerContext, grid: CellGrid) -> None:
         found = _plan_of(ctx, poi, floor, inside)
         if found is None:
             continue
-        cells, walls = found
+        cells, walls, ground = found
         priority = None if inside else OUTSIDE_PRIORITY
         sampled = sample_rect(cells, row0, col0, span_rows, span_cols, sampler.rows, sampler.cols, priority)
         if sampled is None:
             continue
         rows, cols, values = sampled
+        if ground is not None:
+            _stamp_ground(ctx, grid, ground, (row0, col0, span_rows, span_cols), sampler)
         sampled_walls = None
         if walls is not None:
             *_, sampled_walls = sample_rect(walls, row0, col0, span_rows, span_cols, sampler.rows, sampler.cols)  # type: ignore[misc]

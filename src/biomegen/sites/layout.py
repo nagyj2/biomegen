@@ -17,7 +17,10 @@ from ..world.tile import Cell
 from .patch import SitePatch
 from .streets import StreetRules
 
-Layout = Callable[["SiteContext"], Optional[np.ndarray | tuple[np.ndarray, np.ndarray]]]
+Layout = Callable[
+    ["SiteContext"],
+    Optional[np.ndarray | tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]],
+]
 LAYOUTS: dict[str, Layout] = {}
 
 

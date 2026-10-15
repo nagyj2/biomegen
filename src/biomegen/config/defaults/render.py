@@ -371,6 +371,9 @@ VALUES: Dict[str, Any] = {
     # Clutter that should not draw the eye: these cells take the floor fill, and a glyph only this factor brighter.
     "interior_subtle": ["rubble", "rock", "barrel", "crate", "cargo"],
     "interior_subtle_fg_scale": 1.2,
+    # At an upper floor of a settlement the ground-level streets, trees and walls show through under the floor plan,
+    # both colours scaled by this factor so they read as another level (``sites.settlement.ground_above``).
+    "ground_dim": 0.55,
     # Interior Cell -> RGB base colour, used when a detail cell belongs to a POI interior (the
     # single colour authority for interiors, shared with SVG/PNG export later). ``void`` is never
     # drawn (the surrounding terrain shows through), so it has no colour entry.
