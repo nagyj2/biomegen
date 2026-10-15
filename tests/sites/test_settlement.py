@@ -415,3 +415,151 @@ def test_harbour_and_mill_are_deterministic(config: Config) -> None:
     clear_cache()
     _, second = _coast(config, ("port",))
     assert np.array_equal(first.cells, second.cells)
+
+
+# --- streets that meet the world road -------------------------------------------------------------------------------
+
+
+def _strip(rows: int = 9, cols: int = 30) -> tuple[np.ndarray, np.ndarray]:
+    return np.zeros((rows, cols), dtype=np.uint8), np.ones((rows, cols), dtype=bool)
+
+
+def test_a_one_row_sliver_between_two_streets_is_paved() -> None:
+    from biomegen.sites.settlement import _close_slivers
+
+    grid, dry = _strip()
+    grid[2, :], grid[4, :] = PATH, PATH
+    _close_slivers(grid, dry)
+    assert (grid[3, :] == PATH).all()
+
+
+def test_a_one_column_sliver_between_two_streets_is_paved() -> None:
+    from biomegen.sites.settlement import _close_slivers
+
+    grid, dry = _strip()
+    grid[:, 5], grid[:, 7] = PATH, PATH
+    _close_slivers(grid, dry)
+    assert (grid[:, 6] == PATH).all()
+
+
+def test_a_two_row_strip_between_streets_is_not_paved() -> None:
+    from biomegen.sites.settlement import _close_slivers
+
+    grid, dry = _strip()
+    grid[2, :], grid[5, :] = PATH, PATH
+    _close_slivers(grid, dry)
+    assert (grid[3:5, :] == VOID).all()
+
+
+def test_the_inside_of_a_street_corner_is_left_alone() -> None:
+    from biomegen.sites.settlement import _close_slivers
+
+    grid, dry = _strip()
+    grid[2, 2:10], grid[2:8, 2] = PATH, PATH
+    _close_slivers(grid, dry)
+    assert grid[3, 3] == VOID
+
+
+def test_slivers_are_not_paved_over_water_or_buildings() -> None:
+    from biomegen.sites.settlement import _close_slivers
+
+    grid, dry = _strip()
+    grid[2, :], grid[4, :] = PATH, PATH
+    dry[3, 4] = False
+    grid[3, 8] = WALL
+    _close_slivers(grid, dry)
+    assert grid[3, 4] == VOID and grid[3, 8] == WALL
+
+
+def test_a_street_running_beside_the_road_is_joined_to_it() -> None:
+    from biomegen.sites.settlement import _join_roads
+
+    grid, dry = _strip(rows=12)
+    road = np.zeros(grid.shape, dtype=bool)
+    road[2, :] = True
+    grid[road] = PATH  # the road is laid into the grid as street
+    grid[5, 4:20] = PATH  # a lane three rows away
+    _join_roads(grid, dry, road, aspect=2.0, reach=3.0)
+    assert (grid[3:5, 4:20] == PATH).all()
+
+
+def test_a_street_far_from_the_road_is_left_alone() -> None:
+    from biomegen.sites.settlement import _join_roads
+
+    grid, dry = _strip(rows=12)
+    road = np.zeros(grid.shape, dtype=bool)
+    road[2, :] = True
+    grid[road] = PATH
+    grid[8, 4:20] = PATH
+    _join_roads(grid, dry, road, aspect=2.0, reach=3.0)
+    assert (grid[3:8, :] == VOID).all()
+
+
+def test_a_street_already_touching_the_road_adds_nothing() -> None:
+    from biomegen.sites.settlement import _join_roads
+
+    grid, dry = _strip(rows=12)
+    road = np.zeros(grid.shape, dtype=bool)
+    road[2, :] = True
+    grid[road] = PATH
+    grid[3, 4:20] = PATH
+    before = grid.copy()
+    _join_roads(grid, dry, road, aspect=2.0, reach=3.0)
+    assert np.array_equal(grid, before)
+
+
+def test_a_join_does_not_pave_water_or_buildings() -> None:
+    from biomegen.sites.settlement import _join_roads
+
+    grid, dry = _strip(rows=12)
+    road = np.zeros(grid.shape, dtype=bool)
+    road[2, :] = True
+    grid[road] = PATH
+    grid[5, 4:20] = PATH
+    dry[3, 10] = False
+    grid[4, 12] = WALL
+    _join_roads(grid, dry, road, aspect=2.0, reach=3.0)
+    assert grid[3, 10] == VOID and grid[4, 12] == WALL
+
+
+def test_joining_can_be_switched_off_with_a_zero_reach() -> None:
+    from biomegen.sites.settlement import _join_roads
+
+    grid, dry = _strip(rows=12)
+    road = np.zeros(grid.shape, dtype=bool)
+    road[2, :] = True
+    grid[road] = PATH
+    grid[5, 4:20] = PATH
+    _join_roads(grid, dry, road, aspect=2.0, reach=0.0)
+    assert (grid[3:5, :] == VOID).all()
+
+
+def test_a_settlement_on_a_road_has_less_bare_ground_beside_its_streets_with_joining(config: Config) -> None:
+    # Bare cells that lie close to the road and touch a street that is not the road are the strips the ground shows
+    # through; joining the streets to the road leaves fewer of them.
+    import copy
+
+    from scipy import ndimage as nd
+
+    from biomegen.sites import read_patch, site_geometry
+
+    def bare(cfg: Config) -> int:
+        total = 0
+        for seed in range(6):
+            clear_cache()
+            world = flat_world(16, 12)
+            world.road[6, :] = 1
+            poi = add_poi(world, "city", 8, 6, pop=12000, floor_count=1, interior_seed=100 + seed)
+            plan = site_plan(poi, 0, cfg, world)
+            assert plan is not None
+            patch = read_patch(poi, site_geometry(poi, cfg), world, cfg)
+            road = patch.road & patch.dry
+            street = (plan.cells == PATH) & ~road
+            near = nd.distance_transform_edt(~road, sampling=(1.0, 1.0 / 2.0)) <= 3.0
+            void = (plan.cells == VOID) & patch.dry & ~road
+            total += int((void & near & nd.binary_dilation(street, structure=np.ones((3, 3), bool))).sum())
+        return total
+
+    off = copy.deepcopy(config)
+    off.data["sites"]["settlement"]["road_join_rows"] = 0.0
+    assert bare(config) < bare(off)

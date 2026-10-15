@@ -30,6 +30,8 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
 - Walls are one cell thick (`WALL`); the renderer joins them into line glyphs, so never draw a wall twice as thick.
   A door is a `DOOR` cell in a wall line. Buildings come from `building.build_building`.
 - Use `cells.OUTSIDE_PRIORITY` when scaling down, so thin walls survive.
+- Streets meet the road without bare ground between: `_join_roads` runs a street that passes within
+  `sites.settlement.road_join_rows` of the road into it, and `_close_slivers` paves a one-cell strip between two streets.
 - An upper floor of a settlement or tower is the ground view with the buildings replaced, the current floor laid over
   all the lower ones: the storey of each building that reaches that floor, `ROOF` over each that does not (and over the
   outline of a lower, wider tower floor). Streets, trees, the wall and its gates stay as on the ground floor, undimmed.

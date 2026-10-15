@@ -49,6 +49,7 @@ _RING_STEP = 0.5  # radians between the sample points of a ring street
 _WHEEL = int(Cell.WHEEL)
 _STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 _MILL_TRIES = 40  # candidate spots tried for a mill before giving up
+_SLIVER_PASSES = 2  # passes that pave bare strips between streets
 
 
 @dataclass(frozen=True)
@@ -327,6 +328,53 @@ def _fit_lot(
             break
         free += 1
     return start, edge, length, free
+
+
+_OPPOSITES = (((0, -1), (0, 1)), ((-1, 0), (1, 0)))  # (dx, dy) pairs: above and below, left and right
+
+
+def _join_roads(grid: np.ndarray, dry: np.ndarray, road: np.ndarray, aspect: float, reach: float) -> None:
+    """Run every street that passes close beside the world road into it, so no bare strip is left between them.
+
+    A street cell within ``reach`` rows of a road cell of ``road``, but not touching it, is joined to the nearest road
+    cell by a straight run of street over the free dry cells between (the world road itself is laid into the grid as
+    street at this point, so the run ends on it).
+    """
+    road = road & dry
+    if not road.any():
+        return
+    distance, nearest = ndimage.distance_transform_edt(~road, sampling=(1.0, 1.0 / aspect), return_indices=True)
+    touching = ndimage.binary_dilation(road, structure=np.ones((3, 3), bool))
+    street = np.isin(grid, _STREET) & ~road & ~touching & (distance <= reach)
+    for y, x in np.argwhere(street).tolist():
+        end_y, end_x = int(nearest[0][y, x]), int(nearest[1][y, x])
+        steps = max(abs(end_x - x), abs(end_y - y))
+        for i in range(1, steps):
+            cx, cy = round(x + (end_x - x) * i / steps), round(y + (end_y - y) * i / steps)
+            if grid[cy, cx] == _VOID and dry[cy, cx]:
+                grid[cy, cx] = _PATH
+
+
+def _close_slivers(grid: np.ndarray, dry: np.ndarray) -> None:
+    """Pave the bare cells squeezed between two street or road cells, so streets close up beside each other.
+
+    A lane or spoke can run a cell away from another street or from the road (laid into the grid as street), and the
+    ground would show through the strip between. A free dry cell with street on two opposite sides (above and below,
+    or left and right) becomes street; a second pass closes the slivers the first leaves at a bend. The inside of a
+    street corner has street on two adjacent sides only and stays bare.
+    """
+    rows, cols = grid.shape
+    for _ in range(int(_SLIVER_PASSES)):
+        street = np.pad(np.isin(grid, _STREET), 1)
+        closing = np.zeros(grid.shape, dtype=bool)
+        for (ax, ay), (bx, by) in _OPPOSITES:
+            first = street[1 + ay : 1 + ay + rows, 1 + ax : 1 + ax + cols]
+            second = street[1 + by : 1 + by + rows, 1 + bx : 1 + bx + cols]
+            closing |= first & second
+        closing &= (grid == _VOID) & dry
+        if not closing.any():
+            return
+        grid[closing] = _PATH
 
 
 def _lots(
@@ -757,6 +805,8 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     _rings(ctx, grid, town, dry, centre, stream)
     _lanes(ctx, grid, ground, town, stream)
     _harbour(ctx, grid, dry, centre)
+    _join_roads(grid, dry, ctx.patch.road, ctx.aspect, float(ctx.config.get("sites.settlement.road_join_rows")))
+    _close_slivers(grid, dry)
     mill = _mill(ctx, grid, dry, ground, centre)
     roofs, lots = _lots(ctx, grid, ground, centre, stream, [mill] if mill is not None else [])
     uppers = _storeys(ctx, grid, lots, centre, stream)
