@@ -86,7 +86,8 @@ pathfinder = "astar"            # "astar" | "tcod" | "dijkstra"
 civilized_connect_prob = 0.9
 uncivilized_connect_prob = 0.25
 cardinal_only = false           # true routes every road north, east, south or west only (one box-drawing glyph set)
-meander_strength = 0.30
+meander_strength = 0.10         # how far a long road wanders sideways, as a share of its length (0 = straight)
+meander_step_km = 60.0          # a long road is steered through a waypoint every this far along its line
 
 [render]
 zoom_scale = 5                  # ZOOM (mid) scale: detail-cell height per biome tile (aspect-corrected)

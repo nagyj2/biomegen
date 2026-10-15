@@ -21,5 +21,8 @@ VALUES: Dict[str, Any] = {
     # the 1–3× base_cost range reduce zigzagging without over-straightening
     "cardinal_only": False,  # True routes every road north, east, south or west only (no diagonal links), so the
     # map draws one box-drawing glyph set with no slashes or junction stars
-    "meander_strength": 0.30,  # deterministic per-tile noise added to cost so paths curve
+    "meander_strength": 0.10,  # how far a long road wanders sideways, as a share of its length (0 = as straight as the
+    # terrain allows, 0.1 a gentle wander, 0.25 very winding); it also scales a small per-tile noise added to the cost
+    "meander_step_km": 60.0,  # a road is steered through a waypoint every this far along its line (a road shorter than
+    # two steps is not bent), each pushed sideways by up to meander_strength x the road's length
 }
