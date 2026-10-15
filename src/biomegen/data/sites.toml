@@ -83,3 +83,35 @@ layout = "boat"
 extent_tiles = [0.4, 0.2]
 rows_per_tile = 40
 grows_with_pop = false
+
+# A hamlet is a few houses round a lane, smaller than a village.
+[sites.hamlet]
+furniture = "home"
+layout = "settlement"
+extent_tiles = [1.0, 0.8]
+rows_per_tile = 20
+grows_with_pop = true
+plaza_tiles = 0.05
+
+# A camp's look follows its `purpose` (POI.purpose): a site row named `camp_<purpose>` replaces the plain `camp` row.
+# Founding camps are a builders' yard, bandit camps the rough tents the camp row always drew, army camps a banner camp.
+[sites.camp_founding]
+furniture = "camp_founding"
+layout = "camp"
+extent_tiles = [0.5, 0.5]
+rows_per_tile = 24
+grows_with_pop = false
+
+[sites.camp_bandit]
+furniture = "camp"
+layout = "camp"
+extent_tiles = [0.5, 0.5]
+rows_per_tile = 24
+grows_with_pop = false
+
+[sites.camp_army]
+furniture = "camp_army"
+layout = "camp"
+extent_tiles = [0.7, 0.6]
+rows_per_tile = 24
+grows_with_pop = false

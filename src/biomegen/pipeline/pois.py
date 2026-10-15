@@ -23,6 +23,7 @@ import random
 import numpy as np
 
 from ..config.model import Config
+from ..sites.geometry import site_row_name
 from ..util import geometry as geo
 from ..util import rng
 from ..world.entities import POI
@@ -32,9 +33,12 @@ from ..world.world import World
 _CANDIDATE_LIMIT = 4000  # only the best-scoring eligible cells are tried; placement needs a handful
 
 
-def max_footprint(config: Config, kind: str) -> tuple[int, int] | None:
-    """Return the most tiles ``(w, h)`` a kind's site can cover given ``sites.size_jitter``, or None (no site)."""
-    row = config.get(f"tables.sites.{kind}", None)
+def max_footprint(config: Config, kind: str, purpose: str = "") -> tuple[int, int] | None:
+    """Return the most tiles ``(w, h)`` a kind's site can cover given ``sites.size_jitter``, or None (no site).
+
+    A POI with a ``purpose`` uses its ``<kind>_<purpose>`` site row when there is one.
+    """
+    row = config.get(f"tables.sites.{site_row_name(config, kind, purpose)}", None)
     if row is None:
         return None
     jitter = float(config.get("sites.size_jitter"))
@@ -124,7 +128,7 @@ def pick_blue_noise(
     return picked
 
 
-def _commit(world: World, seed: int, kind: str, x: int, y: int, floors: tuple[int, int]) -> None:
+def _commit(world: World, seed: int, kind: str, x: int, y: int, floors: tuple[int, int], purpose: str = "") -> None:
     """Append one POI and write it into ``poi_index``."""
     poi = POI(
         kind=kind,
@@ -133,6 +137,7 @@ def _commit(world: World, seed: int, kind: str, x: int, y: int, floors: tuple[in
         interior_seed=rng.derive_int(seed, "poi_interior", x, y),
         floor_count=floors[0],
         lowest_floor=floors[1],
+        purpose=purpose,
     )
     index = len(world.pois)
     world.pois.append(poi)
@@ -174,7 +179,8 @@ def run(world: World, config: Config, seed: int) -> None:
         count = round(area_km2[not on_water] / float(row["km2_per_poi"]) * density)
         if count <= 0 or not row.get("biomes"):
             continue
-        footprint = None if on_water else max_footprint(config, kind)
+        purpose = str(row.get("purpose", ""))
+        footprint = None if on_water else max_footprint(config, kind, purpose)
         mask = _eligible(world, row, footprint, min_land)
         noise = rng.derive_numpy(seed, "poi", kind).random(mask.shape) * jitter
         score = 1.0 + float(row.get("near_freshwater", 0.0)) * fresh_weight
@@ -183,5 +189,5 @@ def run(world: World, config: Config, seed: int) -> None:
 
         stream = rng.derive(seed, "poi", kind, "floors")
         for x, y in pick_blue_noise(score, count, float(row["min_spacing_km"]), placed, world):
-            _commit(world, seed, kind, x, y, _floors(kind, row, stream))
+            _commit(world, seed, kind, x, y, _floors(kind, row, stream), purpose)
             placed.append((x, y))

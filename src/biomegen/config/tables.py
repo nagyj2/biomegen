@@ -65,6 +65,9 @@ _TIER_ROW = {
     "spacing_km": "positive",
     "land_per_settlement_km2": "positive",
     "backbone": "bool",
+    "dynamic": "bool",
+    "connect": "bool",
+    "map_marker": "bool",
 }
 _SITE_ROW = {
     "layout": "text",
@@ -94,6 +97,7 @@ _POI_ROW = {
     "bandit_strength": "count",
     "bandit_radius_km": "positive",
     "lifespan": "count",
+    "purpose": "text",
 }
 _STYLE_ROW = {
     "label": "text",
@@ -156,6 +160,7 @@ _POI_OPTIONAL = frozenset(
         "bandit_strength",
         "bandit_radius_km",
         "lifespan",
+        "purpose",
     }
 )
 
@@ -203,7 +208,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "relief": (_RELIEF_ROW, frozenset({"min_elevation_m"})),
     "detail": (_DETAIL_ROW, frozenset()),
     "detail_relief": (_DETAIL_RELIEF_ROW, frozenset()),
-    "tiers": (_TIER_ROW, frozenset({"bg"})),
+    "tiers": (_TIER_ROW, frozenset({"bg", "dynamic", "connect", "map_marker"})),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
     "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled"})),

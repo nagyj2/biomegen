@@ -6,7 +6,7 @@ import numpy as np
 
 from ...sampling.detail import SCALE_SITE, DetailSampler
 from ..grid import CellGrid
-from ..poi_style import poi_marker
+from ..poi_style import poi_marker, poi_on_map
 from . import LAYERS, LayerContext
 
 
@@ -31,6 +31,9 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
         has_bg = np.array([bg is not None for _glyph, _fg, bg in styles])
         at = np.clip(poi_index, 0, len(world.pois) - 1)
         anchored = ctx.sampler.inside & ctx.sampler.anchor & (poi_index >= 0)
+        if not isinstance(sampler, DetailSampler):  # the map scale leaves out kinds whose row hides them there
+            on_map = np.array([poi_on_map(ctx.config, poi.kind) for poi in world.pois])
+            anchored &= on_map[np.clip(poi_index, 0, len(world.pois) - 1)]
         grid.put(anchored, glyph=glyphs[at], fg=fgs[at], bold=True)
         grid.put(anchored & has_bg[at], bg=bgs[at])
     if ctx.overlay is not None and not (isinstance(sampler, DetailSampler) and sampler.scale == SCALE_SITE):

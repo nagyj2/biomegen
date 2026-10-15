@@ -85,6 +85,12 @@ class SiteGeometry:
         return left - 0.5 < tile_x < right + 0.5 and top - 0.5 < tile_y < bottom + 0.5
 
 
+def site_row_name(config: Config, kind: str, purpose: str = "") -> str:
+    """Return the ``tables.sites`` row that draws a POI: ``<kind>_<purpose>`` when that row exists, else ``kind``."""
+    named = f"{kind}_{purpose}"
+    return named if purpose and config.get(f"tables.sites.{named}", None) is not None else kind
+
+
 def _scale(poi: POI, config: Config, row: dict) -> float:
     """Return the extent factor for ``poi``: a seeded jitter, times a population factor for growing settlements."""
     jitter = float(config.get("sites.size_jitter"))
@@ -99,7 +105,7 @@ def _scale(poi: POI, config: Config, row: dict) -> float:
 
 def site_geometry(poi: POI, config: Config) -> Optional[SiteGeometry]:
     """Return ``poi``'s site geometry, or ``None`` when its kind has no site row or the site would be too small."""
-    row = config.get(f"tables.sites.{poi.kind}", None)
+    row = config.get(f"tables.sites.{site_row_name(config, poi.kind, poi.purpose)}", None)
     if row is None:
         return None
     factor = _scale(poi, config, row)

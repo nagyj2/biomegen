@@ -15,6 +15,7 @@
 #   elevation_min_m, elevation_max_m   (optional) height band in metres
 #   near_freshwater, coastal, remoteness   (optional) score weights favouring fresh water, the coast, distance from
 #                     settlements
+#   purpose           (optional) a camp's purpose (POI.purpose): its site row is `<kind>_<purpose>` in sites.toml
 #   floors            storeys: a count, or a [min, max] range drawn per POI (a dungeon descends, the rest rise)
 #
 # Simulation seams (data only until a later simulation reads them):
@@ -66,6 +67,7 @@ connect = true
 [pois.camp]
 priority = 40
 source = "location"
+purpose = "bandit"
 km2_per_poi = 1200000.0
 min_spacing_km = 250.0
 biomes = ["grass", "forest", "tundra", "savanna", "taiga"]

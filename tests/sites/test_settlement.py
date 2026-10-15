@@ -563,3 +563,10 @@ def test_a_settlement_on_a_road_has_less_bare_ground_beside_its_streets_with_joi
     off = copy.deepcopy(config)
     off.data["sites"]["settlement"]["road_join_rows"] = 0.0
     assert bare(config) < bare(off)
+
+
+def test_a_hamlet_builds_at_least_one_house(config: Config) -> None:
+    # The hamlet row is a settlement layout smaller than a village; its plan still has a building.
+    world = flat_world(14, 10)
+    plan = site_plan(add_poi(world, "hamlet", 7, 5, civilized=True, pop=40), 0, config, world)
+    assert plan is not None and bool((plan.outside == int(Cell.ROOF)).any())

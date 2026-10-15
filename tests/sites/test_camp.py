@@ -75,3 +75,27 @@ def test_a_road_runs_through_the_camp_clear_of_the_tents(config: Config) -> None
 def test_a_camp_without_a_road_has_no_gate(config: Config) -> None:
     poi, world, _plan = _camp(config)
     assert read_patch(poi, site_geometry(poi, config), world, config).gates == ()
+
+
+def test_a_purpose_selects_its_own_site_row(config: Config) -> None:
+    # An army camp's row (camp_army) is larger than the plain camp row, so its site spans more of the window.
+    world = flat_world(14, 10)
+    plain, army = add_poi(world, "camp", 3, 5), add_poi(world, "camp", 10, 5, purpose="army")
+    first, second = site_geometry(plain, config), site_geometry(army, config)
+    assert (
+        first is not None
+        and second is not None
+        and second.extent[2] - second.extent[0] > first.extent[2] - first.extent[0]
+    )
+
+
+def test_a_purpose_without_a_row_falls_back_to_the_plain_kind(config: Config) -> None:
+    world = flat_world(14, 10)
+    odd, plain = add_poi(world, "camp", 3, 5, purpose="picnic"), add_poi(world, "camp", 3, 5)
+    assert site_geometry(odd, config) == site_geometry(plain, config)
+
+
+def test_every_camp_purpose_row_builds_a_plan(config: Config) -> None:
+    for purpose in ("founding", "bandit", "army"):
+        world = flat_world(14, 10)
+        assert site_plan(add_poi(world, "camp", 7, 5, purpose=purpose), 0, config, world) is not None

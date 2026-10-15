@@ -126,6 +126,8 @@ def run(world: World, config: Config, seed: int) -> None:
     tiers = sorted(config.get("tables.tiers"), key=lambda name: int(config.get(f"tables.tiers.{name}.rank")))
     for tier in tiers:
         row = config.get(f"tables.tiers.{tier}")
+        if row.get("dynamic", False):
+            continue  # minted by a later simulation, never placed here
         wanted = _tier_count(config, tier, land_km2)
         allowed = _eligible_landmasses(world, config, tier)
         spacing = float(row["spacing_km"])

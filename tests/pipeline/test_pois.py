@@ -164,3 +164,9 @@ def test_footprint_mask_needs_enough_dry_land() -> None:
     world.water_type[2, 2] = int(WaterType.SALT)
     assert pois.footprint_land_fraction_mask(world, 3, 3, 0.9)[2, 2] is np.False_
     assert pois.footprint_land_fraction_mask(world, 3, 3, 0.5)[2, 2] is np.True_
+
+
+def test_generated_camps_take_their_row_purpose(world: World, cfg: Config) -> None:
+    # The camp row names a purpose; every placed camp carries it and no other kind has one.
+    purpose = cfg.get("tables.pois.camp.purpose")
+    assert purpose and all((p.purpose == purpose) == (p.kind == "camp") for p in world.pois)

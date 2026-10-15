@@ -58,10 +58,10 @@ def test_relief_table_covers_every_relief_member() -> None:
     assert set(get_defaults()["tables"]["relief"]) == set(RELIEF_BY_NAME)
 
 
-def test_tier_ranks_order_capital_to_village() -> None:
-    # Placement order is data: rank 0 is the capital, then city, town, village.
+def test_tier_ranks_order_capital_to_hamlet() -> None:
+    # Placement order is data: rank 0 is the capital, then city, town, village and the simulation-minted hamlet.
     tiers = get_defaults()["tables"]["tiers"]
-    assert sorted(tiers, key=lambda name: tiers[name]["rank"]) == ["capital", "city", "town", "village"]
+    assert sorted(tiers, key=lambda name: tiers[name]["rank"]) == ["capital", "city", "town", "village", "hamlet"]
 
 
 def test_user_override_changes_one_attribute_and_keeps_the_row(tmp_path: Path) -> None:
@@ -320,3 +320,11 @@ def test_a_poi_biome_name_must_exist() -> None:
     cfg["tables"]["pois"]["tower"]["biomes"] = ["moonscape"]
     with pytest.raises(ConfigError, match=r"tables\.pois\.tower\.biomes: unknown biome"):
         validate(cfg)
+
+
+def test_a_poi_purpose_has_a_site_row() -> None:
+    # A row's purpose names a `<kind>_<purpose>` site row, or its POIs would silently use the plain kind's look.
+    tables = get_defaults()["tables"]
+    assert all(
+        f"{kind}_{row['purpose']}" in tables["sites"] for kind, row in tables["pois"].items() if "purpose" in row
+    )

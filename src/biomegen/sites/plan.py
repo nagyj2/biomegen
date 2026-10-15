@@ -20,7 +20,7 @@ from ..world.tile import Cell
 from ..world.world import World
 from . import boat, camp, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
-from .geometry import SiteGeometry, site_geometry
+from .geometry import SiteGeometry, site_geometry, site_row_name
 from .layout import LAYOUTS, SiteContext
 from .patch import read_patch
 from .streets import clear_roads
@@ -75,6 +75,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     cache = _cache(world, config)
     key = (
         poi.kind,
+        poi.purpose,
         poi.x,
         poi.y,
         poi.interior_seed,
@@ -90,7 +91,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     if geometry is None:
         cache[key] = None
         return None
-    row = config.get(f"tables.sites.{poi.kind}")
+    row = config.get(f"tables.sites.{site_row_name(config, poi.kind, poi.purpose)}")
     context = SiteContext(
         kind=poi.kind,
         seed=int(poi.interior_seed),

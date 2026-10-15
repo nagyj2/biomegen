@@ -33,3 +33,8 @@ def _marker(config: Config, kind: str, ascii_only: bool) -> tuple[str, RGB, Opti
         return tier["ascii" if ascii_only else "glyph"], _rgb(tier["fg"]), _rgb(bg) if bg is not None else None
     style = config.get("render.marker_style")
     return config.get("render.markers").get(kind, _UNKNOWN), _rgb(style["fg"]), _rgb(style["bg"])
+
+
+def poi_on_map(config: Config, kind: str) -> bool:
+    """Return whether a ``kind`` POI is marked at the map scale (a tier row sets ``map_marker = false`` to hide it)."""
+    return config.cached((__name__, "on_map", kind), lambda: bool(config.get(f"tables.tiers.{kind}.map_marker", True)))

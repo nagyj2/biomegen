@@ -106,3 +106,14 @@ table = 4.0
 barrel = 5.0
 crate = 4.0
 rock = 2.0
+
+[furniture.camp_founding.supplies]
+crate = 6.0
+barrel = 3.0
+rock = 3.0
+shelf = 1.0
+
+[furniture.camp_army.supplies]
+barrel = 5.0
+crate = 5.0
+chest = 1.0

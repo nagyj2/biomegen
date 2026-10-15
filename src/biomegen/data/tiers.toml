@@ -16,6 +16,9 @@
 #   spacing_km    minimum distance to any already-placed settlement
 #   land_per_settlement_km2  one settlement of this tier per this much land area (km²)
 #   backbone      true when roads join this tier into the trunk network; false tiers branch off it as spurs
+#   dynamic       (optional, default false) true for a tier a later simulation mints: the settlements stage places none
+#   connect       (optional, default true) false for a tier the roads stage does not link
+#   map_marker    (optional, default true) false to hide the marker at the map scale (it still shows at the zoom scale)
 
 [tiers.capital]
 label = "Capital"
@@ -66,3 +69,20 @@ floors = [1, 1]
 spacing_km = 230.0
 land_per_settlement_km2 = 300000.0
 backbone = false
+
+# A hamlet is minted by a later simulation, never placed by the settlements stage (`dynamic`), and roads do not link it
+# (`connect = false`). Its marker is hidden on the map and drawn from the zoom scale down (`map_marker = false`).
+[tiers.hamlet]
+label = "Hamlet"
+rank = 4
+glyph = "·"
+ascii = "."
+fg = [235, 225, 205]
+pop = [10, 80]
+floors = [1, 1]
+spacing_km = 120.0
+land_per_settlement_km2 = 150000.0
+backbone = false
+dynamic = true
+connect = false
+map_marker = false

@@ -173,3 +173,13 @@ def test_the_default_tinted_and_terrain_views_draw_markers_after_sites() -> None
     for name, view in get_defaults()["render"]["views"].items():
         layers = view["detail_layers"]
         assert layers.index("sites") < layers.index("markers"), name
+
+
+def test_hamlet_marker_is_hidden_at_the_map_scale(config) -> None:
+    # The hamlet's tier row sets map_marker = false, so the map scale leaves its cell undrawn.
+    assert not bool(_draw(_world_with_town("hamlet"), config).bold[1, 1])
+
+
+def test_hamlet_marker_is_drawn_at_the_zoom_scale(config) -> None:
+    grid = _draw_detail(_world_with_town("hamlet"), config)
+    assert int((grid.glyph == config.get("tables.tiers.hamlet.glyph")).sum()) == 1

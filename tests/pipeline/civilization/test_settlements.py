@@ -164,3 +164,9 @@ def test_a_settlement_has_the_floors_its_tier_allows(generated: World, cfg: Conf
 
 def test_a_settlement_never_goes_underground(generated: World) -> None:
     assert all(poi.lowest_floor == 0 for poi in generated.pois if poi.kind in TIERS)
+
+
+def test_a_dynamic_tier_is_never_placed(cfg: Config, generated: World) -> None:
+    # The hamlet tier is minted by a later simulation: its row asks for settlements by area but none is placed.
+    assert cfg.get("tables.tiers.hamlet.dynamic") is True
+    assert all(poi.kind != "hamlet" for poi in generated.pois)
