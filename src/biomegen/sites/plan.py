@@ -36,15 +36,12 @@ class SitePlan:
         cells: ``Cell`` values over the extent box (``box_rows x box_cols``, read-only), seen from inside; void shows
             the terrain.
         outside: The same box seen from outside (the map, zoom and local scales): buildings as roofs, walls solid.
-        ground: The ground-level features (streets, trees, walls) of a settlement seen from an upper floor, to be drawn
-            dimmed under ``cells``; ``None`` when the floor shows no ground (every other floor and kind).
     """
 
     geometry: SiteGeometry
     floor: int
     cells: np.ndarray
     outside: np.ndarray
-    ground: Optional[np.ndarray] = None
 
     def window_cells(self, cells: Optional[np.ndarray] = None) -> np.ndarray:
         """Return ``cells`` (default: this plan's) embedded in a window-sized grid, void outside the extent box."""
@@ -113,12 +110,11 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     built = LAYOUTS[row["layout"]](context)
     plan = None
     if built is not None:
-        ground = built[2] if isinstance(built, tuple) and len(built) == 3 else None
-        cells, outside = built[:2] if isinstance(built, tuple) else (built, built)
+        cells, outside = built if isinstance(built, tuple) else (built, built)
         cells, outside = clear_roads(cells, context.patch), clear_roads(outside, context.patch)
-        for array in (cells, outside) + ((ground,) if ground is not None else ()):
-            array.setflags(write=False)
-        plan = SitePlan(geometry, floor, cells, outside, ground)
+        cells.setflags(write=False)
+        outside.setflags(write=False)
+        plan = SitePlan(geometry, floor, cells, outside)
     if len(cache) >= int(config.get("sites.cache_size")):
         cache.pop(next(iter(cache)))
     cache[key] = plan

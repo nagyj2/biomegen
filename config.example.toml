@@ -77,9 +77,6 @@ shape = "mixed"                 # solid-building outline: rectangle|blob|cellula
 ruin_erosion = 0.45             # fraction of a ruin's walls that have collapsed
 coast_margin_rows = 1           # bare ground kept between a solid structure and any water
 bridge_max_rows = 6             # the widest water a settlement street will bridge
-
-[sites.settlement]
-ground_above = true             # upper floors show the ground-level streets, trees and walls under the floor plan, dimmed
 # Per-kind site rows (layout, extent in tiles, plan resolution, furniture set) live in
 # src/biomegen/data/sites.toml; furniture weights in furniture.toml. Override one with e.g.
 # [tables.sites.village] extent_tiles = [1.5, 1.0]

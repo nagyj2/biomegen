@@ -30,9 +30,7 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
   A door is a `DOOR` cell in a wall line. Buildings come from `building.build_building`.
 - Use `cells.OUTSIDE_PRIORITY` when scaling down, so thin walls survive.
 - An upper floor of a settlement shows the storey of every building that reaches it and `ROOF` over every building that
-  does not (a footprint is never left void). `SitePlan.ground` (a layout's optional third return value) carries the
-  ground-level streets, trees, walls and gates, buildings removed, for the sites layer to draw dimmed (`render.ground_dim`)
-  under the floor's cells; `sites.settlement.ground_above` turns it off.
+  does not (a footprint is never left void); the ground between the buildings is left to the terrain.
 
 ## Adding a kind
 

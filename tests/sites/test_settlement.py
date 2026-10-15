@@ -209,7 +209,7 @@ def test_the_ground_floor_is_the_same_whichever_floor_is_asked_first(config: Con
     assert first is not None and again is not None and np.array_equal(first.cells, again.cells)
 
 
-# --- upper floors: roofs and the dimmed ground ---------------------------------------------------------------------
+# --- upper floors: roofs ---------------------------------------------------------------------
 
 
 def test_a_building_without_a_storey_this_high_shows_its_roof(config: Config) -> None:
@@ -232,41 +232,6 @@ def test_the_building_that_reaches_the_top_floor_has_no_roof_there(config: Confi
 
 def test_the_ground_floor_has_no_roofs_inside(config: Config) -> None:
     assert ROOF not in _floors(config, "city", 3, 12000)[0].cells
-
-
-def test_an_upper_floor_carries_the_ground_level_streets(config: Config) -> None:
-    plans = _floors(config, "city", 3, 12000)
-    ground = plans[1].ground
-    assert ground is not None and np.array_equal(ground == PATH, plans[0].cells == PATH)
-
-
-def test_the_dimmed_ground_has_no_building_cells(config: Config) -> None:
-    # Buildings show as storeys or roofs, never as ground: no floor, roof or door of a building in the ground layer.
-    plans = _floors(config, "city", 3, 12000)
-    ground = plans[1].ground
-    footprint = plans[0].outside == ROOF
-    assert ground is not None and (ground[footprint] == VOID).all()
-
-
-def test_the_dimmed_ground_keeps_trees_and_walls(config: Config) -> None:
-    plans = _floors(config, "capital", 3, 90000)
-    ground = plans[1].ground
-    assert ground is not None and WALL in ground and (TREE in ground or BUSH in ground)
-
-
-def test_the_ground_floor_and_single_floors_carry_no_ground_layer(config: Config) -> None:
-    assert _floors(config, "city", 3, 12000)[0].ground is None and _floors(config, "village", 1, 500)[0].ground is None
-
-
-def test_the_ground_layer_can_be_switched_off(config: Config) -> None:
-    import copy
-
-    quiet = copy.deepcopy(config)
-    quiet.data["sites"]["settlement"]["ground_above"] = False
-    assert _floors(quiet, "city", 3, 12000)[1].ground is None
-
-
-# --- harbours and mills --------------------------------------------------------------------------------------------
 
 
 def _coast(config: Config, tags: tuple[str, ...], water_from: int = 6):

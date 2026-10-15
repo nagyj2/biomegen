@@ -43,7 +43,6 @@ VALUES: Dict[str, Any] = {
         # the shortest building on free ground within ``reach`` rows of the river, with a water wheel in the water.
         "harbour": {"pier_rows": 6, "boats": 2, "boat_length": 5, "boat_beam": 4, "reach_rows": 45},
         "mill": {"reach": 1.5, "width": 1.2},
-        "ground_above": True,  # upper floors show the ground-level streets, trees and walls round the buildings, dimmed
     },
     "extra_corridors": {"dungeon": 0.34, "tower": 0.15, "ruin": 0.2},  # extra room-to-room links per room, by layout
     "furnish": {
