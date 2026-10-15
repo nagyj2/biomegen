@@ -105,6 +105,8 @@ _POI_ROW = {
     "kind_spacing_km": "positive",
     "holdings": "range",
     "fated": "bool",
+    "holding_km": "span",
+    "holding_spacing_km": "positive",
     "per_km_of_front": "positive",
     "max_per_event": "count",
 }
@@ -187,6 +189,8 @@ _POI_OPTIONAL = frozenset(
         "kind_spacing_km",
         "holdings",
         "fated",
+        "holding_km",
+        "holding_spacing_km",
         "per_km_of_front",
         "max_per_event",
     }

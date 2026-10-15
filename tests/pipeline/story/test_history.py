@@ -89,8 +89,9 @@ def test_settlements_are_founded_by_the_present(world: World) -> None:
     assert all(0 <= p.founded <= world.year for p in world.pois if p.civilized)
 
 
-def test_wild_pois_stay_undated(world: World) -> None:
-    assert all(p.founded == 0 for p in world.pois if not p.civilized)
+def test_wild_pois_placed_by_location_stay_undated(world: World) -> None:
+    # Only a POI an event made (a fallen realm's ruin) takes a date; the rest of the wild ones have none.
+    assert all(p.founded == 0 for p in world.pois if not p.civilized and not p.event_ids)
 
 
 def test_each_vassal_tie_is_one_conquest(world: World) -> None:

@@ -26,6 +26,8 @@
 #   kind_spacing_km   (optional) minimum distance to another POI of the same kind
 #   holdings          (optional) [min, max] extra POIs of the kind made with the first (a fallen realm's outlying ruins)
 #   fated             (optional) true when each POI draws a fate from `poi_fates`
+#   holding_km        (optional) [min, max] km from the first POI, the band an extra (holding) POI is placed in
+#   holding_spacing_km  (optional) minimum distance between a holding and any other POI
 #   per_km_of_front   (optional) one POI per this many km of a war's front (rounded up) ...
 #   max_per_event     (optional) ... at most this many
 
@@ -78,6 +80,8 @@ source = "both"
 events = ["fall"]
 holdings = [0, 2]
 fated = true
+holding_km = [30.0, 150.0]
+holding_spacing_km = 80.0
 km2_per_poi = 1400000.0
 min_spacing_km = 350.0
 biomes = ["grass", "forest", "desert", "savanna", "tundra", "jungle"]

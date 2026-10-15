@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import math
 import random
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 
 import numpy as np
 
@@ -67,7 +67,7 @@ def footprint_land_fraction_mask(world: World, width: int, height: int, min_frac
     return (full_area - water_count) / full_area >= min_fraction
 
 
-def _eligible(world: World, row: dict, footprint: tuple[int, int] | None, min_land: float) -> np.ndarray:
+def eligible_mask(world: World, row: dict, footprint: tuple[int, int] | None, min_land: float) -> np.ndarray:
     """Bool grid of the cells a kind may occupy."""
     wanted = np.array(sorted(int(biome_from_name(name)) for name in row.get("biomes", [])), dtype=world.biome.dtype)
     on_water = bool(row.get("on_water", False))
@@ -93,7 +93,7 @@ def _remoteness(distance_km: np.ndarray, scale_km: float) -> np.ndarray:
     return np.where(np.isfinite(distance_km), 1.0 - _closeness(distance_km, scale_km), 1.0)
 
 
-def _floors(kind: str, row: dict, stream: random.Random) -> tuple[int, int]:
+def draw_floors(kind: str, row: dict, stream: random.Random) -> tuple[int, int]:
     """Return ``(floor_count, lowest_floor)``: a dungeon descends, everything else anchors at floor 0."""
     floors = row.get("floors", 1)
     if isinstance(floors, (list, tuple)):
@@ -129,10 +129,22 @@ def pick_blue_noise(
     return picked
 
 
-def _commit(
-    world: World, seed: int, kind: str, x: int, y: int, floors: tuple[int, int], purpose: str = "", connect: bool = True
-) -> None:
-    """Append one POI and write it into ``poi_index``."""
+def commit(
+    world: World,
+    seed: int,
+    kind: str,
+    x: int,
+    y: int,
+    floors: tuple[int, int],
+    *,
+    purpose: str = "",
+    connect: bool = True,
+    founded: int = 0,
+    fell: int | None = None,
+    bandit_strength: int = 0,
+    event_ids: Sequence[int] = (),
+) -> int:
+    """Append one POI, write it into ``poi_index`` and return its index; it takes its realm from the map."""
     poi = POI(
         kind=kind,
         x=x,
@@ -143,10 +155,15 @@ def _commit(
         purpose=purpose,
         connect=connect,
         realm_id=int(world.realm_id[y, x]),
+        founded=founded,
+        fell=fell,
+        bandit_strength=bandit_strength,
+        event_ids=list(event_ids),
     )
     index = len(world.pois)
     world.pois.append(poi)
     world.poi_index[y, x] = index
+    return index
 
 
 def place_by_location(world: World, config: Config, seed: int, sources: Collection[str] = ("location", "both")) -> None:
@@ -186,7 +203,7 @@ def place_by_location(world: World, config: Config, seed: int, sources: Collecti
             continue
         purpose = str(row.get("purpose", ""))
         footprint = None if on_water else max_footprint(config, kind, purpose)
-        mask = _eligible(world, row, footprint, min_land)
+        mask = eligible_mask(world, row, footprint, min_land)
         noise = rng.derive_numpy(seed, "poi", kind).random(mask.shape) * jitter
         score = 1.0 + float(row.get("near_freshwater", 0.0)) * fresh_weight
         score = score + float(row.get("coastal", 0.0)) * coast_weight + float(row.get("remoteness", 0.0)) * remote
@@ -194,5 +211,14 @@ def place_by_location(world: World, config: Config, seed: int, sources: Collecti
 
         stream = rng.derive(seed, "poi", kind, "floors")
         for x, y in pick_blue_noise(score, count, float(row["min_spacing_km"]), placed, world):
-            _commit(world, seed, kind, x, y, _floors(kind, row, stream), purpose, bool(row.get("connect", True)))
+            commit(
+                world,
+                seed,
+                kind,
+                x,
+                y,
+                draw_floors(kind, row, stream),
+                purpose=purpose,
+                connect=bool(row.get("connect", True)),
+            )
             placed.append((x, y))

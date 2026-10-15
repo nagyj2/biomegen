@@ -72,11 +72,12 @@ def test_land_pois_on_land_boats_on_water(world: World) -> None:
 
 
 def test_a_wild_poi_keeps_its_spacing_from_every_earlier_poi(world: World, cfg: Config) -> None:
-    # Each wild POI was placed no closer than its kind's min_spacing_km to any POI placed before it.
+    # Each POI placed by location was placed no closer than its kind's min_spacing_km to any POI placed before it
+    # (a POI an event made is placed by its own rule and is not held to it).
     types = cfg.get("tables.pois")
     scale = world.scale
     for i, p in enumerate(world.pois):
-        if p.kind not in types:
+        if p.kind not in types or p.event_ids:
             continue
         spacing = float(types[p.kind]["min_spacing_km"])
         for q in world.pois[:i]:
