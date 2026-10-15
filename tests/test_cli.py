@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -288,3 +290,41 @@ def test_site_scale_draws_a_poi(capsys):
         cli.main(["--seed", "3", "--width", "64", "--height", "32", "--scale", "site", "--at", f"{poi.x},{poi.y}"]) == 0
     )
     assert "│" in capsys.readouterr().out
+
+
+def _chronicle(capsys, *args: str) -> tuple[str, str]:
+    from biomegen import cli
+
+    assert cli.main(["--seed", "3", "--width", "64", "--height", "32", "--chronicle", *args]) == 0
+    captured = capsys.readouterr()
+    return captured.out, captured.err
+
+
+def test_chronicle_prints_a_title_and_dated_events(capsys):
+    out, _ = _chronicle(capsys)
+    assert out.startswith("The Chronicle of ") and re.search(r"^\s*\d+  \S", out, re.MULTILINE)
+
+
+def test_chronicle_leaves_no_token_in_the_text(capsys):
+    out, _ = _chronicle(capsys)
+    assert "{" not in out and "}" not in out
+
+
+def test_chronicle_sends_the_seed_line_to_stderr(capsys):
+    # Stdout is only the chronicle, so it can be piped or parsed.
+    out, err = _chronicle(capsys)
+    assert "biomegen: seed=3" in err and "biomegen: seed" not in out
+
+
+def test_chronicle_json_parses_to_events_and_entities(capsys):
+    out, _ = _chronicle(capsys, "--chronicle-format", "json")
+    data = json.loads(out)
+    assert data["seed"] == 3 and data["events"] and {"realms", "fallen_realms", "settlements"} <= set(data)
+
+
+def test_unknown_chronicle_format_is_rejected(capsys):
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--seed", "3", "--chronicle", "--chronicle-format", "xml"])
+    assert "invalid choice" in capsys.readouterr().err

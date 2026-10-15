@@ -1,0 +1,82 @@
+"""Plain-text and JSON output of a world's chronicle.
+
+Both read only the finished :class:`~biomegen.world.world.World`, so any layer above may call them. The text is one line
+per event, oldest first; the JSON holds every event plus the realms, fallen realms and settlements its ids refer to,
+so it can be read without the rest of the world.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+from .world import World
+
+
+def chronicle_text(world: World) -> str:
+    """Return the chronicle as text: a title line, then ``year  event`` for every event, oldest first."""
+    lines = [f"The Chronicle of {world.island_name or 'the island'} (year {world.year})", ""]
+    lines += [f"{event.year:>5}  {event.text}" for event in world.chronicle]
+    return "\n".join(lines)
+
+
+def chronicle_data(world: World) -> dict[str, Any]:
+    """Return the chronicle as plain data: the events and the entities their ids name."""
+    return {
+        "island": world.island_name,
+        "seed": world.seed,
+        "year": world.year,
+        "events": [
+            {
+                "id": e.id,
+                "year": e.year,
+                "kind": e.kind,
+                "text": e.text,
+                "tags": list(e.tags),
+                "location": None if e.location == (-1, -1) else list(e.location),
+                "realm_ids": e.realm_ids,
+                "poi_ids": e.poi_ids,
+                "fallen_ids": e.fallen_ids,
+                "near_poi": None if e.near_poi < 0 else e.near_poi,
+            }
+            for e in world.chronicle
+        ],
+        "realms": [
+            {
+                "id": r.id,
+                "name": r.name,
+                "kind": r.kind,
+                "founded": r.founded,
+                "liege": None if r.liege < 0 else r.liege,
+                "seat_poi": None if r.seat_poi < 0 else r.seat_poi,
+            }
+            for r in world.realms
+        ],
+        "fallen_realms": [
+            {
+                "id": f.id,
+                "name": f.name,
+                "culture": f.culture,
+                "location": list(f.location),
+                "founded": f.founded,
+                "fell": f.fell,
+            }
+            for f in world.fallen_realms
+        ],
+        "settlements": [
+            {
+                "id": i,
+                "name": p.name,
+                "kind": p.kind,
+                "realm_id": None if p.realm_id < 0 else p.realm_id,
+                "founded": p.founded,
+            }
+            for i, p in enumerate(world.pois)
+            if p.civilized
+        ],
+    }
+
+
+def chronicle_json(world: World) -> str:
+    """Return :func:`chronicle_data` as indented JSON (keys in a fixed order, non-ASCII names kept as they are)."""
+    return json.dumps(chronicle_data(world), indent=2, ensure_ascii=False)

@@ -7,7 +7,7 @@ Run the CLI application with::
                     [--headless] [--view NAME] [--scale {map,zoom,local,site}] [--at X,Y] [--floor N]
                     [--labels {all,cities,none}]
                     [--color {auto,truecolor,256,none}] [--ascii] [--no-legend] [--save FILE] [--html FILE]
-                    [--color-test]
+                    [--chronicle] [--chronicle-format {text,json}] [--color-test]
 
 This launcher wires together the three top-level concerns and nothing else:
     1. parse CLI arguments,
@@ -116,6 +116,17 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--html", metavar="FILE", default=None, help="Also save a coloured HTML copy of the static map."
+    )
+    parser.add_argument(
+        "--chronicle",
+        action="store_true",
+        help="Print the world's chronicle (the seed line goes to stderr) and exit.",
+    )
+    parser.add_argument(
+        "--chronicle-format",
+        choices=("text", "json"),
+        default="text",
+        help="Format of --chronicle: readable text, or JSON with the realms and places its ids name.",
     )
     parser.add_argument("--color-test", action="store_true", help="Show colour and glyph test swatches and exit.")
     return parser
@@ -284,7 +295,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     _apply_overrides(args, config, parser)
 
     seed = resolve_seed(args.seed, config)
-    print(f"biomegen: seed={seed}")
+    print(f"biomegen: seed={seed}", file=sys.stderr if args.chronicle else sys.stdout)
 
     # Generate the world (the same pipeline feeds both the UI and the headless dump).
     from biomegen import pipeline
@@ -293,6 +304,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.headless:
         _print_stats(pipeline.stats(world))
+        return 0
+
+    if args.chronicle:
+        from biomegen.world.chronicle import chronicle_json, chronicle_text
+
+        print(chronicle_json(world) if args.chronicle_format == "json" else chronicle_text(world))
         return 0
 
     if args.at is not None and not (0 <= args.at[0] < world.width and 0 <= args.at[1] < world.height):
@@ -326,6 +343,7 @@ def _print_stats(stats: dict[str, Any]) -> None:
         f"roads={stats['road_tiles']} tiles  bridge_tiles={stats.get('bridge_tiles', 0)}"
     )
     print(f"pois={stats['pois']}: {stats.get('poi_kinds', {})}")
+    print(f"chronicle: {stats['events']} events, {stats['fallen_realms']} fallen realms: {stats['event_kinds']}")
     print("biomes:")
     for name, count in stats["biomes"].items():
         print(f"  {name:>10}: {count}")
