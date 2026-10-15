@@ -70,9 +70,11 @@ def _validate_biome_names(cfg: Dict[str, Any], errors: List[str]) -> None:
     if "peak_biome" in biomes:
         check(biomes["peak_biome"], "biomes.peak_biome")
 
-    for kind, rule in (cfg.get("poi", {}).get("types", {}) or {}).items():
-        for name in rule.get("biomes", []) or []:
-            check(name, f"poi.types.{kind}.biomes")
+    pois = cfg.get("tables", {}).get("pois", {}) or {}
+    for kind in sorted(pois):
+        rule = pois[kind]
+        for name in (rule.get("biomes", []) or []) if isinstance(rule, dict) else []:
+            check(name, f"tables.pois.{kind}.biomes")
 
     for habitat, names in (cfg.get("politics", {}).get("habitats", {}) or {}).items():
         for name in names or []:

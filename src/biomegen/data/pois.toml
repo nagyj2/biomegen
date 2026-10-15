@@ -1,0 +1,88 @@
+# POI kind table, keyed by kind. Loaded into the config tree as `tables.pois`; override with e.g. `[tables.pois.tower]`
+# + `km2_per_poi = 900000.0` in a user config. Settlement kinds (capital, city, town, village) are tiers (tiers.toml);
+# the kinds here are the wild and dynamic ones. A kind also needs a row in sites.toml to be zoomable and a marker in
+# `render.markers`.
+#
+# Placement (the location pass of the pois stage), in `priority` order, lowest first:
+#   priority          order of the passes; unique
+#   source            where the kind comes from: "location" (placed by score), "history" (made from chronicle events) or
+#                     "both"
+#   km2_per_poi       one POI per this much land (sea, for on_water kinds) in km², times `poi.density`; omit for a
+#                     kind the location pass never places
+#   min_spacing_km    minimum distance to every POI placed before it
+#   biomes            (optional) land cover it may stand on (lower-case Biome names); a kind without any is not placed
+#   on_water          (optional) true for a kind that floats on open water
+#   elevation_min_m, elevation_max_m   (optional) height band in metres
+#   near_freshwater, coastal, remoteness   (optional) score weights favouring fresh water, the coast, distance from
+#                     settlements
+#   floors            storeys: a count, or a [min, max] range drawn per POI (a dungeon descends, the rest rise)
+#
+# Simulation seams (data only until a later simulation reads them):
+#   owner             "realm" (held by the realm that owns its cell) or "wild"
+#   dynamic           true when a later simulation mints and removes it
+#   connect           true when the roads stage links it to the road network
+#   bandit_strength   (optional) bandits it holds when it is wild and made with them
+#   bandit_radius_km  (optional) how far its bandits' danger reaches
+#   lifespan          (optional) years a dynamic POI stands before it is dismantled
+
+[pois.tower]
+priority = 10
+source = "both"
+km2_per_poi = 1750000.0
+min_spacing_km = 400.0
+biomes = ["snow", "grass", "forest", "tundra"]
+elevation_min_m = 300.0
+remoteness = 0.5
+floors = [4, 8]
+owner = "wild"
+dynamic = false
+connect = true
+
+[pois.dungeon]
+priority = 20
+source = "both"
+km2_per_poi = 1750000.0
+min_spacing_km = 450.0
+biomes = ["snow", "forest", "tundra", "desert", "swamp"]
+elevation_min_m = 100.0
+remoteness = 0.7
+floors = [3, 6]
+owner = "wild"
+dynamic = false
+connect = true
+
+[pois.ruin]
+priority = 30
+source = "both"
+km2_per_poi = 1400000.0
+min_spacing_km = 350.0
+biomes = ["grass", "forest", "desert", "savanna", "tundra", "jungle"]
+remoteness = 0.6
+floors = 1
+owner = "wild"
+dynamic = false
+connect = true
+
+[pois.camp]
+priority = 40
+source = "location"
+km2_per_poi = 1200000.0
+min_spacing_km = 250.0
+biomes = ["grass", "forest", "tundra", "savanna", "taiga"]
+remoteness = 0.3
+floors = 1
+owner = "wild"
+dynamic = true
+connect = true
+
+[pois.boat]
+priority = 50
+source = "location"
+km2_per_poi = 2200000.0
+min_spacing_km = 350.0
+biomes = ["shallow", "deep", "lake"]
+on_water = true
+floors = 1
+owner = "wild"
+dynamic = false
+connect = false

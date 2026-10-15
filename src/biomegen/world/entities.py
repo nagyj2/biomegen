@@ -50,6 +50,16 @@ class POI:
     lowest_floor: int = 0  # 0 for ground-level; negative for dungeons going underground
     pop: int = 0  # population (settlements only)
     founded: int = 0  # chronicle year the settlement was founded (set by the history stage; 0 = not dated)
+    fell: int | None = None  # year it fell or was dismantled (None while it stands); set by a later simulation
+    event_ids: List[int] = field(
+        default_factory=list
+    )  # chronicle events that made or marked it (the link runs POI -> event)
+    hook: str = ""  # its story text, rendered by the naming stage
+    hook_refs: List[Tuple[int, int, str, int]] = field(
+        default_factory=list
+    )  # (start, end, REF_KINDS entry, id) per name in hook
+    bandit_strength: int = 0  # bandits it holds (a wild tower, dungeon or ruin); data only until a simulation reads it
+    purpose: str = ""  # a camp's purpose (founding, bandit, army); empty for every other kind
     tags: Tuple[str, ...] = ()  # site traits, e.g. "port", "river"
     extra: dict = field(default_factory=dict)  # kind-specific data (e.g. boat cargo type)
 

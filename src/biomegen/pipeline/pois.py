@@ -1,7 +1,8 @@
-"""Stage 8: wild points of interest (tower, dungeon, ruin, camp, boat). Interim: phase 8 replaces it.
+"""Wild points of interest placed by location (tower, dungeon, ruin, camp, boat).
 
 Settlements come from the settlements stage first, so they count for spacing and for the remoteness field. Each
-kind in ``poi.types`` then gets one pass, in ``priority`` order:
+kind in ``tables.pois`` placed by location (``source`` "location" or "both") then gets one pass, in ``priority``
+order:
 
 1. a hard **eligibility** mask (biome whitelist, elevation bounds, land or water, a free tile, and for land kinds
    enough dry land under the largest site it may grow to);
@@ -139,7 +140,7 @@ def _commit(world: World, seed: int, kind: str, x: int, y: int, floors: tuple[in
 
 
 def run(world: World, config: Config, seed: int) -> None:
-    """Place every ``poi.types`` kind, mutating ``world`` in place."""
+    """Place every location-sourced ``tables.pois`` kind, mutating ``world`` in place."""
     backend = config.get("compute.backend")
     sampling = world.scale.sampling
     land = world.water_type == int(WaterType.NONE)
@@ -163,10 +164,12 @@ def run(world: World, config: Config, seed: int) -> None:
     jitter = float(config.get("poi.jitter"))
     density = float(config.get("poi.density"))
 
-    types = config.get("poi.types")
+    types = config.get("tables.pois")
     placed = [(p.x, p.y) for p in world.pois]
     for kind in sorted(types, key=lambda name: (int(types[name].get("priority", 0)), name)):
         row = types[kind]
+        if row.get("source", "location") == "history" or "km2_per_poi" not in row:
+            continue
         on_water = bool(row.get("on_water", False))
         count = round(area_km2[not on_water] / float(row["km2_per_poi"]) * density)
         if count <= 0 or not row.get("biomes"):

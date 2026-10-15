@@ -70,7 +70,7 @@ max_capitals = 16
 density = 1.0                    # multiplies every wild POI kind's count (one per km2_per_poi)
 min_footprint_land = 0.5        # min dry-land fraction of the tiles a wild POI's site covers for an eligible anchor
 
-# Per-kind rules live under [poi.types.<kind>]; only overrides shown here (see src/biomegen/config/defaults/poi.py for all).
+# Per-kind rules are the rows of [tables.pois.<kind>] (src/biomegen/data/pois.toml).
 
 [sites]
 size_jitter = 0.25              # each site's extent is scaled by a seeded factor in [1 - jitter, 1 + jitter]

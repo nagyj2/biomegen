@@ -41,9 +41,9 @@ def _island(width: int = 60, height: int = 30) -> World:
 
 
 def _wild_config(**rows: dict) -> Config:
-    """Defaults with ``poi.types`` replaced by the given kinds."""
+    """Defaults with ``tables.pois`` replaced by the given kinds."""
     config = load_config(None)
-    config.data["poi"]["types"] = rows
+    config.data["tables"]["pois"] = rows
     return config
 
 
@@ -53,8 +53,8 @@ def _camp(**overrides: object) -> dict:
 
 # --------------------------------------------------------------------------- generated world
 def test_only_wild_kinds_come_from_the_poi_stage(world: World, cfg: Config) -> None:
-    # Settlements come from another stage; poi.types lists exactly the wild kinds.
-    assert set(cfg.get("poi.types")) == set(WILD)
+    # Settlements come from another stage; tables.pois lists the wild kinds.
+    assert set(cfg.get("tables.pois")) == set(WILD)
 
 
 def test_poi_index_refs_are_consistent(world: World) -> None:
@@ -72,7 +72,7 @@ def test_land_pois_on_land_boats_on_water(world: World) -> None:
 
 def test_a_wild_poi_keeps_its_spacing_from_every_earlier_poi(world: World, cfg: Config) -> None:
     # Each wild POI was placed no closer than its kind's min_spacing_km to any POI placed before it.
-    types = cfg.get("poi.types")
+    types = cfg.get("tables.pois")
     scale = world.scale
     for i, p in enumerate(world.pois):
         if p.kind not in types:
@@ -92,7 +92,7 @@ def test_placement_deterministic(cfg: Config) -> None:
 def test_pois_respect_their_metre_elevation_limits(world: World, cfg: Config) -> None:
     # Every placed POI anchor sits within its kind's elevation_min_m / elevation_max_m band.
     for p in world.pois:
-        rule = cfg.get(f"poi.types.{p.kind}", {})
+        rule = cfg.get(f"tables.pois.{p.kind}", {})
         height = float(world.elevation_m[p.y, p.x])
         assert height >= rule.get("elevation_min_m", float("-inf"))
         assert height <= rule.get("elevation_max_m", float("inf"))

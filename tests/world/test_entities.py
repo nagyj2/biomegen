@@ -54,3 +54,23 @@ def test_realm_and_settlement_start_undated() -> None:
 
 def test_event_kinds_are_unique() -> None:
     assert len(set(EVENT_KINDS)) == len(EVENT_KINDS)
+
+
+def test_poi_starts_standing_and_unlinked() -> None:
+    # A new POI has not fallen, belongs to no event, holds no bandits and has no hook or purpose yet.
+    poi = POI(kind="ruin", x=1, y=2, interior_seed=0)
+    assert (poi.fell, poi.event_ids, poi.hook, poi.hook_refs, poi.bandit_strength, poi.purpose) == (
+        None,
+        [],
+        "",
+        [],
+        0,
+        "",
+    )
+
+
+def test_poi_link_lists_are_not_shared() -> None:
+    first, second = POI(kind="ruin", x=1, y=2, interior_seed=0), POI(kind="ruin", x=3, y=4, interior_seed=0)
+    first.event_ids.append(7)
+    first.hook_refs.append((0, 1, "poi", 0))
+    assert second.event_ids == [] and second.hook_refs == []

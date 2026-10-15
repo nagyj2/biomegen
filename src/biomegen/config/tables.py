@@ -18,7 +18,8 @@ from .validate import _coerce_color
 # "range" [min, max] ints >= 0; "pair" a [w, h] of numbers > 0; "forms" a non-empty list of name patterns,
 # each containing "{n}" exactly once; "ascii_char" / "ascii_char?" / "ascii_text" are "char" / "char?" /
 # "text" restricted to 7-bit characters; "factor" one of "none", "moisture", "elevation"; "span" [min, max]
-# numbers with 0 <= min <= max; "text_list" a non-empty list of strings.
+# numbers with 0 <= min <= max; "text_list" a non-empty list of strings; "number" any number; "source" and "owner"
+# one of `POI_SOURCES` / `POI_OWNERS`; "floors" a storey count or a [min, max] range of them.
 _BIOME_ROW = {
     "label": "text",
     "glyph": "char",
@@ -74,6 +75,26 @@ _SITE_ROW = {
     "plaza_tiles": "positive",
     "walled": "bool",
 }
+_POI_ROW = {
+    "priority": "rank",
+    "source": "source",
+    "km2_per_poi": "positive",
+    "min_spacing_km": "positive",
+    "biomes": "text_list",
+    "on_water": "bool",
+    "elevation_min_m": "number",
+    "elevation_max_m": "number",
+    "near_freshwater": "nonneg",
+    "coastal": "nonneg",
+    "remoteness": "nonneg",
+    "floors": "floors",
+    "owner": "owner",
+    "dynamic": "bool",
+    "connect": "bool",
+    "bandit_strength": "count",
+    "bandit_radius_km": "positive",
+    "lifespan": "count",
+}
 _STYLE_ROW = {
     "label": "text",
     "weight": "nonneg",
@@ -121,6 +142,26 @@ _REASON_TOKEN_ROW = {"fallback": "text"}
 _RULING_STYLE_ROW = {"label": "text", "weight": "positive", "strength_mul": "positive"}
 _CHRONICLE_ROW = {"templates": "text_list", "templates_near": "text_list"}
 
+#: The POI row keys a kind may omit (placement numbers a history-only kind lacks, and the optional seam fields).
+_POI_OPTIONAL = frozenset(
+    {
+        "km2_per_poi",
+        "biomes",
+        "on_water",
+        "elevation_min_m",
+        "elevation_max_m",
+        "near_freshwater",
+        "coastal",
+        "remoteness",
+        "bandit_strength",
+        "bandit_radius_km",
+        "lifespan",
+    }
+)
+
+POI_SOURCES = ("location", "history", "both")
+POI_OWNERS = ("realm", "wild")
+
 DETAIL_FACTORS = ("none", "moisture", "elevation")
 
 #: Habitats a realm form may name: the biome groups of ``politics.habitats``, ``high`` (mostly relief) and the
@@ -166,6 +207,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
     "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled"})),
+    "pois": (_POI_ROW, _POI_OPTIONAL),
     "realm_kinds": (_REALM_KIND_ROW, frozenset()),
     "realm_forms": (_REALM_FORM_ROW, frozenset()),
     "relation_weights": (_RELATION_WEIGHT_ROW, frozenset()),
@@ -179,6 +221,17 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
 
 def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _is_floors(value: Any) -> bool:
+    """A storey count (an int >= 1) or a [min, max] range of them."""
+    if isinstance(value, list):
+        return (
+            len(value) == 2
+            and all(isinstance(n, int) and not isinstance(n, bool) for n in value)
+            and 1 <= value[0] <= value[1]
+        )
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
 def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: List[str]) -> None:
@@ -198,6 +251,10 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "ascii_char?": lambda v: isinstance(v, str) and len(v) <= 1 and v.isascii(),
         "ascii_text": lambda v: isinstance(v, str) and v.isascii(),
         "factor": lambda v: v in DETAIL_FACTORS,
+        "source": lambda v: v in POI_SOURCES,
+        "owner": lambda v: v in POI_OWNERS,
+        "number": _is_number,
+        "floors": _is_floors,
         "bool": lambda v: isinstance(v, bool),
         "unit": lambda v: _is_number(v) and 0.0 <= v <= 1.0,
         "cost": lambda v: _is_number(v) and v >= 1.0,

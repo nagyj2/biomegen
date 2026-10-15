@@ -38,6 +38,7 @@ def test_shipped_tables_load_and_validate() -> None:
         "detail_relief",
         "furniture",
         "geo_names",
+        "pois",
         "realm_colors",
         "realm_forms",
         "realm_kinds",
@@ -159,8 +160,8 @@ def test_duplicate_tier_rank_is_rejected() -> None:
 
 def test_loader_combines_the_shipped_files() -> None:
     # biomes.toml supplies biomes and relief; detail.toml detail and detail_relief; tiers.toml tiers;
-    # terrain.toml styles; geography.toml geo_names; sites.toml sites; furniture.toml furniture; polity.toml the
-    # four realm and relation tables; reasons.toml reasons and reason_tokens; rulers.toml ruling_styles;
+    # terrain.toml styles; geography.toml geo_names; sites.toml sites; pois.toml pois; furniture.toml furniture;
+    # polity.toml the four realm and relation tables; reasons.toml reasons and reason_tokens; rulers.toml ruling_styles;
     # chronicle.toml chronicle.
     assert sorted(_load(DATA_DIR, DATA_FILES)) == [
         "biomes",
@@ -169,6 +170,7 @@ def test_loader_combines_the_shipped_files() -> None:
         "detail_relief",
         "furniture",
         "geo_names",
+        "pois",
         "realm_colors",
         "realm_forms",
         "realm_kinds",
@@ -277,4 +279,44 @@ def test_a_site_row_must_name_an_existing_furniture_set() -> None:
     cfg = get_defaults()
     cfg["tables"]["sites"]["village"]["furniture"] = "palace"
     with pytest.raises(ConfigError):
+        validate(cfg)
+
+
+def test_every_poi_kind_has_a_site_row_and_a_marker() -> None:
+    # Each kind in pois.toml needs a site row and a map marker, or it could not be zoomed into or drawn.
+    cfg = get_defaults()
+    assert set(cfg["tables"]["pois"]) <= set(cfg["tables"]["sites"])
+    assert set(cfg["tables"]["pois"]) <= set(cfg["render"]["markers"])
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("source", "both_ways"),
+        ("owner", "faction"),
+        ("floors", [0, 3]),
+        ("connect", "yes"),
+        ("bandit_strength", 0),
+        ("min_spacing_km", -5.0),
+    ],
+)
+def test_a_poi_row_value_of_the_wrong_kind_is_rejected(key: str, value: object) -> None:
+    cfg = get_defaults()
+    cfg["tables"]["pois"]["tower"][key] = value
+    with pytest.raises(ConfigError, match=rf"tables\.pois\.tower\.{key}: expected"):
+        validate(cfg)
+
+
+def test_a_poi_row_without_a_seam_field_is_rejected() -> None:
+    # owner, dynamic and connect are required on every kind so a later simulation never has to guess.
+    cfg = get_defaults()
+    del cfg["tables"]["pois"]["tower"]["connect"]
+    with pytest.raises(ConfigError, match=r"tables\.pois\.tower: missing key 'connect'"):
+        validate(cfg)
+
+
+def test_a_poi_biome_name_must_exist() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["pois"]["tower"]["biomes"] = ["moonscape"]
+    with pytest.raises(ConfigError, match=r"tables\.pois\.tower\.biomes: unknown biome"):
         validate(cfg)
