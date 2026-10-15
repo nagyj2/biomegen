@@ -159,16 +159,17 @@ class _Timeline:
     def _offshoot(self, step: _Step) -> None:
         """Check whether realm ``step.b`` left realm ``step.a`` in the year of its founding.
 
-        The odds are ``history.secession.chance`` times the offshoot score, which reads the parent's strength at this
-        moment (against the mean of the living realms), and at most ``max_per_world`` happen. If it does the realm's
-        founding is a ``secession`` event, its seat older than the realm; if not, it is founded as any realm is.
+        The odds are the offshoot :func:`~.secession.form_chance` times the offshoot score, which reads the parent's
+        strength at this moment (against the mean of the living realms), and at most ``max_per_world`` happen. If it
+        does the realm's founding is a ``secession`` event, its seat older than the realm; if not, it is founded as any
+        realm is.
         """
         world, config, seed = self.world, self.config, self.seed
         parent, child = world.realms[step.a[1]], world.realms[step.b[1]]
         mean = sum(self.strength[(REALM, r.id)] for r in world.realms) / len(world.realms)
         score = secession.offshoot_score(world, config, child, parent, step.year, self.strength[step.a] / mean)
         roll = rng.derive(seed, "history", "secession", "check", "offshoot", child.id).random()
-        chance = float(config.get("history.secession.chance"))
+        chance = secession.form_chance(config, "offshoot")
         if self.secessions >= int(config.get("history.secession.max_per_world")) or roll >= chance * score:
             add_founding(world, config, seed, self.ledger, child)
             return
@@ -371,13 +372,16 @@ def derive(
     ledger: Ledger,
     styles: dict[int, StyleTimeline] | None = None,
     offshoots: Mapping[int, int] | None = None,
+    secessions_made: int = 0,
 ) -> None:
     """Add the war, peace, battle, rivalry, treaty and fall events of the world to ``ledger``.
 
     ``offshoots`` maps a realm that may have left an older one to that parent: each gets its founding (or secession)
-    event here, from a check at its founding year.
+    event here, from a check at its founding year. ``secessions_made`` counts the clean splits already decided, which
+    use up the per-world cap first.
     """
     timeline = _Timeline(world, config, seed, span, ledger, styles)
+    timeline.secessions = secessions_made
     _plan_relations(timeline)
     _plan_fallen_wars(timeline)
     _plan_offshoots(timeline, offshoots or {})

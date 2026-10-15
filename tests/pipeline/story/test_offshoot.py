@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from biomegen import pipeline
@@ -16,10 +17,12 @@ from biomegen.world.world import World
 SEEDS = (42, 7)
 
 
-def _eager() -> Config:
-    """Defaults where every candidate offshoot happens (chance 1, no cap), so each world has several."""
+def _eager(**overrides: object) -> Config:
+    """Defaults where only offshoots happen, and every candidate's chance is its score (chance 1, no cap)."""
     config = load_config(None)
-    config.data["history"]["secession"].update(chance=1.0, max_per_world=99)
+    config.data["history"]["secession"].update({"chance": 1.0, "max_per_world": 99, **overrides})
+    for form, weight in (("offshoot", 1.0), ("split", 0.0), ("defection", 0.0)):
+        config.data["tables"]["secession_forms"][form]["weight"] = weight
     return config
 
 
@@ -98,10 +101,10 @@ def test_an_offshoots_seat_takes_the_secession_text_as_its_hook(world: World) ->
             assert world.pois[realm.seat_poi].hook == _secession(world, realm.id).text
 
 
-def test_the_parent_keeps_its_name_ruler_and_origin(world: World) -> None:
+def test_the_parent_keeps_its_name_and_ruler(world: World) -> None:
     for realm in _offshoots(world):
         parent = world.realms[realm.parent]
-        assert parent.name and parent.ruler and parent.origin != "split"
+        assert parent.name and parent.ruler and parent.name != realm.name
 
 
 def test_a_realm_that_left_nobody_has_no_parent(world: World) -> None:
@@ -110,7 +113,7 @@ def test_a_realm_that_left_nobody_has_no_parent(world: World) -> None:
 
 def test_the_partition_is_untouched_by_secession(world: World) -> None:
     plain = pipeline.generate(load_config(None), world.seed)
-    assert world.fingerprint() == plain.fingerprint()
+    assert np.array_equal(world.realm_id, plain.realm_id)
 
 
 def test_the_world_is_deterministic() -> None:
@@ -119,15 +122,12 @@ def test_the_world_is_deterministic() -> None:
 
 
 def test_the_cap_limits_the_secessions_of_a_world() -> None:
-    config = _eager()
-    config.data["history"]["secession"]["max_per_world"] = 1
-    assert len([r for r in pipeline.generate(config, 42).realms if r.origin]) <= 1
+    made = pipeline.generate(_eager(max_per_world=1), 42)
+    assert len([r for r in made.realms if r.origin]) <= 1
 
 
 def test_no_chance_means_no_secession() -> None:
-    config = _eager()
-    config.data["history"]["secession"]["chance"] = 0.0
-    made = pipeline.generate(config, 42)
+    made = pipeline.generate(_eager(chance=0.0), 42)
     assert not [r for r in made.realms if r.origin] and not [e for e in made.chronicle if e.kind == "secession"]
 
 
@@ -174,14 +174,18 @@ def test_a_tribe_is_never_planned() -> None:
 
 
 def test_nothing_is_planned_at_chance_zero() -> None:
+    assert secession.plan_offshoots(_tiny(), _eager(chance=0.0), 1) == {}
+
+
+def test_nothing_is_planned_when_the_offshoot_form_has_no_weight() -> None:
     config = _eager()
-    config.data["history"]["secession"]["chance"] = 0.0
+    config.data["tables"]["secession_forms"]["offshoot"]["weight"] = 0.0
+    config.data["tables"]["secession_forms"]["split"]["weight"] = 1.0
     assert secession.plan_offshoots(_tiny(), config, 1) == {}
 
 
 def _check(chance: float, seed: int = 1) -> tuple[World, list]:
-    config = _eager()
-    config.data["history"]["secession"]["chance"] = chance
+    config = _eager(chance=chance)
     world = _tiny()
     ledger = Ledger(config)
     conflicts.derive(world, config, seed, 1200, ledger, None, {1: 0})

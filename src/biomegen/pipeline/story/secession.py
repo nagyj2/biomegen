@@ -23,6 +23,9 @@ a break.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
+
+import numpy as np
 
 from ...config.model import Config
 from ...util import rng
@@ -31,6 +34,17 @@ from ...world.world import World
 
 OFFSHOOT_KINDS = ("major", "city_state")  # a tribal land is native to its area: it never broke away from a realm
 PARENT_KINDS = ("major",)
+
+
+def form_chance(config: Config, form: str) -> float:
+    """Return the chance of a candidate of ``form`` (offshoot, split or defection) before its score tilts it.
+
+    ``history.secession.chance`` is the chance of the likeliest form; the others are that times their share of its
+    ``tables.secession_forms`` weight, and a form with weight 0 never happens.
+    """
+    rows = config.get("tables.secession_forms")
+    top = max(float(row["weight"]) for row in rows.values())
+    return float(config.get("history.secession.chance")) * float(rows[form]["weight"]) / top if top > 0 else 0.0
 
 
 def proximity_term(config: Config, km: float, bordering: bool) -> float:
@@ -237,20 +251,20 @@ def fracture_score(world: World, config: Config, realm: Realm, year: int, streng
     )
 
 
-def plan_offshoots(world: World, config: Config, seed: int) -> dict[int, int]:
+def plan_offshoots(world: World, config: Config, seed: int, exclude: frozenset[int] = frozenset()) -> dict[int, int]:
     """Return ``{breakaway realm id: parent realm id}`` for every realm that may have left an older one.
 
     A realm of ``OFFSHOOT_KINDS`` is a candidate when some major realm was founded at least ``history.min_gap_years``
     before it. Its parent is drawn among those by their offshoot score (without a strength, which only the timeline
-    knows). Nothing is decided here: the timeline checks each candidate at its founding year. Empty when the chance
-    is 0.
+    knows). Nothing is decided here: the timeline checks each candidate at its founding year. Empty when the offshoot
+    chance is 0. A realm in ``exclude`` (one that came of a clean split) is never a candidate.
     """
-    if float(config.get("history.secession.chance")) <= 0.0:
+    if form_chance(config, "offshoot") <= 0.0:
         return {}
     gap = int(config.get("history.min_gap_years"))
     planned: dict[int, int] = {}
     for child in world.realms:
-        if child.kind not in OFFSHOOT_KINDS:
+        if child.kind not in OFFSHOOT_KINDS or child.id in exclude:
             continue
         parents = [
             r for r in world.realms if r.kind in PARENT_KINDS and r.id != child.id and r.founded + gap <= child.founded
@@ -263,3 +277,55 @@ def plan_offshoots(world: World, config: Config, seed: int) -> dict[int, int]:
                 planned[child.id] = parent.id
                 break
     return planned
+
+
+def adjacent_pairs(world: World) -> list[tuple[int, int]]:
+    """Return every pair of realm ids ``(a, b)``, ``a < b``, whose land touches (side by side), in sorted order."""
+    ids = world.realm_id
+    pairs: set[tuple[int, int]] = set()
+    for first, second in ((ids[:, :-1], ids[:, 1:]), (ids[:-1, :], ids[1:, :])):
+        touching = (first != second) & (first >= 0) & (second >= 0)
+        low, high = np.minimum(first[touching], second[touching]), np.maximum(first[touching], second[touching])
+        pairs.update(zip(low.tolist(), high.tolist(), strict=True))
+    return sorted(pairs)
+
+
+@dataclass(frozen=True)
+class SplitPlan:
+    """A clean split: realms ``first`` and ``second`` share the founding ``year``; the old realm began ``founded``."""
+
+    first: int
+    second: int
+    year: int
+    founded: int
+
+
+def plan_splits(world: World, config: Config, seed: int) -> list[SplitPlan]:
+    """Return the clean splits that happened: pairs of touching realms that both came of one old realm.
+
+    A pair of ``OFFSHOOT_KINDS`` realms is a candidate when the older founding leaves room (``history.min_gap_years``)
+    after ``history.first_founding_year`` for the old realm to have existed; both then share that year, the earlier of
+    the two. The old realm's age is drawn, the pair scored without a parent (:func:`split_score`) and the split happens
+    with the split's :func:`form_chance` times the score. A realm is in at most one split, and at most
+    ``history.secession.max_per_world`` happen. Pairs go in sorted order and every draw is keyed on the pair.
+    """
+    chance, cap = form_chance(config, "split"), int(config.get("history.secession.max_per_world"))
+    if chance <= 0.0 or cap <= 0:
+        return []
+    gap, first_year = int(config.get("history.min_gap_years")), int(config.get("history.first_founding_year"))
+    used: set[int] = set()
+    plans: list[SplitPlan] = []
+    for a, b in adjacent_pairs(world):
+        if len(plans) >= cap:
+            break
+        first, second = world.realms[a], world.realms[b]
+        year = min(first.founded, second.founded)
+        if {first.kind, second.kind} - set(OFFSHOOT_KINDS) or a in used or b in used or year - gap < first_year:
+            continue
+        stream = rng.derive(seed, "history", "secession", "split", a, b)
+        age = stream.randint(gap, year - first_year)  # both draws are always made, so the stream stays aligned
+        roll = stream.random()
+        if roll < chance * split_score(world, config, first, second, year, year - age):
+            plans.append(SplitPlan(a, b, year, year - age))
+            used |= {a, b}
+    return plans

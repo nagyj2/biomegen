@@ -120,3 +120,12 @@ def test_every_realm_name_in_a_generated_chronicle_is_a_map_colour(generated: Wo
 
 def test_every_event_is_a_row_under_the_title(generated: World, cfg: Config) -> None:
     assert len(chronicle_document(generated, cfg)) == 2 + len(generated.chronicle)
+
+
+def test_an_old_realm_that_split_has_its_own_colour(cfg: Config) -> None:
+    from biomegen.world.entities import Predecessor
+
+    world = _tiny()
+    world.predecessors = [Predecessor(id=0, founded=1, split_year=50, color=(12, 120, 230))]
+    world.chronicle[0].refs = [(0, 12, "predecessor", 0)]
+    assert _name(world, cfg, "Kingdom of A").fg == (12, 120, 230)

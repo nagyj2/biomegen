@@ -9,7 +9,16 @@ resolves. Every draw is keyed on the entity, so a name never depends on processi
 from __future__ import annotations
 
 from ..config.model import Config
-from ..world.entities import REF_FALLEN, REF_POI, REF_REALM, REF_RULER, ChronicleEvent, Realm, Relation
+from ..world.entities import (
+    REF_FALLEN,
+    REF_POI,
+    REF_PREDECESSOR,
+    REF_REALM,
+    REF_RULER,
+    ChronicleEvent,
+    Realm,
+    Relation,
+)
 from ..world.tile import Relief
 from ..world.world import World
 from . import cultures, polity
@@ -83,6 +92,34 @@ def _offshoot_tokens(
         where["ruler"] = ref
 
 
+def _predecessor_tokens(
+    world: World, event: ChronicleEvent, realms: list[Realm], tokens: dict[str, object], where: Where
+) -> None:
+    """Fill the tokens of an event of a realm that ended in a clean split: its founding, or the split itself.
+
+    The split also names the two new realms with their founders.
+    """
+    predecessor = world.predecessors[event.predecessor_ids[0]]
+    tokens["predecessor"] = predecessor.name
+    where["predecessor"] = (REF_PREDECESSOR, predecessor.id)
+    for suffix, realm in zip(("a", "b"), realms, strict=False):
+        tokens[f"realm_{suffix}"], tokens[f"short_{suffix}"] = realm.name, realm.short
+        where[f"realm_{suffix}"] = where[f"short_{suffix}"] = (REF_REALM, realm.id)
+        tokens[f"ruler_{suffix}"], ref = _ruler(world, realm, event.year)
+        if ref:
+            where[f"ruler_{suffix}"] = ref
+
+
+def _secession_tokens(
+    world: World, event: ChronicleEvent, realms: list[Realm], tokens: dict[str, object], where: Where
+) -> None:
+    """Fill the tokens of an event of a secession: a realm that ended in a split (founding or split), or an offshoot."""
+    if event.predecessor_ids:
+        _predecessor_tokens(world, event, realms, tokens, where)
+    else:
+        _offshoot_tokens(world, event, realms[0], realms[1], tokens, where)
+
+
 def _tokens(
     world: World, config: Config, event: ChronicleEvent, relations: dict[tuple[int, int], Relation]
 ) -> tuple[dict[str, object], Where]:
@@ -102,8 +139,8 @@ def _tokens(
     if event.kind == "settling" and "free" in event.tags:  # a settlement no realm holds
         tokens["town"] = world.pois[event.poi_ids[0]].name
         where["town"] = (REF_POI, event.poi_ids[0])
-    elif event.kind == "secession" and "offshoot" in event.tags and len(realms) == 2:
-        _offshoot_tokens(world, event, realms[0], realms[1], tokens, where)
+    elif event.predecessor_ids or (event.kind == "secession" and len(realms) == 2):
+        _secession_tokens(world, event, realms, tokens, where)
     elif event.kind == "succession" and realms:
         realm = realms[0]
         styles = dict(tag.split(":") for tag in event.tags if tag.partition(":")[0] in ("from", "to"))

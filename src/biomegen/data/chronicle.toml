@@ -11,6 +11,7 @@
 # Tokens ({year}, the year of the event, is allowed in every sentence):
 #   founding          {realm} {short} {ruler} {seat}              the new realm, its short name, its ruler, its seat
 #   settling          {realm} {short} {town}                      the realm and the city it settled
+#   founding_predecessor  {predecessor}                           a realm that later ended in a clean split (see below)
 #   settling_free     {town}                                      a city or town no realm holds
 #   settling_remnant  {town} {fallen}                             a free settlement founded in the life of a fallen realm
 #   conquest          {realm} {short} {liege} {liege_short} {ruler}   the vassal, its overlord and the overlord's ruler
@@ -49,6 +50,13 @@ templates = [
 ]
 templates_near = [
   "{town} is settled in the lands near {near}.",
+]
+
+[chronicle.founding_predecessor]
+templates = [
+  "{predecessor} is founded.",
+  "{predecessor} rises as a power.",
+  "{predecessor} is proclaimed, and its banners are raised over the land.",
 ]
 
 [chronicle.settling_free]

@@ -20,7 +20,8 @@
 #   score    how readily sides in this relation part (the `relation` term)
 #   tag      how the break is worded: "bitter" or "amicable" (the `secession_*_<tag>` rows of chronicle.toml)
 #
-# secession_forms, one row per form, the chance of each among the secessions that happen:
+# secession_forms, one row per form (offshoot, split, defection): `history.secession.chance` is the chance of the form with
+# the greatest weight and the others have that chance times their share of it; a form with weight 0 never happens:
 #   weight   relative chance of the form
 
 [secession_terms.proximity]

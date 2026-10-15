@@ -57,12 +57,15 @@ def test_no_event_comes_before_the_first_year(world: World, cfg: Config) -> None
 
 def _beginnings(world: World) -> dict[int, object]:
     """Each realm's beginning: its founding event, or the secession that made it (the first listing the realm)."""
-    return {
-        e.realm_ids[0]: e
-        for e in world.chronicle
-        if e.kind == "founding" or (e.kind == "secession" and e.realm_ids and world.realms[e.realm_ids[0]].origin)
-        if e.realm_ids
-    }
+    beginnings: dict[int, object] = {}
+    for e in world.chronicle:
+        if e.kind == "founding" and e.realm_ids:
+            beginnings[e.realm_ids[0]] = e
+        elif e.kind == "secession" and "split" in e.tags:  # a split begins both its realms
+            beginnings.update({realm_id: e for realm_id in e.realm_ids})
+        elif e.kind == "secession":  # an offshoot begins the first realm it names
+            beginnings[e.realm_ids[0]] = e
+    return beginnings
 
 
 def test_every_realm_has_one_founding_or_secession(world: World) -> None:
@@ -283,9 +286,11 @@ def test_no_fallen_realms_at_rate_zero() -> None:
 
 
 def test_a_seat_is_marked_by_its_realms_founding(world: World) -> None:
+    # Or by the secession that began the realm.
     for realm in world.realms:
         if realm.seat_poi >= 0:
-            assert world.chronicle[world.pois[realm.seat_poi].event_ids[0]].kind == "founding"
+            kind = world.chronicle[world.pois[realm.seat_poi].event_ids[0]].kind
+            assert kind == ("secession" if realm.origin else "founding")
 
 
 def test_a_settlement_is_marked_by_the_event_that_settled_it(world: World) -> None:

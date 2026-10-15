@@ -14,9 +14,12 @@ Everything is placed from static quantities, so the same world always gives the 
    a :class:`~biomegen.world.entities.FallenRealm` on wild land habitable enough to have held a realm
    (``history.fall_min_habitability``), spaced ``history.fall_spacing_km`` from each other and from settlements. Each
    has a founding event; its fall comes from :mod:`.conflicts`. Without the ``fall`` kind there are no fallen realms.
-5. **Secession** (:mod:`.secession`): a living realm may have left an older one. Such a realm's founding event is held
-   back; the conflicts timeline checks at its founding year, with the parent's strength then, and writes a
-   ``secession`` event or, if the check fails, the ordinary founding.
+5. **Secession** (:mod:`.secession`). Two touching realms may have come of one old realm (a clean split): they share a
+   founding year, the old realm is recorded as a :class:`~biomegen.world.entities.Predecessor`, and one ``secession``
+   event replaces both foundings; this is decided up front, before the rulers are drawn. A living realm may also have
+   left an older one (an offshoot): its founding event is held back, and the conflicts timeline checks at its founding
+   year, with the parent's strength then, and writes a ``secession`` event or, if the check fails, the ordinary
+   founding.
 6. **Conflicts** (:mod:`.conflicts`): wars, battles, peace, rivalries, treaties and falls, tracked through time.
 
 Events are collected in a :class:`~.ledger.Ledger`, sorted by ``(year, kind order, creation order)`` and numbered, so
@@ -28,13 +31,13 @@ text. Every draw is a ``history`` sub-stream keyed on the entity, so the result 
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Collection
 
 import numpy as np
 
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import POI, FallenRealm
+from ...world.entities import NO_LOCATION, POI, FallenRealm, Predecessor
 from ...world.tile import WaterType
 from ...world.world import World
 from ..civilization.diplomacy import faction_color, neutral_colors
@@ -131,18 +134,71 @@ def _remnant_of(world: World, config: Config, poi: POI) -> int:
     return best[1]
 
 
+def _apply_splits(world: World, config: Config, seed: int, plans: list[secession.SplitPlan]) -> None:
+    """Make each planned clean split real: both realms share the year, and the old realm is recorded.
+
+    The younger realm's founding (and its seat's) moves to the older's, so this runs before anything reads those years.
+    Each realm gets its origin and the :class:`Predecessor` that ended; the predecessor is coloured after the realms and
+    fallen realms, so no faction shares its colour.
+    """
+    taken = neutral_colors(config) + [realm.color for realm in world.realms] + [f.color for f in world.fallen_realms]
+    start = rng.derive(seed, "history", "colours", "predecessor").random()
+    world.predecessors = []
+    for plan in plans:
+        predecessor = Predecessor(id=len(world.predecessors), founded=plan.founded, split_year=plan.year)
+        predecessor.color = faction_color(config, "fallen", taken, start)
+        taken.append(predecessor.color)
+        for realm_id in (plan.first, plan.second):
+            realm = world.realms[realm_id]
+            realm.founded, realm.origin, realm.predecessor = plan.year, "split", predecessor.id
+            if realm.seat_poi >= 0:
+                world.pois[realm.seat_poi].founded = plan.year
+            predecessor.children.append(realm_id)
+        world.predecessors.append(predecessor)
+
+
+def _split_events(world: World, config: Config, seed: int, ledger: Ledger) -> None:
+    """Add each clean split's events: the old realm's founding, and the ``secession`` replacing the two foundings."""
+    for predecessor in world.predecessors:
+        ledger.add(
+            predecessor.founded,
+            "founding",
+            "founding_predecessor",
+            ("predecessor", predecessor.id),
+            seed,
+            predecessor_ids=[predecessor.id],
+            tags=("predecessor",),
+        )
+        first, second = (world.realms[i] for i in predecessor.children)
+        seats = [r.seat_poi for r in (first, second) if r.seat_poi >= 0]
+        tag = secession.relation_tag(world, config, first, second)
+        ledger.add(
+            predecessor.split_year,
+            "secession",
+            f"secession_split_{tag}",
+            ("split", predecessor.id),
+            seed,
+            realm_ids=[first.id, second.id],
+            poi_ids=seats,
+            predecessor_ids=[predecessor.id],
+            location=(world.pois[seats[0]].x, world.pois[seats[0]].y) if seats else NO_LOCATION,
+            tags=("split", tag, *(("capital",) if any(world.pois[s].kind == "capital" for s in seats) else ())),
+        )
+
+
 def _realm_events(
-    world: World, config: Config, seed: int, span: int, ledger: Ledger, offshoots: Mapping[int, int]
+    world: World, config: Config, seed: int, span: int, ledger: Ledger, held_back: Collection[int]
 ) -> None:
     """Add the founding (realms and fallen realms), settling and conquest events.
 
-    A realm in ``offshoots`` (it may have left an older realm) has no founding yet: the conflicts timeline adds a
-    ``secession`` event, or the founding if the check fails.
+    A realm in ``held_back`` has no founding yet: it came of a clean split (:func:`_split_events` adds the
+    secession), or it may have left an older realm (the conflicts timeline adds a ``secession`` event, or the founding
+    if the check fails).
     """
     gap = int(config.get("history.min_gap_years"))
     settle_kinds = set(config.get("history.settle_kinds"))
     for realm in world.realms:
-        if realm.id not in offshoots:
+        if realm.id not in held_back:
             add_founding(world, config, seed, ledger, realm)
     for fallen in world.fallen_realms:
         ledger.add(
@@ -231,10 +287,16 @@ def run(world: World, config: Config, seed: int) -> None:
     _settlement_founding_years(world, config, seed, span)
     ledger = Ledger(config)
     _place_fallen_realms(world, config, seed, span, ledger.enabled("fall"))
+    splits = secession.plan_splits(world, config, seed) if ledger.enabled("secession") else []
+    _apply_splits(world, config, seed, splits)
     styles = rulers.derive(world, config, seed, span, ledger)
-    offshoots = secession.plan_offshoots(world, config, seed) if ledger.enabled("secession") else {}
-    _realm_events(world, config, seed, span, ledger, offshoots)
-    conflicts.derive(world, config, seed, span, ledger, styles, offshoots)
+    came_of_split = frozenset(i for plan in splits for i in (plan.first, plan.second))
+    offshoots = {}
+    if ledger.enabled("secession"):
+        offshoots = secession.plan_offshoots(world, config, seed, came_of_split)
+    _realm_events(world, config, seed, span, ledger, came_of_split | set(offshoots))
+    _split_events(world, config, seed, ledger)
+    conflicts.derive(world, config, seed, span, ledger, styles, offshoots, len(splits))
     remnants = _remnants(world, config, seed, ledger)
     world.chronicle = ledger.finish()
     for event in world.chronicle:  # a settlement is marked by the event that founded or settled it

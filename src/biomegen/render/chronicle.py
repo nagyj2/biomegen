@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from ..config.model import Config
 from ..world.chronicle import KIND_WIDTH, chronicle_title
-from ..world.entities import REF_FALLEN, REF_FEATURE, REF_POI, REF_REALM, REF_RULER
+from ..world.entities import REF_FALLEN, REF_FEATURE, REF_POI, REF_PREDECESSOR, REF_REALM, REF_RULER
 from ..world.world import World
 from .grid import RGB, Document, Span
 
@@ -33,6 +33,8 @@ def chronicle_document(world: World, config: Config) -> Document:
             return world.realms[world.rulers[ref].realm_id].color
         if kind == REF_FALLEN:
             return world.fallen_realms[ref].color
+        if kind == REF_PREDECESSOR:
+            return world.predecessors[ref].color
         if kind == REF_FEATURE:
             return palette["place"]
         assert kind == REF_POI

@@ -238,7 +238,8 @@ class Predecessor:
 class ChronicleEvent:
     """One entry of the derived history (``World.chronicle``), plain data a later simulation can also emit.
 
-    ``realm_ids``, ``poi_ids`` and ``fallen_ids`` index ``World.realms``, ``World.pois`` and ``World.fallen_realms``.
+    ``realm_ids``, ``poi_ids``, ``fallen_ids`` and ``predecessor_ids`` index ``World.realms``, ``World.pois``,
+    ``World.fallen_realms`` and ``World.predecessors``.
     ``location`` is a cell (:data:`NO_LOCATION` when none). ``template`` is the raw wording with its ``{tokens}``; the
     naming stage renders it into ``text``. The list is sorted by ``(year, kind order, creation order)`` and ``id`` is
     the index into it.
@@ -250,6 +251,9 @@ class ChronicleEvent:
     realm_ids: List[int] = field(default_factory=list)
     poi_ids: List[int] = field(default_factory=list)
     fallen_ids: List[int] = field(default_factory=list)
+    predecessor_ids: List[int] = field(
+        default_factory=list
+    )  # index into World.predecessors (a clean split's old realm)
     location: Tuple[int, int] = NO_LOCATION
     template: str = ""
     text: str = ""

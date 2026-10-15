@@ -97,8 +97,8 @@ VALUES: Dict[str, Any] = {
     # Secession (pipeline/story/secession.py; the weights and wording are data/secession.toml and chronicle.toml). A
     # secession is an offshoot (a realm leaves an older one), a clean split (an old realm ends in two) or a defection (a
     # settlement changes sides). Each realm's founding year, and each settlement a defection may touch, is checked
-    # once: it happens with chance ``chance`` times the plausibility score (0..1), at most ``max_per_world`` times in
-    # a world.
+    # once: it happens with chance ``chance`` (that of the likeliest form; the others scale by their weight in
+    # ``tables.secession_forms``) times the plausibility score (0..1), at most ``max_per_world`` times in a world.
     "secession": {
         "chance": 0.1,
         "max_per_world": 4,
