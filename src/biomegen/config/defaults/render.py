@@ -37,6 +37,11 @@ VALUES: Dict[str, Any] = {
     "road_min_rows": 1.0,
     "road_max_rows": 2.0,
     "road_warp": 0.05,
+    # Rounding of the road bed: where a road tile joins exactly two links the corner is a curve from the middle of one
+    # link to the middle of the other, steered by the tile's centre; this is how far (0..1) it is pulled from the
+    # chord toward the centre. 1 rounds every bend (a staircase of tiles reads as a gentle curve), 0 keeps the sharp
+    # polyline. The curve stays within about a quarter of a tile of the polyline, so it never wanders far at any scale.
+    "road_smooth": 1.0,
     "road_bed": {
         "glyphs": {"horizontal": "─", "vertical": "│", "rising": "╱", "falling": "╲"},
         "ascii": {"horizontal": "-", "vertical": "|", "rising": "/", "falling": "\\"},
