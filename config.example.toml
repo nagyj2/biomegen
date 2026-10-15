@@ -99,6 +99,9 @@ road_min_rows = 1.0             # but never thinner than this many rows, so road
 road_max_rows = 2.0             # and never thicker, so a road through a site is a street and not a field
 road_warp = 0.05                # organic wobble (tiles) of the road bed; 0 = dead-straight segments
 road_smooth = 1.0               # rounds the road bed's corners (0 = sharp polyline, 1 = every bend a curve)
+road_relax = 0.5                # pulls a bending tile toward its neighbours first, so bends cut deeper (0..1)
+road_meander = 0.3              # slow long-scale drift (tiles) that keeps a long road from running pencil straight; 0 = off
+road_meander_scale = 5.0        # tiles across a meander feature
 # road_bed (the glyphs the detail-scale road bed is drawn with, by direction) and roads (the map-scale glyph set,
 # including the diagonal and junction glyphs) are also tunable.
 # road clutter (road_clutter, road_clutter_local), bridge_glyphs and the detail colours (detail_colors) are also

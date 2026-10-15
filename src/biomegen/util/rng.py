@@ -49,6 +49,8 @@ LABELS: frozenset[str] = frozenset(
         "hydrology.rivers",  # river source selection / meander
         "biomeblend.x",  # detail-view biome-boundary blend warp (x component)
         "biomeblend.y",  # detail-view biome-boundary blend warp (y component)
+        "roadmeander.x",  # detail-view road meander displacement (x component)
+        "roadmeander.y",  # detail-view road meander displacement (y component)
         "poi",  # POI placement sampling
         "poi_interior",  # per-POI interior seed minting (keyed on coordinates too)
         "site.extent",  # per-POI site size jitter, keyed on the site seed

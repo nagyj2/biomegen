@@ -133,6 +133,20 @@ class DetailSampler(Sampler):
         ny = noise.get_sampler(backend, rng.derive_int(self.world.seed, "biomeblend.y"))(xs, ys)
         return nx, ny
 
+    @cached_property
+    def road_meander_noise(self) -> tuple[np.ndarray, np.ndarray]:
+        """The road meander field ``(nx, ny)`` in roughly [-1, 1] per cell: a slow coherent drift of position.
+
+        It is read at the cell's unwarped position, in features ``render.road_meander_scale`` tiles across, from its own
+        seeds, so every scale (and a site's plan) sees the same field and a road meanders the same way in all of them.
+        """
+        scale = max(1e-6, float(self.config.get("render.road_meander_scale")))
+        backend = self.config.get("terrain.noise_backend")
+        xs, ys = (self.fx + 0.5) / scale, (self.fy + 0.5) / scale
+        nx = noise.get_sampler(backend, rng.derive_int(self.world.seed, "roadmeander.x"))(xs, ys)
+        ny = noise.get_sampler(backend, rng.derive_int(self.world.seed, "roadmeander.y"))(xs, ys)
+        return nx, ny
+
     def warped(self, strength: float) -> tuple[np.ndarray, np.ndarray]:
         """Return each cell's position moved by the warp field times ``strength`` tiles (unchanged at 0)."""
         if strength <= 0:

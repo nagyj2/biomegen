@@ -40,8 +40,16 @@ VALUES: Dict[str, Any] = {
     # Rounding of the road bed: where a road tile joins exactly two links the corner is a curve from the middle of one
     # link to the middle of the other, steered by the tile's centre; this is how far (0..1) it is pulled from the
     # chord toward the centre. 1 rounds every bend (a staircase of tiles reads as a gentle curve), 0 keeps the sharp
-    # polyline. The curve stays within about a quarter of a tile of the polyline, so it never wanders far at any scale.
+    # polyline.
     "road_smooth": 1.0,
+    # ``road_relax`` pulls a tile of exactly two links this far (0..1) toward the middle of its neighbours before it is
+    # rounded, so bends cut deeper and a staircase flows (0.5 leaves a right angle about 0.4 of a tile off its corner).
+    "road_relax": 0.5,
+    # Long-scale meander: positions drift by up to ``road_meander`` tiles in features about ``road_meander_scale`` tiles
+    # across (a pure function of position, so every scale and a site's plan agree), which bends a long straight road
+    # into a slow wander. 0 turns it off; keep it under half a tile so a road never strays far from its tiles.
+    "road_meander": 0.3,
+    "road_meander_scale": 5.0,
     "road_bed": {
         "glyphs": {"horizontal": "─", "vertical": "│", "rising": "╱", "falling": "╲"},
         "ascii": {"horizontal": "-", "vertical": "|", "rising": "/", "falling": "\\"},

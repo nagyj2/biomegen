@@ -14,6 +14,7 @@ from tests.render.conftest import make_world
 def _config() -> Config:
     config = load_config(None)
     config.data["render"]["road_warp"] = 0.0
+    config.data["render"]["road_meander"] = 0.0
     return config
 
 
@@ -141,7 +142,7 @@ def test_a_rounded_corner_is_still_one_connected_road() -> None:
 
 
 def test_a_rounded_corner_stays_close_to_the_polyline() -> None:
-    # Every bed cell lies within a third of a tile of the sharp polyline (the road never wanders far).
+    # Every bed cell lies within half a tile of the sharp polyline (the road never wanders far).
     found, sampler = _bed(_bend_world(), 1.0)
     assert found is not None
     points = [(0.0, 2.0), (2.0, 2.0), (2.0, 4.0)]
@@ -150,7 +151,7 @@ def test_a_rounded_corner_stays_close_to_the_polyline() -> None:
         dx, dy = bx - ax, by - ay
         t = np.clip(((sampler.fx - ax) * dx + (sampler.fy - ay) * dy) / (dx * dx + dy * dy), 0.0, 1.0)
         distance = np.minimum(distance, np.hypot(sampler.fx - (ax + t * dx), sampler.fy - (ay + t * dy)))
-    assert float(distance[found.bed].max()) < 0.34
+    assert float(distance[found.bed].max()) < 0.5
 
 
 def test_a_rounded_corner_is_drawn_with_a_slanting_piece() -> None:
@@ -221,3 +222,108 @@ def test_piece_kinds_follow_their_slope() -> None:
         0,
         1,
     ]
+
+
+# --- relaxing corners and the long-scale meander ---------------------------------------------------------------------
+
+
+def _bed_with(world, cell_w: int = 20, cell_h: int = 10, **render):
+    from biomegen.sampling.roads import road_bed
+
+    config = _config()
+    config.data["render"].update(render)
+    sampler = DetailSampler(world, config, cell_w, cell_h, 0, 0, world.width, world.height)
+    return road_bed(sampler, world, config), sampler
+
+
+def _corner_gap(found, sampler) -> float:
+    """How far the bed passes from the centre of tile (2, 2), the bend's corner."""
+    distance = np.hypot(sampler.fx - 2.0, sampler.fy - 2.0)
+    return float(distance[found.bed].min())
+
+
+def test_relaxing_a_corner_cuts_it_deeper() -> None:
+    sharp, sampler = _bed_with(_bend_world(), road_relax=0.0)
+    relaxed, _ = _bed_with(_bend_world(), road_relax=0.5)
+    assert (
+        sharp is not None and relaxed is not None and _corner_gap(relaxed, sampler) > _corner_gap(sharp, sampler) + 0.1
+    )
+
+
+def test_relaxing_leaves_a_straight_road_alone() -> None:
+    world = make_world(6, 3)
+    world.road[1, :] = 1
+    a, _ = _bed_with(world, road_relax=0.0)
+    b, _ = _bed_with(world, road_relax=1.0)
+    assert a is not None and b is not None and np.array_equal(a.bed, b.bed)
+
+
+def test_relaxing_does_nothing_when_rounding_is_off() -> None:
+    a, _ = _bed_with(_bend_world(), road_smooth=0.0, road_relax=0.0)
+    b, _ = _bed_with(_bend_world(), road_smooth=0.0, road_relax=1.0)
+    assert a is not None and b is not None and np.array_equal(a.bed, b.bed)
+
+
+def test_a_relaxed_staircase_stays_connected() -> None:
+    from scipy import ndimage
+
+    world = make_world(10, 10)
+    for step in range(4):
+        world.road[step * 2, step * 2 : step * 2 + 2] = 1
+        world.road[step * 2 + 1 : step * 2 + 3, step * 2 + 1] = 1
+    found, _ = _bed_with(world, road_relax=0.7)
+    assert found is not None and ndimage.label(found.bed, structure=np.ones((3, 3)))[1] == 1
+
+
+def _long_road():
+    world = make_world(14, 5)
+    world.road[2, :] = 1
+    return world
+
+
+def _rows_covered(found) -> int:
+    return int(found.bed.any(axis=1).sum())
+
+
+def test_a_long_straight_road_runs_straight_without_meander() -> None:
+    found, sampler = _bed_with(_long_road(), cell_w=20, cell_h=10, road_meander=0.0)
+    assert found is not None and _rows_covered(found) <= 3
+
+
+def test_the_meander_bends_a_long_straight_road() -> None:
+    straight, _ = _bed_with(_long_road(), road_meander=0.0)
+    wandering, _ = _bed_with(_long_road(), road_meander=0.4, road_meander_scale=3.0)
+    assert straight is not None and wandering is not None and _rows_covered(wandering) > _rows_covered(straight) + 1
+
+
+def test_the_meander_never_carries_the_road_far_from_its_tiles() -> None:
+    found, sampler = _bed_with(_long_road(), road_meander=0.4, road_meander_scale=3.0)
+    assert found is not None and float(np.abs(sampler.fy - 2.0)[found.bed].max()) < 0.4 + 0.2
+
+
+def test_the_meander_is_the_same_for_every_camera() -> None:
+    # Moving the camera a tile shifts each cell a tile's width; every cell keeps its answer (a function of position).
+    from biomegen.sampling.roads import road_bed
+
+    world = make_world(14, 5)
+    world.road[2, :] = 1
+    config = _config()
+    config.data["render"].update({"road_meander": 0.4, "road_meander_scale": 3.0})
+    first = DetailSampler(world, config, 20, 10, 2, 0, 6, 5)
+    second = DetailSampler(world, config, 20, 10, 3, 0, 6, 5)
+    a, b = road_bed(first, world, config), road_bed(second, world, config)
+    assert a is not None and b is not None and np.array_equal(a.bed[:, 20:], b.bed[:, :-20])
+
+
+def test_the_meander_depends_on_the_seed() -> None:
+    first, _ = _bed_with(_long_road(), road_meander=0.4, road_meander_scale=3.0)
+    other = _long_road()
+    other.seed = 99
+    second, _ = _bed_with(other, road_meander=0.4, road_meander_scale=3.0)
+    assert first is not None and second is not None and not np.array_equal(first.bed, second.bed)
+
+
+def test_the_meander_labels_are_registered() -> None:
+    from biomegen.util import rng
+
+    rng.assert_known_labels(["roadmeander.x", "roadmeander.y"])

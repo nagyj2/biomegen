@@ -432,7 +432,9 @@ markers — they render like the rivers do.
   row at zoom, two or three at the site view), but never under `road_min_rows` rows. The bed glyph follows the direction of the link (`road_bed`: `─ │ ╱ ╲`) in the `detail_colors.road_*` colours with small
   clutter scattered along it (`road_clutter`, plus `road_clutter_local` fine detail at the close scale). A
   small `road_warp` gives it an organic wobble and `road_smooth` rounds its corners (a tile with exactly two links
-  becomes a quadratic curve between the middles of its links, so staircases read as curves; junctions and ends stay straight); water and river cells are never drawn over (bridges carry those).
+  is first pulled toward its neighbours (`road_relax`), then becomes a quadratic curve between the middles of its links,
+  so staircases read as curves; junctions and ends stay straight) and `road_meander` drifts position slowly (features
+  `road_meander_scale` tiles across, from the `roadmeander.*` streams) so a long straight road wanders; water and river cells are never drawn over (bridges carry those).
 - *Bridges* are the same bed over water: where a bed cell lies over water it is a **deck**, and the band as wide
   again beside it is the railing (`detail_colors.deck_*` / `wall_*`). They are not POIs: the road model
   (`sampling/roads.py: road_bed`) is the one rasterisation, shared by the renderer and the site plans.

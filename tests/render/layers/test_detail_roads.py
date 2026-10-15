@@ -17,9 +17,9 @@ BRIDGES = View("t", ("terrain", "water", "roads"))
 
 
 def _crisp_config(**render) -> Config:
-    """A config with the biome warp and road wobble off, so blocks line up with the tile grid."""
+    """A config with the biome warp and road wobble and meander off, so blocks line up with the tile grid."""
     config = load_config(None)
-    config.data["render"].update({"blend_strength": 0.0, "road_warp": 0.0, **render})
+    config.data["render"].update({"blend_strength": 0.0, "road_warp": 0.0, "road_meander": 0.0, **render})
     return config
 
 

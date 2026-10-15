@@ -1,11 +1,14 @@
 """The road bed: one rasterisation of the road network for every grid that shows it.
 
 A road is a chain of links between neighbouring road tiles' centres. Where a tile joins exactly two links the corner is
-rounded (a quadratic curve from the middle of one link to the middle of the other, steered by the tile's centre), the
-way a river is smoothed, so a staircase of tiles reads as a gentle curve and a right angle as a bend; junctions and
-road ends stay straight. A grid cell is on the road when its warped position lies within a fixed fraction of a tile of
-that line, so the zoom and local views, and a site's plan (which is a grid of its own), draw the same road at their own
-resolution and meet exactly at a site's edge. Everything here is a pure function of world position.
+rounded: the tile is first pulled toward the middle of its two neighbours (``render.road_relax``), then the road is a
+quadratic curve from the middle of one link to the middle of the other, steered by the tile, the way a river is
+smoothed, so a staircase of tiles reads as a gentle curve and a right angle as a bend; junctions and road ends stay
+straight. A grid cell is on the road when its position, shifted by a small wobble (``render.road_warp``) and a slow
+drift (``render.road_meander``, which keeps a long straight road from running pencil straight), lies within a fixed
+fraction of a tile of that line. The zoom and local views, and a site's plan (which is a grid of its own), therefore
+draw the same road at their own resolution and meet exactly at a site's edge. Everything here is a pure function of
+world position.
 """
 
 from __future__ import annotations
@@ -101,46 +104,70 @@ def road_bed(sampler: DetailSampler, world: World, config: Config) -> Optional[R
     """Return the road bed over ``sampler``'s grid, or None when no road is near it.
 
     The bed is the cells within ``render.road_half_width`` tiles (at least ``render.road_min_rows`` rows) of a link
-    between two neighbouring road tiles (eight directions), measured at the road-warped position
-    (``render.road_warp``). A diagonal link is left out when either orthogonal tile between the two is road, since the
-    two already join through it and the link would cut the corner (the same rule as the map scale's glyph mask). A
-    road tile with no link is a disc at its centre. Road tiles over water are road too:
-    where the bed lies over water a caller draws a bridge.
+    between two neighbouring road tiles (eight directions), measured at the position shifted by the road wobble
+    (``render.road_warp``) and the slow road meander (``render.road_meander``); corners are rounded (see the module).
+    A diagonal link is left out when either orthogonal tile between the two is road, since the two already join
+    through it and the link would cut the corner (the same rule as the map scale's glyph mask). A road tile with no
+    link is a disc at its centre. Road tiles over water are road too: where the bed lies over water a caller draws a
+    bridge.
     """
     half = bed_half_width(config, sampler)
     if half <= 0:
         return None
     road = world.road > 0
     warp = max(float(config.get("render.road_warp")), 0.0)
+    meander = max(float(config.get("render.road_meander")), 0.0)
     rail_half = 2.0 * half
-    reach = rail_half + warp
-    x_lo = max(0, int(np.floor(sampler.cam_x - reach)))
-    x_hi = min(world.width, int(np.ceil(sampler.cam_x + sampler.tiles_w + reach)))
-    y_lo = max(0, int(np.floor(sampler.cam_y - reach)))
-    y_hi = min(world.height, int(np.ceil(sampler.cam_y + sampler.tiles_h + reach)))
+    reach = rail_half + warp + meander
+    margin = reach + 0.5  # a rounded corner lies within half a tile of the tiles it joins
+    x_lo = max(0, int(np.floor(sampler.cam_x - margin)))
+    x_hi = min(world.width, int(np.ceil(sampler.cam_x + sampler.tiles_w + margin)))
+    y_lo = max(0, int(np.floor(sampler.cam_y - margin)))
+    y_hi = min(world.height, int(np.ceil(sampler.cam_y + sampler.tiles_h + margin)))
     if x_hi <= x_lo or y_hi <= y_lo:
         return None
     tile_rows, tile_cols = np.nonzero(road[y_lo:y_hi, x_lo:x_hi])
     if len(tile_cols) == 0:
         return None
     warped = sampler.warped(warp)
+    if meander > 0.0:  # a slow drift of position: the road, found at the drifted position, wanders the other way
+        drift_x, drift_y = sampler.road_meander_noise
+        warped = (warped[0] + meander * drift_x, warped[1] + meander * drift_y)
     nearest = np.full(sampler.fx.shape, np.inf)
     kind = np.full(sampler.fx.shape, KIND_LONE, dtype=np.int8)
     smooth = min(max(float(config.get("render.road_smooth")), 0.0), 1.0)
+    relax = min(max(float(config.get("render.road_relax")), 0.0), 1.0) if smooth > 0.0 else 0.0
+    memo: dict[tuple[int, int], list[tuple[int, int]]] = {}
+
+    def links_of(x: int, y: int) -> list[tuple[int, int]]:
+        if (x, y) not in memo:
+            memo[(x, y)] = _links(road, x, y)
+        return memo[(x, y)]
+
+    def anchor(x: int, y: int) -> tuple[float, float]:
+        """Where a tile's road passes: its centre, a tile of exactly two links pulled toward its neighbours' middle."""
+        links = links_of(x, y)
+        if relax <= 0.0 or len(links) != 2:
+            return float(x), float(y)
+        (ax, ay), (bx, by) = links
+        return x + relax * ((ax + bx) / 2.0 - x), y + relax * ((ay + by) / 2.0 - y)
+
     for row, col in zip(tile_rows.tolist(), tile_cols.tolist(), strict=True):
         tx, ty = x_lo + col, y_lo + row
-        links = _links(road, tx, ty)
+        links = links_of(tx, ty)
         if not links:
             _mark_segment(sampler, nearest, kind, warped, (tx, ty), (tx, ty), reach, rail_half, KIND_LONE)
             continue
-        ends = [((tx + nx) / 2.0, (ty + ny) / 2.0) for nx, ny in links]  # the middle of each link
+        centre = anchor(tx, ty)
+        ends = []  # the middle of each link
+        for nx, ny in links:
+            other = anchor(nx, ny)
+            ends.append(((centre[0] + other[0]) / 2.0, (centre[1] + other[1]) / 2.0))
         if len(links) == 2 and smooth > 0.0:
-            _mark_corner(sampler, nearest, kind, warped, (tx, ty), ends[0], ends[1], smooth, reach, rail_half)
+            _mark_corner(sampler, nearest, kind, warped, centre, ends[0], ends[1], smooth, reach, rail_half)
             continue
-        for (
-            end
-        ) in ends:  # a junction, a road end, or no rounding: straight from the tile's centre to each link's middle
-            _mark_segment(sampler, nearest, kind, warped, (tx, ty), end, reach, rail_half)
+        for end in ends:  # a junction, a road end, or no rounding: straight from the tile to each link's middle
+            _mark_segment(sampler, nearest, kind, warped, centre, end, reach, rail_half)
     bed = nearest <= half
     return RoadBed(bed, kind, (nearest > half) & (nearest <= rail_half)) if bed.any() else None
 
@@ -168,7 +195,7 @@ def _mark_corner(
     nearest: np.ndarray,
     kind: np.ndarray,
     warped: tuple[np.ndarray, np.ndarray],
-    centre: tuple[int, int],
+    centre: tuple[float, float],
     first: tuple[float, float],
     second: tuple[float, float],
     smooth: float,
