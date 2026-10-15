@@ -80,13 +80,6 @@ def _border_km(edges: _Edges) -> dict[Pair, float]:
     return dict(sorted(totals.items()))
 
 
-def top_of(realms: list[Realm], index: int) -> int:
-    """Return the id of the independent power at the top of ``index``'s chain of lieges."""
-    while realms[index].liege >= 0:
-        index = realms[index].liege
-    return index
-
-
 def _neighbours(borders: dict[Pair, float]) -> dict[int, dict[int, float]]:
     """Shared border km per realm, keyed by the neighbour."""
     nbrs: dict[int, dict[int, float]] = {}
@@ -150,7 +143,7 @@ def _colours(world: World, config: Config, seed: int) -> None:
         if realm.liege >= 0:
             role = rows["vassal"]
             jitter = float(role["hue_jitter"])
-            hue = hue_of[top_of(realms, realm.id)] + stream.uniform(-jitter, jitter)
+            hue = hue_of[world.top_realm(realm.id)] + stream.uniform(-jitter, jitter)
         elif realm.kind == "major":
             role, hue = rows["major"], hue_of[realm.id]
         else:
@@ -232,7 +225,7 @@ def run(world: World, config: Config, seed: int) -> None:
     _vassalage(world, config, seed, nbrs)
     _colours(world, config, seed)
 
-    tops = np.array([top_of(realms, r.id) for r in realms], dtype=np.int32)
+    tops = np.array([world.top_realm(r.id) for r in realms], dtype=np.int32)
     top_borders: dict[Pair, float] = {}
     for (a, b), km in borders.items():
         pair = (min(int(tops[a]), int(tops[b])), max(int(tops[a]), int(tops[b])))

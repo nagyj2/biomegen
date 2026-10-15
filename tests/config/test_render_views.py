@@ -9,10 +9,10 @@ from biomegen.config.validate import ConfigError, validate
 
 
 def test_default_views_tint_with_a_defined_ramp() -> None:
-    # Every default view that names a tint ramp names one that render.ramps defines.
+    # Every default view that names a tint ramp names one that render.ramps defines (or the realm tint).
     render = get_defaults()["render"]
     tints = {view["tint"] for view in render["views"].values() if view["tint"]}
-    assert tints <= set(render["ramps"])
+    assert tints <= set(render["ramps"]) | {"realm"}
 
 
 def test_default_ramps_are_ascending() -> None:

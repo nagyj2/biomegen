@@ -134,6 +134,17 @@ class LayerContext:
         return np.where(self.rocky, style.relief_floor[self.relief], style.floor[self.biome])
 
     @cached_property
+    def realm(self) -> np.ndarray:
+        """Realm id per land cell, -1 on wild land and water.
+
+        Read where the biome is read (the warped tile at the detail scales), so a border wobbles like a biome edge and
+        zoom and local agree; a land cell whose warped tile holds no realm takes the realm of its own tile.
+        """
+        realm = self.sampler.blended(self.world.realm_id).astype(np.int64)
+        realm = np.where((realm < 0) & self.land, self.sampler.nearest(self.world.realm_id), realm)
+        return np.where(self.land, realm, -1)
+
+    @cached_property
     def elevation_m(self) -> np.ndarray:
         """Elevation in metres per cell (bilinear)."""
         return self.sampler.bilinear(self.world.elevation_m)
@@ -186,6 +197,7 @@ def build_grid(
 
 
 from . import (  # noqa: E402,F401  (registers the built-in layers)
+    borders,
     clutter,
     compass,
     markers,

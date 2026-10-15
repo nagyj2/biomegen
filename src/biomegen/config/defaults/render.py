@@ -86,6 +86,22 @@ VALUES: Dict[str, Any] = {
             "detail_layers": ["terrain", "relief", "clutter", "water", "roads", "markers", "sites"],
             "tint": "",
         },
+        "political": {
+            "layers": [
+                "terrain",
+                "relief",
+                "tint",
+                "water",
+                "borders",
+                "roads",
+                "sites",
+                "markers",
+                "labels",
+                "compass",
+            ],
+            "detail_layers": ["terrain", "relief", "clutter", "tint", "water", "borders", "roads", "markers", "sites"],
+            "tint": "realm",
+        },
         "elevation": {
             "layers": ["terrain", "relief", "tint", "water", "roads", "sites", "markers", "labels", "compass"],
             "detail_layers": ["terrain", "relief", "tint", "water", "roads", "markers"],
@@ -102,6 +118,14 @@ VALUES: Dict[str, Any] = {
             "tint": "rainfall",
         },
     },
+    # Realm tint (``tint = "realm"`` in a view): land is desaturated toward its own grey by ``desaturate`` (1 = grey)
+    # and mixed toward the colour of its realm by ``mix``. Land no realm holds is that grey scaled by ``wild_scale``
+    # plus ``wild_offset`` (0..255), a flat dull ground.
+    "realm_tint": {"desaturate": 1.0, "mix": 0.62, "wild_scale": 0.5, "wild_offset": 40},
+    # Borders layer: the cell on one side of a border between two realms (the one with the larger id; wild land counts
+    # as -1) is lightened toward white by ``lighten``, or by ``vassal_lighten`` when the two belong to the same
+    # overlord. Where ``World.front`` marks a war, the line is mixed toward ``front_color`` by ``front_mix`` instead.
+    "borders": {"lighten": 0.5, "vassal_lighten": 0.2, "front_color": [200, 25, 25], "front_mix": 0.85},
     # Fit-to-screen map: when a cell covers a block of tiles it shows the block's most salient tile. A tile's
     # priority is the larger of its biome's and relief's ``priority`` (data/biomes.toml), raised to ``road`` on a
     # road tile and ``poi`` on a point of interest; rivers count as ``river``. Higher wins, first tile on a tie.

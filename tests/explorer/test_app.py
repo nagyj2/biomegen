@@ -155,7 +155,11 @@ def test_local_key_goes_in_a_scale(config: Config) -> None:
 
 
 def test_view_key_cycles_to_the_next_view(config: Config) -> None:
-    assert "view: elevation" in _screen(_run(_world(), config, "v"))
+    assert "view: political" in _screen(_run(_world(), config, "v"))
+
+
+def test_view_key_goes_on_to_the_data_views(config: Config) -> None:
+    assert "view: elevation" in _screen(_run(_world(), config, "v", "v"))
 
 
 def test_fit_key_toggles_to_one_to_one(config: Config) -> None:

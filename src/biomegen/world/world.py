@@ -188,6 +188,12 @@ class World:
         i = int(self.realm_id[y, x])
         return self.realms[i] if 0 <= i < len(self.realms) else None
 
+    def top_realm(self, index: int) -> int:
+        """Return the id of the independent power at the top of realm ``index``'s chain of lieges."""
+        while self.realms[index].liege >= 0:
+            index = self.realms[index].liege
+        return index
+
     # ------------------------------------------------------------------ reproducibility
     def fingerprint(self) -> str:
         """Return a stable hex digest of all per-tile arrays - the golden-world test's anchor.

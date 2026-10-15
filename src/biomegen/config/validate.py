@@ -118,6 +118,10 @@ def _validate_world(world: Dict[str, Any], errors: List[str]) -> None:
         errors.append(f"world.center_lat_range_deg must be [min, max] with 0 <= min <= max <= 89, got {lat_range!r}")
 
 
+#: The one tint a view may name that is not a ``render.ramps`` entry: realm colours (see ``render/layers/tint.py``).
+REALM_TINT = "realm"
+
+
 def _validate_render_views(render: Dict[str, Any], errors: List[str]) -> None:
     """Check ``render.ramps`` (a World field and ascending stops, colours coerced) and ``render.views``."""
     from ..world.world import World  # local import: avoids import-order coupling
@@ -158,8 +162,8 @@ def _validate_render_views(render: Dict[str, Any], errors: List[str]) -> None:
         if not isinstance(detail_layers, list) or not all(isinstance(layer, str) for layer in detail_layers):
             errors.append(f"{where}.detail_layers must be a list of layer names")
         tint = view.get("tint", "") if isinstance(view, dict) else ""
-        if tint and tint not in ramps:
-            errors.append(f"{where}.tint {tint!r} is not a render.ramps entry")
+        if tint and tint != REALM_TINT and tint not in ramps:
+            errors.append(f"{where}.tint {tint!r} is not a render.ramps entry or {REALM_TINT!r}")
 
 
 def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:

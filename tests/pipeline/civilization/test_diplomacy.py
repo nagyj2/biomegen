@@ -143,8 +143,7 @@ def test_the_vassal_tree_has_no_cycles(generated: World) -> None:
 def test_a_vassal_is_paler_than_its_overlord(generated: World) -> None:
     vassals = [r for r in generated.realms if r.liege >= 0]
     assert vassals and all(
-        _saturation(r.color) < _saturation(generated.realms[diplomacy.top_of(generated.realms, r.id)].color)
-        for r in vassals
+        _saturation(r.color) < _saturation(generated.realms[generated.top_realm(r.id)].color) for r in vassals
     )
 
 
@@ -212,7 +211,7 @@ def test_a_lone_realm_has_no_front_and_no_relations() -> None:
 
 
 def test_front_cells_belong_to_warring_powers(generated: World) -> None:
-    tops = np.array([diplomacy.top_of(generated.realms, r.id) for r in generated.realms])
+    tops = np.array([generated.top_realm(r.id) for r in generated.realms])
     warring = {i for r in generated.relations if r.kind == "war" for i in (r.a, r.b)}
     cells = tops[generated.realm_id[generated.front]]
     assert set(cells.tolist()) <= warring
@@ -228,7 +227,7 @@ def test_peace_has_no_attacker(generated: World) -> None:
 
 
 def test_a_war_claims_a_town_of_the_defender(generated: World) -> None:
-    tops = [diplomacy.top_of(generated.realms, r.id) for r in generated.realms]
+    tops = [generated.top_realm(r.id) for r in generated.realms]
     claims = [(r, generated.pois[r.claim_poi]) for r in generated.relations if r.kind == "war" and r.claim_poi >= 0]
     assert claims and all(
         poi.kind != "capital" and tops[poi.realm_id] == (r.b if r.attacker == r.a else r.a) for r, poi in claims

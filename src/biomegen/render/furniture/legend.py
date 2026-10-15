@@ -85,7 +85,7 @@ def _swatches(world: World, config: Config, view: View, ascii_only: bool) -> lis
                 "River",
             )
         )
-    shows_relief = not view.tint or config.get(f"render.ramps.{view.tint}.keep_relief", False)
+    shows_relief = not view.ramp or config.get(f"render.ramps.{view.ramp}.keep_relief", False)
     if shows_relief:
         tints = config.get("render.relief_tints")
         for relief in sorted(int(r) for r in np.unique(world.relief) if r):
@@ -105,7 +105,7 @@ def _swatches(world: World, config: Config, view: View, ascii_only: bool) -> lis
 
 
 def _ramp_bar(text: _Text, config: Config, view: View, ascii_only: bool) -> None:
-    ramp = config.get(f"render.ramps.{view.tint}")
+    ramp = config.get(f"render.ramps.{view.ramp}")
     stops = ramp["stops"]
     unit = ramp.get("unit_ascii", ramp.get("unit", "")) if ascii_only else ramp.get("unit", "")
     segment = max(4, min(10, (text.width - 10) // len(stops)))
@@ -201,7 +201,7 @@ def build_legend(world: World, config: Config, view: View, width: int, ascii_onl
         for glyph, fg, bg, label in swatches[start : start + per_line]:
             line += [Span(" "), Span(glyph, fg, bg, True), Span(" " + label.ljust(column - 3), text.text_fg)]
         text.lines.append(line)
-    if view.tint:
+    if view.ramp:
         _ramp_bar(text, config, view, ascii_only)
     _geography(text, world, config, ascii_only)
     _climate(text, world, config, ascii_only)

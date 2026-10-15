@@ -106,10 +106,8 @@ def _town(world: World, config: Config, relation: Relation, stream: random.Rando
 
 def describe_relations(world: World, config: Config, seed: int) -> None:
     """Replace each relation's raw reason template by its text, naming the town, river, range, sea and goods."""
-    from ..pipeline.civilization.diplomacy import top_of  # local: naming sits above the stages that make realms
-
     realms = world.realms
-    tops = {r.id: top_of(realms, r.id) for r in realms}
+    tops = {r.id: world.top_realm(r.id) for r in realms}
     places = {
         "river": _largest(world, "river", config, str(config.get("tables.reason_tokens.river.fallback"))),
         "range": _largest(world, "range", config, str(config.get("tables.reason_tokens.range.fallback"))),

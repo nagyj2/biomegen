@@ -53,3 +53,38 @@ def test_a_ramp_can_read_any_world_field() -> None:
     world.moisture[0] = [0.0, 1.0]
     grid = _draw(world, config, "moisture")
     assert grid.bg[0, 1, 0] > grid.bg[0, 0, 0]
+
+
+# --- the realm tint -----------------------------------------------------------------------------------------------
+
+
+def _realm_world(config):
+    from biomegen.world.entities import Realm
+
+    world = make_world(3, 1, Biome.GRASS)
+    world.realms = [Realm(id=0, kind="major", color=(200, 0, 0)), Realm(id=1, kind="major", color=(0, 0, 200))]
+    world.realm_id[0] = [0, 1, -1]
+    return world
+
+
+def test_realm_tint_colours_land_by_its_realm(config) -> None:
+    grid = _draw(_realm_world(config), config, "realm")
+    assert (grid.bg[0, 0, 0] > grid.bg[0, 0, 2]) and (grid.bg[0, 1, 2] > grid.bg[0, 1, 0])
+
+
+def test_unclaimed_land_is_a_flat_grey(config) -> None:
+    red, green, blue = _draw(_realm_world(config), config, "realm").bg[0, 2].tolist()
+    assert red == green == blue
+
+
+def test_realm_tint_leaves_water_alone(config) -> None:
+    world = _realm_world(config)
+    world.biome[0, 1] = int(Biome.DEEP)
+    plain = build_grid(world, config, View("t", ("terrain", "relief")), Sampler.viewport(world, 1, 3))
+    assert (_draw(world, config, "realm").bg[0, 1] == plain.bg[0, 1]).all()
+
+
+def test_realm_tint_keeps_relief_glyphs(config) -> None:
+    world = _realm_world(config)
+    world.relief[0, 0] = int(Relief.MOUNTAIN)
+    assert _draw(world, config, "realm").glyph[0, 0] == config.get("tables.relief.mountain.glyph")

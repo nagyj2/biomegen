@@ -72,3 +72,8 @@ def test_ascii_legend_is_pure_ascii(config) -> None:
 
 def test_legend_wraps_within_the_width(config) -> None:
     assert max(len(line) for line in _text(config).split("\n")) <= 100 + 24
+
+
+def test_a_political_legend_has_no_ramp_bar_but_lists_relief(config) -> None:
+    text = _text(config, View("political", ("terrain", "tint"), "realm"))
+    assert config.get("tables.relief.mountain.label") in text and "ELEVATION" not in text

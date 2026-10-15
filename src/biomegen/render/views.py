@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..config.model import Config
+from ..config.validate import REALM_TINT
 
 
 @dataclass(frozen=True)
@@ -15,7 +16,7 @@ class View:
         name: The view's key in ``render.views``.
         layers: Layer names for the map scale, bottom to top (each must be registered in
             ``render.layers.LAYERS``).
-        tint: The ``render.ramps`` entry the ``tint`` layer applies, or ``""`` for none.
+        tint: The ``render.ramps`` entry the ``tint`` layer applies, ``"realm"`` for realm colours, or ``""`` for none.
         detail_layers: Layer names for the zoom and local scales; empty means the map list is used there too.
     """
 
@@ -23,6 +24,16 @@ class View:
     layers: tuple[str, ...]
     tint: str = ""
     detail_layers: tuple[str, ...] = ()
+
+    @property
+    def ramp(self) -> str:
+        """The ``render.ramps`` entry of a data view, or ``""`` when the view has none (untinted or realm-tinted)."""
+        return "" if self.tint == REALM_TINT else self.tint
+
+    @property
+    def political(self) -> bool:
+        """Whether the view tints land by realm."""
+        return self.tint == REALM_TINT
 
     def layers_for(self, detailed: bool) -> tuple[str, ...]:
         """Return the layer list for a detail scale (``detailed``) or the map scale."""

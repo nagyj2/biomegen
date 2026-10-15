@@ -175,7 +175,7 @@ _HELP_LINES = (
     "{zoom}   step out: map <-> zoom, local or a site -> zoom",
     "{local}   step in: map -> zoom -> local, or into the site of a POI (arrows then move one cell)",
     "{toggle_scale}   fit-to-screen <-> 1:1 (map only)",
-    "{cycle_view}   next view (terrain, elevation, temperature, rainfall)",
+    "{cycle_view}   next view (terrain, political, elevation, temperature, rainfall)",
     "{floor_up} / {floor_down}   floor up / down on a structure",
     "{export_view} / {export_world}   export the view / the whole world",
     "{help}   this help      {quit} or Esc   quit",

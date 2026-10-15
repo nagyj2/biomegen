@@ -78,7 +78,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--view",
         default=None,
-        help="Print a static map of this render.views entry (terrain, elevation, temperature, rainfall) and exit.",
+        help="Print a static map of this render.views entry (terrain, political, elevation, ...) and exit.",
     )
     parser.add_argument(
         "--scale",
