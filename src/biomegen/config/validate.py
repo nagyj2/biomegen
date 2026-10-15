@@ -82,6 +82,10 @@ def _validate_biome_names(cfg: Dict[str, Any], errors: List[str]) -> None:
         for name in rule.get("biomes", []) or []:
             check(name, f"poi.types.{kind}.biomes")
 
+    for habitat, names in (cfg.get("politics", {}).get("habitats", {}) or {}).items():
+        for name in names or []:
+            check(name, f"politics.habitats.{habitat}")
+
 
 def _validate_world(world: Dict[str, Any], errors: List[str]) -> None:
     """Check the ``world`` section: dimensions, extent, latitude settings."""

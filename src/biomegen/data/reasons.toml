@@ -1,0 +1,54 @@
+# Reason texts for diplomatic relations, loaded into the config tree as `tables.reasons` and
+# `tables.reason_tokens`. The naming stage picks one template per relation and fills its tokens once the places
+# are named. Texts follow the reference generator (docs/reference/worldgen.py).
+#
+# reasons, one row per relation kind (war, rivalry, alliance, trade):
+#   templates   texts to pick from. Tokens: war and rivalry may use {town}, {river}, {range}, {sea};
+#               alliance uses none; trade uses {goods_a}, {goods_b}, {short_a}, {short_b}
+#
+# reason_tokens, one row per place token (town, river, range, sea):
+#   fallback    the words used when the world has no such place
+
+[reasons.war]
+templates = [
+  "a disputed succession",
+  "control of the {river}",
+  "the border town of {town}",
+  "a broken marriage pact",
+  "a religious schism",
+  "the silver mines of the {range}",
+  "an assassinated envoy",
+  "grazing rights along the frontier",
+]
+
+[reasons.rivalry]
+templates = [
+  "a cold war over {town}",
+  "rival claims to the {sea}",
+  "competing trade routes",
+  "an unpaid debt three generations old",
+  "sheltering each other's exiles",
+]
+
+[reasons.alliance]
+templates = [
+  "sealed by a royal marriage",
+  "against a common enemy",
+  "an ancient blood oath",
+  "a mutual defence pact",
+]
+
+[reasons.trade]
+templates = ["{goods_a} from {short_a} for {goods_b} from {short_b}"]
+
+[reason_tokens.town]
+fallback = "Nowhere"
+
+[reason_tokens.river]
+fallback = "river crossings"
+
+[reason_tokens.range]
+fallback = "border hills"
+
+[reason_tokens.sea]
+fallback = "open sea"

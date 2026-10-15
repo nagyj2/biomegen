@@ -12,6 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
+REALM_KINDS: Tuple[str, ...] = ("major", "city_state", "tribal")
+RELATION_KINDS: Tuple[str, ...] = ("war", "rivalry", "alliance", "trade")
+
 
 @dataclass
 class POI:

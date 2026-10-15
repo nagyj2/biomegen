@@ -1,0 +1,266 @@
+# Political tables, loaded into the config tree as `tables.realm_kinds`, `tables.realm_forms`,
+# `tables.relation_weights` and `tables.realm_colors`; override one attribute of a row with e.g.
+# `[tables.realm_kinds.tribal]` + `strength = [0.5, 0.8]`. Rows follow the reference generator
+# (docs/reference/worldgen.py `_realms` and `_diplomacy`). Counts, budgets and distances (km) are in the
+# `politics` config section, not here.
+#
+# realm_kinds, one row per kind in world/entities.py REALM_KINDS (major, city_state, tribal):
+#   label            display name of the kind ("realm", "city-state", ...)
+#   strength         [min, max] claim strength: a realm's cost to expand a step is divided by it
+#   rural_per_km2    [min, max] people per km2 of land outside settlements
+#   vassal_chance    chance that the realm swears fealty to a neighbouring major (needs one)
+#
+# realm_forms, one row per way a realm may be named and ruled:
+#   kind      the realm kind that may use the form (a realm_kinds row)
+#   habitat   "any", or the habitat that favours it: dry, cold, wood, high; "open" is the fallback for a
+#             realm of no habitat. A realm picks among its kind's "any" rows and the rows of its habitats;
+#             when none match it uses the "any" and "open" rows
+#   weight    relative chance of the form among the candidates
+#   form      the realm's full name; {n} is a made-up base name, {s} the seat's name
+#   rulers    ruler styles to pick from; {p} is a made-up personal name, {n} the base name
+#
+# relation_weights, one row per kind of neighbour pair (major_pair: both majors; other_pair: any other):
+#   war, rivalry, alliance, trade, none   relative chance of each outcome for a pair sharing a border
+#
+# realm_colors, one row per colour role (major, vassal, city_state, tribal), in HSV:
+#   saturation, value   0..1
+#   hue_jitter          vassals vary their liege's hue by up to this much (0..1 of the hue circle)
+#   hue_offset          hue shift of the role against the golden-ratio sequence (0..1)
+
+[realm_kinds.major]
+label = "realm"
+strength = [0.6, 1.4]
+rural_per_km2 = [2.0, 6.0]
+vassal_chance = 0.35
+
+[realm_kinds.city_state]
+label = "city-state"
+strength = [0.3, 0.45]
+rural_per_km2 = [3.0, 8.0]
+vassal_chance = 0.5
+
+[realm_kinds.tribal]
+label = "tribal lands"
+strength = [0.45, 0.7]
+rural_per_km2 = [0.03, 0.15]
+vassal_chance = 0.35
+
+[realm_forms.kingdom]
+kind = "major"
+habitat = "any"
+weight = 1.0
+form = "Kingdom of {n}"
+rulers = ["King {p}", "Queen {p}"]
+
+[realm_forms.empire]
+kind = "major"
+habitat = "any"
+weight = 1.0
+form = "The {n} Empire"
+rulers = ["Emperor {p}", "Empress {p}"]
+
+[realm_forms.duchy]
+kind = "major"
+habitat = "any"
+weight = 1.0
+form = "Duchy of {n}"
+rulers = ["Duke {p}", "Duchess {p}"]
+
+[realm_forms.grand_duchy]
+kind = "major"
+habitat = "any"
+weight = 1.0
+form = "Grand Duchy of {n}"
+rulers = ["Grand Duke {p}", "Grand Duchess {p}"]
+
+[realm_forms.theocracy]
+kind = "major"
+habitat = "any"
+weight = 1.0
+form = "Theocracy of {n}"
+rulers = ["High Priestess {p}", "the Synod of {n}"]
+
+[realm_forms.republic]
+kind = "major"
+habitat = "any"
+weight = 1.0
+form = "The {n} Republic"
+rulers = ["Consul {p}", "the Senate of {n}"]
+
+[realm_forms.principality]
+kind = "major"
+habitat = "any"
+weight = 1.0
+form = "Principality of {n}"
+rulers = ["Prince {p}", "Princess {p}"]
+
+[realm_forms.dominion]
+kind = "major"
+habitat = "any"
+weight = 1.0
+form = "The {n} Dominion"
+rulers = ["Lord Protector {p}"]
+
+[realm_forms.magocracy]
+kind = "major"
+habitat = "any"
+weight = 1.0
+form = "Magocracy of {n}"
+rulers = ["Archmage {p}"]
+
+[realm_forms.khanate]
+kind = "major"
+habitat = "dry"
+weight = 3.0
+form = "The {n} Khanate"
+rulers = ["Khan {p}", "Khatun {p}"]
+
+[realm_forms.sultanate]
+kind = "major"
+habitat = "dry"
+weight = 3.0
+form = "Sultanate of {n}"
+rulers = ["Sultan {p}", "Sultana {p}"]
+
+[realm_forms.jarldom]
+kind = "major"
+habitat = "cold"
+weight = 3.0
+form = "Jarldom of {n}"
+rulers = ["Jarl {p}"]
+
+[realm_forms.thanedom]
+kind = "major"
+habitat = "cold"
+weight = 3.0
+form = "The {n} Thanedom"
+rulers = ["High Thane {p}"]
+
+[realm_forms.free_city]
+kind = "city_state"
+habitat = "any"
+weight = 1.0
+form = "Free City of {s}"
+rulers = ["Lord Mayor {p}", "Burgomaster {p}"]
+
+[realm_forms.serene_republic]
+kind = "city_state"
+habitat = "any"
+weight = 1.0
+form = "Serene Republic of {s}"
+rulers = ["Doge {p}"]
+
+[realm_forms.merchant_league]
+kind = "city_state"
+habitat = "any"
+weight = 1.0
+form = "Merchant League of {s}"
+rulers = ["the Guild Council"]
+
+[realm_forms.prince_bishopric]
+kind = "city_state"
+habitat = "any"
+weight = 1.0
+form = "Prince-Bishopric of {s}"
+rulers = ["Prince-Bishop {p}"]
+
+[realm_forms.archonate]
+kind = "city_state"
+habitat = "any"
+weight = 1.0
+form = "Archonate of {s}"
+rulers = ["Archon {p}"]
+
+[realm_forms.horde]
+kind = "tribal"
+habitat = "open"
+weight = 1.0
+form = "The {n} Horde"
+rulers = ["Khagan {p}"]
+
+[realm_forms.clans]
+kind = "tribal"
+habitat = "open"
+weight = 1.0
+form = "Clans of the {n}"
+rulers = ["Chieftain {p}"]
+
+[realm_forms.tribes]
+kind = "tribal"
+habitat = "open"
+weight = 1.0
+form = "The {n} Tribes"
+rulers = ["the Elder Circle"]
+
+[realm_forms.wildfolk]
+kind = "tribal"
+habitat = "wood"
+weight = 1.0
+form = "Wildfolk of {n}"
+rulers = ["Speaker {p}"]
+
+[realm_forms.wardens]
+kind = "tribal"
+habitat = "wood"
+weight = 1.0
+form = "The {n} Wardens"
+rulers = ["Warden {p}"]
+
+[realm_forms.druid_circle]
+kind = "tribal"
+habitat = "wood"
+weight = 1.0
+form = "Circle of {n}"
+rulers = ["the Druid Circle"]
+
+[realm_forms.holds]
+kind = "tribal"
+habitat = "high"
+weight = 1.0
+form = "The {n} Holds"
+rulers = ["Hold-Thane {p}"]
+
+[realm_forms.free_holds]
+kind = "tribal"
+habitat = "high"
+weight = 1.0
+form = "Free Holds of {n}"
+rulers = ["the Moot"]
+
+[relation_weights.major_pair]
+war = 0.17
+rivalry = 0.3
+alliance = 0.23
+trade = 0.2
+none = 0.1
+
+[relation_weights.other_pair]
+war = 0.08
+rivalry = 0.2
+alliance = 0.12
+trade = 0.35
+none = 0.25
+
+[realm_colors.major]
+saturation = 0.7
+value = 0.95
+hue_jitter = 0.0
+hue_offset = 0.0
+
+[realm_colors.vassal]
+saturation = 0.35
+value = 0.95
+hue_jitter = 0.04
+hue_offset = 0.0
+
+[realm_colors.city_state]
+saturation = 0.85
+value = 1.0
+hue_jitter = 0.0
+hue_offset = 0.31
+
+[realm_colors.tribal]
+saturation = 0.3
+value = 0.7
+hue_jitter = 0.0
+hue_offset = 0.31

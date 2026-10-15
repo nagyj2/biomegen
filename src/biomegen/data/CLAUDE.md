@@ -9,7 +9,9 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 - `config/defaults/tables.py` reads every file in `DATA_FILES` with `tomllib` and puts each top-level
   table under the `tables` config section (`tables.biomes`, `tables.relief` from `biomes.toml`;
   `tables.detail`, `tables.detail_relief` from `detail.toml`; `tables.tiers`; `tables.styles` from `terrain.toml`;
-  `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.furniture` from `furniture.toml`).
+  `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
+  `tables.relation_weights` and `tables.realm_colors` from `polity.toml`; `tables.reasons` and `tables.reason_tokens` from
+  `reasons.toml`).
 - A user config overrides with the ordinary deep-merge: `[tables.biomes.desert]` + `goods = "glass"`
   changes one attribute and keeps the rest of the row.
 - `config/tables.py` validates every row against its table's schema (`SCHEMAS`): unknown keys, missing
@@ -37,6 +39,17 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 - `furniture.toml` has weight sets nested by family then room role (`[furniture.dungeon.vault]` + `chest = 4.0`): each
   key a lower-case `Cell` name, each value a weight. A layout asks for a role per room; a missing role leaves it bare.
   `validate_tables` checks the keys and that each site row names a family that exists.
+
+## Politics
+
+- `polity.toml`: `realm_kinds` has one row per kind (`major`, `city_state`, `tribal`: strength and rural population
+  spans, vassal chance). `realm_forms` rows are the ways a realm is named and ruled; a row names its `kind`, a `habitat`
+  (`any`, or `dry`, `cold`, `wood`, `high` to favour it, `open` as the default) and a `weight`, and each kind needs an
+  `any` or `open` row. `relation_weights` (`major_pair`, `other_pair`) and `realm_colors` (HSV per role) are fixed row sets.
+- `reasons.toml`: `reasons` has one row per relation kind with `templates`; the tokens a template may use are checked
+  (`{town}`, `{river}`, `{range}`, `{sea}` for war and rivalry; `{goods_a}`, `{goods_b}`, `{short_a}`, `{short_b}` for trade).
+  `reason_tokens` gives the words used when the world lacks the place.
+- Counts, budgets and distances (km) are in the `politics` config section.
 
 ## Adding a table or column
 

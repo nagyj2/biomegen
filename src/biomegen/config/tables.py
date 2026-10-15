@@ -7,6 +7,7 @@ Problems are appended to the caller's error list so validation still reports eve
 
 from __future__ import annotations
 
+import string
 from typing import Any, Dict, List
 
 from .validate import _coerce_color
@@ -16,7 +17,8 @@ from .validate import _coerce_color
 # "nonneg" a number >= 0; "positive" a number > 0; "rank" an int >= 0; "count" an int >= 1;
 # "range" [min, max] ints >= 0; "pair" a [w, h] of numbers > 0; "forms" a non-empty list of name patterns,
 # each containing "{n}" exactly once; "ascii_char" / "ascii_char?" / "ascii_text" are "char" / "char?" /
-# "text" restricted to 7-bit characters; "factor" one of "none", "moisture", "elevation".
+# "text" restricted to 7-bit characters; "factor" one of "none", "moisture", "elevation"; "span" [min, max]
+# numbers with 0 <= min <= max; "text_list" a non-empty list of strings.
 _BIOME_ROW = {
     "label": "text",
     "glyph": "char",
@@ -88,7 +90,50 @@ _GEO_NAME_ROW = {
     "syllables": "range",
 }
 
+_REALM_KIND_ROW = {
+    "label": "text",
+    "strength": "span",
+    "rural_per_km2": "span",
+    "vassal_chance": "unit",
+}
+_REALM_FORM_ROW = {
+    "kind": "text",
+    "habitat": "text",
+    "weight": "positive",
+    "form": "text",
+    "rulers": "text_list",
+}
+_RELATION_WEIGHT_ROW = {
+    "war": "nonneg",
+    "rivalry": "nonneg",
+    "alliance": "nonneg",
+    "trade": "nonneg",
+    "none": "nonneg",
+}
+_REALM_COLOR_ROW = {
+    "saturation": "unit",
+    "value": "unit",
+    "hue_jitter": "unit",
+    "hue_offset": "unit",
+}
+_REASON_ROW = {"templates": "text_list"}
+_REASON_TOKEN_ROW = {"fallback": "text"}
+
 DETAIL_FACTORS = ("none", "moisture", "elevation")
+
+#: Habitats a realm form may name: the biome groups of ``politics.habitats``, ``high`` (mostly relief) and the
+#: ``open`` fallback of a realm with none; ``any`` suits every realm of the kind.
+HABITATS = ("any", "dry", "cold", "wood", "high", "open")
+
+#: The ``str.format`` tokens each text of the political tables may use.
+_FORM_TOKENS = frozenset({"n", "s"})
+_RULER_TOKENS = frozenset({"p", "n"})
+_REASON_TOKENS = {
+    "war": frozenset({"town", "river", "range", "sea"}),
+    "rivalry": frozenset({"town", "river", "range", "sea"}),
+    "alliance": frozenset(),
+    "trade": frozenset({"goods_a", "goods_b", "short_a", "short_b"}),
+}
 
 # Table name -> (row schema, keys a row may omit).
 SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
@@ -100,6 +145,12 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
     "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled"})),
+    "realm_kinds": (_REALM_KIND_ROW, frozenset()),
+    "realm_forms": (_REALM_FORM_ROW, frozenset()),
+    "relation_weights": (_RELATION_WEIGHT_ROW, frozenset()),
+    "realm_colors": (_REALM_COLOR_ROW, frozenset()),
+    "reasons": (_REASON_ROW, frozenset()),
+    "reason_tokens": (_REASON_TOKEN_ROW, frozenset()),
 }
 
 
@@ -135,6 +186,8 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "forms": lambda v: (
             isinstance(v, list) and len(v) > 0 and all(isinstance(f, str) and f.count("{n}") == 1 for f in v)
         ),
+        "span": lambda v: isinstance(v, list) and len(v) == 2 and all(_is_number(n) for n in v) and 0.0 <= v[0] <= v[1],
+        "text_list": lambda v: isinstance(v, list) and len(v) > 0 and all(isinstance(t, str) for t in v),
         "range": lambda v: (
             isinstance(v, list)
             and len(v) == 2
@@ -211,6 +264,84 @@ def _validate_member_tables(tables: Dict[str, Any], errors: List[str]) -> None:
             errors.append("tables.tiers: every tier needs a unique rank")
 
 
+def _tokens(text: str) -> set[str] | None:
+    """Return the ``str.format`` field names of ``text``, or ``None`` when it is not a valid format string."""
+    try:
+        return {field for _, field, _, _ in string.Formatter().parse(text) if field is not None}
+    except ValueError:
+        return None
+
+
+def _check_tokens(text: object, allowed: frozenset[str], where: str, errors: List[str]) -> None:
+    """Record a problem when ``text`` uses a ``{token}`` outside ``allowed`` (or is not a format string)."""
+    if not isinstance(text, str):
+        return
+    used = _tokens(text)
+    if used is None:
+        errors.append(f"{where}: {text!r} is not a valid pattern")
+    elif used - allowed:
+        errors.append(f"{where}: unknown token {{{sorted(used - allowed)[0]}}} in {text!r}")
+
+
+def _validate_realm_forms(forms: Any, errors: List[str]) -> None:
+    """Check each realm form's kind, habitat and name tokens, and that every realm kind has a fallback form."""
+    from ..world.entities import REALM_KINDS
+
+    if not isinstance(forms, dict):
+        return
+    usable = {kind: False for kind in REALM_KINDS}
+    for name in sorted(forms):
+        row = forms[name]
+        where = f"tables.realm_forms.{name}"
+        if not isinstance(row, dict):
+            continue
+        if row.get("kind") not in REALM_KINDS:
+            errors.append(f"{where}.kind: expected one of {', '.join(REALM_KINDS)}, got {row.get('kind')!r}")
+        elif row.get("habitat") in ("any", "open"):
+            usable[row["kind"]] = True
+        if row.get("habitat") not in HABITATS:
+            errors.append(f"{where}.habitat: expected one of {', '.join(HABITATS)}, got {row.get('habitat')!r}")
+        _check_tokens(row.get("form"), _FORM_TOKENS, f"{where}.form", errors)
+        for ruler in row.get("rulers", []) if isinstance(row.get("rulers"), list) else []:
+            _check_tokens(ruler, _RULER_TOKENS, f"{where}.rulers", errors)
+    for kind in REALM_KINDS:
+        if forms and not usable[kind]:
+            errors.append(f"tables.realm_forms: realm kind {kind!r} needs a form with habitat 'any' or 'open'")
+
+
+def _validate_polity(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check the political tables against each other: realm kinds, relation kinds, habitats and text tokens."""
+    from ..world.entities import REALM_KINDS, RELATION_KINDS
+
+    kinds = tables.get("realm_kinds", {})
+    if isinstance(kinds, dict) and set(kinds) != set(REALM_KINDS):
+        errors.append(f"tables.realm_kinds must have exactly one row per realm kind: {', '.join(REALM_KINDS)}")
+    _validate_realm_forms(tables.get("realm_forms", {}), errors)
+    weights = tables.get("relation_weights", {})
+    if isinstance(weights, dict):
+        if set(weights) != {"major_pair", "other_pair"}:
+            errors.append("tables.relation_weights must have the rows major_pair and other_pair")
+        for name in sorted(weights):
+            row = weights[name]
+            if isinstance(row, dict) and row and all(_is_number(w) and w == 0 for w in row.values()):
+                errors.append(f"tables.relation_weights.{name}: needs at least one weight above 0")
+    colors = tables.get("realm_colors", {})
+    if isinstance(colors, dict) and set(colors) != {"major", "vassal", "city_state", "tribal"}:
+        errors.append("tables.realm_colors must have the rows major, vassal, city_state and tribal")
+    reasons = tables.get("reasons", {})
+    if isinstance(reasons, dict):
+        if set(reasons) != set(RELATION_KINDS):
+            errors.append(f"tables.reasons must have exactly one row per relation kind: {', '.join(RELATION_KINDS)}")
+        for name in sorted(reasons):
+            row = reasons[name]
+            if isinstance(row, dict) and isinstance(row.get("templates"), list) and name in _REASON_TOKENS:
+                for template in row["templates"]:
+                    _check_tokens(template, _REASON_TOKENS[name], f"tables.reasons.{name}.templates", errors)
+    reason_tokens = tables.get("reason_tokens", {})
+    if isinstance(reason_tokens, dict) and set(reason_tokens) != {"town", "river", "range", "sea"}:
+        errors.append("tables.reason_tokens must have the rows town, river, range and sea")
+
+
 def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     """Validate every row of every table under ``cfg["tables"]``, appending problems to ``errors``."""
 
@@ -241,6 +372,7 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
 
     _validate_member_tables(tables, errors)
     _validate_furniture(tables, errors)
+    _validate_polity(tables, errors)
 
     styles = tables.get("styles", {})
     style = cfg.get("terrain", {}).get("style")
