@@ -91,5 +91,5 @@ templates = [
   "The last king of {fallen} dies and the realm dissolves.",
 ]
 templates_near = [
-  "{fallen} falls; its ruins are left a long way from {near}.",
+  "{fallen} falls; its ruins crumble in the wilds near {near}.",
 ]

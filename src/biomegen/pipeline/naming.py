@@ -3,15 +3,16 @@
 Runs last, once realms, diplomacy, POIs, rivers, lakes and geographic features all exist. Each realm gets a culture
 (biome-biased, seeded on the realm id; a vassal keeps its own), then the island, every POI, river, lake and geographic
 feature is named in the culture of the realm that holds it (wild land and open water use ``common``). Realms are named
-once their seats are, and the reasons of the relations are worded once every place has a name. Names are keyed on
-stable entity identity, so the result is invariant to processing order. Names live on the entity objects (not the
-numpy arrays), so this stage does not change ``World.fingerprint()``.
+once their seats are, and the reasons of the relations are worded once every place has a name. The chronicle's fallen
+realms and event texts come last. Names are keyed on stable entity identity, so the result is invariant to processing
+order. Names live on the entity objects (not the numpy arrays), so this stage does not change
+``World.fingerprint()``.
 """
 
 from __future__ import annotations
 
 from ..config.model import Config
-from ..naming import cultures, forge, polity
+from ..naming import chronicle, cultures, forge, polity
 from ..world.world import World
 
 COMMON = "common"
@@ -69,6 +70,9 @@ def run(world: World, config: Config, seed: int) -> None:
     for realm in sorted(world.realms, key=lambda r: r.id):
         polity.name_realm(seed, realm, polity.seat_name(world, realm) or "", config)
     polity.describe_relations(world, config, seed)
+
+    # 6. Name the fallen realms and render the chronicle (every realm, place and relation is worded now).
+    chronicle.describe_events(world, config, seed)
 
 
 def _name_features(world: World, config: Config, seed: int, realm_culture: dict[int, str]) -> None:

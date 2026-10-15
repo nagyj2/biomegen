@@ -115,3 +115,12 @@ def culture_for_realm(seed: int, realm: Realm) -> str:
 
     weights = BIOME_CULTURE_WEIGHTS.get(int(realm.dominant_biome), _UNIFORM)
     return weighted_choice(rngmod.derive(seed, "naming.culture", "realm", realm.id), weights)
+
+
+def culture_for_site(seed: int, biome: int, key: int) -> str:
+    """Assign a culture to something with no realm (a fallen one): biome-biased choice seeded on ``key``."""
+    from ..util import rng as rngmod
+
+    return weighted_choice(
+        rngmod.derive(seed, "naming.culture", "fallen", key), BIOME_CULTURE_WEIGHTS.get(biome, _UNIFORM)
+    )
