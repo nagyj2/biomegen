@@ -31,7 +31,7 @@ from ...world.entities import NO_LOCATION
 from ...world.world import World
 from ..civilization.diplomacy import front_cells
 from . import secession
-from .founding import add_founding
+from .founding import add_founding, add_settling
 from .ledger import Ledger
 from .places import nearest_settlement
 from .rulers import StyleTimeline, style_at
@@ -116,7 +116,7 @@ class _Timeline:
         """Play every step in year order, then let each surviving fallen realm fall at its natural year."""
         for step in sorted(self.steps, key=lambda s: (s.year, _ORDER[s.kind])):
             if step.kind == "secession":
-                self._offshoot(step)
+                (self._defection if step.key[0] == "defection" else self._offshoot)(step)
                 continue
             if step.a in self.dead or step.b in self.dead:
                 continue
@@ -192,6 +192,38 @@ class _Timeline:
             poi_ids=[child.seat_poi] if seat is not None else [],
             location=(seat.x, seat.y) if seat is not None else NO_LOCATION,
             tags=(child.kind, "offshoot", tag, *(("capital",) if seat is not None and seat.kind == "capital" else ())),
+        )
+
+    def _defection(self, step: _Step) -> None:
+        """Check whether settlement ``step.key[1]`` left realm ``step.a`` for its holder ``step.b`` in ``step.year``.
+
+        Odds as for an offshoot, with the defection :func:`~.secession.form_chance` and score (the old owner's strength
+        then). If it did, the settlement was settled for the realm it left and a ``secession`` tagged ``defection``
+        follows; if not, it was settled for its holder as any settlement is.
+        """
+        world, config, seed = self.world, self.config, self.seed
+        index = int(step.key[1])
+        old, holder, town = world.realms[step.a[1]], world.realms[step.b[1]], world.pois[index]
+        mean = sum(self.strength[(REALM, r.id)] for r in world.realms) / len(world.realms)
+        score = secession.defection_score(world, config, town, old, holder, step.year, self.strength[step.a] / mean)
+        roll = rng.derive(seed, "history", "secession", "check", "defection", index).random()
+        chance = secession.form_chance(config, "defection")
+        if self.secessions >= int(config.get("history.secession.max_per_world")) or roll >= chance * score:
+            add_settling(world, config, seed, self.ledger, index, holder.id)
+            return
+        self.secessions += 1
+        add_settling(world, config, seed, self.ledger, index, old.id)  # it was the old owner's town to begin with
+        tag = secession.relation_tag(world, config, old, holder)
+        self.ledger.add(
+            step.year,
+            "secession",
+            f"secession_defection_{tag}",
+            ("defection", index),
+            seed,
+            realm_ids=[holder.id, old.id],
+            poi_ids=[index],
+            location=(town.x, town.y),
+            tags=(town.kind, "defection", tag),
         )
 
     def _battle(self, step: _Step, winner: Faction, loser: Faction) -> None:
@@ -364,6 +396,13 @@ def _plan_offshoots(timeline: _Timeline, offshoots: Mapping[int, int]) -> None:
         timeline.plan(child.founded, "secession", (REALM, parent_id), (REALM, child_id), ("offshoot", child_id))
 
 
+def _plan_defections(timeline: _Timeline, defections: Mapping[int, tuple[int, int]]) -> None:
+    """Plan the check of every settlement that may have left an older realm for its holder, in its drawn year."""
+    for index, (old_id, year) in sorted(defections.items()):
+        holder_id = timeline.world.pois[index].realm_id
+        timeline.plan(year, "secession", (REALM, old_id), (REALM, holder_id), ("defection", index))
+
+
 def derive(
     world: World,
     config: Config,
@@ -373,16 +412,19 @@ def derive(
     styles: dict[int, StyleTimeline] | None = None,
     offshoots: Mapping[int, int] | None = None,
     secessions_made: int = 0,
+    defections: Mapping[int, tuple[int, int]] | None = None,
 ) -> None:
     """Add the war, peace, battle, rivalry, treaty and fall events of the world to ``ledger``.
 
     ``offshoots`` maps a realm that may have left an older one to that parent: each gets its founding (or secession)
     event here, from a check at its founding year. ``secessions_made`` counts the clean splits already decided, which
-    use up the per-world cap first.
+    use up the per-world cap first. ``defections`` maps a settlement that may have changed sides to the realm it would
+    have left and the year; each is checked there, and gets its ``settling`` event from the outcome.
     """
     timeline = _Timeline(world, config, seed, span, ledger, styles)
     timeline.secessions = secessions_made
     _plan_relations(timeline)
     _plan_fallen_wars(timeline)
     _plan_offshoots(timeline, offshoots or {})
+    _plan_defections(timeline, defections or {})
     timeline.play()

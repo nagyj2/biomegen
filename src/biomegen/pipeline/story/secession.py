@@ -329,3 +329,59 @@ def plan_splits(world: World, config: Config, seed: int) -> list[SplitPlan]:
             plans.append(SplitPlan(a, b, year, year - age))
             used |= {a, b}
     return plans
+
+
+def _land_km(world: World, x: int, y: int, cells: tuple[np.ndarray, np.ndarray]) -> float:
+    """Return the km from cell ``(x, y)`` to the nearest of ``cells`` (``(rows, cols)``, as ``np.nonzero`` gives)."""
+    rows, cols = cells
+    if len(rows) == 0:
+        return float("inf")
+    return float(np.hypot((cols - x) * world.scale.km_per_col, (rows - y) * world.scale.km_per_row).min())
+
+
+def plan_defections(world: World, config: Config, seed: int) -> dict[int, tuple[int, int]]:
+    """Return ``{settlement index: (old owner id, year)}`` for every held city or town that may have changed sides.
+
+    A candidate is a non-seat settlement of the ``history.settle_kinds`` held now by a realm. Its old owner is drawn,
+    by defection score, among the other independent realms whose land lies within ``history.secession.defect_km`` of it
+    and that were founded at least ``history.min_gap_years`` before it; the year is drawn between
+    ``history.min_gap_years`` after the settlement's founding and the present. Nothing is decided here: the timeline
+    checks each candidate in its year. Empty when the defection chance is 0.
+    """
+    if form_chance(config, "defection") <= 0.0:
+        return {}
+    gap, present = int(config.get("history.min_gap_years")), world.year
+    limit = float(config.get("history.secession.defect_km"))
+    kinds = set(config.get("history.settle_kinds"))
+    seats = {realm.seat_poi for realm in world.realms}
+    land = {realm.id: np.nonzero(world.realm_id == realm.id) for realm in world.realms}
+    planned: dict[int, tuple[int, int]] = {}
+    for index, poi in enumerate(world.pois):
+        if not poi.civilized or poi.kind not in kinds or poi.realm_id < 0 or index in seats:
+            continue
+        holder = world.realms[poi.realm_id]
+        year_first = poi.founded + gap
+        owners = [
+            realm
+            for realm in world.realms
+            if realm.id != holder.id
+            and world.top_realm(realm.id) != world.top_realm(holder.id)
+            and realm.founded + gap <= poi.founded
+            and year_first <= present
+            and _land_km(world, poi.x, poi.y, land[realm.id]) <= limit
+        ]
+        years = [
+            year_first
+            + int(
+                rng.derive(seed, "history", "secession", "defection", index, o.id).random() * (present - year_first + 1)
+            )
+            for o in owners
+        ]
+        scores = [defection_score(world, config, poi, o, holder, y) for o, y in zip(owners, years, strict=True)]
+        pick = rng.derive(seed, "history", "secession", "defection", "owner", index).random() * sum(scores)
+        for owner, year, score in zip(owners, years, scores, strict=True):
+            pick -= score
+            if pick < 0:
+                planned[index] = (owner.id, year)
+                break
+    return planned

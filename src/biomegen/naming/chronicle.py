@@ -110,12 +110,25 @@ def _predecessor_tokens(
             where[f"ruler_{suffix}"] = ref
 
 
+def _defection_tokens(
+    world: World, event: ChronicleEvent, holder: Realm, old: Realm, tokens: dict[str, object], where: Where
+) -> None:
+    """Fill the tokens of a defection: the settlement, the realm it joins and the realm it leaves."""
+    town = event.poi_ids[0]
+    tokens.update(town=world.pois[town].name, realm=holder.name, short=holder.short)
+    tokens.update(parent=old.name, parent_short=old.short)
+    where.update(town=(REF_POI, town), realm=(REF_REALM, holder.id), short=(REF_REALM, holder.id))
+    where.update(parent=(REF_REALM, old.id), parent_short=(REF_REALM, old.id))
+
+
 def _secession_tokens(
     world: World, event: ChronicleEvent, realms: list[Realm], tokens: dict[str, object], where: Where
 ) -> None:
-    """Fill the tokens of an event of a secession: a realm that ended in a split (founding or split), or an offshoot."""
+    """Fill the tokens of a secession event: a split (or its old realm's founding), a defection or an offshoot."""
     if event.predecessor_ids:
         _predecessor_tokens(world, event, realms, tokens, where)
+    elif "defection" in event.tags:
+        _defection_tokens(world, event, realms[0], realms[1], tokens, where)
     else:
         _offshoot_tokens(world, event, realms[0], realms[1], tokens, where)
 

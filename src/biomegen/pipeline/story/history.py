@@ -19,7 +19,7 @@ Everything is placed from static quantities, so the same world always gives the 
    event replaces both foundings; this is decided up front, before the rulers are drawn. A living realm may also have
    left an older one (an offshoot): its founding event is held back, and the conflicts timeline checks at its founding
    year, with the parent's strength then, and writes a ``secession`` event or, if the check fails, the ordinary
-   founding.
+   founding. A settlement may also have left an older realm for its holder (a defection): the same check decides it.
 6. **Conflicts** (:mod:`.conflicts`): wars, battles, peace, rivalries, treaties and falls, tracked through time.
 
 Events are collected in a :class:`~.ledger.Ledger`, sorted by ``(year, kind order, creation order)`` and numbered, so
@@ -44,7 +44,7 @@ from ..civilization.diplomacy import faction_color, neutral_colors
 from ..civilization.settlements import habitability
 from ..pois import pick_blue_noise
 from . import conflicts, rulers, secession
-from .founding import add_founding
+from .founding import add_founding, add_settling
 from .ledger import Ledger
 from .places import nearest_settlement
 
@@ -187,13 +187,20 @@ def _split_events(world: World, config: Config, seed: int, ledger: Ledger) -> No
 
 
 def _realm_events(
-    world: World, config: Config, seed: int, span: int, ledger: Ledger, held_back: Collection[int]
+    world: World,
+    config: Config,
+    seed: int,
+    span: int,
+    ledger: Ledger,
+    held_back: Collection[int],
+    defecting: Collection[int] = (),
 ) -> None:
     """Add the founding (realms and fallen realms), settling and conquest events.
 
     A realm in ``held_back`` has no founding yet: it came of a clean split (:func:`_split_events` adds the
     secession), or it may have left an older realm (the conflicts timeline adds a ``secession`` event, or the founding
-    if the check fails).
+    if the check fails). A settlement in ``defecting`` may have left an older realm: the timeline settles it (for the
+    realm it left if it did, else for its holder).
     """
     gap = int(config.get("history.min_gap_years"))
     settle_kinds = set(config.get("history.settle_kinds"))
@@ -225,19 +232,8 @@ def _realm_events(
                 location=(poi.x, poi.y),
                 tags=(poi.kind, "free"),
             )
-        if poi.civilized and poi.kind in settle_kinds and poi.realm_id >= 0 and index not in seats:
-            ledger.add(
-                poi.founded,
-                "settling",
-                "settling",
-                (index,),
-                seed,
-                realm_ids=[poi.realm_id],
-                poi_ids=[index],
-                location=(poi.x, poi.y),
-                near_poi=nearest_settlement(world, config, poi.x, poi.y, (index,)),
-                tags=(poi.kind,),
-            )
+        if poi.civilized and poi.kind in settle_kinds and poi.realm_id >= 0 and index not in seats | set(defecting):
+            add_settling(world, config, seed, ledger, index, poi.realm_id)
     for realm in world.realms:
         if realm.liege < 0:
             continue
@@ -294,9 +290,10 @@ def run(world: World, config: Config, seed: int) -> None:
     offshoots = {}
     if ledger.enabled("secession"):
         offshoots = secession.plan_offshoots(world, config, seed, came_of_split)
-    _realm_events(world, config, seed, span, ledger, came_of_split | set(offshoots))
+    defections = secession.plan_defections(world, config, seed) if ledger.enabled("secession") else {}
+    _realm_events(world, config, seed, span, ledger, came_of_split | set(offshoots), set(defections))
     _split_events(world, config, seed, ledger)
-    conflicts.derive(world, config, seed, span, ledger, styles, offshoots, len(splits))
+    conflicts.derive(world, config, seed, span, ledger, styles, offshoots, len(splits), defections)
     remnants = _remnants(world, config, seed, ledger)
     world.chronicle = ledger.finish()
     for event in world.chronicle:  # a settlement is marked by the event that founded or settled it
