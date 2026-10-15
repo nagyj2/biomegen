@@ -23,7 +23,7 @@ All wrap `uv run` and pin fixture seeds and sizes in `scripts/_fixtures.sh`:
 - `scripts/check.sh`: ruff format check, ruff, mypy, pytest.
 - `scripts/run.sh [args]`: launch the app on the fixture seed (42).
 - `scripts/stats.sh [seed]`: headless stats dump, including the fingerprint.
-- `scripts/fingerprint.sh [seed ...]`: world fingerprints (default seeds 42, 7, 1337); the before/after
+- `scripts/fingerprint.sh [seed ...]`: world fingerprints (default seeds 42, 7, 1337, 11, 15; 11 and 15 hold a defection and an offshoot); the before/after
   proof for refactors.
 - `scripts/export.sh [seed] [dir]`: headless SVG/PNG export (default `build/export`).
 - `scripts/view.sh [view] [seed] [args]`: a static map; add `--scale zoom|local --at X,Y` for a magnified part.

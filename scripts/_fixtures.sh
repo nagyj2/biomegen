@@ -17,7 +17,7 @@ fi
 
 # Default fixture seed, the extra fingerprint seeds, and a small fast world for quick checks.
 fixture_seed=42
-fixture_fingerprint_seeds=(42 7 1337)
+fixture_fingerprint_seeds=(42 7 1337 11 15)
 fixture_small_width=64
 fixture_small_height=32
 build_dir="${repo_root}/build"
