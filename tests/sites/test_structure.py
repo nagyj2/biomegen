@@ -28,7 +28,9 @@ def _floor_plans(config: Config, kind: str, **fields):
 
 
 def _footprint(cells: np.ndarray) -> int:
-    return int((cells != VOID).sum())
+    """The cells of the floor's own room: not bare ground, not the roofs of the floors below."""
+    ground = [VOID, ROOF, int(Cell.PATH), int(Cell.TREE), int(Cell.BUSH)]
+    return int((~np.isin(cells, ground)).sum())
 
 
 def test_each_tower_floor_is_smaller_than_the_one_below(config: Config) -> None:
@@ -131,3 +133,16 @@ def test_no_tree_walls_a_ruin_door_in(config: Config) -> None:
         if len(doors - {0}) > 1:
             split.append(index)
     assert split == []
+
+
+def test_an_upper_tower_floor_shows_the_floor_below_as_a_roof(config: Config) -> None:
+    # Where the floor below is wider, its outline shows round the smaller floor as a roof.
+    _poi, plans = _floor_plans(config, "tower", floor_count=3)
+    own = ~np.isin(plans[1].cells, [VOID, ROOF, int(Cell.PATH), int(Cell.TREE), int(Cell.BUSH)])
+    ring = (plans[0].outside == ROOF) & ~own
+    assert ring.any() and (plans[1].cells[ring] == ROOF).all()
+
+
+def test_the_ground_floor_of_a_tower_has_no_roofs_inside(config: Config) -> None:
+    _poi, plans = _floor_plans(config, "tower", floor_count=3)
+    assert ROOF not in plans[0].cells

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 import random
+from dataclasses import replace
 from typing import Optional
 
 import numpy as np
@@ -272,7 +273,10 @@ def build_dungeon(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
 # ----------------------------------------------------------------------------------------------------------- tower
 @layout("tower")
 def build_tower(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
-    """A tower floor: one room, each floor a little smaller than the one below, the stairs in a single column."""
+    """A tower floor: one room, each floor a little smaller than the one below, the stairs in a single column.
+
+    An upper floor also shows the ground and the outline of each floor below it as a roof, under its own cells.
+    """
     stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
     base_rows = max(7, round(ctx.rows * 0.72))
     base_cols = round(base_rows * ctx.aspect)
@@ -319,6 +323,13 @@ def build_tower(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     if ctx.floor == 0:
         outside = grid.copy()
         outside[gy : gy + gh, gx : gx + gw][building.footprint] = _ROOF
+    else:  # the ground view (approach, trees) with every lower floor's outline as a roof, this floor laid over them
+        lowest = build_tower(replace(ctx, floor=ctx.lowest_floor))
+        shown = lowest[0].copy() if lowest is not None else np.full_like(grid, _VOID)
+        for lower_x, lower_y, lower_w, lower_h in rects[: ctx.floor - ctx.lowest_floor]:
+            shown[lower_y : lower_y + lower_h, lower_x : lower_x + lower_w] = _ROOF
+        shown[grid != _VOID] = grid[grid != _VOID]
+        grid = shown
     return grid, outside
 
 

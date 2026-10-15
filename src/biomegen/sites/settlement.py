@@ -11,8 +11,8 @@ bushes fill free ground. A port builds a harbour (a pier, boats and a street to 
 town, and a river settlement a mill with a water wheel in the river (``sites.settlement.harbour`` and ``mill``).
 
 Seen from outside every building is a roof and the wall is solid stone; the streets and trees are as they are. An upper
-floor shows the storey of each building that reaches it and the roof of each that does not; the ground between the
-buildings is left to the terrain. The
+floor is the ground view with the buildings in it replaced: the storey of each building that reaches that floor, the
+roof of each that does not (the current floor laid over all the lower ones). Streets, trees and the wall stay. The
 world's road is laid in first (:func:`.streets.lay_roads`), so the town grows round and onto it.
 """
 
@@ -698,8 +698,9 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     _plant(ctx, grid, dry, roofs, stream)
     if ctx.floor > 0:
         layer = uppers[ctx.floor - 1] if ctx.floor - 1 < len(uppers) else np.zeros_like(grid)
-        cells = layer.copy()
-        cells[roofs & (layer == _VOID)] = int(Cell.ROOF)  # a building with no storey this high shows its roof
+        cells = grid.copy()  # the ground as it is: streets, trees, the wall and its gates, the harbour and the mill
+        cells[roofs] = int(Cell.ROOF)  # every building is a roof...
+        cells[layer != _VOID] = layer[layer != _VOID]  # ...except where it has a storey this high
         return cells, np.zeros_like(layer)
     outside = grid.copy()
     outside[roofs] = int(Cell.ROOF)

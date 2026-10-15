@@ -172,9 +172,9 @@ def test_a_tall_settlement_has_stairs_up_on_the_ground_floor(config: Config) -> 
     assert int(Cell.STAIRS_UP) in plans[0].cells
 
 
-def test_the_upper_floor_has_stairs_down_but_no_streets(config: Config) -> None:
+def test_the_upper_floor_has_stairs_down_and_keeps_the_streets(config: Config) -> None:
     plans = _floors(config, "city", 3, 12000)
-    assert int(Cell.STAIRS_DOWN) in plans[1].cells and PATH not in plans[1].cells
+    assert int(Cell.STAIRS_DOWN) in plans[1].cells and PATH in plans[1].cells
 
 
 def test_the_stairs_of_one_floor_meet_the_floor_above(config: Config) -> None:
@@ -185,11 +185,18 @@ def test_the_stairs_of_one_floor_meet_the_floor_above(config: Config) -> None:
     assert down and down <= up
 
 
-def test_an_upper_storey_stands_inside_the_ground_footprint(config: Config) -> None:
-    # Every cell of an upper floor is under a roof seen from outside.
+def test_an_upper_floor_keeps_the_ground_outside_the_buildings(config: Config) -> None:
+    # Streets, trees and the wall are as they are on the ground floor: only the buildings change.
     plans = _floors(config, "city", 3, 12000)
-    upper = plans[1].cells != VOID
-    assert upper.any() and (plans[0].outside[upper] == ROOF).all()
+    outside = plans[0].outside != ROOF
+    assert np.array_equal(plans[1].cells[outside], plans[0].cells[outside])
+
+
+def test_an_upper_storey_stands_inside_the_ground_footprint(config: Config) -> None:
+    # Every cell that differs from the ground floor lies under a roof seen from outside.
+    plans = _floors(config, "city", 3, 12000)
+    changed = plans[1].cells != plans[0].cells
+    assert changed.any() and (plans[0].outside[changed] == ROOF).all()
 
 
 def test_a_single_floor_settlement_has_no_stairs(config: Config) -> None:
