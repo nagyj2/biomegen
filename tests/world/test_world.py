@@ -161,3 +161,23 @@ def test_events_at_matches_an_event_the_poi_is_marked_by() -> None:
     world = _history_world()
     world.pois[0].event_ids = [2]
     assert [e.id for e in world.events_at(2, 1)] == [1, 2]
+
+
+def test_the_ruler_in_a_year_is_the_reign_that_began_before_it() -> None:
+    from biomegen.world.entities import Ruler
+
+    world = World(4, 4, 1)
+    world.rulers = [
+        Ruler(id=0, realm_id=0, from_year=10, to_year=300, style="martial"),
+        Ruler(id=1, realm_id=0, from_year=300, to_year=None, style="gentle"),
+        Ruler(id=2, realm_id=1, from_year=50, to_year=None, style="pious"),
+    ]
+    assert [world.ruler_at(0, y).id for y in (10, 299, 300, 900)] == [0, 0, 1, 1]  # type: ignore[union-attr]
+
+
+def test_the_ruler_before_a_founding_is_the_founder_and_a_realm_without_rulers_has_none() -> None:
+    from biomegen.world.entities import Ruler
+
+    world = World(4, 4, 1)
+    world.rulers = [Ruler(id=0, realm_id=0, from_year=10, to_year=None, style="martial")]
+    assert world.ruler_at(0, 1).id == 0 and world.ruler_at(5, 100) is None  # type: ignore[union-attr]

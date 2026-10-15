@@ -183,7 +183,13 @@ _REALM_COLOR_ROW = {
 }
 _REASON_ROW = {"templates": "text_list"}
 _REASON_TOKEN_ROW = {"fallback": "text"}
-_RULING_STYLE_ROW = {"label": "text", "weight": "positive", "strength_mul": "positive", "temper": "temper"}
+_RULING_STYLE_ROW = {
+    "label": "text",
+    "weight": "positive",
+    "strength_mul": "positive",
+    "temper": "temper",
+    "traits": "traits",
+}
 _CHRONICLE_ROW = {"templates": "text_list", "templates_near": "text_list"}
 
 #: The POI row keys a kind may omit (placement numbers a history-only kind lacks, and the optional seam fields).
@@ -304,6 +310,17 @@ def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+def _is_traits(value: Any) -> bool:
+    """A ruler's trait values: exactly the names of ``world.entities.TRAITS``, each a number in [0, 1]."""
+    from ..world.entities import TRAITS  # local import: avoids import-order coupling
+
+    return (
+        isinstance(value, dict)
+        and set(value) == set(TRAITS)
+        and all(_is_number(v) and 0.0 <= v <= 1.0 for v in value.values())
+    )
+
+
 def _is_floors(value: Any) -> bool:
     """A storey count (an int >= 1) or a [min, max] range of them."""
     if isinstance(value, list):
@@ -352,6 +369,7 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "unit_pair": lambda v: (
             isinstance(v, list) and len(v) == 2 and all(_is_number(n) and 0.0 <= n <= 1.0 for n in v)
         ),
+        "traits": _is_traits,
         "weights": lambda v: (
             isinstance(v, dict)
             and len(v) > 0

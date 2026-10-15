@@ -14,7 +14,7 @@ from typing import Optional
 
 from ..config.model import Config
 from ..util import rng
-from ..world.entities import REF_FEATURE, REF_POI, Realm, Relation
+from ..world.entities import REF_FEATURE, REF_POI, Realm, Relation, Ruler
 from ..world.tile import BIOME_NAME
 from ..world.world import World
 from . import forge
@@ -54,6 +54,36 @@ def _weighted(stream: random.Random, options: list[tuple[str, dict]]) -> dict:
         if pick < 0:
             return row
     return options[-1][1]
+
+
+def _form_row(seed: int, realm: Realm, config: Config) -> dict:
+    """The ``tables.realm_forms`` row the realm is named and ruled by (the first draw of its form stream)."""
+    return _weighted(rng.derive(seed, "naming", "realm_form", realm.id), _candidate_forms(realm, config))
+
+
+def name_ruler(seed: int, ruler: Ruler, realm: Realm, config: Config) -> str:
+    """Return the name of ``ruler`` of ``realm``: a title from the realm's form and a personal name in its culture.
+
+    Pure: the draws are keyed on the realm and the reign, so the name never depends on the order rulers are named in,
+    and a later simulation can name a ruler it adds. The realm needs its culture.
+    """
+    generators, naming_cfg = config.get("naming.generators"), config.section("naming")
+    base = forge.name_entity(seed, "realm", (realm.id,), realm.culture, generators, naming_cfg)
+    person = forge.name_entity(seed, "ruler", (realm.id, ruler.id), realm.culture, generators, naming_cfg)
+    title = rng.derive(seed, "naming", "ruler_title", realm.id, ruler.id).choice(
+        list(_form_row(seed, realm, config)["rulers"])
+    )
+    return str(title).format(p=person, n=base)
+
+
+def name_rulers(world: World, config: Config, seed: int) -> None:
+    """Name every ruler, then make each realm's ``ruler`` its present ruler's name."""
+    for ruler in world.rulers:
+        ruler.name = name_ruler(seed, ruler, world.realms[ruler.realm_id], config)
+    for realm in world.realms:
+        present = world.ruler_at(realm.id, world.year)
+        if present is not None:
+            realm.ruler = present.name
 
 
 def name_realm(seed: int, realm: Realm, seat_name: str, config: Config) -> None:

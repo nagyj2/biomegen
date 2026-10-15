@@ -18,7 +18,7 @@ from typing import Optional
 import numpy as np
 
 from ..util.units import GridScale, grid_scale
-from .entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Lake, Realm, Relation, River
+from .entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Lake, Realm, Relation, River, Ruler
 from .tile import Biome, Relief, TileView, WaterType
 
 
@@ -116,6 +116,7 @@ class World:
         self.year: int = 0
         self.chronicle: list[ChronicleEvent] = []
         self.fallen_realms: list[FallenRealm] = []
+        self.rulers: list[Ruler] = []  # every realm's rulers, realm by realm, oldest first
 
         # Terrain style row name (filled by the terrain stage; metadata, not hashed).
         self.terrain_style: str = ""
@@ -190,6 +191,16 @@ class World:
         return index
 
     # ------------------------------------------------------------------ history
+    def rulers_of(self, realm_id: int) -> list[Ruler]:
+        """Return realm ``realm_id``'s rulers, oldest first (their reigns tile its life)."""
+        return [ruler for ruler in self.rulers if ruler.realm_id == realm_id]
+
+    def ruler_at(self, realm_id: int, year: int) -> Optional[Ruler]:
+        """Return realm ``realm_id``'s ruler in ``year`` (its founder before the founding), or None with no rulers."""
+        reigns = self.rulers_of(realm_id)
+        held = [ruler for ruler in reigns if ruler.from_year <= year]
+        return held[-1] if held else (reigns[0] if reigns else None)
+
     def events_until(self, year: int) -> list[ChronicleEvent]:
         """Return the chronicle events dated ``year`` or earlier, oldest first."""
         return [event for event in self.chronicle if event.year <= year]

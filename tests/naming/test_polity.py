@@ -7,7 +7,7 @@ import pytest
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.naming import cultures, polity
-from biomegen.world.entities import POI, GeoFeature, Realm, Relation
+from biomegen.world.entities import POI, GeoFeature, Realm, Relation, Ruler
 from biomegen.world.tile import Biome
 from biomegen.world.world import World
 
@@ -210,3 +210,39 @@ def test_a_place_diplomacy_did_not_choose_uses_the_fallback_words(config: Config
     world.features = _features()
     polity.describe_relations(world, config, 1)
     assert world.relations[0].why == "river crossings border hills open sea"
+
+
+# --- rulers ----------------------------------------------------------------------------------------------------------
+
+
+def _ruler(number: int = 0, realm_id: int = 0) -> Ruler:
+    return Ruler(id=number, realm_id=realm_id, from_year=10, to_year=None, style="martial")
+
+
+def test_a_ruler_name_is_the_same_every_time(config: Config) -> None:
+    realm = _realm()
+    assert polity.name_ruler(7, _ruler(), realm, config) == polity.name_ruler(7, _ruler(), realm, config)
+
+
+def test_the_rulers_of_a_realm_have_their_own_names(config: Config) -> None:
+    realm = _realm()
+    names = {polity.name_ruler(7, _ruler(n), realm, config) for n in range(12)}
+    assert len(names) > 6
+
+
+def test_a_ruler_takes_a_title_of_the_realms_form(config: Config) -> None:
+    realm = _realm()
+    config = _only(config, "kingdom")
+    assert polity.name_ruler(7, _ruler(), realm, config).split()[0] in {"King", "Queen"}
+
+
+def test_naming_the_rulers_makes_each_realms_ruler_its_present_one(config: Config) -> None:
+    world = World(10, 10, 1)
+    world.year = 1200
+    world.realms = [_realm(id=0)]
+    world.rulers = [
+        Ruler(id=0, realm_id=0, from_year=10, to_year=600, style="martial"),
+        Ruler(id=1, realm_id=0, from_year=600, to_year=None, style="gentle"),
+    ]
+    polity.name_rulers(world, config, 7)
+    assert world.realms[0].ruler == world.rulers[1].name and world.rulers[0].name

@@ -26,6 +26,7 @@ EVENT_KINDS: Tuple[str, ...] = (
     "peace",
     "fall",
 )
+TRAITS: Tuple[str, ...] = ("aggression", "greed", "trust", "expansionism", "caution")  # a ruler's personality
 NO_LOCATION: Tuple[int, int] = (-1, -1)  # a chronicle event not tied to a cell
 REF_KINDS: Tuple[str, ...] = ("realm", "poi", "fallen", "ruler", "feature")  # what a name in a text can refer to
 REF_REALM, REF_POI, REF_FALLEN, REF_RULER, REF_FEATURE = REF_KINDS
@@ -96,6 +97,24 @@ class Realm:
     color: Tuple[int, int, int] = (0, 0, 0)
     founded: int = 0  # chronicle year the realm was founded (set by the history stage)
     ruling_style: str = ""  # the ruler's style now, a tables.ruling_styles row (set by the history stage)
+
+
+@dataclass
+class Ruler:
+    """One ruler of a realm: the founder, then one per succession (a succession that keeps the style included).
+
+    ``from_year`` is the year the reign began and ``to_year`` the year the next began (None for the present ruler), so a
+    realm's reigns tile its life. ``traits`` holds a value in [0, 1] for each of :data:`TRAITS`: the ruling style's base
+    values plus seeded noise. History creates the records; the naming stage fills ``name`` (title and personal name).
+    """
+
+    id: int  # index into World.rulers
+    realm_id: int  # index into World.realms
+    from_year: int
+    to_year: Optional[int]
+    style: str  # a tables.ruling_styles row
+    traits: dict = field(default_factory=dict)  # TRAITS entry -> value in [0, 1]
+    name: str = ""
 
 
 @dataclass

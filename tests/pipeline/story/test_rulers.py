@@ -165,3 +165,102 @@ def test_a_style_only_counts_while_it_holds() -> None:
 def test_a_realm_with_no_style_has_its_plain_strength() -> None:
     timeline = _conflicts({})
     assert timeline._odds((REALM, 0), 100) == timeline.strength[(REALM, 0)]
+
+
+# --- the ruler records ---------------------------------------------------------------------------------
+
+
+def _rulers_of(world: World, realm_id: int) -> list:
+    return [r for r in world.rulers if r.realm_id == realm_id]
+
+
+def test_every_realm_has_a_founder_from_its_founding(world: World) -> None:
+    assert all(_rulers_of(world, r.id)[0].from_year == r.founded for r in world.realms)
+
+
+def test_ruler_ids_are_their_index_in_the_world(world: World) -> None:
+    assert [r.id for r in world.rulers] == list(range(len(world.rulers)))
+
+
+def test_a_realms_reigns_follow_one_another(world: World) -> None:
+    # Each reign ends the year the next begins and the present ruler's has no end.
+    for realm in world.realms:
+        reigns = _rulers_of(world, realm.id)
+        assert all(a.to_year == b.from_year for a, b in zip(reigns, reigns[1:], strict=False))
+        assert reigns[-1].to_year is None
+
+
+def test_no_reign_begins_after_the_present(world: World) -> None:
+    assert all(r.from_year <= world.year for r in world.rulers)
+
+
+def test_silent_successions_are_rulers_too(world: World) -> None:
+    # The style changes are the only events, yet there are more reigns than style changes.
+    changes = len([e for e in _successions(world)])
+    assert len(world.rulers) - len(world.realms) >= changes
+
+
+def test_the_present_style_is_the_present_rulers(world: World) -> None:
+    assert all(realm.ruling_style == _rulers_of(world, realm.id)[-1].style for realm in world.realms)
+
+
+def test_a_style_change_event_begins_a_reign_of_the_new_style(world: World) -> None:
+    for event in _successions(world):
+        new = dict(t.split(":") for t in event.tags)["to"]
+        assert any(r.from_year == event.year and r.style == new for r in _rulers_of(world, event.realm_ids[0]))
+
+
+def test_a_ruler_has_each_trait_in_range(world: World) -> None:
+    from biomegen.world.entities import TRAITS
+
+    assert all(set(r.traits) == set(TRAITS) and all(0.0 <= v <= 1.0 for v in r.traits.values()) for r in world.rulers)
+
+
+def test_a_rulers_traits_stay_within_the_spread_of_its_styles(world: World, cfg: Config) -> None:
+    spread = float(cfg.get("history.ruler_trait_spread"))
+    for ruler in world.rulers:
+        base = cfg.get(f"tables.ruling_styles.{ruler.style}.traits")
+        assert all(abs(v - base[name]) <= spread + 1e-9 for name, v in ruler.traits.items())
+
+
+def test_martial_rulers_are_more_aggressive_than_gentle_ones() -> None:
+    world = _tiny(40)
+    _derive(world, succession_change_chance=1.0)
+    by_style = {s: [r.traits["aggression"] for r in world.rulers if r.style == s] for s in ("martial", "gentle")}
+    assert by_style["martial"] and by_style["gentle"]
+    assert sum(by_style["martial"]) / len(by_style["martial"]) > sum(by_style["gentle"]) / len(by_style["gentle"])
+
+
+def test_the_rulers_are_deterministic() -> None:
+    first, second = _tiny(), _tiny()
+    _derive(first)
+    _derive(second)
+    assert first.rulers == second.rulers
+
+
+def test_a_realms_rulers_do_not_depend_on_the_other_realms() -> None:
+    # Every draw is keyed on the realm and the reign: a world of two realms gives realm 0 what a world of three gave it.
+    small, large = _tiny(2), _tiny(3)
+    _derive(small)
+    _derive(large)
+    assert _rulers_of(small, 0) == _rulers_of(large, 0)
+
+
+def test_the_trait_draws_never_move_the_style_events() -> None:
+    # The personality draws use their own stream, so the spread changes the traits but not one succession event.
+    narrow, wide = _derive(_tiny(), ruler_trait_spread=0.0)[1], _derive(_tiny(), ruler_trait_spread=0.5)[1]
+    assert [(e.year, e.tags) for e in narrow] == [(e.year, e.tags) for e in wide]
+
+
+def test_every_ruler_is_named_after_generation(world: World) -> None:
+    assert world.rulers and all(r.name for r in world.rulers)
+
+
+def test_a_realms_ruler_is_its_present_rulers_name(world: World) -> None:
+    assert all(realm.ruler == _rulers_of(world, realm.id)[-1].name for realm in world.realms)
+
+
+def test_rulers_of_a_dawn_world_are_none() -> None:
+    config = load_config(None)
+    config.data["history"]["start"] = "dawn"
+    assert pipeline.generate(config, 42).rulers == []

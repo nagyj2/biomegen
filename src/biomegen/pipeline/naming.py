@@ -94,6 +94,7 @@ def run(world: World, config: Config, seed: int) -> None:
     # 5. Name realms (their seats are named now), then word the relations (every place is named now).
     for realm in sorted(world.realms, key=lambda r: r.id):
         polity.name_realm(seed, realm, polity.seat_name(world, realm) or "", config)
+    polity.name_rulers(world, config, seed)
     polity.describe_relations(world, config, seed)
 
     # 6. Name the fallen realms and render the chronicle (every realm, place and relation is worded now).

@@ -485,3 +485,23 @@ def test_a_free_fate_without_factors_is_rejected() -> None:
     cfg["tables"]["free_fates"]["join"]["factors"] = []
     with pytest.raises(ConfigError, match=r"tables\.free_fates\.join\.factors: expected text_list"):
         validate(cfg)
+
+
+def test_every_ruling_style_has_all_five_traits() -> None:
+    from biomegen.world.entities import TRAITS
+
+    assert all(set(row["traits"]) == set(TRAITS) for row in get_defaults()["tables"]["ruling_styles"].values())
+
+
+def test_a_style_missing_a_trait_is_rejected() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["ruling_styles"]["martial"]["traits"]["greed"]
+    with pytest.raises(ConfigError, match=r"tables\.ruling_styles\.martial\.traits: expected traits"):
+        validate(cfg)
+
+
+def test_a_trait_outside_zero_to_one_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["ruling_styles"]["martial"]["traits"]["greed"] = 1.5
+    with pytest.raises(ConfigError, match=r"tables\.ruling_styles\.martial\.traits: expected traits"):
+        validate(cfg)

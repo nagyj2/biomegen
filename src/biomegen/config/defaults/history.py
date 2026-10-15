@@ -27,6 +27,9 @@ VALUES: Dict[str, Any] = {
     # ``succession_years`` years; only a change is an event. Rulers' real lifetimes are abstracted away.
     "succession_years": [300, 700],
     "succession_change_chance": 0.5,
+    # Every ruler (the founder and one per succession) has the five traits of ``world.entities.TRAITS``: its ruling
+    # style's base values (data/rulers.toml) plus a seeded draw within +- this spread, kept in [0, 1].
+    "ruler_trait_spread": 0.15,
     "min_gap_years": 20,  # least time between a realm existing and its next event (conquest, war, treaty)
     "first_founding_year": 10,  # the oldest realm is founded this year; every founding is shifted to match
     # Relations. A pair sharing a border may have had an older war first (``past_war_chance``, lasting
