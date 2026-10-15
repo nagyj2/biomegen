@@ -11,6 +11,8 @@ realm by grid lookup. History placement comes first: every event of the finished
 - **battlefield** (a ``decisive`` battle that passed its chance and age): the nearest free cell round the battle within
   ``offset_km``, at least ``min_spacing_km`` from every POI and ``kind_spacing_km`` from every other battlefield.
 
+- **tower**, **dungeon** (a ``fall``, a dungeon only a conquered one, each at its ``chance``): placed like a field,
+  and bandit-held from the start (the row's ``bandit_strength``): what a fallen realm's land comes to.
 - **watchtower** (an ongoing ``war``): up to ``max_per_event`` towers on the war's front, one per ``per_km_of_front``
   of it, on high ground and ``kind_spacing_km`` apart, each held by the realm owning its cell.
 
@@ -88,7 +90,8 @@ def _place_ruins(
 
 
 def _clear_of_pois(world: World, config: Config, row: dict) -> np.ndarray:
-    """Bool grid: where a POI of ``row`` keeps its ``min_spacing_km`` from every POI placed so far."""
+    """Bool grid: where a POI of ``row`` placed from an event keeps its spacing (``event_spacing_km``, else
+    ``min_spacing_km``) from every POI placed so far."""
     anywhere = np.zeros((world.height, world.width), dtype=bool)
     for poi in world.pois:
         anywhere[poi.y, poi.x] = True
@@ -97,14 +100,15 @@ def _clear_of_pois(world: World, config: Config, row: dict) -> np.ndarray:
     distance = geo.distance_to(
         anywhere, backend=config.get("compute.backend"), metric="euclidean", sampling=world.scale.sampling
     )
-    return distance >= float(row["min_spacing_km"])
+    return distance >= float(row.get("event_spacing_km", row["min_spacing_km"]))
 
 
 def _near_free_cell(world: World, config: Config, kind: str, event: ChronicleEvent) -> tuple[int, int] | None:
     """Return the free cell nearest the event's cell where a ``kind`` POI may stand, or None.
 
     A candidate is eligible land (the row's biomes, elevation and footprint), within the row's ``offset_km`` of the
-    event, at least ``min_spacing_km`` from every POI and ``kind_spacing_km`` from every other POI of its kind.
+    event, at least ``event_spacing_km`` (else ``min_spacing_km``) from every POI and ``kind_spacing_km`` from every
+    other POI of its kind.
     The nearest wins; ties go to the first in row-major order.
     """
     row = config.get(f"tables.pois.{kind}")
@@ -131,21 +135,26 @@ def _near_free_cell(world: World, config: Config, kind: str, event: ChronicleEve
     return int(xs[best]), int(ys[best])
 
 
-def _place_battlefield(world: World, config: Config, seed: int, event: ChronicleEvent) -> None:
-    """Place the battlefield of a decisive battle on the nearest free cell round it, if there is one."""
-    cell = _near_free_cell(world, config, "battlefield", event)
+def _place_near_event(world: World, config: Config, seed: int, event: ChronicleEvent, kind: str) -> None:
+    """Place a ``kind`` POI (a battlefield, or a bandit tower or dungeon) on the nearest free cell round the event.
+
+    It is dated by the event and holds the row's bandits (a wild kind with a ``bandit_strength``; none for a
+    battlefield).
+    """
+    cell = _near_free_cell(world, config, kind, event)
     if cell is None:
         return
-    row = config.get("tables.pois.battlefield")
-    stream = rng.derive(seed, "poi", "battlefield", "floors", event.id)
+    row = config.get(f"tables.pois.{kind}")
+    stream = rng.derive(seed, "poi", kind, "floors", event.id)
     pois.commit(
         world,
         seed,
-        "battlefield",
+        kind,
         *cell,
-        pois.draw_floors("battlefield", row, stream),
+        pois.draw_floors(kind, row, stream),
         connect=bool(row.get("connect", True)),
         founded=event.year,
+        bandit_strength=int(row.get("bandit_strength", 0)),
         event_ids=[event.id],
     )
 
@@ -244,8 +253,8 @@ def run(world: World, config: Config, seed: int) -> None:
             for plan in poi_for_event(world, config, seed, event):
                 if plan.kind == "ruin" and score is not None:
                     _place_ruins(world, config, seed, event, plan, score)
-                elif plan.kind == "battlefield":
-                    _place_battlefield(world, config, seed, event)
+                elif plan.kind in ("battlefield", "tower", "dungeon"):
+                    _place_near_event(world, config, seed, event, plan.kind)
                 elif plan.kind == "watchtower":
                     _place_watchtowers(world, config, seed, event, plan)
                 elif plan.kind == "shrine":

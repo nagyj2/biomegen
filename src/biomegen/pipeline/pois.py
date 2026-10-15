@@ -173,6 +173,8 @@ class ScoreFields(NamedTuple):
     fresh: np.ndarray
     coast: np.ndarray
     remote: np.ndarray
+    wild: np.ndarray
+    seat_remote: np.ndarray
 
 
 def score_fields(world: World, config: Config) -> ScoreFields:
@@ -185,13 +187,17 @@ def score_fields(world: World, config: Config) -> ScoreFields:
     for poi in world.pois:
         if poi.civilized:
             settled[poi.y, poi.x] = True
+    seats = np.zeros_like(settled)
+    for realm in world.realms:
+        if realm.seat_poi >= 0:
+            seats[world.pois[realm.seat_poi].y, world.pois[realm.seat_poi].x] = True
+    scale_km = float(config.get("poi.remoteness_scale_km"))
     return ScoreFields(
         _closeness(fresh, float(config.get("poi.freshwater_scale_km"))),
         _closeness(world.dist_to_ocean, float(config.get("poi.coastal_scale_km"))),
-        _remoteness(
-            geo.distance_to(settled, backend=backend, metric="euclidean", sampling=sampling),
-            float(config.get("poi.remoteness_scale_km")),
-        ),
+        _remoteness(geo.distance_to(settled, backend=backend, metric="euclidean", sampling=sampling), scale_km),
+        (world.realm_id < 0).astype(np.float64),
+        _remoteness(geo.distance_to(seats, backend=backend, metric="euclidean", sampling=sampling), scale_km),
     )
 
 
@@ -201,7 +207,7 @@ def place_by_location(world: World, config: Config, seed: int, sources: Collecti
     cell_km2 = world.scale.cell_area_km2
     area_km2 = {True: float(land.sum()) * cell_km2, False: float((~land).sum()) * cell_km2}  # keyed by "land kind"
 
-    fresh_weight, coast_weight, remote = score_fields(world, config)
+    fields = score_fields(world, config)
     min_land = float(config.get("poi.min_footprint_land"))
     jitter = float(config.get("poi.jitter"))
     density = float(config.get("poi.density"))
@@ -220,8 +226,15 @@ def place_by_location(world: World, config: Config, seed: int, sources: Collecti
         footprint = None if on_water else max_footprint(config, kind, purpose)
         mask = eligible_mask(world, row, footprint, min_land)
         noise = rng.derive_numpy(seed, "poi", kind).random(mask.shape) * jitter
-        score = 1.0 + float(row.get("near_freshwater", 0.0)) * fresh_weight
-        score = score + float(row.get("coastal", 0.0)) * coast_weight + float(row.get("remoteness", 0.0)) * remote
+        score = 1.0 + float(row.get("near_freshwater", 0.0)) * fields.fresh
+        score = (
+            score + float(row.get("coastal", 0.0)) * fields.coast + float(row.get("remoteness", 0.0)) * fields.remote
+        )
+        score = (
+            score
+            + float(row.get("wild", 0.0)) * fields.wild
+            + float(row.get("seat_remoteness", 0.0)) * fields.seat_remote
+        )
         score = np.where(mask, score + noise, -np.inf)
 
         stream = rng.derive(seed, "poi", kind, "floors")
@@ -235,5 +248,6 @@ def place_by_location(world: World, config: Config, seed: int, sources: Collecti
                 draw_floors(kind, row, stream),
                 purpose=purpose,
                 connect=bool(row.get("connect", True)),
+                bandit_strength=0 if row.get("fated") else int(row.get("bandit_strength", 0)),
             )
             placed.append((x, y))

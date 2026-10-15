@@ -298,3 +298,60 @@ def test_a_shrine_keeps_its_spacing_from_the_pois_before_it(shrines: World, cfg:
     for index, p in enumerate(shrines.pois):
         if p.kind == "shrine":
             assert all(shrines.scale.distance_km(p.x, p.y, q.x, q.y) >= spacing - 1e-6 for q in shrines.pois[:index])
+
+
+# --- bandit country: wild towers and dungeons -------------------------------------------------------------
+
+
+@pytest.fixture(scope="module", params=SEEDS)
+def hideouts(request: pytest.FixtureRequest) -> World:
+    """A world with many falls that always leave a tower and a dungeon, so those are there to check."""
+    config = load_config(None)
+    config.data["history"].update(fallen_realms_per_million_km2=3.0, fall_strength=0.9, fallen_wars=[2, 4])
+    for kind in ("tower", "dungeon"):
+        config.data["tables"]["pois"][kind].update(chance=1.0, elevation_min_m=0.0)
+    return pipeline.generate(config, request.param)
+
+
+def _made_by_events(world: World, kind: str) -> list[POI]:
+    return [p for p in world.pois if p.kind == kind and p.event_ids]
+
+
+def test_a_fall_can_leave_a_tower_and_a_conquest_a_dungeon(hideouts: World) -> None:
+    assert _made_by_events(hideouts, "tower") and _made_by_events(hideouts, "dungeon")
+
+
+def test_a_dungeon_from_history_follows_a_conquered_fall(hideouts: World) -> None:
+    for dungeon in _made_by_events(hideouts, "dungeon"):
+        event = hideouts.chronicle[dungeon.event_ids[0]]
+        assert event.kind == "fall" and "conquered" in event.tags
+
+
+def test_a_history_tower_stands_within_reach_of_its_fall(hideouts: World, cfg: Config) -> None:
+    reach = cfg.get("tables.pois.tower.offset_km")
+    for tower in _made_by_events(hideouts, "tower"):
+        assert hideouts.scale.distance_km(tower.x, tower.y, *hideouts.chronicle[tower.event_ids[0]].location) <= reach
+
+
+def test_a_history_hideout_keeps_its_event_spacing_from_earlier_pois(hideouts: World, cfg: Config) -> None:
+    spacing = cfg.get("tables.pois.tower.event_spacing_km")
+    for index, p in enumerate(hideouts.pois):
+        if p.kind in ("tower", "dungeon") and p.event_ids:
+            assert all(hideouts.scale.distance_km(p.x, p.y, q.x, q.y) >= spacing - 1e-6 for q in hideouts.pois[:index])
+
+
+def test_towers_and_dungeons_hold_their_rows_bandits(world: World, cfg: Config) -> None:
+    for p in world.pois:
+        if p.kind in ("tower", "dungeon"):
+            assert p.bandit_strength == cfg.get(f"tables.pois.{p.kind}.bandit_strength")
+
+
+def test_most_towers_and_dungeons_stand_in_bandit_country(cfg: Config) -> None:
+    # Across the seeds the wild-favouring score puts them on wild land far more often than land is wild.
+    seeds = (42, 7, 1337, 9999)
+    worlds = [pipeline.generate(cfg, seed) for seed in seeds]
+    hideouts = [p for w in worlds for p in w.pois if p.kind in ("tower", "dungeon") and not p.event_ids]
+    wild_share = sum(int(((w.realm_id < 0) & (w.water_type == 0)).sum()) for w in worlds) / sum(
+        int((w.water_type == 0).sum()) for w in worlds
+    )
+    assert sum(1 for p in hideouts if p.realm_id < 0) / len(hideouts) > wild_share + 0.2

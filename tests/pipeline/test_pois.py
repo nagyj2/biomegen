@@ -172,3 +172,39 @@ def test_generated_camps_take_their_row_purpose(world: World, cfg: Config) -> No
     # The camp row names a purpose; every placed camp carries it and no other kind has one.
     purpose = cfg.get("tables.pois.camp.purpose")
     assert purpose and all((p.purpose == purpose) == (p.kind == "camp") for p in world.pois)
+
+
+def _two_realm_island() -> World:
+    """The island with its west half held by realm 0 (seated at the far west) and its east half wild."""
+    from biomegen.world.entities import Realm
+
+    island = _island()
+    island.realm_id[:, :30] = 0
+    island.pois.append(POI(kind="village", x=4, y=15, interior_seed=0, civilized=True))
+    island.poi_index[15, 4] = 0
+    island.realms = [Realm(id=0, kind="major", seat_poi=0)]
+    return island
+
+
+def test_a_wild_weight_pulls_a_kind_onto_wild_land() -> None:
+    # With no jitter and a flat island, only the wild weight tells the halves apart: the pick lands in the east.
+    island = _two_realm_island()
+    config = _wild_config(camp=_camp(km2_per_poi=2000000.0, wild=5.0))
+    config.data["poi"]["jitter"] = 0.0
+    pois.place_by_location(island, config, 5)
+    assert island.pois[-1].x >= 30 and island.pois[-1].realm_id == -1
+
+
+def test_a_seat_remoteness_weight_pushes_a_kind_away_from_the_seat() -> None:
+    island = _two_realm_island()
+    config = _wild_config(camp=_camp(km2_per_poi=2000000.0, seat_remoteness=5.0))
+    config.data["poi"]["jitter"] = 0.0
+    pois.place_by_location(island, config, 5)
+    assert island.pois[-1].x > 30
+
+
+def test_a_poi_takes_the_realm_of_its_cell_when_placed() -> None:
+    island = _two_realm_island()
+    pois.place_by_location(island, _wild_config(camp=_camp(km2_per_poi=200000.0)), 5)
+    placed = island.pois[1:]  # the village was there before the stage
+    assert placed and all(p.realm_id == int(island.realm_id[p.y, p.x]) for p in placed)

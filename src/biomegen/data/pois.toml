@@ -15,6 +15,8 @@
 #   elevation_min_m, elevation_max_m   (optional) height band in metres
 #   near_freshwater, coastal, remoteness   (optional) score weights favouring fresh water, the coast, distance from
 #                     settlements
+#   wild, seat_remoteness   (optional) score weights favouring wild land (no realm holds it) and distance from every
+#                     realm's seat: bandit country
 #   purpose           (optional) a camp's purpose (POI.purpose): its site row is `<kind>_<purpose>` in sites.toml
 #   floors            storeys: a count, or a [min, max] range drawn per POI (a dungeon descends, the rest rise)
 #
@@ -26,6 +28,7 @@
 #   kind_spacing_km   (optional) minimum distance to another POI of the same kind
 #   holdings          (optional) [min, max] extra POIs of the kind made with the first (a fallen realm's outlying ruins)
 #   fated             (optional) true when each POI draws a fate from `poi_fates`
+#   event_spacing_km  (optional) replaces min_spacing_km for a POI placed from an event, which stands near what it marks
 #   offset_km         (optional) how far from the event's cell the POI may be placed (the nearest free cell that keeps
 #                     the spacing wins)
 #   holding_km        (optional) [min, max] km from the first POI, the band an extra (holding) POI is placed in
@@ -47,10 +50,14 @@ source = "both"
 events = ["fall"]
 chance = 0.2
 km2_per_poi = 1750000.0
-min_spacing_km = 400.0
+min_spacing_km = 300.0
 biomes = ["snow", "grass", "forest", "tundra"]
 elevation_min_m = 300.0
 remoteness = 0.5
+wild = 0.8
+seat_remoteness = 0.6
+event_spacing_km = 50.0
+offset_km = 150.0
 floors = [4, 8]
 owner = "wild"
 dynamic = false
@@ -65,10 +72,14 @@ events = ["fall"]
 tags = ["conquered"]
 chance = 0.2
 km2_per_poi = 1750000.0
-min_spacing_km = 450.0
+min_spacing_km = 300.0
 biomes = ["snow", "forest", "tundra", "desert", "swamp"]
 elevation_min_m = 100.0
 remoteness = 0.7
+wild = 1.0
+seat_remoteness = 0.8
+event_spacing_km = 50.0
+offset_km = 150.0
 floors = [3, 6]
 owner = "wild"
 dynamic = false
