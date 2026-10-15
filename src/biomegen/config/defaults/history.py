@@ -17,13 +17,13 @@ VALUES: Dict[str, Any] = {
     "kinds": ["founding", "settling", "conquest", "war", "rivalry", "treaty", "battle", "fall"],
     # Founding: a realm's age is a share of span_years drawn from its kind's range, pulled toward the oldest end by
     # larger area by ``age_area_weight`` (0 = pure draw, 1 = rank only).
-    "age_range": {"major": [0.5, 0.95], "city_state": [0.2, 0.7], "tribal": [0.6, 1.0]},
+    "age_range": {"major": [0.6, 1.0], "city_state": [0.3, 0.8], "tribal": [0.7, 1.0]},
     "age_area_weight": 0.5,
-    "settle_kinds": ["city"],  # settlement kinds that get a settling event (others are only dated)
+    "settle_kinds": ["city", "town"],  # settlement kinds that get a settling event (others are only dated)
     "min_gap_years": 20,  # least time between a realm existing and its next event (conquest, war, treaty)
     # Relations: a relation lasts a number of years between the two ends of its range, longer for a longer shared
     # border (``border_km_for_full_span`` km or more gives the top end). A war is ongoing at the present.
-    "war_years": [10, 300],
+    "war_years": [10, 500],
     "other_years": [20, 600],
     "border_km_for_full_span": 1500.0,
     "battles_per_100km_front": 0.5,  # battles fought along a war's border, per 100 km of it

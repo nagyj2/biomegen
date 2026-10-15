@@ -102,9 +102,9 @@ def test_a_conquest_names_the_vassal_then_its_liege(world: World) -> None:
     assert events and all(world.realms[e.realm_ids[0]].liege == e.realm_ids[1] for e in events)
 
 
-def test_settling_events_are_for_the_configured_kinds_only(world: World) -> None:
+def test_settling_events_are_for_the_configured_kinds_only(world: World, cfg: Config) -> None:
     kinds = {world.pois[e.poi_ids[0]].kind for e in world.chronicle if e.kind == "settling"}
-    assert kinds <= {"city"}
+    assert kinds <= set(cfg.get("history.settle_kinds"))
 
 
 def test_a_realms_seat_has_no_settling_event(world: World) -> None:

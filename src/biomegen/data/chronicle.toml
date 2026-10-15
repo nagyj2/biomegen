@@ -34,8 +34,8 @@ templates_near = [
 [chronicle.settling]
 templates = [
   "{short} settles {town}.",
-  "The settlers of {realm} found the city of {town}.",
-  "{town} is raised from a camp into a city.",
+  "The settlers of {realm} found {town}.",
+  "{town} grows from a camp into a lasting settlement.",
 ]
 templates_near = [
   "{town} is settled in the lands near {near}.",
@@ -58,13 +58,13 @@ templates = [
 [chronicle.rivalry]
 templates = [
   "{a_short} and {b_short} fall into rivalry: {reason}.",
-  "Bitter words pass between {a} and {b} over {reason}.",
+  "Relations between {a} and {b} sour: {reason}.",
 ]
 
 [chronicle.treaty_alliance]
 templates = [
   "{a_short} and {b_short} swear an alliance, {reason}.",
-  "A pact binds {a} and {b}: {reason}.",
+  "A pact is sealed between {a} and {b}: {reason}.",
 ]
 
 [chronicle.treaty_trade]
@@ -88,7 +88,7 @@ templates_near = [
 templates = [
   "{fallen}, founded in {founded}, falls and is forgotten.",
   "{fallen} collapses; its halls are left to the wild.",
-  "The last king of {fallen} dies and the realm dissolves.",
+  "The last ruler of {fallen} dies and the realm dissolves.",
 ]
 templates_near = [
   "{fallen} falls; its ruins crumble in the wilds near {near}.",
