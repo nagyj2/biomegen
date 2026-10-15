@@ -18,6 +18,17 @@
 #   purpose           (optional) a camp's purpose (POI.purpose): its site row is `<kind>_<purpose>` in sites.toml
 #   floors            storeys: a count, or a [min, max] range drawn per POI (a dungeon descends, the rest rise)
 #
+# History (the rule table, pipeline/story/poi_rules.py): which chronicle events make the kind
+#   events            (optional) event kinds that make this kind of POI
+#   tags              (optional) tags an event must all carry
+#   chance            (optional, default 1) the chance an event makes it
+#   min_age_years     (optional) the event must be at least this old at the present
+#   kind_spacing_km   (optional) minimum distance to another POI of the same kind
+#   holdings          (optional) [min, max] extra POIs of the kind made with the first (a fallen realm's outlying ruins)
+#   fated             (optional) true when each POI draws a fate from `poi_fates`
+#   per_km_of_front   (optional) one POI per this many km of a war's front (rounded up) ...
+#   max_per_event     (optional) ... at most this many
+
 # Simulation seams (data only until a later simulation reads them):
 #   owner             "realm" (held by the realm that owns its cell) or "wild"
 #   dynamic           true when a later simulation mints and removes it
@@ -29,6 +40,8 @@
 [pois.tower]
 priority = 10
 source = "both"
+events = ["fall"]
+chance = 0.2
 km2_per_poi = 1750000.0
 min_spacing_km = 400.0
 biomes = ["snow", "grass", "forest", "tundra"]
@@ -38,10 +51,15 @@ floors = [4, 8]
 owner = "wild"
 dynamic = false
 connect = true
+bandit_strength = 50
+bandit_radius_km = 120.0
 
 [pois.dungeon]
 priority = 20
 source = "both"
+events = ["fall"]
+tags = ["conquered"]
+chance = 0.2
 km2_per_poi = 1750000.0
 min_spacing_km = 450.0
 biomes = ["snow", "forest", "tundra", "desert", "swamp"]
@@ -51,10 +69,15 @@ floors = [3, 6]
 owner = "wild"
 dynamic = false
 connect = true
+bandit_strength = 80
+bandit_radius_km = 150.0
 
 [pois.ruin]
 priority = 30
 source = "both"
+events = ["fall"]
+holdings = [0, 2]
+fated = true
 km2_per_poi = 1400000.0
 min_spacing_km = 350.0
 biomes = ["grass", "forest", "desert", "savanna", "tundra", "jungle"]
@@ -63,6 +86,8 @@ floors = 1
 owner = "wild"
 dynamic = false
 connect = true
+bandit_strength = 20
+bandit_radius_km = 60.0
 
 [pois.camp]
 priority = 40
@@ -88,3 +113,93 @@ floors = 1
 owner = "wild"
 dynamic = false
 connect = false
+
+# Made by history only (no km2_per_poi): the location pass never places them.
+[pois.battlefield]
+priority = 60
+source = "history"
+events = ["battle"]
+tags = ["decisive"]
+chance = 0.25
+min_age_years = 30
+min_spacing_km = 40.0
+kind_spacing_km = 250.0
+floors = 1
+owner = "wild"
+dynamic = false
+connect = false
+
+[pois.watchtower]
+priority = 70
+source = "history"
+events = ["war"]
+tags = ["ongoing"]
+per_km_of_front = 300.0
+max_per_event = 3
+min_spacing_km = 60.0
+floors = [2, 3]
+owner = "realm"
+dynamic = true
+lifespan = 150
+connect = true
+
+# The site of a shrine comes from `poi_sites` (a row's `connect` replaces this one).
+[pois.shrine]
+priority = 80
+source = "history"
+events = ["succession"]
+tags = ["to:pious"]
+min_spacing_km = 40.0
+floors = 1
+owner = "realm"
+dynamic = true
+connect = true
+
+# What becomes of a fallen realm's ruins (a `fated` kind draws one per POI). `sim_only` fates are returned only to a later
+# simulation (`poi_for_event(..., simulated=True)`): generation cannot show them, the living realms being final.
+#   weight     relative chance among the fates open to the caller
+#   sim_only   true when generation never draws it
+#   bandits    true when the POI holds bandits (the kind's `bandit_strength`)
+[poi_fates.ruin]
+weight = 3.0
+sim_only = false
+bandits = false
+
+[poi_fates.bandit]
+weight = 1.0
+sim_only = false
+bandits = true
+
+[poi_fates.captured]
+weight = 1.0
+sim_only = true
+bandits = false
+
+[poi_fates.successor]
+weight = 1.0
+sim_only = true
+bandits = false
+
+# Where a kind with several sites is built; the previous ruler's `temper` (rulers.toml) picks the row.
+#   kind                the pois.toml kind
+#   temper              "aggressive" or "passive"
+#   min_km, max_km      distance band from the realm's seat
+#   connect             true when the roads stage links it
+#   near_freshwater, remoteness   score weights for the cell inside the band
+[poi_sites.shrine_near_seat]
+kind = "shrine"
+temper = "aggressive"
+min_km = 25.0
+max_km = 150.0
+connect = true
+near_freshwater = 1.0
+remoteness = 0.5
+
+[poi_sites.shrine_wild]
+kind = "shrine"
+temper = "passive"
+min_km = 150.0
+max_km = 450.0
+connect = false
+near_freshwater = 0.5
+remoteness = 1.0

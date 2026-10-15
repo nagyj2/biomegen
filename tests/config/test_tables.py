@@ -38,6 +38,8 @@ def test_shipped_tables_load_and_validate() -> None:
         "detail_relief",
         "furniture",
         "geo_names",
+        "poi_fates",
+        "poi_sites",
         "pois",
         "realm_colors",
         "realm_forms",
@@ -170,6 +172,8 @@ def test_loader_combines_the_shipped_files() -> None:
         "detail_relief",
         "furniture",
         "geo_names",
+        "poi_fates",
+        "poi_sites",
         "pois",
         "realm_colors",
         "realm_forms",
@@ -328,3 +332,51 @@ def test_a_poi_purpose_has_a_site_row() -> None:
     assert all(
         f"{kind}_{row['purpose']}" in tables["sites"] for kind, row in tables["pois"].items() if "purpose" in row
     )
+
+
+def test_every_ruling_style_has_a_temper() -> None:
+    # The shrine rule reads the temper of the style a succession leaves, so no style may lack one.
+    styles = get_defaults()["tables"]["ruling_styles"]
+    assert styles and all(row["temper"] in ("aggressive", "passive") for row in styles.values())
+
+
+def test_an_unknown_ruling_temper_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["ruling_styles"]["gentle"]["temper"] = "meek"
+    with pytest.raises(ConfigError, match=r"tables\.ruling_styles\.gentle\.temper: expected"):
+        validate(cfg)
+
+
+def test_a_poi_row_naming_an_unknown_event_kind_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["pois"]["ruin"]["events"] = ["earthquake"]
+    with pytest.raises(ConfigError, match=r"tables\.pois\.ruin\.events: unknown event kind"):
+        validate(cfg)
+
+
+def test_a_poi_tag_naming_an_unknown_style_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["pois"]["shrine"]["tags"] = ["to:heroic"]
+    with pytest.raises(ConfigError, match=r"tables\.pois\.shrine\.tags: 'to:heroic' names no ruling style"):
+        validate(cfg)
+
+
+def test_a_kind_with_sites_needs_one_for_each_temper() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["poi_sites"]["shrine_wild"]
+    with pytest.raises(ConfigError, match=r"kind 'shrine' needs a site for each temper"):
+        validate(cfg)
+
+
+def test_a_site_band_must_run_from_near_to_far() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_sites"]["shrine_near_seat"]["min_km"] = 500.0
+    with pytest.raises(ConfigError, match=r"min_km must be below max_km"):
+        validate(cfg)
+
+
+def test_a_history_kind_without_events_is_rejected() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["pois"]["battlefield"]["events"]
+    with pytest.raises(ConfigError, match=r"tables\.pois\.battlefield: a history kind needs events"):
+        validate(cfg)

@@ -7,33 +7,40 @@
 #   label         the word the chronicle uses for a ruler of this style ("a warlike ruler")
 #   weight        relative chance of the style when one is drawn
 #   strength_mul  multiplies the realm's strength in battle while the style holds (1 = no effect)
+#   temper        "aggressive" or "passive": the previous ruler's temper decides where a shrine is built (pois.toml poi_sites)
 
 [ruling_styles.martial]
 label = "warlike"
 weight = 1.0
 strength_mul = 1.25
+temper = "aggressive"
 
 [ruling_styles.pious]
 label = "devout"
 weight = 1.0
 strength_mul = 0.95
+temper = "passive"
 
 [ruling_styles.mercantile]
 label = "mercantile"
 weight = 1.0
 strength_mul = 1.0
+temper = "passive"
 
 [ruling_styles.scholarly]
 label = "learned"
 weight = 0.8
 strength_mul = 0.9
+temper = "passive"
 
 [ruling_styles.tyrannical]
 label = "tyrannical"
 weight = 0.8
 strength_mul = 1.1
+temper = "aggressive"
 
 [ruling_styles.gentle]
 label = "gentle"
 weight = 1.0
 strength_mul = 0.85
+temper = "passive"

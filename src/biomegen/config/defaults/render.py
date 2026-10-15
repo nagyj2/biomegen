@@ -352,6 +352,9 @@ VALUES: Dict[str, Any] = {
         "ruin": "r",
         "camp": "a",
         "boat": "b",
+        "battlefield": "x",
+        "watchtower": "W",
+        "shrine": "s",
         "bridge": "=",
     },
     # Glyphs for interior Cell values (drawn by the interiors layer).

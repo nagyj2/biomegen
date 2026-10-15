@@ -115,3 +115,25 @@ layout = "camp"
 extent_tiles = [0.7, 0.6]
 rows_per_tile = 24
 grows_with_pop = false
+
+# History kinds start on an existing layout; phase 8 gives them their own.
+[sites.battlefield]
+furniture = "ruin"
+layout = "ruin"
+extent_tiles = [1.5, 1.0]
+rows_per_tile = 16
+grows_with_pop = false
+
+[sites.watchtower]
+furniture = "tower"
+layout = "tower"
+extent_tiles = [0.5, 0.5]
+rows_per_tile = 24
+grows_with_pop = false
+
+[sites.shrine]
+furniture = "ruin"
+layout = "ruin"
+extent_tiles = [0.6, 0.5]
+rows_per_tile = 24
+grows_with_pop = false

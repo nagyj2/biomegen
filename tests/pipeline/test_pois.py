@@ -52,9 +52,10 @@ def _camp(**overrides: object) -> dict:
 
 
 # --------------------------------------------------------------------------- generated world
-def test_only_wild_kinds_come_from_the_poi_stage(world: World, cfg: Config) -> None:
-    # Settlements come from another stage; tables.pois lists the wild kinds.
-    assert set(cfg.get("tables.pois")) == set(WILD)
+def test_only_location_kinds_are_placed_by_the_poi_stage(world: World, cfg: Config) -> None:
+    # Settlements come from another stage and history kinds from events: the location pass places the rest.
+    rows = cfg.get("tables.pois")
+    assert {kind for kind, row in rows.items() if row["source"] != "history"} == set(WILD)
 
 
 def test_poi_index_refs_are_consistent(world: World) -> None:

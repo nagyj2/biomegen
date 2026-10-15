@@ -18,8 +18,8 @@ from .validate import _coerce_color
 # "range" [min, max] ints >= 0; "pair" a [w, h] of numbers > 0; "forms" a non-empty list of name patterns,
 # each containing "{n}" exactly once; "ascii_char" / "ascii_char?" / "ascii_text" are "char" / "char?" /
 # "text" restricted to 7-bit characters; "factor" one of "none", "moisture", "elevation"; "span" [min, max]
-# numbers with 0 <= min <= max; "text_list" a non-empty list of strings; "number" any number; "source" and "owner"
-# one of `POI_SOURCES` / `POI_OWNERS`; "floors" a storey count or a [min, max] range of them.
+# numbers with 0 <= min <= max; "text_list" a non-empty list of strings; "number" any number; "source", "owner" and
+# "temper" one of `POI_SOURCES` / `POI_OWNERS` / `TEMPERS`; "floors" a storey count or a [min, max] range of them.
 _BIOME_ROW = {
     "label": "text",
     "glyph": "char",
@@ -98,6 +98,25 @@ _POI_ROW = {
     "bandit_radius_km": "positive",
     "lifespan": "count",
     "purpose": "text",
+    "events": "text_list",
+    "tags": "text_list",
+    "chance": "unit",
+    "min_age_years": "nonneg",
+    "kind_spacing_km": "positive",
+    "holdings": "range",
+    "fated": "bool",
+    "per_km_of_front": "positive",
+    "max_per_event": "count",
+}
+_POI_FATE_ROW = {"weight": "positive", "sim_only": "bool", "bandits": "bool"}
+_POI_SITE_ROW = {
+    "kind": "text",
+    "temper": "temper",
+    "min_km": "nonneg",
+    "max_km": "positive",
+    "connect": "bool",
+    "near_freshwater": "nonneg",
+    "remoteness": "nonneg",
 }
 _STYLE_ROW = {
     "label": "text",
@@ -143,7 +162,7 @@ _REALM_COLOR_ROW = {
 }
 _REASON_ROW = {"templates": "text_list"}
 _REASON_TOKEN_ROW = {"fallback": "text"}
-_RULING_STYLE_ROW = {"label": "text", "weight": "positive", "strength_mul": "positive"}
+_RULING_STYLE_ROW = {"label": "text", "weight": "positive", "strength_mul": "positive", "temper": "temper"}
 _CHRONICLE_ROW = {"templates": "text_list", "templates_near": "text_list"}
 
 #: The POI row keys a kind may omit (placement numbers a history-only kind lacks, and the optional seam fields).
@@ -161,11 +180,21 @@ _POI_OPTIONAL = frozenset(
         "bandit_radius_km",
         "lifespan",
         "purpose",
+        "events",
+        "tags",
+        "chance",
+        "min_age_years",
+        "kind_spacing_km",
+        "holdings",
+        "fated",
+        "per_km_of_front",
+        "max_per_event",
     }
 )
 
 POI_SOURCES = ("location", "history", "both")
 POI_OWNERS = ("realm", "wild")
+TEMPERS = ("aggressive", "passive")
 
 DETAIL_FACTORS = ("none", "moisture", "elevation")
 
@@ -213,6 +242,8 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "geo_names": (_GEO_NAME_ROW, frozenset()),
     "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled"})),
     "pois": (_POI_ROW, _POI_OPTIONAL),
+    "poi_fates": (_POI_FATE_ROW, frozenset()),
+    "poi_sites": (_POI_SITE_ROW, frozenset()),
     "realm_kinds": (_REALM_KIND_ROW, frozenset()),
     "realm_forms": (_REALM_FORM_ROW, frozenset()),
     "relation_weights": (_RELATION_WEIGHT_ROW, frozenset()),
@@ -258,6 +289,7 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "factor": lambda v: v in DETAIL_FACTORS,
         "source": lambda v: v in POI_SOURCES,
         "owner": lambda v: v in POI_OWNERS,
+        "temper": lambda v: v in TEMPERS,
         "number": _is_number,
         "floors": _is_floors,
         "bool": lambda v: isinstance(v, bool),
@@ -427,6 +459,47 @@ def _validate_polity(tables: Dict[str, Any], errors: List[str]) -> None:
         errors.append("tables.reason_tokens must have the rows town, river, range and sea")
 
 
+def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check the history keys of the POI kinds: known event kinds, known styles in `to:` / `from:` tags, a history kind
+    with events, and every kind with sites covering both tempers."""
+    from ..world.entities import EVENT_KINDS  # local import: avoids import-order coupling
+
+    pois, styles = tables.get("pois", {}), tables.get("ruling_styles", {})
+    if not isinstance(pois, dict) or not isinstance(styles, dict):
+        return
+    for kind in sorted(pois):
+        row = pois[kind]
+        if not isinstance(row, dict):
+            continue
+        where = f"tables.pois.{kind}"
+        for event in row.get("events", []) if isinstance(row.get("events"), list) else []:
+            if event not in EVENT_KINDS:
+                errors.append(f"{where}.events: unknown event kind {event!r} (valid: {', '.join(EVENT_KINDS)})")
+        for tag in row.get("tags", []) if isinstance(row.get("tags"), list) else []:
+            side, _, style = str(tag).partition(":")
+            if side in ("to", "from") and style not in styles:
+                errors.append(f"{where}.tags: {tag!r} names no ruling style")
+        if row.get("source") == "history" and not row.get("events"):
+            errors.append(f"{where}: a history kind needs events")
+    sites = tables.get("poi_sites", {})
+    if not isinstance(sites, dict):
+        return
+    tempers: Dict[str, set] = {}
+    for name in sorted(sites):
+        row = sites[name]
+        if not isinstance(row, dict):
+            continue
+        if row.get("kind") not in pois:
+            errors.append(f"tables.poi_sites.{name}.kind: no POI kind named {row.get('kind')!r}")
+        if isinstance(row.get("min_km"), (int, float)) and isinstance(row.get("max_km"), (int, float)):
+            if row["min_km"] >= row["max_km"]:
+                errors.append(f"tables.poi_sites.{name}: min_km must be below max_km")
+        tempers.setdefault(str(row.get("kind")), set()).add(row.get("temper"))
+    for kind in sorted(tempers):
+        if tempers[kind] != set(TEMPERS):
+            errors.append(f"tables.poi_sites: kind {kind!r} needs a site for each temper ({', '.join(TEMPERS)})")
+
+
 def _validate_chronicle(chronicle: Any, errors: List[str]) -> None:
     """Check the chronicle rows: exactly the known rows, only that row's tokens, and {near} only where it belongs."""
     if not isinstance(chronicle, dict):
@@ -479,6 +552,7 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     _validate_furniture(tables, errors)
     _validate_polity(tables, errors)
     _validate_chronicle(tables.get("chronicle", {}), errors)
+    _validate_pois(tables, errors)
 
     styles = tables.get("styles", {})
     style = cfg.get("terrain", {}).get("style")
