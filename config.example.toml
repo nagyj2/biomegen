@@ -54,6 +54,13 @@ city_state_far_km = 540.0        # a city this far from every capital is likely 
 tribe_max = 6                    # tribes claiming the largest unclaimed areas
 claim_budget_km = 1500.0         # how far (cost in km) a realm of strength 1 reaches over flat land
 
+[history]
+start = "present"                # "dawn" stops after the physical stages: year 0, nothing settled, no chronicle
+span_years = 1200                # the present year of a "present" world (event wording: data/chronicle.toml)
+battles_per_100km_front = 0.5    # battles fought along a war's border, per 100 km of it
+fallen_realms_per_million_km2 = 3.0   # vanished realms whose ruins lie on wild land
+near_km = 250.0                  # a place named in an event is a settlement at most this far away
+
 [settlements]
 density = 1.0                    # multiplies every tier's settlement count (tiers: data/tiers.toml)
 capital_min_landmass_km2 = 400000.0

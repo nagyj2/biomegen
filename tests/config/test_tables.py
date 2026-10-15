@@ -33,6 +33,7 @@ def test_shipped_tables_load_and_validate() -> None:
     # The packaged data files give their tables and pass their own schema.
     assert sorted(load_config(None).get("tables")) == [
         "biomes",
+        "chronicle",
         "detail",
         "detail_relief",
         "furniture",
@@ -158,9 +159,10 @@ def test_duplicate_tier_rank_is_rejected() -> None:
 def test_loader_combines_the_shipped_files() -> None:
     # biomes.toml supplies biomes and relief; detail.toml detail and detail_relief; tiers.toml tiers;
     # terrain.toml styles; geography.toml geo_names; sites.toml sites; furniture.toml furniture; polity.toml the
-    # four realm and relation tables; reasons.toml reasons and reason_tokens.
+    # four realm and relation tables; reasons.toml reasons and reason_tokens; chronicle.toml chronicle.
     assert sorted(_load(DATA_DIR, DATA_FILES)) == [
         "biomes",
+        "chronicle",
         "detail",
         "detail_relief",
         "furniture",

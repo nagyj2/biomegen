@@ -118,6 +118,7 @@ _REALM_COLOR_ROW = {
 }
 _REASON_ROW = {"templates": "text_list"}
 _REASON_TOKEN_ROW = {"fallback": "text"}
+_CHRONICLE_ROW = {"templates": "text_list", "templates_near": "text_list"}
 
 DETAIL_FACTORS = ("none", "moisture", "elevation")
 
@@ -133,6 +134,19 @@ _REASON_TOKENS = {
     "rivalry": frozenset({"town", "river", "range", "sea"}),
     "alliance": frozenset(),
     "trade": frozenset({"goods_a", "goods_b", "short_a", "short_b"}),
+}
+
+#: The tokens each chronicle row may use besides {year}; a "near" sentence may also use {near} (and must).
+_CHRONICLE_TOKENS = {
+    "founding": frozenset({"realm", "short", "ruler", "seat"}),
+    "settling": frozenset({"realm", "short", "town"}),
+    "conquest": frozenset({"realm", "short", "liege", "liege_short", "ruler"}),
+    "war": frozenset({"attacker", "attacker_short", "defender", "defender_short", "reason", "town"}),
+    "rivalry": frozenset({"a", "a_short", "b", "b_short", "reason"}),
+    "treaty_alliance": frozenset({"a", "a_short", "b", "b_short", "reason"}),
+    "treaty_trade": frozenset({"a", "a_short", "b", "b_short", "reason"}),
+    "battle": frozenset({"winner", "winner_short", "loser", "loser_short", "reason"}),
+    "fall": frozenset({"fallen", "founded"}),
 }
 
 # Table name -> (row schema, keys a row may omit).
@@ -151,6 +165,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "realm_colors": (_REALM_COLOR_ROW, frozenset()),
     "reasons": (_REASON_ROW, frozenset()),
     "reason_tokens": (_REASON_TOKEN_ROW, frozenset()),
+    "chronicle": (_CHRONICLE_ROW, frozenset({"templates_near"})),
 }
 
 
@@ -342,6 +357,26 @@ def _validate_polity(tables: Dict[str, Any], errors: List[str]) -> None:
         errors.append("tables.reason_tokens must have the rows town, river, range and sea")
 
 
+def _validate_chronicle(chronicle: Any, errors: List[str]) -> None:
+    """Check the chronicle rows: exactly the known rows, only that row's tokens, and {near} only where it belongs."""
+    if not isinstance(chronicle, dict):
+        return
+    if set(chronicle) != set(_CHRONICLE_TOKENS):
+        errors.append(f"tables.chronicle must have exactly the rows: {', '.join(_CHRONICLE_TOKENS)}")
+    for name in sorted(set(chronicle) & set(_CHRONICLE_TOKENS)):
+        row = chronicle[name]
+        if not isinstance(row, dict):
+            continue
+        allowed = _CHRONICLE_TOKENS[name] | {"year"}
+        for key, extra in (("templates", frozenset()), ("templates_near", frozenset({"near"}))):
+            texts = row.get(key)
+            for text in texts if isinstance(texts, list) else []:
+                where = f"tables.chronicle.{name}.{key}"
+                _check_tokens(text, allowed | extra, where, errors)
+                if key == "templates_near" and isinstance(text, str) and "near" not in (_tokens(text) or set()):
+                    errors.append(f"{where}: {text!r} must use {{near}}")
+
+
 def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     """Validate every row of every table under ``cfg["tables"]``, appending problems to ``errors``."""
 
@@ -373,6 +408,7 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     _validate_member_tables(tables, errors)
     _validate_furniture(tables, errors)
     _validate_polity(tables, errors)
+    _validate_chronicle(tables.get("chronicle", {}), errors)
 
     styles = tables.get("styles", {})
     style = cfg.get("terrain", {}).get("style")

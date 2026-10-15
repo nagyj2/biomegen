@@ -110,6 +110,31 @@ def _validate_world(world: Dict[str, Any], errors: List[str]) -> None:
         errors.append(f"world.center_lat_range_deg must be [min, max] with 0 <= min <= max <= 89, got {lat_range!r}")
 
 
+def _validate_history(history: Dict[str, Any], errors: List[str]) -> None:
+    """Check the ``history`` section: the start mode and the event kinds that would otherwise crash the stage."""
+    from ..world.entities import EVENT_KINDS, REALM_KINDS
+
+    if history.get("start") not in (None, "present", "dawn"):
+        errors.append(f"history.start must be 'present' or 'dawn', got {history.get('start')!r}")
+    kinds = history.get("kinds")
+    if kinds is not None and not (isinstance(kinds, list) and set(kinds) <= set(EVENT_KINDS)):
+        errors.append(f"history.kinds must list event kinds from: {', '.join(EVENT_KINDS)}")
+    ages = history.get("age_range")
+    if ages is not None and not (
+        isinstance(ages, dict)
+        and set(ages) == set(REALM_KINDS)
+        and all(
+            isinstance(v, list)
+            and len(v) == 2
+            and all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in v)
+            and 0 <= v[0] <= v[1] <= 1
+            for v in ages.values()
+        )
+    ):
+        errors.append(f"history.age_range needs a [min, max] within 0..1 for each of: {', '.join(REALM_KINDS)}")
+    _clamp(history, "age_area_weight", 0.0, 1.0, errors, "history")
+
+
 #: The one tint a view may name that is not a ``render.ramps`` entry: realm colours (see ``render/layers/tint.py``).
 REALM_TINT = "realm"
 
@@ -169,6 +194,7 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     for key in ("civilized_connect_prob", "uncivilized_connect_prob", "extra_edge_prob", "road_discount"):
         _clamp(roads, key, 0.0, 1.0, errors, "roads")
 
+    _validate_history(cfg.get("history", {}), errors)
     _validate_render_views(cfg.get("render", {}), errors)
     if cfg.get("controls", {}).get("pan") not in (None, "edge", "centre"):
         errors.append("controls.pan must be 'edge' or 'centre'")

@@ -1,0 +1,95 @@
+# Wording of the chronicle's events, loaded into the config tree as `tables.chronicle`. The history stage picks a
+# template per event (seeded) and the naming stage fills its tokens once every realm, place and fallen realm has a
+# name. Override one row with e.g. `[tables.chronicle.war]` + `templates = [...]` in a user config.
+#
+# chronicle, one row per kind of event text (founding, settling, conquest, war, rivalry, treaty_alliance,
+# treaty_trade, battle, fall):
+#   templates       sentences to pick from; they never name a nearby place
+#   templates_near  optional; sentences that name a nearby settlement with {near}. An event draws from these as well
+#                   only when a settlement of the same landmass lies within `history.near_km`; each must contain {near}
+#
+# Tokens ({year}, the year of the event, is allowed in every sentence):
+#   founding          {realm} {short} {ruler} {seat}              the new realm, its short name, its ruler, its seat
+#   settling          {realm} {short} {town}                      the realm and the city it settled
+#   conquest          {realm} {short} {liege} {liege_short} {ruler}   the vassal, its overlord and the overlord's ruler
+#   war               {attacker} {attacker_short} {defender} {defender_short} {reason} {town}
+#   rivalry           {a} {a_short} {b} {b_short} {reason}
+#   treaty_alliance   {a} {a_short} {b} {b_short} {reason}
+#   treaty_trade      {a} {a_short} {b} {b_short} {reason}
+#   battle            {winner} {winner_short} {loser} {loser_short} {reason}
+#   fall              {fallen} {founded}                          the fallen realm's name and its founding year
+# {reason} is the wording of the relation (data/reasons.toml); {town} the claimed town of the war.
+
+[chronicle.founding]
+templates = [
+  "{realm} is founded under {ruler}.",
+  "{ruler} unites the clans and raises {realm}.",
+  "{short} rises as a power, ruled by {ruler}.",
+  "{realm} is proclaimed in {seat}.",
+]
+templates_near = [
+  "{realm} is founded at {seat}, a few days' ride from {near}.",
+]
+
+[chronicle.settling]
+templates = [
+  "{short} settles {town}.",
+  "The settlers of {realm} found the city of {town}.",
+  "{town} is raised from a camp into a city.",
+]
+templates_near = [
+  "{town} is settled in the lands near {near}.",
+]
+
+[chronicle.conquest]
+templates = [
+  "{liege} subdues {realm}; its lords kneel to {ruler}.",
+  "{short} swears fealty to {liege_short}.",
+  "{realm} falls under the rule of {liege}.",
+]
+
+[chronicle.war]
+templates = [
+  "{attacker} marches on {defender} over {reason}.",
+  "War breaks out between {attacker_short} and {defender_short}: {reason}.",
+  "{attacker_short} declares war on {defender_short}, citing {reason}.",
+]
+
+[chronicle.rivalry]
+templates = [
+  "{a_short} and {b_short} fall into rivalry: {reason}.",
+  "Bitter words pass between {a} and {b} over {reason}.",
+]
+
+[chronicle.treaty_alliance]
+templates = [
+  "{a_short} and {b_short} swear an alliance, {reason}.",
+  "A pact binds {a} and {b}: {reason}.",
+]
+
+[chronicle.treaty_trade]
+templates = [
+  "{a_short} and {b_short} open their markets: {reason}.",
+  "A trade pact is struck between {a} and {b}: {reason}.",
+]
+
+[chronicle.battle]
+templates = [
+  "{winner_short} defeats {loser_short} in a bloody battle on the border.",
+  "The host of {winner_short} breaks the army of {loser_short}.",
+  "A battle on the frontier ends in victory for {winner_short}.",
+]
+templates_near = [
+  "{winner_short} routs {loser_short} in a battle fought near {near}.",
+  "The fields near {near} run red as {winner_short} defeats {loser_short}.",
+]
+
+[chronicle.fall]
+templates = [
+  "{fallen}, founded in {founded}, falls and is forgotten.",
+  "{fallen} collapses; its halls are left to the wild.",
+  "The last king of {fallen} dies and the realm dissolves.",
+]
+templates_near = [
+  "{fallen} falls; its ruins are left a long way from {near}.",
+]
