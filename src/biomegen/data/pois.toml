@@ -100,7 +100,7 @@ remoteness = 0.3
 floors = 1
 owner = "wild"
 dynamic = true
-connect = true
+connect = false
 
 [pois.boat]
 priority = 50

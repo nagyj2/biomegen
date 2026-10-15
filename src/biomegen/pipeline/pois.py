@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Collection
 
 import numpy as np
 
@@ -128,7 +129,9 @@ def pick_blue_noise(
     return picked
 
 
-def _commit(world: World, seed: int, kind: str, x: int, y: int, floors: tuple[int, int], purpose: str = "") -> None:
+def _commit(
+    world: World, seed: int, kind: str, x: int, y: int, floors: tuple[int, int], purpose: str = "", connect: bool = True
+) -> None:
     """Append one POI and write it into ``poi_index``."""
     poi = POI(
         kind=kind,
@@ -138,14 +141,16 @@ def _commit(world: World, seed: int, kind: str, x: int, y: int, floors: tuple[in
         floor_count=floors[0],
         lowest_floor=floors[1],
         purpose=purpose,
+        connect=connect,
+        realm_id=int(world.realm_id[y, x]),
     )
     index = len(world.pois)
     world.pois.append(poi)
     world.poi_index[y, x] = index
 
 
-def run(world: World, config: Config, seed: int) -> None:
-    """Place every location-sourced ``tables.pois`` kind, mutating ``world`` in place."""
+def place_by_location(world: World, config: Config, seed: int, sources: Collection[str] = ("location", "both")) -> None:
+    """Place every ``tables.pois`` kind whose ``source`` is in ``sources``, mutating ``world`` in place."""
     backend = config.get("compute.backend")
     sampling = world.scale.sampling
     land = world.water_type == int(WaterType.NONE)
@@ -173,7 +178,7 @@ def run(world: World, config: Config, seed: int) -> None:
     placed = [(p.x, p.y) for p in world.pois]
     for kind in sorted(types, key=lambda name: (int(types[name].get("priority", 0)), name)):
         row = types[kind]
-        if row.get("source", "location") == "history" or "km2_per_poi" not in row:
+        if row.get("source", "location") not in sources or "km2_per_poi" not in row:
             continue
         on_water = bool(row.get("on_water", False))
         count = round(area_km2[not on_water] / float(row["km2_per_poi"]) * density)
@@ -189,5 +194,5 @@ def run(world: World, config: Config, seed: int) -> None:
 
         stream = rng.derive(seed, "poi", kind, "floors")
         for x, y in pick_blue_noise(score, count, float(row["min_spacing_km"]), placed, world):
-            _commit(world, seed, kind, x, y, _floors(kind, row, stream), purpose)
+            _commit(world, seed, kind, x, y, _floors(kind, row, stream), purpose, bool(row.get("connect", True)))
             placed.append((x, y))

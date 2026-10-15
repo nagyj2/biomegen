@@ -111,38 +111,38 @@ def test_dungeons_descend_and_other_kinds_start_at_the_ground(world: World) -> N
 def test_count_is_land_area_over_km2_per_poi() -> None:
     # 54 x 24 land cells of 900 km2 hold 1,166,400 km2: one camp per 200,000 km2 asks for six.
     island = _island()
-    pois.run(island, _wild_config(camp=_camp(km2_per_poi=200000.0)), 5)
+    pois.place_by_location(island, _wild_config(camp=_camp(km2_per_poi=200000.0)), 5)
     assert sum(1 for p in island.pois if p.kind == "camp") == 6
 
 
 def test_density_multiplies_the_count() -> None:
     one, two = _island(), _island()
-    pois.run(one, _wild_config(camp=_camp(km2_per_poi=200000.0)), 5)
+    pois.place_by_location(one, _wild_config(camp=_camp(km2_per_poi=200000.0)), 5)
     config = _wild_config(camp=_camp(km2_per_poi=200000.0))
     config.data["poi"]["density"] = 2.0
-    pois.run(two, config, 5)
+    pois.place_by_location(two, config, 5)
     assert len(two.pois) == 2 * len(one.pois)
 
 
 def test_boats_count_sea_area_and_stand_on_water() -> None:
     island = _island()
     boat = _camp(km2_per_poi=500000.0, biomes=["shallow"], on_water=True)
-    pois.run(island, _wild_config(boat=boat), 5)
+    pois.place_by_location(island, _wild_config(boat=boat), 5)
     assert island.pois and all(island.water_type[p.y, p.x] != int(WaterType.NONE) for p in island.pois)
 
 
 def test_elevation_cap_keeps_a_kind_off_high_ground() -> None:
     island = _island()
     island.elevation_m[:, 30:] = 900.0
-    pois.run(island, _wild_config(camp=_camp(elevation_max_m=500.0)), 5)
+    pois.place_by_location(island, _wild_config(camp=_camp(elevation_max_m=500.0)), 5)
     assert island.pois and all(p.x < 30 for p in island.pois)
 
 
 def test_stage_is_deterministic_on_an_island() -> None:
     first, second = _island(), _island()
     config = _wild_config(camp=_camp())
-    pois.run(first, config, 5)
-    pois.run(second, config, 5)
+    pois.place_by_location(first, config, 5)
+    pois.place_by_location(second, config, 5)
     assert [(p.x, p.y) for p in first.pois] == [(p.x, p.y) for p in second.pois]
 
 
@@ -154,7 +154,7 @@ def test_remoteness_pushes_a_kind_away_from_a_settlement() -> None:
     island.poi_index[15, 10] = 0
     config = _wild_config(camp=_camp(km2_per_poi=2000000.0, remoteness=5.0))
     config.data["poi"]["jitter"] = 0.0
-    pois.run(island, config, 5)
+    pois.place_by_location(island, config, 5)
     assert island.pois[1].x > 30
 
 

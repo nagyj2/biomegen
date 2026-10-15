@@ -256,3 +256,85 @@ def test_a_river_corner_is_bridged_when_no_land_corner_exists():
     world.water_type[2, 3] = world.water_type[3, 2] = int(WaterType.FRESH)
     _close_diagonals(world)
     assert int(world.road.sum()) == 3
+
+
+# --------------------------------------------------------------------------- spurs for the wild and history POIs
+def _spur_world(connect: bool = True):
+    """Two towns joined by the settlement roads, and a ruin one row off the route, with the ruin's ``connect`` set."""
+    from biomegen.pipeline.civilization import roads
+
+    cfg = load_config(None)
+    cfg.data["roads"].update({"meander_strength": 0.0, "uncivilized_connect_prob": 1.0})
+    world = _flat_world(20, 11)
+    _add_poi(world, "town", 1, 2)
+    _add_poi(world, "town", 18, 2)
+    roads.run(world, cfg, 1)
+    _add_poi(world, "ruin", 9, 9)
+    world.pois[-1].civilized = False
+    world.pois[-1].connect = connect
+    return world, cfg, roads
+
+
+def test_a_ruin_that_may_connect_gets_a_spur_to_the_road():
+    world, cfg, roads = _spur_world(connect=True)
+    roads.spurs(world, cfg, 1)
+    assert world.road[9, 9]
+
+
+def test_a_ruin_that_may_not_connect_gets_no_road():
+    world, cfg, roads = _spur_world(connect=False)
+    roads.spurs(world, cfg, 1)
+    assert not world.road[9, 9]
+
+
+def test_the_settlement_pass_leaves_a_poi_that_may_not_connect_alone():
+    # Even a POI that exists at roads time is skipped by the settlement roads when its connect is false.
+    from biomegen.pipeline.civilization import roads
+
+    cfg = load_config(None)
+    cfg.data["roads"]["meander_strength"] = 0.0
+    world = _flat_world(20, 11)
+    _add_poi(world, "town", 1, 2)
+    _add_poi(world, "town", 18, 2)
+    _add_poi(world, "hamlet", 9, 9)
+    world.pois[-1].connect = False
+    roads.run(world, cfg, 1)
+    assert not world.road[9, 9]
+
+
+def test_a_spur_changes_no_tile_of_the_settlement_roads():
+    # Spurs only add road: every tile of the settlement network is still there afterwards.
+    world, cfg, roads = _spur_world()
+    before = world.road.copy()
+    roads.spurs(world, cfg, 1)
+    assert (world.road[before > 0] > 0).all()
+
+
+def test_spurs_on_a_landmass_with_no_road_do_nothing():
+    from biomegen.pipeline.civilization import roads
+
+    cfg = load_config(None)
+    world = _flat_world(20, 11)
+    _add_poi(world, "ruin", 9, 9)
+    roads.spurs(world, cfg, 1)
+    assert not world.road.any()
+
+
+def test_the_stages_run_in_the_documented_order(cfg):
+    timings: dict[str, float] = {}
+    pipeline.generate(cfg, 42, timings)
+    names = list(timings)
+    assert names[names.index("settlements") :] == [
+        "settlements",
+        "roads",
+        "realms",
+        "diplomacy",
+        "history",
+        "pois",
+        "spurs",
+        "naming",
+    ]
+
+
+def test_generated_pois_take_their_realm_from_the_map(world):
+    assert all(p.realm_id == int(world.realm_id[p.y, p.x]) for p in world.pois)

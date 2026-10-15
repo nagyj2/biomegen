@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import math
 import random
+from dataclasses import dataclass
 from typing import Dict, List, Tuple, cast
 
 import numpy as np
@@ -60,10 +61,10 @@ class _UnionFind:
 
 
 def _road_eligible(world: World) -> List[Tuple[int, "POI"]]:
-    """Land POIs eligible to be road endpoints (boats and any water-anchored POI excluded), by index."""
+    """Land POIs eligible to be road endpoints (those with ``connect``; water-anchored POIs excluded), by index."""
     out = []
     for i, p in enumerate(world.pois):
-        if p.kind == "boat":
+        if not p.connect:
             continue
         if world.water_type[p.y, p.x] != int(WaterType.NONE):
             continue
@@ -394,20 +395,27 @@ def _close_diagonals(world: World) -> None:
                 road[cy, cx] = True
 
 
-def run(world: World, config: Config, seed: int) -> None:
-    """Build the road network, mutating ``world`` in place."""
-    backend = config.get("compute.backend")
-    eligible = _road_eligible(world)
-    if len(eligible) < 2:
-        return  # nothing to connect
+@dataclass
+class _Network:
+    """What both road passes share: the landmass labels, the cost surface and the routing settings."""
 
+    labels: np.ndarray
+    groups: Dict[int, List[Tuple[int, "POI"]]]
+    enter_base: np.ndarray
+    costs: Tuple[float, float, float, float]
+    turn_cost: float
+    cardinal_only: bool
+    settlement: np.ndarray
+
+
+def _network(world: World, config: Config, seed: int, eligible: List[Tuple[int, "POI"]]) -> _Network:
+    """Group ``eligible`` POIs by landmass component and precompute the static entry-cost surface."""
     # 1. Group eligible POIs by landmass component (ocean separates islands; rivers/lakes do not).
     landmass = world.water_type != int(WaterType.SALT)
-    labels, _ = geo.label_by_value(landmass.astype(np.uint8), connectivity=8, backend=backend)
+    labels, _ = geo.label_by_value(landmass.astype(np.uint8), connectivity=8, backend=config.get("compute.backend"))
     groups: Dict[int, List[Tuple[int, "POI"]]] = {}
     for idx, poi in eligible:
-        comp = int(labels[poi.y, poi.x])
-        groups.setdefault(comp, []).append((idx, poi))
+        groups.setdefault(int(labels[poi.y, poi.x]), []).append((idx, poi))
 
     # 2. Precompute the static entry-cost surface (biome and relief move costs, water penalty, meander noise).
     base_cost = float(config.get("roads.base_cost"))
@@ -423,19 +431,54 @@ def run(world: World, config: Config, seed: int) -> None:
         float(config.get("roads.road_discount")),
         base_cost,
     )
-    turn_cost = float(config.get("roads.turn_cost"))
-    cardinal_only = bool(config.get("roads.cardinal_only"))
-
-    col_km, row_km = world.scale.km_per_col, world.scale.km_per_row
-    tiers = config.get("tables.tiers")
-    backbone_kinds = {name: bool(row["backbone"]) for name, row in tiers.items()}  # tier kind -> joins the trunk
-
-    # 3. Build and route connections for each component.
-    #    Settlement tiles attract roads exactly as existing road tiles do (same discount factor).
+    # Settlement tiles attract roads exactly as existing road tiles do (same discount factor).
     settlement = np.zeros((world.height, world.width), dtype=bool)
     for poi in world.pois:
         if poi.kind in _SETTLEMENT_KINDS:
             settlement[poi.y, poi.x] = True
+    return _Network(
+        labels,
+        groups,
+        enter_base,
+        costs,
+        float(config.get("roads.turn_cost")),
+        bool(config.get("roads.cardinal_only")),
+        settlement,
+    )
+
+
+def _lay(world: World, network: _Network, comp_mask: np.ndarray, a: Coord, b: Coord, tier: int) -> None:
+    """Route ``a`` to ``b`` and write the path into the road arrays (``tier`` 1 trunk, 2 spur)."""
+    path = _route(
+        world,
+        comp_mask,
+        network.enter_base,
+        a,
+        b,
+        network.costs,
+        network.turn_cost,
+        network.settlement,
+        network.cardinal_only,
+    )
+    for x, y in path:
+        world.road[y, x] = 1
+        if world.road_tier[y, x] == 0:
+            world.road_tier[y, x] = tier
+
+
+def run(world: World, config: Config, seed: int) -> None:
+    """Build the road network of the POIs that exist (the settlements), mutating ``world`` in place.
+
+    The wild and history POIs come later, after the history stage: :func:`spurs` branches them off this network.
+    """
+    eligible = _road_eligible(world)
+    if len(eligible) < 2:
+        return  # nothing to connect
+    network = _network(world, config, seed, eligible)
+
+    col_km, row_km = world.scale.km_per_col, world.scale.km_per_row
+    tiers = config.get("tables.tiers")
+    backbone_kinds = {name: bool(row["backbone"]) for name, row in tiers.items()}  # tier kind -> joins the trunk
     probs = (
         float(config.get("roads.civilized_connect_prob")),
         float(config.get("roads.uncivilized_connect_prob")),
@@ -443,8 +486,8 @@ def run(world: World, config: Config, seed: int) -> None:
     )
     k = int(config.get("roads.k_neighbors"))
 
-    for comp in sorted(groups):
-        group = groups[comp]
+    for comp in sorted(network.groups):
+        group = network.groups[comp]
         if len(group) < 2:
             continue
         coords = [_endpoint(p) for (_i, p) in group]
@@ -454,17 +497,11 @@ def run(world: World, config: Config, seed: int) -> None:
         edge_rng = rng.derive(seed, "roads", comp)
         trunk_edges, spur_indices = _classify_edges(km_coords, civ_flags, backbone_flags, k, edge_rng, probs)
 
-        comp_mask = labels == comp
+        comp_mask = network.labels == comp
 
         # Trunk phase: route the MST backbone + extra loop edges first.
         for i, j in trunk_edges:
-            path = _route(
-                world, comp_mask, enter_base, coords[i], coords[j], costs, turn_cost, settlement, cardinal_only
-            )
-            for x, y in path:
-                world.road[y, x] = 1
-                if world.road_tier[y, x] == 0:
-                    world.road_tier[y, x] = 1
+            _lay(world, network, comp_mask, coords[i], coords[j], 1)
 
         # Spur phase: connect each isolated POI to the nearest existing road tile.
         # Routing after the trunk means spurs branch off the closest point on the network,
@@ -473,9 +510,7 @@ def run(world: World, config: Config, seed: int) -> None:
         for node_idx in spur_indices:
             start = coords[node_idx]
             if len(road_yx) > 0:
-                d2 = ((road_yx[:, 1] - start[0]) * col_km) ** 2 + ((road_yx[:, 0] - start[1]) * row_km) ** 2
-                best = road_yx[int(np.argmin(d2))]
-                target = (int(best[1]), int(best[0]))  # (x, y)
+                target = _nearest_road(road_yx, start, col_km, row_km)
             else:
                 # No trunk yet (e.g. single backbone node); fall back to nearest backbone POI.
                 backbone = [i for i, f in enumerate(civ_flags) if f] or list(range(len(coords)))
@@ -485,10 +520,42 @@ def run(world: World, config: Config, seed: int) -> None:
                     for t in backbone
                 ]
                 target = coords[backbone[int(np.argmin(d2_list))]]
-            path = _route(world, comp_mask, enter_base, start, target, costs, turn_cost, settlement, cardinal_only)
-            for x, y in path:
-                world.road[y, x] = 1
-                if world.road_tier[y, x] == 0:
-                    world.road_tier[y, x] = 2
-    if cardinal_only:
+            _lay(world, network, comp_mask, start, target, 2)
+    if network.cardinal_only:
+        _close_diagonals(world)
+
+
+def _nearest_road(road_yx: np.ndarray, start: Coord, col_km: float, row_km: float) -> Coord:
+    """The road tile (x, y) nearest ``start`` in km, the first of the lowest index on a tie."""
+    d2 = ((road_yx[:, 1] - start[0]) * col_km) ** 2 + ((road_yx[:, 0] - start[1]) * row_km) ** 2
+    best = road_yx[int(np.argmin(d2))]
+    return int(best[1]), int(best[0])
+
+
+def spurs(world: World, config: Config, seed: int) -> None:
+    """Branch the wild and history POIs off the settlement roads, mutating ``world`` in place.
+
+    Runs after the pois stage. Every POI whose kind is not a settlement tier and whose ``connect`` is true is a
+    candidate; as for a village, ``roads.uncivilized_connect_prob`` decides (in POI order, one draw each) whether it
+    gets a spur, which runs to the nearest road tile of its landmass. A landmass with no road gets none.
+    """
+    tiers = config.get("tables.tiers")
+    eligible = [(i, p) for i, p in _road_eligible(world) if p.kind not in tiers]
+    if not eligible:
+        return
+    network = _network(world, config, seed, eligible)
+    col_km, row_km = world.scale.km_per_col, world.scale.km_per_row
+    chance = float(config.get("roads.uncivilized_connect_prob"))
+    for comp in sorted(network.groups):
+        comp_mask = network.labels == comp
+        road_yx = np.argwhere((world.road > 0) & comp_mask)
+        if len(road_yx) == 0:
+            continue
+        stream = rng.derive(seed, "roads", "spurs", comp)
+        for _index, poi in network.groups[comp]:
+            if stream.random() < chance:
+                _lay(
+                    world, network, comp_mask, _endpoint(poi), _nearest_road(road_yx, _endpoint(poi), col_km, row_km), 2
+                )
+    if network.cardinal_only:
         _close_diagonals(world)

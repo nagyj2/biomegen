@@ -49,8 +49,19 @@ def test_dawn_has_no_realms_or_relations(dawn: World) -> None:
     assert (dawn.realms, dawn.relations) == ([], [])
 
 
-def test_dawn_has_no_settlements_or_pois(dawn: World) -> None:
-    assert dawn.pois == [] and (dawn.poi_index == -1).all()
+def test_dawn_has_no_settlements(dawn: World) -> None:
+    assert not any(poi.civilized for poi in dawn.pois)
+
+
+def test_dawn_has_only_the_pois_that_stand_from_the_start(dawn: World, config: Config) -> None:
+    # Ruins, towers and dungeons (source "both") are placed by location; camps, boats and history kinds are not.
+    rows = config.get("tables.pois")
+    allowed = {kind for kind, row in rows.items() if row["source"] == "both"}
+    assert dawn.pois and {poi.kind for poi in dawn.pois} == allowed
+
+
+def test_dawn_pois_belong_to_no_realm_and_no_event(dawn: World) -> None:
+    assert all(poi.realm_id == -1 and poi.event_ids == [] for poi in dawn.pois)
 
 
 def test_dawn_has_no_roads_or_fronts(dawn: World) -> None:
@@ -86,12 +97,12 @@ def test_dawn_differs_from_the_present_start(dawn: World) -> None:
 def test_dawn_skips_the_political_stages() -> None:
     timings: dict[str, float] = {}
     pipeline.generate(_dawn_config(), 42, timings)
-    assert not set(timings) & pipeline.DAWN_SKIPPED and "naming" in timings
+    assert not set(timings) & pipeline.DAWN_SKIPPED and {"pois", "naming"} <= set(timings)
 
 
 def test_dawn_stats_count_nothing_political(dawn: World) -> None:
     stats = pipeline.stats(dawn)
-    assert (stats["realms"], stats["events"], stats["pois"], stats["road_tiles"]) == (0, 0, 0, 0)
+    assert (stats["realms"], stats["events"], stats["road_tiles"]) == (0, 0, 0)
 
 
 @pytest.mark.parametrize("view", ["terrain", "political", "elevation", "temperature", "rainfall"])

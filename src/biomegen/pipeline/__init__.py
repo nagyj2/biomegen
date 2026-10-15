@@ -3,14 +3,16 @@
 :func:`generate` runs the stages in a fixed order, each consuming only fields produced by earlier
 stages so there is no backtracking:
 
-    terrain -> climate -> hydrology -> biomes -> geography -> settlements -> pois -> roads
-    -> realms -> diplomacy -> history -> naming
+    terrain -> climate -> hydrology -> biomes -> geography -> settlements -> roads -> realms -> diplomacy
+    -> history -> pois -> spurs -> naming
 
-With ``history.start = "dawn"`` the stages from settlements to history are skipped: a young, unsettled world at year 0
-with no realms, POIs or chronicle, for a later simulation to settle.
+With ``history.start = "dawn"`` the stages from settlements to history and the spurs are skipped: a young, unsettled
+world at year 0 with no realms, roads or chronicle, for a later simulation to settle. The pois stage still runs, for
+the few ruins, towers and dungeons that stand from the start.
 
-Roads end at every POI's anchor. A POI's site plan (:mod:`biomegen.sites`) is built lazily and finds the roads
-that reach it from the world arrays, so no stage records anything for it.
+The roads stage links the settlements; the spurs stage, after the pois stage, branches the wild and history POIs
+that may be linked (``connect``) off that network. A POI's site plan (:mod:`biomegen.sites`) is built lazily and
+finds the roads that reach it from the world arrays, so no stage records anything for it.
 
 A **land-exists sanity gate** wraps the cheap leading terrain stage: if a seed yields too little land,
 the seed is deterministically perturbed and the stage re-runs, preventing empty-world cascades from
@@ -31,13 +33,14 @@ from ..util import rng
 from ..util.units import grid_scale
 from ..world.tile import BIOME_NAME, RELIEF_NAME, WATER_BIOMES, WaterType
 from ..world.world import World
-from . import naming, pois
+from . import naming
 from .civilization import diplomacy, realms, roads, settlements
 from .physical import biomes, climate, geography, hydrology, terrain
 from .story import history
+from .story import pois as poi_stage
 
 #: Stages a dawn start skips: everything people do, up to and including the history that records it.
-DAWN_SKIPPED = frozenset({"settlements", "pois", "roads", "realms", "diplomacy", "history"})
+DAWN_SKIPPED = frozenset({"settlements", "roads", "realms", "diplomacy", "history", "spurs"})
 
 
 def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = None) -> World:
@@ -91,11 +94,12 @@ def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = No
         ("biomes", biomes.run),
         ("geography", geography.run),
         ("settlements", settlements.run),
-        ("pois", pois.run),
         ("roads", roads.run),
         ("realms", realms.run),
         ("diplomacy", diplomacy.run),
         ("history", history.run),
+        ("pois", poi_stage.run),
+        ("spurs", roads.spurs),
         ("naming", naming.run),
     ):
         if not (dawn and name in DAWN_SKIPPED):
