@@ -228,3 +228,73 @@ def test_watchtowers_are_dynamic_and_stand(cfg: Config) -> None:
 
 def test_no_watchtower_has_fallen(world: World) -> None:
     assert all(tower.fell is None for tower in _towers(world))
+
+
+# --- shrines -----------------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module", params=SEEDS)
+def shrines(request: pytest.FixtureRequest) -> World:
+    """A world with many successions, so shrines of both sites are there to check."""
+    config = load_config(None)
+    config.data["history"].update(succession_years=[60, 120], succession_change_chance=1.0)
+    return pipeline.generate(config, request.param)
+
+
+def _shrines(world: World) -> list[POI]:
+    return [p for p in world.pois if p.kind == "shrine"]
+
+
+def _site_of(world: World, shrine: POI, cfg: Config) -> dict:
+    """The poi_sites row the previous ruler's temper gave the shrine's succession."""
+    event = world.chronicle[shrine.event_ids[0]]
+    previous = next(tag.partition(":")[2] for tag in event.tags if tag.startswith("from:"))
+    temper = cfg.get(f"tables.ruling_styles.{previous}.temper")
+    return next(
+        row for row in cfg.get("tables.poi_sites").values() if row["kind"] == "shrine" and row["temper"] == temper
+    )
+
+
+def test_a_shrine_stands_for_a_succession_into_a_devout_style(shrines: World) -> None:
+    assert _shrines(shrines) and all(
+        shrines.chronicle[s.event_ids[0]].kind == "succession" and "to:pious" in shrines.chronicle[s.event_ids[0]].tags
+        for s in _shrines(shrines)
+    )
+
+
+def test_at_most_one_shrine_per_devout_succession(shrines: World) -> None:
+    events = [s.event_ids[0] for s in _shrines(shrines)]
+    assert len(events) == len(set(events))
+
+
+def test_a_shrine_lies_in_its_sites_band_from_the_seat(shrines: World, cfg: Config) -> None:
+    for shrine in _shrines(shrines):
+        site = _site_of(shrines, shrine, cfg)
+        realm = shrines.realms[shrines.chronicle[shrine.event_ids[0]].realm_ids[0]]
+        seat = shrines.pois[realm.seat_poi]
+        assert site["min_km"] <= shrines.scale.distance_km(shrine.x, shrine.y, seat.x, seat.y) <= site["max_km"]
+
+
+def test_a_quiet_spot_shrine_lies_in_the_realm_that_built_it(shrines: World, cfg: Config) -> None:
+    for shrine in _shrines(shrines):
+        if _site_of(shrines, shrine, cfg)["land"] == "realm":
+            assert shrine.realm_id == shrines.chronicle[shrine.event_ids[0]].realm_ids[0]
+
+
+def test_both_shrine_sites_are_used(shrines: World, cfg: Config) -> None:
+    assert {_site_of(shrines, s, cfg)["temper"] for s in _shrines(shrines)} == {"aggressive", "passive"}
+
+
+def test_a_shrine_takes_its_connect_flag_from_its_site(shrines: World, cfg: Config) -> None:
+    assert all(s.connect == _site_of(shrines, s, cfg)["connect"] for s in _shrines(shrines))
+
+
+def test_a_shrine_is_dated_by_its_succession(shrines: World) -> None:
+    assert all(s.founded == shrines.chronicle[s.event_ids[0]].year for s in _shrines(shrines))
+
+
+def test_a_shrine_keeps_its_spacing_from_the_pois_before_it(shrines: World, cfg: Config) -> None:
+    spacing = cfg.get("tables.pois.shrine.min_spacing_km")
+    for index, p in enumerate(shrines.pois):
+        if p.kind == "shrine":
+            assert all(shrines.scale.distance_km(p.x, p.y, q.x, q.y) >= spacing - 1e-6 for q in shrines.pois[:index])

@@ -14,6 +14,10 @@ realm by grid lookup. History placement comes first: every event of the finished
 - **watchtower** (an ongoing ``war``): up to ``max_per_event`` towers on the war's front, one per ``per_km_of_front``
   of it, on high ground and ``kind_spacing_km`` apart, each held by the realm owning its cell.
 
+- **shrine** (a ``succession`` into a devout style): the best cell, by freshwater and remoteness weights, in the
+  ``poi_sites`` band round the realm's seat; the previous ruler's temper picks the site (an aggressive one a quiet
+  spot in the realm near the seat, a passive one a cell far off, ``connect = false``).
+
 The location pass (:func:`biomegen.pipeline.pois.place_by_location`) then fills the rest by score. With
 ``history.start = "dawn"`` there are no realms and no events, so only the kinds whose ``source`` is "both" are placed,
 by location: a few ruins, towers and dungeons already stand at year 0.
@@ -182,11 +186,60 @@ def _place_watchtowers(world: World, config: Config, seed: int, event: Chronicle
         )
 
 
+def _place_shrine(
+    world: World, config: Config, seed: int, event: ChronicleEvent, plan: PoiPlan, fields: pois.ScoreFields
+) -> None:
+    """Place the shrine of a succession on the best-scoring cell of its site's band round the realm's seat.
+
+    The site row (``poi_sites``, picked by the previous ruler's temper) gives the distance band from the seat, whether
+    the cell must lie in the realm, and the score weights. A realm with no seat, or no free cell in the band, gets none.
+    """
+    seat = world.realms[plan.realm_id].seat_poi
+    if seat < 0:
+        return
+    row, site = config.get("tables.pois.shrine"), config.get(f"tables.poi_sites.{plan.site}")
+    sx, sy = world.pois[seat].x, world.pois[seat].y
+    scale = world.scale
+    km = np.hypot(
+        ((np.arange(world.width) - sx) * scale.km_per_col)[None, :],
+        ((np.arange(world.height) - sy) * scale.km_per_row)[:, None],
+    )
+    mask = pois.eligible_mask(
+        world, row, pois.max_footprint(config, "shrine"), float(config.get("poi.min_footprint_land"))
+    )
+    mask &= (km >= float(site["min_km"])) & (km <= float(site["max_km"])) & _clear_of_pois(world, config, row)
+    if site["land"] == "realm":
+        mask &= world.realm_id == plan.realm_id
+    noise = rng.derive_numpy(seed, "poi", "shrine", event.id).random(mask.shape) * float(config.get("poi.jitter"))
+    score = 1.0 + float(site["near_freshwater"]) * fields.fresh + float(site["remoteness"]) * fields.remote
+    picks = pois.pick_blue_noise(np.where(mask, score + noise, -np.inf), 1, 0.0, [], world)
+    if picks:
+        stream = rng.derive(seed, "poi", "shrine", "floors", event.id)
+        pois.commit(
+            world,
+            seed,
+            "shrine",
+            *picks[0],
+            pois.draw_floors("shrine", row, stream),
+            connect=bool(site["connect"]),
+            founded=event.year,
+            event_ids=[event.id],
+        )
+
+
 def run(world: World, config: Config, seed: int) -> None:
     """Place the POIs of the world, mutating ``world`` in place."""
     dawn = config.get("history.start") == "dawn"
     if not dawn:
         score = habitability(world, config, seed) if world.fallen_realms else None
+        fields: list[pois.ScoreFields] = []
+
+        def _fields() -> pois.ScoreFields:
+            """The score weight grids, computed the first time a shrine needs them."""
+            if not fields:
+                fields.append(pois.score_fields(world, config))
+            return fields[0]
+
         for event in world.chronicle:
             for plan in poi_for_event(world, config, seed, event):
                 if plan.kind == "ruin" and score is not None:
@@ -195,4 +248,6 @@ def run(world: World, config: Config, seed: int) -> None:
                     _place_battlefield(world, config, seed, event)
                 elif plan.kind == "watchtower":
                     _place_watchtowers(world, config, seed, event, plan)
+                elif plan.kind == "shrine":
+                    _place_shrine(world, config, seed, event, plan, _fields())
     pois.place_by_location(world, config, seed, ("both",) if dawn else ("location", "both"))

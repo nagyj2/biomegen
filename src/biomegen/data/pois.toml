@@ -159,6 +159,7 @@ priority = 80
 source = "history"
 events = ["succession"]
 tags = ["to:pious"]
+biomes = ["desert", "savanna", "grass", "forest", "jungle", "swamp", "taiga", "tundra", "snow"]
 min_spacing_km = 40.0
 floors = 1
 owner = "realm"
@@ -193,12 +194,14 @@ bandits = false
 # Where a kind with several sites is built; the previous ruler's `temper` (rulers.toml) picks the row.
 #   kind                the pois.toml kind
 #   temper              "aggressive" or "passive"
+#   land                "realm" (cells of the realm that builds it) or "any" (any land)
 #   min_km, max_km      distance band from the realm's seat
 #   connect             true when the roads stage links it
 #   near_freshwater, remoteness   score weights for the cell inside the band
 [poi_sites.shrine_near_seat]
 kind = "shrine"
 temper = "aggressive"
+land = "realm"
 min_km = 25.0
 max_km = 150.0
 connect = true
@@ -208,6 +211,7 @@ remoteness = 0.5
 [poi_sites.shrine_wild]
 kind = "shrine"
 temper = "passive"
+land = "any"
 min_km = 150.0
 max_km = 450.0
 connect = false

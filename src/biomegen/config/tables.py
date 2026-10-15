@@ -18,8 +18,9 @@ from .validate import _coerce_color
 # "range" [min, max] ints >= 0; "pair" a [w, h] of numbers > 0; "forms" a non-empty list of name patterns,
 # each containing "{n}" exactly once; "ascii_char" / "ascii_char?" / "ascii_text" are "char" / "char?" /
 # "text" restricted to 7-bit characters; "factor" one of "none", "moisture", "elevation"; "span" [min, max]
-# numbers with 0 <= min <= max; "text_list" a non-empty list of strings; "number" any number; "source", "owner" and
-# "temper" one of `POI_SOURCES` / `POI_OWNERS` / `TEMPERS`; "floors" a storey count or a [min, max] range of them.
+# numbers with 0 <= min <= max; "text_list" a non-empty list of strings; "number" any number; "source", "owner",
+# "temper" and "land" one of `POI_SOURCES` / `POI_OWNERS` / `TEMPERS` / `SITE_LANDS`; "floors" a storey count or a
+# [min, max] range of them.
 _BIOME_ROW = {
     "label": "text",
     "glyph": "char",
@@ -115,6 +116,7 @@ _POI_FATE_ROW = {"weight": "positive", "sim_only": "bool", "bandits": "bool"}
 _POI_SITE_ROW = {
     "kind": "text",
     "temper": "temper",
+    "land": "land",
     "min_km": "nonneg",
     "max_km": "positive",
     "connect": "bool",
@@ -201,6 +203,7 @@ _POI_OPTIONAL = frozenset(
 POI_SOURCES = ("location", "history", "both")
 POI_OWNERS = ("realm", "wild")
 TEMPERS = ("aggressive", "passive")
+SITE_LANDS = ("realm", "any")
 
 DETAIL_FACTORS = ("none", "moisture", "elevation")
 
@@ -296,6 +299,7 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "source": lambda v: v in POI_SOURCES,
         "owner": lambda v: v in POI_OWNERS,
         "temper": lambda v: v in TEMPERS,
+        "land": lambda v: v in SITE_LANDS,
         "number": _is_number,
         "floors": _is_floors,
         "bool": lambda v: isinstance(v, bool),

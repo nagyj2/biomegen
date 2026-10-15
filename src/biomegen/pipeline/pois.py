@@ -20,6 +20,7 @@ from __future__ import annotations
 import math
 import random
 from collections.abc import Collection, Sequence
+from typing import NamedTuple
 
 import numpy as np
 
@@ -166,27 +167,41 @@ def commit(
     return index
 
 
+class ScoreFields(NamedTuple):
+    """The ``[0, 1]`` weights scores favour: closeness to fresh water and the coast, remoteness from settlements."""
+
+    fresh: np.ndarray
+    coast: np.ndarray
+    remote: np.ndarray
+
+
+def score_fields(world: World, config: Config) -> ScoreFields:
+    """Return the freshwater, coastal and remoteness weight grids (every falloff scale in km, from ``poi``)."""
+    backend, sampling = config.get("compute.backend"), world.scale.sampling
+    fresh = geo.distance_to(
+        world.water_type == int(WaterType.FRESH), backend=backend, metric="euclidean", sampling=sampling
+    )
+    settled = np.zeros((world.height, world.width), dtype=bool)
+    for poi in world.pois:
+        if poi.civilized:
+            settled[poi.y, poi.x] = True
+    return ScoreFields(
+        _closeness(fresh, float(config.get("poi.freshwater_scale_km"))),
+        _closeness(world.dist_to_ocean, float(config.get("poi.coastal_scale_km"))),
+        _remoteness(
+            geo.distance_to(settled, backend=backend, metric="euclidean", sampling=sampling),
+            float(config.get("poi.remoteness_scale_km")),
+        ),
+    )
+
+
 def place_by_location(world: World, config: Config, seed: int, sources: Collection[str] = ("location", "both")) -> None:
     """Place every ``tables.pois`` kind whose ``source`` is in ``sources``, mutating ``world`` in place."""
-    backend = config.get("compute.backend")
-    sampling = world.scale.sampling
     land = world.water_type == int(WaterType.NONE)
     cell_km2 = world.scale.cell_area_km2
     area_km2 = {True: float(land.sum()) * cell_km2, False: float((~land).sum()) * cell_km2}  # keyed by "land kind"
 
-    fresh = geo.distance_to(
-        world.water_type == int(WaterType.FRESH), backend=backend, metric="euclidean", sampling=sampling
-    )
-    fresh_weight = _closeness(fresh, float(config.get("poi.freshwater_scale_km")))
-    coast_weight = _closeness(world.dist_to_ocean, float(config.get("poi.coastal_scale_km")))
-    settled = np.zeros(land.shape, dtype=bool)
-    for poi in world.pois:
-        if poi.civilized:
-            settled[poi.y, poi.x] = True
-    remote = _remoteness(
-        geo.distance_to(settled, backend=backend, metric="euclidean", sampling=sampling),
-        float(config.get("poi.remoteness_scale_km")),
-    )
+    fresh_weight, coast_weight, remote = score_fields(world, config)
     min_land = float(config.get("poi.min_footprint_land"))
     jitter = float(config.get("poi.jitter"))
     density = float(config.get("poi.density"))
