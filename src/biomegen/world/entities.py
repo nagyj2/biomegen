@@ -168,3 +168,4 @@ class ChronicleEvent:
     template: str = ""
     text: str = ""
     tags: Tuple[str, ...] = ()
+    near_poi: int = -1  # the settlement {near} names (same landmass, within history.near_km), -1 when none
