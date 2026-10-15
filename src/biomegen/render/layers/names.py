@@ -9,7 +9,12 @@ import math
 
 import numpy as np
 
+from ...config.model import Config
+from ...util.geometry import distance_to
+from ...world.derived import derived
 from ...world.entities import GeoFeature
+from ...world.tile import WaterType
+from ...world.world import World
 from ..colors import mix_colors, scale_colors
 from ..grid import CellGrid
 from . import LAYERS, LayerContext
@@ -25,9 +30,13 @@ class _Placer:
         self.labelled = np.zeros_like(self.reserved)
         self.fill_scale = float(ctx.config.get("render.labels.fill_scale"))
 
-    def fits(self, col: int, row: int, text: str) -> bool:
+    def fits(self, col: int, row: int, text: str, over_water: bool = False) -> bool:
         if row < 0 or row >= self.grid.rows or col < 1 or col + len(text) > self.grid.cols - 1:
             return False
+        if over_water:
+            span = slice(col, col + len(text))
+            if not (self.ctx.sampler.inside[row, span] & ~self.ctx.land[row, span]).all():
+                return False
         window = slice(col - 1, col + len(text) + 1)
         return not (self.reserved[row, window].any() or self.labelled[row, window].any())
 
@@ -39,11 +48,14 @@ class _Placer:
         self.grid.bold[row, span] = True
         self.labelled[row, span] = True
 
-    def place(self, text: str, positions: list[tuple[int, int]], fg: tuple[int, ...]) -> bool:
-        """Draw ``text`` at the first of ``positions`` (tile coordinates of its first letter) that fits."""
+    def place(self, text: str, positions: list[tuple[int, int]], fg: tuple[int, ...], over_water: bool = False) -> bool:
+        """Draw ``text`` at the first of ``positions`` (tile coordinates of its first letter) that fits.
+
+        ``over_water`` also requires every cell under the text to be water.
+        """
         for tile_x, tile_y in positions:
             cell = self.ctx.sampler.cell_of(tile_x, tile_y)
-            if cell is not None and self.fits(cell[0], cell[1], text):
+            if cell is not None and self.fits(cell[0], cell[1], text, over_water):
                 self.put(cell[0], cell[1], text, fg)
                 return True
         return False
@@ -56,6 +68,43 @@ def _around(feature: GeoFeature, text: str, count: int, aspect: float) -> list[t
     centre_y = sum(y for _, y in cells) / len(cells)
     nearest = sorted(cells, key=lambda c: (math.hypot(c[0] - centre_x, (c[1] - centre_y) * aspect), c[1], c[0]))
     return [(x - len(text) // 2, y) for x, y in nearest[:count]]
+
+
+def _sea_middles(world: World, config: Config, seas: list[GeoFeature]) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(clearance_km, owner)`` per tile: the salt-water distance to land or the map edge, and the nearest sea.
+
+    ``owner`` is the index in ``seas`` of the sea whose anchor is nearest (-1 off the salt water). A sea's anchor is its
+    point farthest from land, which on an ocean framed by the map edge lies against the edge; the tile of its water
+    with the greatest clearance is the middle of the open water instead. Worked out once per world.
+    """
+    anchors = tuple(sea.anchor for sea in seas)
+
+    def build() -> tuple[np.ndarray, np.ndarray]:
+        salt = world.water_type == int(WaterType.SALT)
+        blocked = ~salt
+        blocked[[0, -1], :] = True
+        blocked[:, [0, -1]] = True
+        clearance = distance_to(blocked, backend=config.get("compute.backend"), sampling=world.scale.sampling)
+        ys, xs = np.indices(salt.shape)
+        reach = np.stack([np.hypot((xs - x) * world.km_per_col, (ys - y) * world.km_per_row) for x, y in anchors])
+        owner = np.where(salt, np.argmin(reach, axis=0), -1)
+        return clearance, owner
+
+    if not anchors:
+        return np.zeros(world.water_type.shape, dtype=np.float32), np.full(world.water_type.shape, -1)
+    return derived(world, (__name__, "sea_middles", anchors), build, world.water_type)
+
+
+def _sea_starts(world: World, config: Config, seas: list[GeoFeature], index: int, count: int) -> list[tuple[int, int]]:
+    """Return up to ``count`` label start positions for ``seas[index]``, the middle of its water first."""
+    clearance, owner = _sea_middles(world, config, seas)
+    ys, xs = np.nonzero(owner == index)
+    if len(xs) == 0:
+        return []
+    ax, ay = seas[index].anchor
+    order = np.lexsort((xs, ys, np.hypot(xs - ax, ys - ay), -clearance[ys, xs]))[:count]
+    text = seas[index].name
+    return [(int(xs[i]) - len(text) // 2, int(ys[i])) for i in order]
 
 
 def _realm_labels(ctx: LayerContext, placer: _Placer, cfg: dict) -> None:
@@ -110,10 +159,10 @@ def labels_layer(ctx: LayerContext, grid: CellGrid) -> None:
                     _around(mountains, mountains.name, int(cfg["range_candidates"]), aspect),
                     tuple(cfg["range_fg"]),
                 )
-    for sea in sorted((f for f in by_kind.get("sea", []) if f.name), key=lambda f: f.id):
-        x, y = sea.anchor
-        starts = [(x - len(sea.name) // 2 + dx, y + dy) for dy in (0, 1, -1, 2, -2) for dx in (0, -4, 4)]
-        placer.place(sea.name, starts, tuple(cfg["sea_fg"]))
+    seas = sorted((f for f in by_kind.get("sea", []) if f.name), key=lambda f: f.id)
+    for index, sea in enumerate(seas):
+        starts = _sea_starts(world, ctx.config, seas, index, int(cfg["sea_candidates"]))
+        placer.place(sea.name, starts, tuple(cfg["sea_fg"]), over_water=True)
     for lake in largest("lake", int(cfg["max_lakes"])):
         if lake.cells:
             placer.place(

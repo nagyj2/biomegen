@@ -289,6 +289,9 @@ VALUES: Dict[str, Any] = {
         "landmass_candidates": 80,
         "range_candidates": 40,
         "lake_candidates": 10,
+        # A sea's name goes in the middle of its water: among the salt-water tiles nearest that sea's anchor, those
+        # farthest from both land and the map edge come first; this many are tried, and every letter must be on water.
+        "sea_candidates": 60,
         "fill_scale": 0.5,  # label cells use the terrain fill darkened by this factor
         "realm_kinds": ["major", "tribal"],
         "realm_min_area_km2": 25000.0,

@@ -6,7 +6,7 @@ from biomegen.render.layers import build_grid
 from biomegen.render.views import View
 from biomegen.sampling.sampler import Sampler
 from biomegen.world.entities import POI
-from biomegen.world.tile import Biome
+from biomegen.world.tile import Biome, WaterType
 from tests.render.conftest import add_feature, make_world
 
 VIEW = View("t", ("terrain", "markers", "labels"))
@@ -52,15 +52,34 @@ def test_label_avoids_a_marker(config) -> None:
     assert grid.glyph[5, 30] == config.get("render.markers.tower")
 
 
-def test_sea_name_is_placed_near_its_anchor(config) -> None:
-    world = make_world(60, 12, Biome.DEEP, -2000.0)
+def _sea(width: int, height: int):
+    """A world of salt sea: the deep-water biome over salt water."""
+    world = make_world(width, height, Biome.DEEP, -2000.0)
+    world.water_type[:] = int(WaterType.SALT)
+    return world
+
+
+def test_sea_name_is_drawn_on_its_water(config) -> None:
+    world = _sea(60, 12)
     add_feature(world, "sea", "Calm Sea", (30, 6))
     assert "Calm Sea" in _text(_draw(world, config))
 
 
+def test_sea_name_sits_in_the_middle_of_its_water_not_at_its_anchor(config) -> None:
+    # Land fills the top half; the anchor (farthest from land) is on the bottom edge. The name goes midway between
+    # the coast and the edge, over water.
+    world = _sea(60, 20)
+    world.biome[:9] = int(Biome.GRASS)
+    world.water_type[:9] = int(WaterType.NONE)
+    world.elevation_m[:9] = 100.0
+    add_feature(world, "sea", "Calm Sea", (30, 19))
+    rows = [row for row, line in enumerate(_text(_draw(world, config)).splitlines()) if "Calm Sea" in line]
+    assert rows and 12 <= rows[0] <= 16
+
+
 def test_label_does_not_run_off_the_grid(config) -> None:
     # A name longer than the grid is dropped rather than clipped.
-    world = make_world(10, 5, Biome.DEEP, -2000.0)
+    world = _sea(10, 5)
     add_feature(world, "sea", "The Extremely Long Sea Name", (5, 2))
     assert "Extremely" not in _text(_draw(world, config))
 
