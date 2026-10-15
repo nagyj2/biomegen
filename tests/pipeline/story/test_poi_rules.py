@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.pipeline.story.poi_rules import PoiPlan, poi_for_event
+from biomegen.pipeline.story.poi_rules import PoiPlan, event_key, poi_for_event
 from biomegen.world.entities import ChronicleEvent, Relation
 from biomegen.world.world import World
 
@@ -28,6 +30,8 @@ def world() -> World:
 
 
 def _event(kind: str, event_id: int = 3, year: int = 500, **fields: object) -> ChronicleEvent:
+    # The draws are keyed on an event's content, not its id, so the number also sets its location.
+    fields.setdefault("location", (event_id, 0))
     return ChronicleEvent(id=event_id, year=year, kind=kind, **fields)  # type: ignore[arg-type]
 
 
@@ -79,12 +83,31 @@ def test_the_same_event_gives_the_same_plans(world: World, cfg: Config) -> None:
     assert poi_for_event(world, cfg, SEED, event) == poi_for_event(world, cfg, SEED, event)
 
 
-def test_a_plan_depends_on_its_event_id_not_on_the_others(world: World, cfg: Config) -> None:
+def test_a_plan_depends_on_its_event_not_on_the_others(world: World, cfg: Config) -> None:
     # Asking about other events first changes nothing: every draw is keyed on the event.
     first = poi_for_event(world, cfg, SEED, _event("fall", 17))
     for n in range(5):
         poi_for_event(world, cfg, SEED, _event("fall", n))
     assert poi_for_event(world, cfg, SEED, _event("fall", 17)) == first
+
+
+def test_a_plan_does_not_depend_on_the_events_id(world: World, cfg: Config) -> None:
+    # An id is a ledger position that shifts when events are added; the same event under another id draws the same.
+    plans = [poi_for_event(world, cfg, SEED, _event("fall", n, location=(4, 4))) for n in (0, 9, 400)]
+    assert plans[0] == [replace(p, event_id=0) for p in plans[1]] == [replace(p, event_id=0) for p in plans[2]]
+
+
+def test_events_that_differ_in_content_have_different_keys() -> None:
+    keys = {
+        event_key(_event("battle", year=500, realm_ids=[0, 1], location=(3, 4))),
+        event_key(_event("battle", year=501, realm_ids=[0, 1], location=(3, 4))),
+        event_key(_event("battle", year=500, realm_ids=[1, 0], location=(3, 4))),
+        event_key(_event("battle", year=500, realm_ids=[0, 1], location=(4, 3))),
+        event_key(_event("war", year=500, realm_ids=[0, 1], location=(3, 4))),
+        event_key(_event("battle", year=500, realm_ids=[0], fallen_ids=[1], location=(3, 4))),
+        event_key(_event("battle", year=500, realm_ids=[0, 1], location=(3, 4), tags=("decisive",))),
+    }
+    assert len(keys) == 7
 
 
 def test_the_table_does_not_touch_the_world(world: World, cfg: Config) -> None:

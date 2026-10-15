@@ -7,6 +7,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.pipeline.story.poi_rules import event_key
 from biomegen.world.entities import POI
 from biomegen.world.world import World
 
@@ -362,3 +363,18 @@ def test_most_towers_and_dungeons_stand_in_bandit_country(cfg: Config) -> None:
         int((w.water_type == 0).sum()) for w in worlds
     )
     assert sum(1 for p in hideouts if p.realm_id < 0) / len(hideouts) > wild_share + 0.2
+
+
+def test_every_event_of_a_world_has_its_own_poi_key(world: World) -> None:
+    # Two events sharing a key would share their POI draws.
+    keys = [event_key(event) for event in world.chronicle]
+    assert len(set(keys)) == len(keys)
+
+
+def test_switching_off_events_that_make_no_poi_leaves_the_pois_alone(cfg: Config) -> None:
+    # Treaties and rivalries make no POI, but dropping them shifts every later event id; the POIs must not move.
+    quiet = load_config(None)
+    quiet.data["history"]["kinds"] = [k for k in quiet.data["history"]["kinds"] if k not in ("treaty", "rivalry")]
+    full, trimmed = pipeline.generate(cfg, 42), pipeline.generate(quiet, 42)
+    assert len(trimmed.chronicle) < len(full.chronicle)
+    assert [(p.kind, p.x, p.y) for p in trimmed.pois] == [(p.kind, p.x, p.y) for p in full.pois]

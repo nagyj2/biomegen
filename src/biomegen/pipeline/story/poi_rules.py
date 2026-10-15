@@ -12,8 +12,9 @@ front up to ``max_per_event``. A ``fated`` kind draws a fate per POI from ``tabl
 ``tables.poi_sites`` rows (a shrine) picks the site the previous ruler's temper calls for. Where a POI goes is the
 placement's business; spacing against other POIs depends on what was placed before, so it is checked there.
 
-Every draw is ``rng.derive(seed, "poi", "event", event.id, kind)`` drawn in a fixed order, so a plan depends on its
-event alone.
+Every draw is ``rng.derive(seed, "poi", "event", *event_key(event), kind)`` drawn in a fixed order, so a plan depends
+on its event alone. The key is the event's own content, not its id: an id is a position in the ledger and shifts
+whenever an event is added, swapped or a chronicle kind is switched off, which would re-roll every POI.
 """
 
 from __future__ import annotations
@@ -41,6 +42,28 @@ class PoiPlan:
     fates: tuple[str, ...] = ()
     site: str = ""
     realm_id: int = -1
+
+
+def event_key(event: ChronicleEvent) -> tuple[object, ...]:
+    """Return the labels that identify ``event`` by what it is (kind, year, who, where, tags), never by its id.
+
+    Every POI draw an event drives is keyed on this, so adding or removing other events leaves its POIs alone. The
+    separators keep the id lists apart. Two events with the same key would share their draws.
+    """
+    return (
+        event.kind,
+        event.year,
+        "realms",
+        *event.realm_ids,
+        "fallen",
+        *event.fallen_ids,
+        "pois",
+        *event.poi_ids,
+        "at",
+        *event.location,
+        "tags",
+        *event.tags,
+    )
 
 
 def front_km(world: World, event: ChronicleEvent) -> float:
@@ -100,7 +123,7 @@ def poi_for_event(
             continue
         if not set(row.get("tags", ())) <= set(event.tags):
             continue
-        stream = rng.derive(seed, "poi", "event", event.id, kind)
+        stream = rng.derive(seed, "poi", "event", *event_key(event), kind)
         chance_roll = stream.random()  # always drawn, so the stream stays aligned
         if chance_roll >= float(row.get("chance", 1.0)) or present - event.year < int(row.get("min_age_years", 0)):
             continue

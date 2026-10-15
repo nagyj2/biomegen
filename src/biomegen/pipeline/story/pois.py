@@ -38,7 +38,7 @@ from ...world.world import World
 from .. import pois
 from ..civilization.diplomacy import front_cells
 from ..civilization.settlements import habitability
-from .poi_rules import PoiPlan, poi_for_event
+from .poi_rules import PoiPlan, event_key, poi_for_event
 
 
 def _holdings(
@@ -56,7 +56,9 @@ def _holdings(
         world, row, pois.max_footprint(config, "ruin"), float(config.get("poi.min_footprint_land"))
     )
     mask &= (km >= low) & (km <= high) & (world.landmass_id == world.landmass_id[y, x])
-    noise = rng.derive_numpy(seed, "poi", "holdings", event.id).random(mask.shape) * float(config.get("poi.jitter"))
+    noise = rng.derive_numpy(seed, "poi", "holdings", *event_key(event)).random(mask.shape) * float(
+        config.get("poi.jitter")
+    )
     placed = [(p.x, p.y) for p in world.pois]
     return pois.pick_blue_noise(
         np.where(mask, score + noise, -np.inf), count, float(row["holding_spacing_km"]), placed, world
@@ -72,7 +74,7 @@ def _place_ruins(
     cells = [event.location]
     if plan.count > 1:
         cells += _holdings(world, config, seed, row, event, plan.count - 1, score)
-    stream = rng.derive(seed, "poi", "ruin", "floors", event.id)
+    stream = rng.derive(seed, "poi", "ruin", "floors", *event_key(event))
     for (x, y), fate in zip(cells, plan.fates, strict=False):
         held = bool(config.get(f"tables.poi_fates.{fate}.bandits"))
         pois.commit(
@@ -146,7 +148,7 @@ def _place_near_event(world: World, config: Config, seed: int, event: ChronicleE
     if cell is None:
         return
     row = config.get(f"tables.pois.{kind}")
-    stream = rng.derive(seed, "poi", kind, "floors", event.id)
+    stream = rng.derive(seed, "poi", kind, "floors", *event_key(event))
     pois.commit(
         world,
         seed,
@@ -184,12 +186,14 @@ def _place_watchtowers(world: World, config: Config, seed: int, event: Chronicle
     )
     mask &= _clear_of_pois(world, config, row)
     rise = world.elevation_m / max(1.0, float(world.elevation_m.max()))
-    noise = rng.derive_numpy(seed, "poi", "watchtower", event.id).random(mask.shape) * float(config.get("poi.jitter"))
+    noise = rng.derive_numpy(seed, "poi", "watchtower", *event_key(event)).random(mask.shape) * float(
+        config.get("poi.jitter")
+    )
     placed = [(p.x, p.y) for p in world.pois if p.kind == "watchtower"]
     picks = pois.pick_blue_noise(
         np.where(mask, 1.0 + rise + noise, -np.inf), plan.count, float(row["kind_spacing_km"]), placed, world
     )
-    stream = rng.derive(seed, "poi", "watchtower", "built", event.id)
+    stream = rng.derive(seed, "poi", "watchtower", "built", *event_key(event))
     for x, y in picks:
         age = stream.randint(0, min(int(row["lifespan"]), world.year - event.year))
         pois.commit(
@@ -229,11 +233,13 @@ def _place_shrine(
     mask &= (km >= float(site["min_km"])) & (km <= float(site["max_km"])) & _clear_of_pois(world, config, row)
     if site["land"] == "realm":
         mask &= world.realm_id == plan.realm_id
-    noise = rng.derive_numpy(seed, "poi", "shrine", event.id).random(mask.shape) * float(config.get("poi.jitter"))
+    noise = rng.derive_numpy(seed, "poi", "shrine", *event_key(event)).random(mask.shape) * float(
+        config.get("poi.jitter")
+    )
     score = 1.0 + float(site["near_freshwater"]) * fields.fresh + float(site["remoteness"]) * fields.remote
     picks = pois.pick_blue_noise(np.where(mask, score + noise, -np.inf), 1, 0.0, [], world)
     if picks:
-        stream = rng.derive(seed, "poi", "shrine", "floors", event.id)
+        stream = rng.derive(seed, "poi", "shrine", "floors", *event_key(event))
         pois.commit(
             world,
             seed,
