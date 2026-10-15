@@ -72,9 +72,15 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 - The chronicle is derived from the finished political state; there is no tick simulation. It runs after diplomacy and
   before naming, writes only entities (`world.chronicle`, `fallen_realms`, `founded`, `year`) and never a per-tile array, so
   the fingerprint is the same with or without it.
-- **Causality.** A realm's first event is its founding; a conquest, war, rivalry or treaty comes at least
-  `history.min_gap_years` after both realms exist (or at the present); a battle falls between its war's start and the
-  present; a fall is before the present. Wars join independent, bordering powers only (they are `Relation`s).
+- **Causality.** A realm's first event is its founding (a fallen realm's too); a conquest, war, rivalry or treaty comes
+  at least `history.min_gap_years` after both realms exist (or at the present); nothing happens to a fallen realm outside
+  its life; a fall is before the present. Wars join independent, bordering powers only (they are `Relation`s), and
+  a relation that follows an older war begins after its peace.
+- **Factions through time.** `conflicts.py` plans every battle and peace, then plays them in year order against
+  per-faction strengths (a win raises, a loss lowers); a dead (fallen) faction takes no further steps. Strengths are
+  tracked in the timeline, not stored on the entities.
+- **Founding dates.** Realm founding years are shifted so the oldest is in `history.first_founding_year`; an event
+  never comes before it.
 - **Ledger.** Events are collected, sorted by `(year, kind order in EVENT_KINDS, creation order)` and then numbered, so an
   event's `id` is its index. Anything added later (a simulation) has `year >= World.year`, so appending keeps the order.
 - **Token resolution.** The stage stores a raw template and the ids it needs; `naming/chronicle.py` fills the tokens last,

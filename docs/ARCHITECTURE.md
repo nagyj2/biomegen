@@ -54,7 +54,7 @@ src/biomegen/
     overlay.py          Mutable Overlay (runtime edits, composited at read time; a revision counts edits)
     derived.py          derived(): values worked out once per world (road pieces), checked by a source digest
     entities.py         POI / Realm / Relation / River / Lake / GeoFeature / ChronicleEvent / FallenRealm dataclasses
-    chronicle.py        chronicle_text() and chronicle_json(): the history as text or JSON
+    chronicle.py        chronicle_text() and chronicle_json(): the history as three-column text or JSON
   sites/                Lazy, deterministic, cached site plans: what you see zooming into a POI
     geometry.py         Extent, window and plan resolution of a POI's site, in world tiles
     patch.py            The terrain under a site (read through the render sampler) and the road gates
@@ -80,7 +80,9 @@ src/biomegen/
       realms.py         Stage 9b — realm seeds, strength-weighted claiming, tribes, realm_id
       diplomacy.py      Stage 9c — vassal tree, colours, relations, war fronts
     story/
-      history.py        Stage 9d — the chronicle: dates realms and settlements, derives the events and fallen realms
+      history.py        Stage 9d — the chronicle: dates realms and settlements, places fallen realms, founding/settling/conquest
+      conflicts.py      Wars, peace, pacts, battles and falls played through time with faction strengths
+      ledger.py         Ledger: collects the events, then sorts and numbers them
       places.py         nearest_settlement(): the locality rule for a place named in an event
     naming.py           Stage 10 — names for all entities, realms and relation reasons
   naming/
@@ -100,6 +102,7 @@ src/biomegen/
     views.py            View: layer lists per scale family + tint (a ramp or the realm tint), from render.views
     colors.py           Colour maths and per-biome / relief / detail / interior lookup arrays from the tables
     scatter.py          Stable per-cell decoration keyed on tile and sub-cell
+    chronicle.py        chronicle_document(): the history as a coloured year / kind / text document
     static.py           render_static (framed map + legend) and render_detail (zoom/local grid)
     colortest.py        --color-test swatches
     layers/             terrain relief tint water clutter borders roads sites markers names(labels) compass
@@ -352,26 +355,35 @@ Partitions solid land (any cell whose biome is not water; a river keeps its land
 5. **Fronts**: a war marks the border cells of its two powers in `World.front`, picks an attacker by coin toss and
    claims the defender's non-capital settlement nearest `claim_samples` border cells.
 
-### Stage 9d — History (`pipeline/story/history.py`)
+### Stage 9d — History (`pipeline/story/history.py`, `conflicts.py`)
 
-A chronicle derived from the finished political state; there is no tick simulation. Dates come from static quantities and
-every draw is a `history` sub-stream keyed on the entity.
+A chronicle derived from the finished political state; there is no tick simulation. Dates come from static quantities
+and every draw is a `history` sub-stream keyed on the entity.
 
-1. **Founding**: each realm is founded `age` years before the present (`history.span_years`), the age drawn from its kind's
-   `history.age_range` and pulled older by a larger area (`age_area_weight`). A seated realm's founding is its seat's too
-   (tag `capital` for a capital). Every civilized POI gets `founded`: a seat with its realm, others later, wild ones from
-   the tribal range.
-2. **Settling** (`history.settle_kinds`, cities), **conquest** (one per vassal tie, after both realms plus `min_gap_years`).
-3. **Relations**: each is one `war` (tag `ongoing`, attacker first, claimed town in `poi_ids`), `rivalry` or `treaty` (tag
-   `alliance` / `trade`), begun earlier for a longer shared border (`war_years` / `other_years`).
-4. **Battles**: `battles_per_100km_front` per 100 km of a war's front, each on a cell from `diplomacy.front_cells`;
-   `realm_ids` is `[winner, loser]`.
-5. **Falls**: `FallenRealm`s on wild, habitable land (`fall_min_habitability`) spaced `fall_spacing_km` from each other and
-   from settlements, each with a `fall` event. Without the `fall` kind there are none.
+1. **Founding**: each realm is founded `age` years before the present (`history.span_years`), the age drawn from its
+   kind's `history.age_range` and pulled older by a larger area (`age_area_weight`); all foundings are then shifted so the
+   oldest is in `history.first_founding_year`. A seated realm's founding is its seat's too (tag `capital`). Every civilized
+   POI gets `founded`. Each fallen realm has a founding event too.
+2. **Settling** (`history.settle_kinds`), **conquest** (one per vassal tie, after both realms plus `min_gap_years`).
+3. **Fallen realms**: `FallenRealm`s on wild, habitable land (`fall_min_habitability`) spaced `fall_spacing_km` from each
+   other and from settlements, with a founding year and a natural fall year.
+4. **Conflicts** (`conflicts.py`): every faction has a strength (a realm's area over the mean; a draw for a fallen realm)
+   that a won battle raises and a lost one lowers. The timeline is planned, then played in year order:
+   - each relation of two powers sharing a border may have an older, ended war (`past_war_chance`, `past_war_years`) with
+     battles and a `peace`; the relation itself (an ongoing `war`, `rivalry` or `treaty`) begins at any later year, so wars
+     and pacts are not confined to one period;
+   - a fallen realm fights up to `fallen_wars` wars against the nearest living realms that exist at the time, one decisive
+     battle each at its ruins; once a lost battle leaves it under `fall_strength` it is conquered a few years on (a `fall`
+     tagged `conquered` naming the victor), otherwise it falls at its natural year;
+   - battles along a front (`battles_per_100km_front`, on `diplomacy.front_cells`) are won with a chance proportional to
+     strength; `realm_ids` of a battle or peace is `[winner, loser]`.
 
 An event holds a raw template from `tables.chronicle` (`templates_near` only when `places.nearest_settlement` finds a
-settlement on the same landmass within `history.near_km`); naming renders `text`. The ledger sorts events by `(year, kind
-order, creation order)` and numbers them. `--chronicle [--chronicle-format json]` and `scripts/chronicle.sh` print them.
+settlement on the same landmass within `history.near_km`); naming renders `text` and the `refs` (the span, kind and id of
+every name in it). The ledger sorts events by `(year, kind order, creation order)` and numbers them.
+`--chronicle [--chronicle-format json]` prints them as three columns (year, event type, text), coloured by `--color` or
+the terminal (`render/chronicle.py`: realms in their map colour, `history.colors` for the rest); `scripts/chronicle.sh`
+wraps it.
 
 ### Stage 10 — Naming (`pipeline/naming.py`, `naming/`)
 

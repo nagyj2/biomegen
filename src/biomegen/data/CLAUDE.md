@@ -53,8 +53,9 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 
 ## Chronicle
 
-- `chronicle.toml`: `chronicle` has one row per kind of event text (`founding`, `settling`, `conquest`, `war`, `rivalry`,
-  `treaty_alliance`, `treaty_trade`, `battle`, `fall`). `templates` are sentences that name no nearby place;
+- `chronicle.toml`: `chronicle` has one row per kind of event text (`founding`, `founding_fallen`, `settling`, `conquest`,
+  `war`, `war_ended`, `war_fallen`, `rivalry`, `treaty_alliance`, `treaty_trade`, `battle`, `peace`, `fall`,
+  `fall_conquered`). `templates` are sentences that name no nearby place;
   `templates_near` (optional) are sentences that name one with `{near}` and must contain it. The tokens a row may use are
   listed in the file's header and checked (`{year}` is allowed everywhere); `{near}` is allowed in `templates_near` only.
 - The history stage picks a template per event (`templates_near` only when a settlement qualifies, see
