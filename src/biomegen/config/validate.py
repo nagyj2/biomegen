@@ -137,7 +137,7 @@ def _validate_history(history: Dict[str, Any], errors: List[str]) -> None:
     _clamp(history, "age_area_weight", 0.0, 1.0, errors, "history")
     colors = history.get("colors")
     if colors is not None:
-        needed = {"year", "poi", "fallen", "ruler", *EVENT_KINDS}
+        needed = {"year", "settlement", "place", *EVENT_KINDS}
         if not isinstance(colors, dict) or not needed <= set(colors):
             errors.append(f"history.colors needs a colour for each of: {', '.join(sorted(needed))}")
         else:

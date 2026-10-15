@@ -9,9 +9,9 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.naming import chronicle
+from biomegen.naming import chronicle, polity
 from biomegen.util.units import grid_scale
-from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, Realm, Relation
+from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Realm, Relation
 from biomegen.world.tile import Biome
 from biomegen.world.world import World
 
@@ -252,6 +252,35 @@ def test_the_capitalised_first_letter_does_not_move_a_span(cfg: Config) -> None:
 def test_every_span_in_a_generated_world_covers_a_name(world: World) -> None:
     names = {r.name for r in world.realms} | {r.short for r in world.realms} | {r.ruler for r in world.realms}
     names |= {p.name for p in world.pois} | {f.name for f in world.fallen_realms}
+    names |= {f.name.removeprefix("The ") for f in world.features}  # a river, range or sea named in a reason
     spans = [(e.text[a:b], kind) for e in world.chronicle for a, b, kind, _ in e.refs]
     lowered = {name.lower() for name in names}  # a ruler's title may be capitalised to open the sentence
     assert spans and all(text.lower() in lowered for text, _ in spans)
+
+
+def test_a_place_named_in_a_reason_is_marked_in_the_event_text(cfg: Config) -> None:
+    # The reason's own river span moves to where the reason lands in the event's text.
+    world = _small_world()
+    world.features = [GeoFeature(id=0, kind="river", anchor=(0, 0), name="The Wend")]
+    world.relations[0].why, world.relations[0].places = "control of the {river}", {"river": 0}
+    polity.describe_relations(world, cfg, 1)
+    event = ChronicleEvent(0, 100, "battle", [0, 1], template="{winner_short} beats {loser_short} over {reason}.")
+    _render(world, event, cfg)
+    spans = [(event.text[a:b], kind) for a, b, kind, _ in event.refs]
+    assert ("Wend", "feature") in spans
+
+
+def test_a_town_in_a_reason_is_marked_in_the_event_text(cfg: Config) -> None:
+    world = _small_world()
+    world.relations[0].why = "the border town of {town}"
+    polity.describe_relations(world, cfg, 1)
+    event = ChronicleEvent(0, 100, "battle", [0, 1], template="{winner_short} beats {loser_short} over {reason}.")
+    _render(world, event, cfg)
+    assert ("Wendham", "poi") in [(event.text[a:b], kind) for a, b, kind, _ in event.refs]
+
+
+def test_a_town_named_in_a_reason_is_marked_as_a_settlement(world: World) -> None:
+    for relation in world.relations:
+        for start, end, kind, ident in relation.why_refs:
+            if kind == "poi":
+                assert relation.why[start:end] == world.pois[ident].name

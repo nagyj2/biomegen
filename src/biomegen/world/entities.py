@@ -27,8 +27,8 @@ EVENT_KINDS: Tuple[str, ...] = (
     "fall",
 )
 NO_LOCATION: Tuple[int, int] = (-1, -1)  # a chronicle event not tied to a cell
-REF_KINDS: Tuple[str, ...] = ("realm", "poi", "fallen", "ruler")  # what a name in an event's text can refer to
-REF_REALM, REF_POI, REF_FALLEN, REF_RULER = REF_KINDS
+REF_KINDS: Tuple[str, ...] = ("realm", "poi", "fallen", "ruler", "feature")  # what a name in a text can refer to
+REF_REALM, REF_POI, REF_FALLEN, REF_RULER, REF_FEATURE = REF_KINDS
 
 
 @dataclass
@@ -109,6 +109,7 @@ class Relation:
     attacker: int = -1
     claim_poi: int = -1
     places: dict = field(default_factory=dict)  # reason token ({river}, {range}, {sea}) -> id in World.features
+    why_refs: List[Tuple[int, int, str, int]] = field(default_factory=list)  # (start, end, REF_KINDS entry, id) in why
 
 
 @dataclass
@@ -173,6 +174,7 @@ class FallenRealm:
     fell: int
     culture: str = ""
     name: str = ""
+    color: Tuple[int, int, int] = (0, 0, 0)  # its colour in the chronicle, distinct from every realm's (set by history)
 
 
 @dataclass

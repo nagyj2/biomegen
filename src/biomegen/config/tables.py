@@ -170,8 +170,6 @@ _RELATION_WEIGHT_ROW = {
 _REALM_COLOR_ROW = {
     "saturation": "unit",
     "value": "unit",
-    "hue_jitter": "unit",
-    "hue_offset": "unit",
 }
 _REASON_ROW = {"templates": "text_list"}
 _REASON_TOKEN_ROW = {"fallback": "text"}
@@ -472,8 +470,8 @@ def _validate_polity(tables: Dict[str, Any], errors: List[str]) -> None:
             if isinstance(row, dict) and row and all(_is_number(w) and w == 0 for w in row.values()):
                 errors.append(f"tables.relation_weights.{name}: needs at least one weight above 0")
     colors = tables.get("realm_colors", {})
-    if isinstance(colors, dict) and set(colors) != {"major", "vassal", "city_state", "tribal"}:
-        errors.append("tables.realm_colors must have the rows major, vassal, city_state and tribal")
+    if isinstance(colors, dict) and set(colors) != {"major", "vassal", "city_state", "tribal", "fallen"}:
+        errors.append("tables.realm_colors must have the rows major, vassal, city_state, tribal and fallen")
     reasons = tables.get("reasons", {})
     if isinstance(reasons, dict):
         if set(reasons) != set(RELATION_KINDS):

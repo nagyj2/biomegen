@@ -341,8 +341,10 @@ Partitions solid land (any cell whose biome is not water; a river keeps its land
 2. **Vassalage**: majors, smallest first, with no vassals of their own may swear fealty (`vassal_chance` of their kind) to
    the independent neighbouring major sharing the longest border that is at least `vassal_area_ratio` times their
    area; city-states and tribes may swear to any neighbouring major. Only leaves swear, so the tree has no cycles.
-3. **Colours**: golden-ratio hues for majors, a paler shade (`tables.realm_colors.vassal`) of the top's hue for vassals,
-   vivid city-states, muted tribes.
+3. **Colours**: every realm gets its own colour (`faction_color`, `util/palette.py`): of `politics.faction_hue_steps` hues at its
+   role's saturation and value (`tables.realm_colors`: major, vassal, city_state, tribal, fallen) the one farthest in CIELAB from
+   every colour already taken (and from the chronicle's neutral colours), bright enough to read (`faction_min_luma`).
+   Fallen realms take theirs from the history stage the same way. The map and the chronicle show the same colour.
 4. **Relations** between independent powers sharing a border (borders summed over their vassal trees): war, rivalry,
    alliance, trade or none by `tables.relation_weights`; at least one war when any border exists; one sea pact between
    far-apart majors. `Relation.why` is a raw template from `tables.reasons`, one whose river, range or sea lies within
@@ -381,8 +383,11 @@ An event holds a raw template from `tables.chronicle` (`templates_near` only whe
 settlement on the same landmass within `history.near_km`); naming renders `text` and the `refs` (the span, kind and id of
 every name in it). The ledger sorts events by `(year, kind order, creation order)` and numbers them.
 `--chronicle [--chronicle-format json]` prints them as three columns (year, event type, text), coloured by `--color` or
-the terminal (`render/chronicle.py`: realms in their map colour, `history.colors` for the rest); `scripts/chronicle.sh`
-wraps it.
+the terminal (`render/chronicle.py`): a realm, its ruler and its settlements are in the realm's map colour (`Realm.color`),
+a fallen realm in its own (`FallenRealm.color`); a settlement is in the neutral `history.colors.settlement` the first time
+it is named (and always when wild), a river, range, sea or other named land in the neutral `place`; the kinds and the year
+use `history.colors` too. The places a reason names are marked too (`Relation.why_refs`, moved into the event's `refs`).
+`scripts/chronicle.sh` wraps it.
 
 ### Stage 9e — POIs (`pipeline/story/pois.py`, `poi_rules.py`, `pipeline/pois.py`)
 

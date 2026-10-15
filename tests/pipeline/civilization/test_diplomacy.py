@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import colorsys
-
 import numpy as np
 import pytest
 
@@ -65,10 +63,6 @@ def _town(world: World, kind: str, x: int, y: int) -> int:
 def _run(world: World, config: Config) -> World:
     diplomacy.run(world, config, 1)
     return world
-
-
-def _saturation(rgb: tuple[int, int, int]) -> float:
-    return colorsys.rgb_to_hsv(*(c / 255 for c in rgb))[1]
 
 
 # --- borders ----------------------------------------------------------------------------------------------------------
@@ -141,16 +135,36 @@ def test_the_vassal_tree_has_no_cycles(generated: World) -> None:
 # --- colours ----------------------------------------------------------------------------------------------------------
 
 
-def test_a_vassal_is_paler_than_its_overlord(generated: World) -> None:
-    vassals = [r for r in generated.realms if r.liege >= 0]
-    assert vassals and all(
-        _saturation(r.color) < _saturation(generated.realms[generated.top_realm(r.id)].color) for r in vassals
-    )
-
-
-def test_independent_majors_have_distinct_colours(generated: World) -> None:
-    colours = [r.color for r in generated.realms if r.kind == "major" and r.liege < 0]
+def test_every_realm_has_its_own_colour(generated: World) -> None:
+    # Vassals, city-states and tribes included: no two realms share a colour.
+    colours = [r.color for r in generated.realms]
     assert len(set(colours)) == len(colours)
+
+
+def test_no_two_realm_colours_are_close(generated: World) -> None:
+    # Each is picked as far from the others as the palette allows, so the nearest pair is still clearly apart.
+    from biomegen.util.palette import distance
+
+    colours = [r.color for r in generated.realms]
+    nearest = min(distance(a, b) for i, a in enumerate(colours) for b in colours[i + 1 :])
+    assert nearest > 12.0
+
+
+def test_a_realm_colour_is_bright_enough_to_read(generated: World, cfg: Config) -> None:
+    from biomegen.util.palette import luma
+
+    floor = cfg.get("politics.faction_min_luma")
+    assert all(luma(r.color) >= floor for r in generated.realms)
+
+
+def test_a_vassal_colour_is_paler_than_a_major(generated: World, cfg: Config) -> None:
+    # The role still sets saturation: vassals are drawn from the pale row, majors from the vivid one.
+    assert cfg.get("tables.realm_colors.vassal.saturation") < cfg.get("tables.realm_colors.major.saturation")
+
+
+def test_colours_are_deterministic(cfg: Config) -> None:
+    first, second = pipeline.generate(cfg, 42), pipeline.generate(cfg, 42)
+    assert [r.color for r in first.realms] == [r.color for r in second.realms]
 
 
 # --- relations --------------------------------------------------------------------------------------------------------

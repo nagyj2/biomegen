@@ -66,6 +66,8 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 - **Relations only between independent powers.** Borders are summed over each vassal tree and a relation joins two tops
   (`a < b`, at most one per pair); at least one war when any border exists. `front` marks the border cells of a war's two
   powers only. A relation's `why` is a raw template from `tables.reasons`; naming fills its tokens last.
+- **Colours.** Every realm has its own colour (`diplomacy.faction_color`: farthest in CIELAB from the colours taken, at its role's
+  saturation and value); fallen realms get theirs in the history stage. The chronicle shows these same colours.
 - Every draw is a `diplomacy` or `realms` sub-stream drawn in a fixed order (always draw, then test, so the stream stays
   aligned); `World.realms[i].id == i`.
 

@@ -64,7 +64,8 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 - `polity.toml`: `realm_kinds` has one row per kind (`major`, `city_state`, `tribal`: strength and rural population
   spans, vassal chance). `realm_forms` rows are the ways a realm is named and ruled; a row names its `kind`, a `habitat`
   (`any`, or `dry`, `cold`, `wood`, `high` to favour it, `open` as the default) and a `weight`, and each kind needs an
-  `any` or `open` row. `relation_weights` (`major_pair`, `other_pair`) and `realm_colors` (HSV per role) are fixed row sets.
+  `any` or `open` row. `relation_weights` (`major_pair`, `other_pair`) and `realm_colors` (saturation and value per role: major, vassal, city_state, tribal, fallen) are fixed row sets; every faction
+  takes the colour farthest from the ones taken (`util/palette.py`), so no two share one.
 - `reasons.toml`: `reasons` has one row per relation kind with `templates`; the tokens a template may use are checked
   (`{town}`, `{river}`, `{range}`, `{sea}` for war and rivalry; `{goods_a}`, `{goods_b}`, `{short_a}`, `{short_b}` for trade).
   `reason_tokens` gives the words used when the world lacks the place.

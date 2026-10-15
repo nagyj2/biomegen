@@ -22,10 +22,9 @@
 # relation_weights, one row per kind of neighbour pair (major_pair: both majors; other_pair: any other):
 #   war, rivalry, alliance, trade, none   relative chance of each outcome for a pair sharing a border
 #
-# realm_colors, one row per colour role (major, vassal, city_state, tribal), in HSV:
+# realm_colors, one row per colour role (major, vassal, city_state, tribal, fallen), in HSV: every faction takes the colour
+# farthest from the ones taken (util/palette.py), among the hues at its role's saturation and value:
 #   saturation, value   0..1
-#   hue_jitter          vassals vary their liege's hue by up to this much (0..1 of the hue circle)
-#   hue_offset          hue shift of the role against the golden-ratio sequence (0..1)
 
 [realm_kinds.major]
 label = "realm"
@@ -244,23 +243,19 @@ none = 0.25
 [realm_colors.major]
 saturation = 0.7
 value = 0.95
-hue_jitter = 0.0
-hue_offset = 0.0
 
 [realm_colors.vassal]
 saturation = 0.35
 value = 0.95
-hue_jitter = 0.04
-hue_offset = 0.0
 
 [realm_colors.city_state]
 saturation = 0.85
 value = 1.0
-hue_jitter = 0.0
-hue_offset = 0.31
 
 [realm_colors.tribal]
 saturation = 0.3
 value = 0.7
-hue_jitter = 0.0
-hue_offset = 0.31
+
+[realm_colors.fallen]
+saturation = 0.5
+value = 0.9

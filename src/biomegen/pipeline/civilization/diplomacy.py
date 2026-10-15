@@ -5,8 +5,8 @@
    ``vassal_chance``, to the neighbouring independent major sharing the longest border if that major is at least
    ``politics.vassal_area_ratio`` times its area. A city-state or tribe may swear fealty to any neighbouring major.
    Only leaves swear to a larger realm, so the tree of lieges has no cycles.
-3. **Colours.** Majors take golden-ratio hues; a vassal takes a paler shade of its overlord's hue; city-states are
-   vivid and tribes muted (``tables.realm_colors``).
+3. **Colours.** Every realm takes its own colour, the one farthest (CIELAB) from every colour taken so far, at the
+   saturation and value of its role (``tables.realm_colors``): :func:`faction_color`. Map and chronicle share it.
 4. **Relations.** Between the independent powers (the tops of the vassal trees) that share a border: war, rivalry,
    alliance, trade or nothing, by ``tables.relation_weights``; at least one war when any border exists. Two far-apart
    independent majors may add one pact across the sea. A relation's ``why`` is a raw reason template; the naming stage
@@ -20,7 +20,6 @@ the result does not depend on dict or set order.
 
 from __future__ import annotations
 
-import colorsys
 import random
 import string
 from dataclasses import dataclass
@@ -28,7 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ...config.model import Config
-from ...util import rng
+from ...util import palette, rng
 from ...world.entities import Realm, Relation
 from ...world.world import World
 from ..story.places import nearest_feature
@@ -128,30 +127,38 @@ def _vassalage(world: World, config: Config, seed: int, nbrs: dict[int, dict[int
         realm.vassals.sort()
 
 
-def _colour(role: dict[str, float], hue: float) -> tuple[int, int, int]:
-    red, green, blue = colorsys.hsv_to_rgb(hue % 1.0, float(role["saturation"]), float(role["value"]))
-    return int(red * 255), int(green * 255), int(blue * 255)
+def faction_color(config: Config, role: str, taken: list[tuple[int, int, int]], start: float) -> tuple[int, int, int]:
+    """Return the colour of a new faction of ``role``: the one farthest in CIELAB from every colour in ``taken``.
+
+    The candidates are ``politics.faction_hue_steps`` hues round the circle (from ``start``) at the saturation and
+    value of the role in ``tables.realm_colors``, bright enough to read (``politics.faction_min_luma``). The result is
+    appended to ``taken``. Pure, so a later simulation can draw its new factions' colours the same way.
+    """
+    row = config.get(f"tables.realm_colors.{role}")
+    candidates = palette.hue_candidates(
+        float(row["saturation"]),
+        float(row["value"]),
+        int(config.get("politics.faction_hue_steps")),
+        start,
+        float(config.get("politics.faction_min_luma")),
+    )
+    color = palette.farthest(candidates, taken)
+    taken.append(color)
+    return color
+
+
+def neutral_colors(config: Config) -> list[tuple[int, int, int]]:
+    """The colours no faction may resemble: the neutral text colours of the chronicle and the map's wild grey."""
+    neutrals = [config.get("history.colors.settlement"), config.get("history.colors.place")]
+    return [(int(c[0]), int(c[1]), int(c[2])) for c in neutrals] + [(128, 128, 128)]
 
 
 def _colours(world: World, config: Config, seed: int) -> None:
-    """Give every realm its colour: majors by golden-ratio hue, vassals a paler shade of their top's hue."""
-    realms = world.realms
-    stream = rng.derive(seed, "diplomacy", "colours")
-    step = float(config.get("politics.hue_step"))
-    rows = config.get("tables.realm_colors")
-    golden = stream.random()
-    hue_of = {r.id: golden + n * step for n, r in enumerate(r for r in realms if r.kind == "major")}
-    for n, realm in enumerate(realms):
-        if realm.liege >= 0:
-            role = rows["vassal"]
-            jitter = float(role["hue_jitter"])
-            hue = hue_of[world.top_realm(realm.id)] + stream.uniform(-jitter, jitter)
-        elif realm.kind == "major":
-            role, hue = rows["major"], hue_of[realm.id]
-        else:
-            role = rows[realm.kind]
-            hue = golden + float(role["hue_offset"]) + n * step
-        realm.color = _colour(role, hue)
+    """Give every realm its own colour (majors vivid, vassals paler, city-states bolder, tribes muted by role)."""
+    start = rng.derive(seed, "diplomacy", "colours").random()
+    taken = neutral_colors(config)
+    for realm in world.realms:
+        realm.color = faction_color(config, "vassal" if realm.liege >= 0 else realm.kind, taken, start)
 
 
 def _draw_kind(stream: random.Random, weights: dict[str, float]) -> str | None:

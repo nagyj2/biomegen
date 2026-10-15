@@ -30,12 +30,13 @@ VALUES: Dict[str, Any] = {
         "wood": ["forest", "jungle", "swamp", "taiga"],
     },
     # Diplomacy. A major swears fealty only to a major at least ``vassal_area_ratio`` times its area. A war's
-    # claimed town is the enemy settlement nearest to ``claim_samples`` border cells. ``hue_step`` spaces realm
-    # colours round the hue circle (the golden ratio). Two far-apart independent majors may still hold a pact
-    # across the sea, of a kind from ``sea_pact_kinds``.
+    # claimed town is the enemy settlement nearest to ``claim_samples`` border cells. Realm colours are picked one
+    # by one, each the farthest (CIELAB) of ``faction_hue_steps`` hues from the colours taken. Two far-apart
+    # independent majors may still hold a pact across the sea, of a kind from ``sea_pact_kinds``.
     "vassal_area_ratio": 2.0,
     "claim_samples": 40,
-    "hue_step": 0.618034,
+    "faction_hue_steps": 72,  # hues tried for each new faction colour
+    "faction_min_luma": 130.0,  # a faction colour is at least this bright (0..255), so it reads as text on dark
     "sea_pact_kinds": ["alliance", "trade"],
     # Trade goods when a realm's biome (or relief) names none: the first for the first realm, the second for the
     # other, the third when the two would otherwise trade the same good.

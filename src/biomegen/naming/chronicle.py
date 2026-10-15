@@ -8,13 +8,12 @@ resolves. Every draw is keyed on the entity, so a name never depends on processi
 
 from __future__ import annotations
 
-import string
-
 from ..config.model import Config
 from ..world.entities import REF_FALLEN, REF_POI, REF_REALM, REF_RULER, ChronicleEvent, Realm, Relation
 from ..world.tile import Relief
 from ..world.world import World
 from . import cultures, polity
+from .render import Where, render_template
 
 
 def name_fallen_realms(world: World, config: Config, seed: int) -> None:
@@ -36,9 +35,6 @@ def name_fallen_realms(world: World, config: Config, seed: int) -> None:
         )
         polity.name_realm(seed, stand_in, "", config)
         fallen.name = stand_in.name
-
-
-Where = dict[str, tuple[str, int]]  # token -> (what it names, its id); what is "realm", "poi", "fallen" or "ruler"
 
 
 def _tokens(
@@ -107,26 +103,6 @@ def _tokens(
     return tokens, where
 
 
-def render_template(
-    template: str, tokens: dict[str, object], where: Where
-) -> tuple[str, list[tuple[int, int, str, int]]]:
-    """Fill ``template`` and return the text with the ``(start, end, what, id)`` span of every name in it."""
-    out: list[str] = []
-    refs: list[tuple[int, int, str, int]] = []
-    length = 0
-    for literal, field, _, _ in string.Formatter().parse(template):
-        out.append(literal)
-        length += len(literal)
-        if field is None:
-            continue
-        value = str(tokens[field])
-        if value and field in where:
-            refs.append((length, length + len(value), *where[field]))
-        out.append(value)
-        length += len(value)
-    return "".join(out), refs
-
-
 def describe_events(world: World, config: Config, seed: int) -> None:
     """Render ``text`` and ``refs`` of every event from its raw template; fallen realms are named first.
 
@@ -135,5 +111,8 @@ def describe_events(world: World, config: Config, seed: int) -> None:
     name_fallen_realms(world, config, seed)
     relations = {(r.a, r.b): r for r in world.relations}
     for event in world.chronicle:
-        text, event.refs = render_template(event.template, *_tokens(world, config, event, relations))
+        tokens, where = _tokens(world, config, event, relations)
+        pair = relations.get((min(event.realm_ids), max(event.realm_ids))) if len(event.realm_ids) == 2 else None
+        inner = {"reason": pair.why_refs} if pair else None
+        text, event.refs = render_template(event.template, tokens, where, inner)
         event.text = text[:1].upper() + text[1:]

@@ -31,6 +31,7 @@ from ...util import rng
 from ...world.entities import NO_LOCATION, FallenRealm
 from ...world.tile import WaterType
 from ...world.world import World
+from ..civilization.diplomacy import faction_color, neutral_colors
 from ..civilization.settlements import habitability
 from ..pois import pick_blue_noise
 from . import conflicts, rulers
@@ -99,6 +100,10 @@ def _place_fallen_realms(world: World, config: Config, seed: int, span: int, ena
         life = min(stream.randint(life_lo, life_hi), last_fall - first_year)
         founded = stream.randint(first_year, last_fall - life)
         world.fallen_realms.append(FallenRealm(id=number, location=(x, y), founded=founded, fell=founded + life))
+    taken = neutral_colors(config) + [realm.color for realm in world.realms]
+    start = rng.derive(seed, "history", "colours").random()
+    for fallen in world.fallen_realms:  # each fallen realm has a colour no realm or earlier fallen realm shares
+        fallen.color = faction_color(config, "fallen", taken, start)
 
 
 def _realm_events(world: World, config: Config, seed: int, span: int, ledger: Ledger) -> None:

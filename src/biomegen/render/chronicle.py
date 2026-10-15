@@ -1,28 +1,19 @@
 """The chronicle as a coloured document: year, event type and text in three columns.
 
-The event type takes its colour from ``history.colors``; a name in the text is coloured by what it names: a realm in its
-own colour from the political map (lifted if too dark to read), a settlement, fallen realm or ruler in the fixed colour
-of its kind. The plain text of the document equals :func:`biomegen.world.chronicle.chronicle_text`.
+The event type takes its colour from ``history.colors``. A name in the text is coloured by what it names, with the same
+colours as the political map: a realm, its ruler and its settlements in the realm's own colour, a fallen realm in its
+own. A settlement is in the neutral ``settlement`` colour the first time the chronicle names it (and always when no
+realm holds it); a mountain, sea, river or other named land is in the neutral ``place`` colour. The plain text of the
+document equals :func:`biomegen.world.chronicle.chronicle_text`.
 """
 
 from __future__ import annotations
 
 from ..config.model import Config
 from ..world.chronicle import KIND_WIDTH, chronicle_title
+from ..world.entities import REF_FALLEN, REF_FEATURE, REF_POI, REF_REALM, REF_RULER
 from ..world.world import World
 from .grid import RGB, Document, Span
-
-_MIN_LUMA = 130.0  # a realm colour darker than this is mixed with white until it reaches it
-
-
-def legible(color: tuple[int, int, int]) -> RGB:
-    """Return ``color``, or the nearest lighter mix of it with white that reads on a dark background."""
-    red, green, blue = color
-    luma = 0.299 * red + 0.587 * green + 0.114 * blue
-    if luma >= _MIN_LUMA:
-        return (red, green, blue)
-    mix = (_MIN_LUMA - luma) / (255.0 - luma)
-    return (round(red + (255 - red) * mix), round(green + (255 - green) * mix), round(blue + (255 - blue) * mix))
 
 
 def _palette(config: Config) -> dict[str, RGB]:
@@ -33,10 +24,20 @@ def _palette(config: Config) -> dict[str, RGB]:
 def chronicle_document(world: World, config: Config) -> Document:
     """Return the title and every event as rows of styled spans (year, kind, then the text with its names coloured)."""
     palette = _palette(config)
-    realm_colors = {realm.id: legible(realm.color) for realm in world.realms}
+    named: set[int] = set()  # settlements the chronicle has already named
 
     def name_color(kind: str, ref: int) -> RGB:
-        return realm_colors[ref] if kind == "realm" else palette[kind]
+        if kind in (REF_REALM, REF_RULER):
+            return world.realms[ref].color
+        if kind == REF_FALLEN:
+            return world.fallen_realms[ref].color
+        if kind == REF_FEATURE:
+            return palette["place"]
+        assert kind == REF_POI
+        first = ref not in named
+        named.add(ref)
+        realm = world.pois[ref].realm_id
+        return palette["settlement"] if first or realm < 0 else world.realms[realm].color
 
     document: Document = [[Span(chronicle_title(world), bold=True)], []]
     for event in world.chronicle:

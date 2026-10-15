@@ -54,8 +54,10 @@ VALUES: Dict[str, Any] = {
     "fallen_neighbours": 3,
     "fall_strength": 0.3,
     "fall_delay_years": [2, 25],
-    # Colours of the coloured text output: the year column, each event kind, and the names a text holds that are not a
-    # realm (a realm is shown in its own colour from the political map). [r, g, b] or "#rrggbb".
+    # Colours of the coloured text output: the year column, each event kind, and two neutral colours for names that
+    # belong to no faction: ``settlement`` (a settlement's first mention, and any wild one) and ``place`` (mountains,
+    # seas, rivers and other named land). A faction's name, ruler and settlements are in its own map colour.
+    # [r, g, b] or "#rrggbb".
     "colors": {
         "year": [150, 150, 160],
         "founding": [120, 210, 130],
@@ -68,9 +70,8 @@ VALUES: Dict[str, Any] = {
         "battle": [240, 190, 80],
         "peace": [140, 220, 220],
         "fall": [170, 140, 210],
-        "poi": [245, 235, 190],
-        "fallen": [170, 140, 210],
-        "ruler": [215, 195, 255],
+        "settlement": [232, 222, 190],
+        "place": [150, 185, 205],
     },
     # A place named in an event ({near}) must be a settlement on the same landmass within this distance.
     "near_km": 250.0,

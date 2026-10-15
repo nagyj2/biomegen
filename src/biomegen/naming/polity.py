@@ -14,10 +14,11 @@ from typing import Optional
 
 from ..config.model import Config
 from ..util import rng
-from ..world.entities import Realm, Relation
+from ..world.entities import REF_FEATURE, REF_POI, Realm, Relation
 from ..world.tile import BIOME_NAME
 from ..world.world import World
 from . import forge
+from .render import Where, render_template
 
 _THE = "The "
 
@@ -92,15 +93,23 @@ def _place(world: World, relation: Relation, token: str, config: Config) -> str:
     return str(config.get(f"tables.reason_tokens.{token}.fallback"))
 
 
-def _town(world: World, config: Config, relation: Relation, stream: random.Random, tops: dict[int, int]) -> str:
-    """The claimed town of a war, else a random settlement of either power, else any, else the fallback words."""
+def _town(
+    world: World, config: Config, relation: Relation, stream: random.Random, tops: dict[int, int]
+) -> tuple[str, int]:
+    """The claimed town of a war, else a random settlement of either power, else any, as ``(name, index)``.
+
+    With no settlement at all it is the fallback words and index -1.
+    """
     if relation.claim_poi >= 0:
-        return world.pois[relation.claim_poi].name
+        return world.pois[relation.claim_poi].name, relation.claim_poi
     kinds = set(config.get("politics.reason_town_kinds"))
-    towns = [p for p in world.pois if p.civilized and p.kind in kinds and p.name]
-    ours = [p for p in towns if tops.get(p.realm_id) in (relation.a, relation.b)]
+    towns = [(i, p) for i, p in enumerate(world.pois) if p.civilized and p.kind in kinds and p.name]
+    ours = [(i, p) for i, p in towns if tops.get(p.realm_id) in (relation.a, relation.b)]
     pool = ours or towns
-    return stream.choice(pool).name if pool else str(config.get("tables.reason_tokens.town.fallback"))
+    if not pool:
+        return str(config.get("tables.reason_tokens.town.fallback")), -1
+    index, poi = stream.choice(pool)
+    return poi.name, index
 
 
 def describe_relations(world: World, config: Config, seed: int) -> None:
@@ -114,15 +123,19 @@ def describe_relations(world: World, config: Config, seed: int) -> None:
         stream = rng.derive(seed, "naming", "reason", index)
         a, b = realms[relation.a], realms[relation.b]
         goods_a, goods_b = _trade_goods(a, b, config)
+        town, town_index = _town(world, config, relation, stream, tops)
         tokens = {
             **{token: _place(world, relation, token, config) for token in ("river", "range", "sea")},
-            "town": _town(world, config, relation, stream, tops),
+            "town": town,
             "goods_a": goods_a,
             "goods_b": goods_b,
             "short_a": a.short,
             "short_b": b.short,
         }
-        relation.why = relation.why.format(**tokens)
+        where: Where = {token: (REF_FEATURE, feature) for token, feature in relation.places.items()}
+        if town_index >= 0:
+            where["town"] = (REF_POI, town_index)
+        relation.why, relation.why_refs = render_template(relation.why, tokens, where)
 
 
 def seat_name(world: World, realm: Realm) -> Optional[str]:

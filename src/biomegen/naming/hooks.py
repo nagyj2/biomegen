@@ -15,7 +15,7 @@ from ..config.model import Config
 from ..util import rng
 from ..world.entities import POI, REF_POI
 from ..world.world import World
-from .chronicle import render_template
+from .render import render_template
 
 
 def describe_hook(world: World, config: Config, seed: int, index: int, near_index: int) -> None:
