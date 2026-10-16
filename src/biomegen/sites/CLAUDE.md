@@ -20,8 +20,8 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
   a run of it meeting the extent's edge. A layout calls `streets.lay_roads` to build round and onto it; `site_plan`
   clears those cells again (`clear_roads`), so a plan never draws the road itself, only lanes, buildings and walls.
   Nothing in the pipeline records anything for a site, so a site can change without moving the world fingerprint.
-- A POI's row is `site_row_name(config, kind, purpose)`: `<kind>_<purpose>` when that row exists (the three camp purposes),
-  else the kind. A layout also gets `age_years` (years since the POI fell, None when undated or standing) and `purpose`.
+- A POI's row is `site_row_name(config, kind, variant)`: `<kind>_<variant>` when that row exists (a camp's purpose, a homestead's
+  style), else the kind. A layout also gets `age_years` (years since the POI fell, None when undated or standing) and `purpose`.
 - Floor 0 is the ground and entry level: dungeons descend, towers rise. Everything random comes from the site seed
   (`rng.derive*` with the `site.*` labels); no wall-clock or global state.
 
@@ -51,6 +51,12 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
   building stands with a chance (`ruin_standing`, falling with age) and at least one always does, a fallen one gets breaches,
   cracked floors, trees and a roof only over rooms that kept it, the wall falls in stretches (`ruin_wall_fall`) and every gate is
   rubble. With no room for buildings the single fallen building is drawn instead (as for a ruin with no origin).
+- **Homestead**: one house in a yard (`homestead.py`): a short track, the house on free ground nearest the middle with its door joined
+  to the track or the world's road, then the dressing the site row's `dress` names (`sites.homestead.dress`): a farm's hedge and wagon,
+  a mill's water wheel (`settlement._mill`, so it needs the `river` tag and a river in the extent), a mine's spoil, a lodge's woods, a
+  fishery's pier and boats (`settlement._harbour`, `port` tag). Existing cells only. A mill's and a fishery's extent is wide so it
+  reaches the neighbouring river or sea tile. Every draw is `rng.derive(seed, "site.homestead")`, so a later phase can rebuild the
+  same house as the first lot of the hamlet it grows into.
 - **Shrine**: one small walled room, a street door, an altar (`hearth`) at its middle, a roof from outside.
 - **Battlefield**: open ground, an ellipse of floor (`sites.battlefield.clearing`) strewn with debris and a few wrecked
   wagons; nothing is built.

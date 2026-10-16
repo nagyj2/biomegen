@@ -63,7 +63,7 @@ src/biomegen/
     plan.py             site_plan(): the per-floor plan, memoised; SitePlan
     layout.py           SiteContext and the layout registry
     building.py         Thin-walled building model: footprint, subdivided rooms, doors, roles, furniture
-    settlement.py structure.py camp.py boat.py   The layouts (structure = dungeon, tower, ruin)
+    settlement.py structure.py camp.py boat.py homestead.py   The layouts (structure = dungeon, tower, ruin; homestead = one house in a yard, dressed by style)
     carve.py partition.py shapes.py furnish.py circulation.py streets.py   the layout toolkit
     cells.py            Cell groups, outside priority, wall autotile index
     coverage.py blit.py Which tiles and cells a site covers; scaling a plan into a grid (priority-aware)
@@ -90,7 +90,8 @@ src/biomegen/
       ledger.py         Ledger: collects the events, then sorts and numbers them
       places.py         nearest_settlement() and nearest_feature(): the locality rule for a place named in text
       poi_rules.py      poi_for_event(): the pure event-to-POI rule table (what an event makes)
-      pois.py           Stage 9e — places the POIs the events make, then the location pass
+      poi_styles.py     style_score() / style_count(): the pure scorer of the homestead and hamlet styles; place_styles(), the last POI pass
+      pois.py           Stage 9e — places the POIs the events make, then the location pass, then the styles pass
     naming.py           Stage 10 — names for all entities, realms and relation reasons
   naming/
     cultures.py         Culture profiles + biome-biased culture assignment
@@ -158,7 +159,8 @@ Sparse entity lists: `pois`, `realms` (`Realm`), `relations` (`Relation`), `rive
 `island_name`. History: `year` (the present; 0 for a dawn start), `chronicle` (`ChronicleEvent`, sorted, `id` is the
 index) and `fallen_realms` (`FallenRealm`), read through `events_until(year)`, `events_at(x, y)` and `events_of(realm_id)`.
 `Realm.founded` and `POI.founded` are chronicle years; a `POI` also holds `fell`, `event_ids` (the events that made or mark
-it), `hook` / `hook_refs`, `bandit_strength`, `purpose` (a camp's) and `connect`. A ruin holds `ruin_of` (the settlement tier it
+it), `hook` / `hook_refs`, `bandit_strength`, `purpose` (a camp's), `style` (a homestead's or a generated hamlet's, a
+`tables.poi_styles` row) and `connect`. A ruin holds `ruin_of` (the settlement tier it
 was, always set) and `pop` (its peak population); `POI.free` is derived (civilized, no realm) and never stored. `rulers`
 (`Ruler`: realm, reign years, style, five traits, name) lists every realm's rulers, founder first, read through
 `rulers_of(realm_id)` and `ruler_at(realm_id, year)`. A realm that began in a secession records `origin` (`offshoot` or `split`),
@@ -446,7 +448,16 @@ and the simulation seams (`owner`, `dynamic`, `connect`, `bandit_strength`, `ban
    times `poi.density`; eligibility (biomes, elevation, a free tile, `poi.min_footprint_land`); score = 1 + freshwater,
    coast, remoteness from settlements, wildness and remoteness from seats (the last two make towers and dungeons bandit
    country) + jitter; blue-noise pick with `min_spacing_km`. At a dawn start only `source = "both"` kinds are placed.
-4. **Interior seed**: each POI mints `interior_seed = blake2b(master_seed, "poi_interior", x, y)` for its lazy site plan.
+4. **Styles pass** (`story/poi_styles.place_styles`, last, so no earlier POI moves; none at a dawn start): the lone building
+   (`homestead` kind, `source = "style"`) and the generated hamlet are placed by `tables.poi_styles` rows (farm, mill, mine,
+   lodge, fishery). `style_score` (pure; `realm_id` and `road` can be overridden by a simulation) is `-inf` where the style may
+   not stand (biome, height, `needs_freshwater_km` / `needs_coast_km`, the larger of its homestead plan and the tier it grows
+   into, a taken tile, and for a homestead land no realm holds) and otherwise the weighted terms (fresh water, coast,
+   remoteness, fertility, roughness, forest, closeness to a settlement and a road, every falloff in km) plus jitter. Count =
+   suited land (score at least `min_score`) over `homestead_km2_per_poi` / `hamlet_km2_per_poi` times `poi.density`; hamlets
+   only for a style that grows (`grows_into`), placed first, each keeping the tier's `spacing_km` from every settlement.
+   A hamlet is `civilized` with a population from the tier range; both get `founded` from `poi.style_founded_years`.
+5. **Interior seed**: each POI mints `interior_seed = blake2b(master_seed, "poi_interior", x, y)` for its lazy site plan.
 
 ### Stage 9f — Spurs (`roads.spurs`)
 
@@ -460,7 +471,7 @@ Assigns names to all entities; region lore is gone, and the chronicle's text is 
 - **Culture assignment**: each realm draws its culture from a biome-biased weighted distribution seeded on
   `(master_seed, "naming.culture", "realm", realm_id)`; a vassal keeps its own. POIs, rivers, lakes and features take the
   culture of the realm holding them, wild land and open water `common`. A POI's name is a pattern from its kind's `names`
-  (`names_fallen` for a fallen realm's capital ruin, which takes the realm's name). The island name uses the largest realm's culture.
+  (`names_fallen` for a fallen realm's capital ruin, which takes the realm's name; a homestead's from its style's `names`). The island name uses the largest realm's culture.
 - **Realms and relations** (`naming/polity.py`): a realm's form (name pattern and ruler styles) is a weighted draw among its
   kind's `tables.realm_forms` rows, favoured by the habitat of its land; its base word and ruler's name are made in its
   culture. A city-state is short-named after its seat. Last, each relation's reason template gets its tokens: the claimed
@@ -469,7 +480,8 @@ Assigns names to all entities; region lore is gone, and the chronicle's text is 
   realm and the reign; `Realm.ruler` is the present ruler's name.
 - **Hooks** (`naming/hooks.py`): after the chronicle, each POI's `hook` and `hook_refs`: a free settlement takes its tier's
   `hooks_free` (`hooks_remnant`, naming the fallen realm, for a remnant), else the text of its first event, else a
-  template from its row's `hooks` (`hooks_near` too when `places.nearest_settlement` finds a settlement).
+  template from its style's `hooks_<kind>` or its row's `hooks` (`_near` too when `places.nearest_settlement` finds a
+  settlement; a tier with `near_target = false`, the hamlet, is never that settlement).
 - **Chronicle** (`naming/chronicle.py`): last, a fallen realm gets a culture from its ruins' biome and a name from a
   major realm's forms (a stand-in realm with a negative id keeps its streams apart; a predecessor is named the same way in its
   first child's culture), then every event's template has its

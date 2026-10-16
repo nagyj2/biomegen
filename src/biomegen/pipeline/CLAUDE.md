@@ -137,6 +137,13 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 - **Ruins by origin.** A ruin records `ruin_of` (the tier it was; a fall's capital ruin is `capital`, holdings and location ruins
   draw from `tables.pois.ruin` `holding_origins` and `origins`) and `pop` (the tier's range), on streams keyed on the cell; they
   move nothing. The site draws it as that tier's settlement (see `sites/CLAUDE.md`).
+- **Styles pass** (`story/poi_styles.py`, last in the pois stage; none at a dawn start). A homestead (one building, `source = "style"`)
+  or a generated hamlet is placed by a `tables.poi_styles` row. `style_score` is pure (`-inf` where ineligible; a simulation passes its
+  own `realm_id` and `road`), `style_count` is suited land over the kind's `km2_per_poi`, `place_styles` appends: hamlets first (only
+  styles that grow, each the tier's `spacing_km` from every settlement), then homesteads (held land only). It only appends, so no
+  earlier POI, realm, road or event moves; streams are `rng.derive(seed, "poi", "style", style, kind, x, y)`. `pois.build_poi` builds
+  a POI without a world (the simulation's seam; `commit` is `build_poi` plus the append). A hamlet tier with `near_target = false` is
+  never `nearest_settlement`; post-pois counts of settlements (the legend) leave it out.
 - **Event link.** A POI lists the events that made or mark it in `event_ids` (and a settlement its founding or settling event);
   an event's `poi_ids` is never appended to, because naming reads `poi_ids[0]` as a `{town}`. `World.events_at` finds events
   through both.

@@ -12,7 +12,8 @@ zoom in to see structure detail, and export the view to SVG/PNG.
 > terrain at the zoom (shell) and local (full, furnished) scales, with floor cycling for towers and dungeons.
 > Settlements and politics (realms, vassals, relations and a political view with borders and war fronts) and the
 > chronicle (a derived history, `--chronicle`) are in, and POIs follow that history (ruins of fallen realms, battlefields,
-> watchtowers on war fronts, shrines) with a stored hook each; the explorer's info panel is the next phase.
+> watchtowers on war fronts, shrines) with a stored hook each; hamlets and lone buildings (homesteads: a farm, mill, mine,
+> lodge or fishery, with no map marker) stand in the generated world; the explorer's info panel is the next phase.
 
 ---
 
@@ -189,10 +190,14 @@ in `src/biomegen/data/polity.toml`; reason texts for wars, rivalries, alliances 
 #### `[poi]`
 | Key | Default | Description |
 |-----|---------|-------------|
-| `density` | `1.0` | Multiplies every wild kind's count (one per `km2_per_poi`) |
+| `density` | `1.0` | Multiplies every wild kind's count (one per `km2_per_poi`) and every style's count |
+| `forest_biomes`, `forest_radius_km` | `forest, taiga, jungle`; `90` | The forest term of a style's score: the share of land in that radius under those biomes |
+| `style_founded_years` | `homestead [5, 200]`, `hamlet [20, 400]` | How long before the present a generated homestead or hamlet was founded |
 
 Per-kind rows (placement numbers, the events that make a kind, name forms, hooks and the simulation seams) are in
 `src/biomegen/data/pois.toml`; the fates of a fallen realm's ruins and the shrine sites are its `poi_fates` and `poi_sites`.
+Hamlets and lone buildings (homesteads) are placed by its `poi_styles` rows (farm, mill, mine, lodge, fishery): each style
+scores the land its own way and sets how much suited land makes one.
 
 #### `[sites]`
 | Key | Default | Description |

@@ -15,6 +15,8 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   terrain, relief, [tint], water, [clutter], [borders], roads, [bridges], sites, markers, labels, compass. At the detail
   scales `markers` comes after `sites` and draws POI markers only at the scales in `render.detail_marker_scales` (zoom). A layer
   that only makes sense at one scale (`clutter`, `bridges`) returns early on the other.
+- **Markers.** A tier row's `map_marker = false` hides its marker at the map scale (the hamlet); a POI kind row's `marker = false`
+  hides it at every scale (the homestead: its plan still draws from the zoom scale down). Both are read per POI by the markers layer.
 - **Political view.** `tint = "realm"` makes the tint layer mix each land cell toward its realm's colour (`render.realm_tint`)
   instead of replacing the fill with a ramp; the `borders` layer then lightens the line between realms and reddens war
   fronts. Both read realms through `ctx.realm`, which uses the sampler's warped tile like the biome blend, so a border is the

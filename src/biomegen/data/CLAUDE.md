@@ -9,7 +9,7 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 - `config/defaults/tables.py` reads every file in `DATA_FILES` with `tomllib` and puts each top-level
   table under the `tables` config section (`tables.biomes`, `tables.relief` from `biomes.toml`;
   `tables.detail`, `tables.detail_relief` from `detail.toml`; `tables.tiers`; `tables.styles` from `terrain.toml`;
-  `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.pois`, `tables.poi_fates` and `tables.poi_sites` from `pois.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
+  `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.pois`, `tables.poi_fates`, `tables.poi_sites` and `tables.poi_styles` from `pois.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
   `tables.relation_weights` and `tables.realm_colors` from `polity.toml`; `tables.reasons` and `tables.reason_tokens` from
   `reasons.toml`; `tables.ruling_styles` from `rulers.toml`; `tables.chronicle` from `chronicle.toml`; `tables.secession_terms`,
   `tables.secession_relations` and `tables.secession_forms` from `secession.toml`; `tables.free_fates` from `pois.toml`).
@@ -61,12 +61,21 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   glyph and the texts. Check `scripts/fingerprint.sh`: a kind placed by location or from an event changes the world.
 - The `ruin` row also has `origins` (tier -> weight, a ruin placed by location), `fall_origin` (the tier of a fallen realm's capital
   ruin) and `holding_origins` (tier -> weight, its holdings); every named tier must be a settlement tier.
+- `poi_styles` rows (farm, mill, mine, lodge, fishery) place the lone building (`homestead`, a kind row with `source = "style"`
+  and `marker = false`) and the generated hamlet: `generated` / `dynamic`, `grows_into` (a tier; only a style that grows makes
+  hamlets), `homestead_km2_per_poi` / `hamlet_km2_per_poi` (one per this much *suited* land: eligible and scoring at least
+  `min_score`), spacings, eligibility (`biomes`, `elevation_*`, `needs_freshwater_km`, `needs_coast_km`, `min_land`), the score
+  weights (`near_freshwater`, `coastal`, `remoteness`, `fertility`, `relief`, `forest`, `near_settlement` and `near_road` with
+  their `_km` scale), `names` and the per-kind `hooks_homestead` / `hooks_hamlet` (each with a `_near` variant). A style needs
+  `hooks_homestead`, and `hooks_hamlet` when it grows; its look is a `homestead_<style>` row in `sites.toml`. Counts and
+  affinities are tuned by eye on the fixture seeds; `tests/pipeline/story/test_poi_styles.py` holds the count bands.
 - `free_fates` rows (`join`, `found`, `bandit`: `weight`, `sim_only`, `factors`) are what a later simulation draws for a free
   settlement; generation reads none of it.
 - `tiers.toml` rows may set `free_fg` (the marker colour of a free settlement), `hooks_free` (`{name}`) and `hooks_remnant`
   (`{name}` and `{fallen}`, needed): the texts of a settlement no realm holds, and of one that outlived a fallen realm.
 - `tiers.toml` rows may set `dynamic` (a later simulation mints it; the settlements stage skips it), `connect` (roads link
-  it) and `map_marker` (false hides the marker at the map scale): the hamlet tier does all three.
+  it), `map_marker` (false hides the marker at the map scale) and `near_target` (false: other places' texts never name it as
+  the settlement nearby and the legend leaves it out of settlement counts): the hamlet tier does all four.
 
 ## Politics
 
