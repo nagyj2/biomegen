@@ -22,9 +22,9 @@ import numpy as np
 from ...config.model import Config
 from ...util import geometry as geo
 from ...util import rng
-from ...world.entities import POI
 from ...world.tile import BIOME_NAME, RELIEF_NAME, Biome, WaterType
 from ...world.world import World
+from ..pois import build_poi
 
 _LANDMASS_REQUIRED = {"capital", "city", "town"}
 
@@ -52,6 +52,11 @@ def _reach_masks(world: World, config: Config) -> dict[str, np.ndarray]:
         prefix: _reach(world, config, water[prefix], float(config.get(f"settlements.{prefix}_reach_km")))
         for prefix in _REACH_PREFIXES
     }
+
+
+def settlement_tags(reach: dict[str, np.ndarray], x: int, y: int) -> tuple[str, ...]:
+    """The ``port`` / ``river`` / ``lake`` tags a settlement at ``(x, y)`` earns from the water in ``reach``."""
+    return tuple(tag for tag, key in _TAGS if reach[key][y, x])
 
 
 def _score(world: World, config: Config, seed: int, reach: dict[str, np.ndarray]) -> np.ndarray:
@@ -160,16 +165,15 @@ def _commit(
     connect: bool,
 ) -> None:
     """Append one settlement POI, tagged by the water in reach."""
-    tags = tuple(tag for tag, key in _TAGS if reach[key][y, x])
-    poi = POI(
-        kind=tier,
-        x=x,
-        y=y,
-        interior_seed=rng.derive_int(seed, "poi_interior", x, y),
+    poi = build_poi(
+        seed,
+        tier,
+        x,
+        y,
+        (floors, 0),
         civilized=True,
         pop=population,
-        floor_count=max(1, floors),
-        tags=tags,
+        tags=settlement_tags(reach, x, y),
         connect=connect,
     )
     index = len(world.pois)

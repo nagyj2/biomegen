@@ -208,3 +208,39 @@ def test_a_poi_takes_the_realm_of_its_cell_when_placed() -> None:
     pois.place_by_location(island, _wild_config(camp=_camp(km2_per_poi=200000.0)), 5)
     placed = island.pois[1:]  # the village was there before the stage
     assert placed and all(p.realm_id == int(island.realm_id[p.y, p.x]) for p in placed)
+
+
+# --------------------------------------------------------------------------- build_poi and commit
+def test_commit_appends_exactly_what_build_poi_builds() -> None:
+    # commit is build_poi plus the append: same POI, taking its realm from the map, indexed at its cell.
+    world = _island()
+    world.realm_id[10, 12] = 3
+    index = pois.commit(world, 7, "camp", 12, 10, (1, 0), purpose="bandit", connect=False, founded=40)
+    expected = pois.build_poi(7, "camp", 12, 10, (1, 0), realm_id=3, purpose="bandit", connect=False, founded=40)
+    assert (world.pois[index], int(world.poi_index[10, 12])) == (expected, index)
+
+
+def test_build_poi_makes_a_settlement_with_every_field() -> None:
+    # A hamlet-like POI: civilized, a population, tags, a style and a founding year all land on the POI.
+    poi = pois.build_poi(
+        7, "hamlet", 5, 6, (1, 0), civilized=True, pop=42, tags=("river",), style="farm", founded=900, realm_id=2
+    )
+    assert (poi.civilized, poi.pop, poi.tags, poi.style, poi.founded, poi.realm_id) == (
+        True,
+        42,
+        ("river",),
+        "farm",
+        900,
+        2,
+    )
+
+
+def test_build_poi_seeds_its_interior_from_its_cell() -> None:
+    # The interior seed is keyed on the cell (as commit always did), so the same cell always draws the same plan.
+    a = pois.build_poi(7, "tower", 5, 6, (3, 0))
+    b = pois.build_poi(7, "tower", 5, 6, (3, 0))
+    assert a.interior_seed == b.interior_seed != pois.build_poi(7, "tower", 6, 5, (3, 0)).interior_seed
+
+
+def test_build_poi_keeps_at_least_one_floor() -> None:
+    assert pois.build_poi(7, "camp", 1, 1, (0, 0)).floor_count == 1

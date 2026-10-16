@@ -154,6 +154,53 @@ def ruin_origin(
     return origin, stream.randint(lo, hi)
 
 
+def build_poi(
+    seed: int,
+    kind: str,
+    x: int,
+    y: int,
+    floors: tuple[int, int],
+    *,
+    realm_id: int = -1,
+    purpose: str = "",
+    style: str = "",
+    connect: bool = True,
+    civilized: bool = False,
+    founded: int = 0,
+    fell: int | None = None,
+    bandit_strength: int = 0,
+    event_ids: Sequence[int] = (),
+    ruin_of: str = "",
+    pop: int = 0,
+    tags: Sequence[str] = (),
+) -> POI:
+    """Return a new POI of ``kind`` at ``(x, y)`` without placing it anywhere.
+
+    ``floors`` is ``(floor_count, lowest_floor)``. Pure: it reads and writes no world, so a simulation can build a
+    POI of its own; :func:`commit` is the generation's append.
+    """
+    return POI(
+        kind=kind,
+        x=x,
+        y=y,
+        interior_seed=rng.derive_int(seed, "poi_interior", x, y),
+        civilized=civilized,
+        floor_count=max(1, floors[0]),
+        lowest_floor=floors[1],
+        purpose=purpose,
+        style=style,
+        connect=connect,
+        realm_id=realm_id,
+        founded=founded,
+        fell=fell,
+        bandit_strength=bandit_strength,
+        event_ids=list(event_ids),
+        ruin_of=ruin_of,
+        pop=pop,
+        tags=tuple(tags),
+    )
+
+
 def commit(
     world: World,
     seed: int,
@@ -163,31 +210,36 @@ def commit(
     floors: tuple[int, int],
     *,
     purpose: str = "",
+    style: str = "",
     connect: bool = True,
+    civilized: bool = False,
     founded: int = 0,
     fell: int | None = None,
     bandit_strength: int = 0,
     event_ids: Sequence[int] = (),
     ruin_of: str = "",
     pop: int = 0,
+    tags: Sequence[str] = (),
 ) -> int:
     """Append one POI, write it into ``poi_index`` and return its index; it takes its realm from the map."""
-    poi = POI(
-        kind=kind,
-        x=x,
-        y=y,
-        interior_seed=rng.derive_int(seed, "poi_interior", x, y),
-        floor_count=floors[0],
-        lowest_floor=floors[1],
-        purpose=purpose,
-        connect=connect,
+    poi = build_poi(
+        seed,
+        kind,
+        x,
+        y,
+        floors,
         realm_id=int(world.realm_id[y, x]),
+        purpose=purpose,
+        style=style,
+        connect=connect,
+        civilized=civilized,
         founded=founded,
         fell=fell,
         bandit_strength=bandit_strength,
-        event_ids=list(event_ids),
+        event_ids=event_ids,
         ruin_of=ruin_of,
         pop=pop,
+        tags=tags,
     )
     index = len(world.pois)
     world.pois.append(poi)

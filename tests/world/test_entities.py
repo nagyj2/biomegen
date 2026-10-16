@@ -120,3 +120,8 @@ def test_a_predecessors_children_are_not_shared() -> None:
     a, b = Predecessor(id=0, founded=10, split_year=300), Predecessor(id=1, founded=20, split_year=400)
     a.children.append(5)
     assert b.children == []
+
+
+def test_a_poi_starts_with_no_style() -> None:
+    # Only a homestead or a generated hamlet has a style (a tables.poi_styles row).
+    assert POI(kind="tower", x=0, y=0, interior_seed=1).style == ""
