@@ -154,21 +154,3 @@ def test_legend_names_a_building_kind_roof_by_its_label(config: Config) -> None:
     seen = Seen(cells={roof_cell(config, "cathedral")})
     text = "\n".join(_panel(make_world(6, 3), config, seen=seen))
     assert "cathedral" in text
-
-
-def test_poi_line_names_the_centre_building_of_a_settlement(config: Config) -> None:
-    world = make_world(6, 3)
-    world.pois.append(POI(kind="village", x=2, y=1, interior_seed=1, name="Oakford", civilized=True, pop=300))
-    assert "(village, pop 300, centre chapel)" in _panel(world, config)[5]
-
-
-def test_poi_line_names_the_centre_a_ruin_had(config: Config) -> None:
-    world = make_world(6, 3)
-    world.pois.append(POI(kind="ruin", x=2, y=1, interior_seed=1, name="Old Hold", ruin_of="town"))
-    assert "centre hall" in _panel(world, config)[5]
-
-
-def test_poi_line_has_no_centre_for_a_homestead(config: Config) -> None:
-    world = make_world(6, 3)
-    world.pois.append(POI(kind="homestead", x=2, y=1, interior_seed=1, name="Oak Farm", style="farm"))
-    assert "centre" not in _panel(world, config)[5]

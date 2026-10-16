@@ -13,7 +13,7 @@ from ..render.colors import biome_style, interior_style
 from ..render.grid import RGB, CellGrid
 from ..render.layers import Seen
 from ..sampling.detail import SCALE_MAP
-from ..sites.kinds import cell_name, centre_kind
+from ..sites.kinds import cell_name
 from ..world.entities import POI
 from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
@@ -57,9 +57,9 @@ def view_label(state: ViewState) -> str:
     return "1:1" if state.mode == MODE_ONE_TO_ONE else "FIT"
 
 
-def _poi_line(poi: Optional[POI], config: Config) -> str:
-    """The panel's POI line: name, kind, the style of a homestead or generated hamlet, and for settlements (and ruins)
-    the population, the centre building and the tags."""
+def _poi_line(poi: Optional[POI]) -> str:
+    """The panel's POI line: name, kind, the style of a homestead or generated hamlet, and for settlements the
+    population and tags."""
     if poi is None:
         return " POI: -"
     detail = [poi.kind]
@@ -67,9 +67,6 @@ def _poi_line(poi: Optional[POI], config: Config) -> str:
         detail.append(poi.style)
     if poi.pop:
         detail.append(f"pop {poi.pop:,}")
-    centre = centre_kind(config, poi)
-    if centre is not None:
-        detail.append(f"centre {str(config.get(f'tables.buildings.{centre}.label')).lower()}")
     detail.extend(poi.tags)
     return f" POI: {poi.name or poi.kind} ({', '.join(detail)})"
 
@@ -164,7 +161,7 @@ def build_panel(
     else:
         canvas.text(3, 0, " realm: open water" if tile.is_water else " realm: none (wild land)")
     poi = poi_under_cursor(world, config, state)
-    canvas.text(5, 0, _poi_line(poi, config))
+    canvas.text(5, 0, _poi_line(poi))
     last = height - 1
     if config.get("render.show_legend", True) and 6 < last:
         _legend(canvas, config, seen, 6, last, ascii_only)
