@@ -16,6 +16,9 @@ VALUES: Dict[str, Any] = {
     "coastal_scale_km": 225.0,
     "remoteness_scale_km": 550.0,
     "jitter": 0.15,
+    # The forest term of a style's score: the share of land within this radius that wears one of these biomes.
+    "forest_biomes": ["forest", "taiga", "jungle"],
+    "forest_radius_km": 90.0,
     # Minimum fraction of a land structure's (max) footprint that must be dry land for an anchor to
     # be eligible. Keeps a coastal structure substantial (most of it on land) while still allowing
     # shoreline sites - the terrain-aware interior builder forms the structure around whatever water

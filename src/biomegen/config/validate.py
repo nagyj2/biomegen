@@ -84,6 +84,9 @@ def _validate_biome_names(cfg: Dict[str, Any], errors: List[str]) -> None:
         for name in (rule.get("biomes", []) or []) if isinstance(rule, dict) else []:
             check(name, f"tables.poi_styles.{style}.biomes")
 
+    for name in cfg.get("poi", {}).get("forest_biomes", []) or []:
+        check(name, "poi.forest_biomes")
+
     for habitat, names in (cfg.get("politics", {}).get("habitats", {}) or {}).items():
         for name in names or []:
             check(name, f"politics.habitats.{habitat}")
