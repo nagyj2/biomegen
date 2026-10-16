@@ -147,9 +147,9 @@ def site_geometry(poi: POI, config: Config) -> Optional[SiteGeometry]:
 
 
 def site_roof_floor(poi: POI, config: Config) -> Optional[int]:
-    """Return the roof level of a settlement's site (one above its top storey, where every building is seen as the roof
-    of its kind), or None for a site with no roof level."""
-    if config.get(f"tables.sites.{site_row_for(config, poi)}.layout", "") != "settlement":
+    """Return the roof level of a site (one above its top storey, where every building is seen as its roof), or None
+    for a layout outside ``sites.roof_layouts``."""
+    if config.get(f"tables.sites.{site_row_for(config, poi)}.layout", "") not in config.get("sites.roof_layouts"):
         return None
     return int(poi.lowest_floor) + int(poi.floor_count)
 

@@ -43,7 +43,8 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
   `sites.settlement.upper`): an L or T keeps its whole outline on the first upper storey (chance `whole`) and then one wing,
   the large or the small, so a tall building reads as a tower; a rectangle is shortened along its longer side. The cut part
   shows the roof of the storey below. The floor above the top storey (`geometry.site_roof_floor`) is the roof level: every
-  building as its kind roof, so a roof hidden by a taller neighbour can be seen.
+  building as its kind roof, so a roof hidden by a taller neighbour can be seen. Layouts in `sites.roof_layouts` (settlement,
+  homestead, dungeon, tower, ruin) have one; the others build it on floor 0 and show `outside` (`site_plan`'s `roof_view`).
 
 ## Archetypes
 

@@ -70,7 +70,7 @@ def test_window_cells_embed_the_box_and_leave_the_margin_void(config: Config) ->
 def test_a_floor_outside_the_site_is_clamped(config: Config) -> None:
     poi, world, ground = _plan(config, "tower", floor_count=3)
     above = site_plan(poi, 9, config, world)
-    top = site_plan(poi, 2, config, world)
+    top = site_plan(poi, 3, config, world)  # the roof level, one above the top floor
     assert above is top and ground is not None
 
 

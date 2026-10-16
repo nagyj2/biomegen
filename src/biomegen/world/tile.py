@@ -124,6 +124,7 @@ class Cell(IntEnum):
     BONES = 36  # the remains left on a field
     WHEAT = 37  # a sown field: open ground, never roofed
     LOG = 38  # a felled trunk lying in a lodge's working area
+    DUNGEON_ROOF = 39  # the top of a dungeon's gatehouse seen from outside
 
 
 # Plan cell values above the ``Cell`` enum are data driven, in two reserved blocks (a plan stays one ``uint8`` array):

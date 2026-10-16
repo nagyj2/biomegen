@@ -37,6 +37,8 @@ VALUES: Dict[str, Any] = {
     # it has ``breaches`` per room, ``crack`` of its floor cracked into rubble, ``strip`` of its furniture gone and
     # ``roof`` of its rooms unroofed.
     "ruin_damage": {"breaches": 6.0, "crack": 0.6, "strip": 0.85, "roof": 0.8},
+    # Layouts with a roof level above their top floor, where every building is seen as its roof.
+    "roof_layouts": ["settlement", "homestead", "dungeon", "tower", "ruin"],
     "coast_margin_rows": 1,  # bare ground kept between a solid structure and any water, in rows
     "street_water_cost": 6.0,  # cost of a street cell over water relative to dry ground (it becomes a bridge)
     "bridge_max_rows": 6,  # the widest water, in rows, a settlement street will bridge

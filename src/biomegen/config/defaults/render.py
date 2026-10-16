@@ -388,6 +388,7 @@ VALUES: Dict[str, Any] = {
         "solid": " ",
         "roof": "░",
         "stone": "▓",
+        "dungeon_roof": "▓",
         "hull": "=",
         "wheel": "○",
         "axle_h": "═",
@@ -402,6 +403,7 @@ VALUES: Dict[str, Any] = {
     "interior_glyphs_ascii": {
         "roof": "^",
         "stone": "#",
+        "dungeon_roof": "%",
         "wheel": "O",
         "axle_h": "=",
         "axle_v": "|",
@@ -452,6 +454,7 @@ VALUES: Dict[str, Any] = {
         "solid": [30, 27, 26],
         "roof": [120, 74, 58],
         "stone": [118, 112, 104],
+        "dungeon_roof": [74, 70, 86],
         "hull": [128, 92, 58],
         "wheel": [150, 104, 64],
         "axle_h": [128, 88, 52],

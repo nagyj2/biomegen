@@ -620,12 +620,21 @@ def test_a_settlement_has_a_roof_level_above_its_top_storey(config: Config) -> N
     assert (site_floor_range(poi, config), site_roof_floor(poi, config)) == ((0, 3), 3)
 
 
-def test_a_dungeon_and_a_homestead_have_no_roof_level(config: Config) -> None:
+def test_a_homestead_and_a_dungeon_have_a_roof_level_but_a_camp_has_none(config: Config) -> None:
     from biomegen.sites import site_roof_floor
 
     world = flat_world(16, 12)
-    assert site_roof_floor(add_poi(world, "homestead", 7, 5), config) is None
-    assert site_roof_floor(add_poi(world, "dungeon", 3, 3, floor_count=2, lowest_floor=-1), config) is None
+    assert site_roof_floor(add_poi(world, "homestead", 7, 5), config) == 1
+    assert site_roof_floor(add_poi(world, "dungeon", 3, 3, floor_count=2, lowest_floor=-1), config) == 1
+    assert site_roof_floor(add_poi(world, "camp", 5, 5), config) is None
+
+
+def test_the_roof_level_of_a_dungeon_is_its_surface_view(config: Config) -> None:
+    # Above the top floor a dungeon is seen from outside: its roof cells, not the gatehouse rooms.
+    world = flat_world(16, 12)
+    poi = add_poi(world, "dungeon", 8, 6, floor_count=2, lowest_floor=-1)
+    roof, ground = site_plan(poi, 1, config, world), site_plan(poi, 0, config, world)
+    assert roof is not None and ground is not None and np.array_equal(roof.cells, ground.outside)
 
 
 def _ground_and_roofs(config: Config, kind: str, count: int, pop: int):

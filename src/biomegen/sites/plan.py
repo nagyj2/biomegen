@@ -20,7 +20,7 @@ from ..world.tile import Cell
 from ..world.world import World
 from . import battlefield, boat, camp, homestead, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
-from .geometry import SiteGeometry, site_floor_range, site_geometry, site_row_for
+from .geometry import SiteGeometry, site_floor_range, site_geometry, site_roof_floor, site_row_for
 from .kinds import family_weights
 from .layout import LAYOUTS, Fall, SiteBuilding, SiteContext
 from .patch import read_patch
@@ -123,10 +123,12 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         return None
     row = config.get(f"tables.sites.{site_row_for(config, poi)}")
     age_years = None if poi.fell is None else max(0, world.year - poi.fell)
+    # Only a settlement lays its own roof level; any other layout is built on the ground floor and seen from outside.
+    roof_view = floor == site_roof_floor(poi, config) and row["layout"] != "settlement"
     context = SiteContext(
         kind=poi.kind,
         seed=int(poi.interior_seed),
-        floor=floor,
+        floor=0 if roof_view else floor,
         lowest_floor=int(poi.lowest_floor),
         floor_count=int(poi.floor_count),
         patch=read_patch(poi, geometry, world, config),
@@ -145,6 +147,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     )
     built = LAYOUTS[row["layout"]](context)
     if built is None and context.fall is not None:  # no room for the settlement: a single fallen building instead
+        roof_view = floor == site_roof_floor(poi, config)  # which is no settlement, so it has no roof level of its own
         ruin_row = config.get("tables.sites.ruin")
         built = LAYOUTS[ruin_row["layout"]](
             replace(
@@ -153,6 +156,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
                 plaza_rows=0,
                 walled=False,
                 fall=None,
+                floor=0 if roof_view else floor,
             )
         )
     plan = None
@@ -164,6 +168,8 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
             cells, outside, buildings = built
         else:
             cells, outside = built
+        if roof_view:
+            cells = outside.copy()  # the roof level is the surface: every building as its roof
         cells, outside = clear_roads(cells, context.patch), clear_roads(outside, context.patch)
         cells.setflags(write=False)
         outside.setflags(write=False)

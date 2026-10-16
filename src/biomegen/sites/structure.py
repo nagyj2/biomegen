@@ -54,6 +54,7 @@ _DOOR = int(Cell.DOOR)
 _PATH = int(Cell.PATH)
 _SOLID = int(Cell.SOLID)
 _ROOF = int(Cell.ROOF)
+_DUNGEON_ROOF = int(Cell.DUNGEON_ROOF)
 _STONE = int(Cell.STONE)
 _RUBBLE = int(Cell.RUBBLE)
 _MIN_STAIR_GAP = 4  # cells between two staircases, so they never touch
@@ -269,7 +270,7 @@ def build_dungeon(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     keep_reachable(grid, sorted(reserved | set((x + dx, y + dy) for dx, dy in building.doors)))
     _approach(ctx, grid, building, house)
     outside = grid.copy()
-    outside[y : y + h, x : x + w][building.footprint] = _ROOF
+    outside[y : y + h, x : x + w][building.footprint] = _DUNGEON_ROOF
     return grid, outside
 
 
