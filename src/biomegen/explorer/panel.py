@@ -161,8 +161,11 @@ def build_panel(
     last = height - 1
     if config.get("render.show_legend", True) and 6 < last:
         _legend(canvas, config, seen, 6, last, ascii_only)
-    canvas.text(last, 0, controls_line(config), dim)
     message = state.last_message
+    controls = controls_line(config)
+    if message:
+        controls = controls[: max(0, width - len(message) - 2)]  # leave the message its own cells
+    canvas.text(last, 0, controls, dim)
     if message:
         canvas.text(last, max(0, width - len(message) - 1), message, head, bold=True)
     return canvas.grid
