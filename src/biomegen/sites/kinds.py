@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from ..config.model import Config
+from ..world.entities import POI
 from ..world.tile import KIND_ROOF_BASE, KIND_ROOF_SLOTS, Cell
 from .building import Spec
 from .layout import SiteContext
@@ -91,3 +92,23 @@ def lot_widths(config: Config, kind: str, aspect: float) -> tuple[int, int]:
     rows_lo, rows_hi = lot_rows(config, kind)
     narrow, wide = row["width"]
     return round(float(narrow) * rows_lo * aspect), round(float(wide) * rows_hi * aspect)
+
+
+def centre_kind(config: Config, poi: POI) -> Optional[str]:
+    """Return the civic kind at the plaza of ``poi``: its tier's ``centre``, or None for a kind with no tier.
+
+    A ruin has the centre of the tier it was (``ruin_of``); a homestead or a wild site is no settlement and has none.
+    """
+    tier = poi.ruin_of or poi.kind
+    centre = config.get(f"tables.tiers.{tier}.centre", None)
+    return None if centre is None else str(centre)
+
+
+def tier_centre(config: Config, tier: str) -> str:
+    """Return the civic kind that stands at the plaza of a settlement of ``tier``."""
+    return str(config.get(f"tables.tiers.{tier}.centre"))
+
+
+def tier_reserve(config: Config, tier: str) -> str:
+    """Return the civic kind whose plot a ``tier`` plaza keeps: the next tier's centre, else its own."""
+    return str(config.get(f"tables.tiers.{tier}.reserve", tier_centre(config, tier)))

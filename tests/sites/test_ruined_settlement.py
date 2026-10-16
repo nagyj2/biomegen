@@ -10,10 +10,9 @@ import pytest
 from biomegen.config.model import Config
 from biomegen.sites import SitePlan, site_geometry, site_plan
 from biomegen.world.tile import Cell
-from tests.sites.conftest import HOUSE_ROOF, add_poi, flat_world
+from tests.sites.conftest import add_poi, flat_world, roofs
 
 PATH, RUBBLE, DOOR = (int(c) for c in (Cell.PATH, Cell.RUBBLE, Cell.DOOR))
-ROOF = HOUSE_ROOF
 SEED = 77
 
 
@@ -48,19 +47,19 @@ def test_a_ruin_that_was_a_town_has_the_towns_streets(full: Config) -> None:
 
 def test_a_ruin_has_fewer_roofs_than_the_town_it_was(full: Config) -> None:
     town, ruin = _plans(full, "town", fell=900)
-    assert (ruin.outside == ROOF).sum() < (town.outside == ROOF).sum()
+    assert roofs(ruin.outside).sum() < roofs(town.outside).sum()
 
 
 @pytest.mark.parametrize("seed", range(12))
 def test_at_least_one_building_always_stands(full: Config, seed: int) -> None:
     _town, ruin = _plans(full, "village", fell=None, seed=seed, pop=300)
-    assert (ruin.outside == ROOF).any()
+    assert roofs(ruin.outside).any()
 
 
 def test_a_young_ruin_keeps_more_roofs_than_an_old_one(full: Config) -> None:
     _t, young = _plans(full, "town", fell=1195)
     _t, old = _plans(full, "town", fell=None)
-    assert (young.outside == ROOF).sum() > (old.outside == ROOF).sum()
+    assert roofs(young.outside).sum() > roofs(old.outside).sum()
 
 
 def test_every_gate_of_a_walled_ruin_is_breached(full: Config) -> None:

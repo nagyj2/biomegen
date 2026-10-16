@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from biomegen.config import load_config
 from biomegen.sites.cells import OUTSIDE_PRIORITY
-from biomegen.sites.kinds import cell_name, kind_of_cell, kind_row, roof_cell
+from biomegen.sites.kinds import cell_name, centre_kind, kind_of_cell, kind_row, roof_cell, tier_reserve
+from biomegen.world.entities import POI
 from biomegen.world.tile import KIND_ROOF_BASE, KIND_ROOF_SLOTS, Cell
 
 _CONFIG = load_config(None)
@@ -45,3 +46,35 @@ def test_a_kind_roof_draws_over_a_street_and_ties_with_the_plain_roof() -> None:
     # A roof of any kind beats a street when a plan is drawn smaller, as the plain roof does.
     house = OUTSIDE_PRIORITY[roof_cell(_CONFIG, "house")]
     assert house == OUTSIDE_PRIORITY[int(Cell.ROOF)] > OUTSIDE_PRIORITY[int(Cell.PATH)]
+
+
+def _poi(kind: str, ruin_of: str = "") -> POI:
+    return POI(kind=kind, x=0, y=0, interior_seed=1, ruin_of=ruin_of)
+
+
+def test_a_settlement_poi_has_its_tiers_centre() -> None:
+    assert [centre_kind(_CONFIG, _poi(tier)) for tier in ("hamlet", "village", "town", "city", "capital")] == [
+        "gathering_point",
+        "chapel",
+        "hall",
+        "cathedral",
+        "palace",
+    ]
+
+
+def test_a_ruin_has_the_centre_of_the_tier_it_was() -> None:
+    assert centre_kind(_CONFIG, _poi("ruin", ruin_of="town")) == "hall"
+
+
+def test_a_homestead_or_a_wild_site_has_no_centre() -> None:
+    assert [centre_kind(_CONFIG, _poi(kind)) for kind in ("homestead", "tower", "dungeon", "ruin")] == [None] * 4
+
+
+def test_a_tier_reserves_the_next_tiers_centre_and_the_capital_its_own() -> None:
+    assert [tier_reserve(_CONFIG, tier) for tier in ("hamlet", "village", "town", "city", "capital")] == [
+        "chapel",
+        "hall",
+        "cathedral",
+        "palace",
+        "palace",
+    ]

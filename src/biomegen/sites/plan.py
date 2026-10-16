@@ -135,6 +135,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         purpose=poi.purpose,
         fall=_fall(config, row, age_years) if poi.kind == "ruin" and "ruin_standing" in row else None,
         dress=str(row.get("dress", "")),
+        tier=poi.ruin_of or poi.kind,
     )
     built = LAYOUTS[row["layout"]](context)
     if built is None and context.fall is not None:  # no room for the settlement: a single fallen building instead

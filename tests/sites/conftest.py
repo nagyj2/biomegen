@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from biomegen.config import load_config
@@ -12,7 +13,14 @@ from biomegen.world.tile import Biome
 from biomegen.world.world import World
 from tests.render.conftest import make_world
 
-HOUSE_ROOF = roof_cell(load_config(None), "house")  # the roof cell of a settlement house seen from outside
+_DEFAULTS = load_config(None)
+HOUSE_ROOF = roof_cell(_DEFAULTS, "house")  # the roof cell of a settlement house seen from outside
+ROOF_CELLS = sorted(roof_cell(_DEFAULTS, kind) for kind in _DEFAULTS.get("tables.buildings"))  # every kind's roof cell
+
+
+def roofs(cells: np.ndarray) -> np.ndarray:
+    """Return which of ``cells`` are the roof of some building kind."""
+    return np.isin(cells, ROOF_CELLS)
 
 
 @pytest.fixture(scope="module")

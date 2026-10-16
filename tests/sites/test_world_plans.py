@@ -10,9 +10,10 @@ from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.sites import PASSABLE, read_patch, site_geometry, site_plan
+from biomegen.sites.kinds import centre_kind, roof_cell
 from biomegen.world.tile import Cell
 from biomegen.world.world import World
-from tests.sites.conftest import HOUSE_ROOF
+from tests.sites.conftest import roofs
 
 VOID = int(Cell.VOID)
 OVER_WATER = {int(Cell.BRIDGE), int(Cell.BRIDGE_WALL)}
@@ -72,7 +73,7 @@ def test_doors_and_stairs_are_mutually_reachable(world: World, cfg: Config) -> N
     # Furniture must never trap a door or a stair: all of a floor's doors and stairs share one walkable component.
     special = [int(Cell.DOOR), int(Cell.STAIRS_UP), int(Cell.STAIRS_DOWN)]
     for poi, _geometry, plan in _plans(world, cfg):
-        if poi.kind in ("camp", "boat") or poi.kind in {"capital", "city", "town", "village"} or poi.ruin_of:
+        if poi.kind in ("camp", "boat") or poi.kind in {"capital", "city", "town", "village", "hamlet"} or poi.ruin_of:
             continue  # a settlement, or the ruin of one, is a town of buildings, not one structure
         labels, _ = ndimage.label(np.isin(plan.cells, _PASSABLE))
         marks = {int(labels[y, x]) for y, x in np.argwhere(np.isin(plan.cells, special)).tolist()}
@@ -108,23 +109,23 @@ def test_the_ground_floor_of_a_structure_has_a_door(world: World, cfg: Config) -
             assert int(Cell.DOOR) in plan.cells, f"{poi.kind} at {poi.x},{poi.y}"
 
 
-def test_every_settlement_has_at_least_one_house(world: World, cfg: Config) -> None:
-    # A settlement is at least one house: some roof is seen from outside, whatever the shore does to its lots.
+def test_every_settlement_has_its_centre_building(world: World, cfg: Config) -> None:
+    # A settlement is at least its centre building: its tier's centre roof shows from outside, whatever the shore does.
     empty = []
     for poi in world.pois:
         if poi.civilized:
             plan = site_plan(poi, 0, cfg, world)
-            if plan is None or not (plan.outside == HOUSE_ROOF).any():
+            if plan is None or roof_cell(cfg, centre_kind(cfg, poi)) not in plan.outside:
                 empty.append((poi.kind, poi.x, poi.y))
     assert empty == []
 
 
-def test_a_village_on_a_shore_with_no_room_for_lots_still_has_a_house(cfg: Config) -> None:
+def test_a_village_on_a_shore_with_no_room_for_lots_still_has_a_building(cfg: Config) -> None:
     # Seed 42's village at (165, 7) is half water; its lots found no room, and it used to have no building at all.
     shore = pipeline.generate(cfg, 42)
     poi = next(p for p in shore.pois if (p.x, p.y) == (165, 7))
     plan = site_plan(poi, 0, cfg, shore)
-    assert plan is not None and (plan.outside == HOUSE_ROOF).any() and (plan.cells == int(Cell.DOOR)).any()
+    assert plan is not None and roofs(plan.outside).any() and (plan.cells == int(Cell.DOOR)).any()
 
 
 def test_the_house_of_a_crowded_shore_village_is_reached_by_a_street(cfg: Config) -> None:

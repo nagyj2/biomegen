@@ -9,11 +9,10 @@ from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.sites import clear_cache, site_plan
 from biomegen.world.tile import Biome, Cell, WaterType
-from tests.sites.conftest import HOUSE_ROOF, add_poi, flat_world
+from tests.sites.conftest import HOUSE_ROOF, add_poi, flat_world, roofs
 
 VOID, FLOOR, WALL, DOOR, PATH = (int(c) for c in (Cell.VOID, Cell.FLOOR, Cell.WALL, Cell.DOOR, Cell.PATH))
 STONE, TREE, BUSH = (int(c) for c in (Cell.STONE, Cell.TREE, Cell.BUSH))
-ROOF = HOUSE_ROOF
 
 
 def _plan(config: Config, kind: str, world=None, pop: int = 2000):
@@ -54,7 +53,7 @@ def test_every_building_is_under_a_roof_seen_from_outside(config: Config) -> Non
     plan = _plan(config, "town")
     # The one exception is a front door, which shows as the street it opens onto.
     interior = np.isin(plan.cells, (FLOOR, int(Cell.TABLE), int(Cell.BED)))
-    assert (plan.outside[interior] == ROOF).all()
+    assert roofs(plan.outside[interior]).all()
 
 
 def test_streets_are_the_same_inside_and_outside(config: Config) -> None:
@@ -190,7 +189,7 @@ def test_the_stairs_of_one_floor_meet_the_floor_above(config: Config) -> None:
 def test_an_upper_floor_keeps_the_ground_outside_the_buildings(config: Config) -> None:
     # Streets, trees and the wall are as they are on the ground floor: only the buildings change.
     plans = _floors(config, "city", 3, 12000)
-    outside = plans[0].outside != ROOF
+    outside = ~roofs(plans[0].outside)
     assert np.array_equal(plans[1].cells[outside], plans[0].cells[outside])
 
 
@@ -198,7 +197,7 @@ def test_an_upper_storey_stands_inside_the_ground_footprint(config: Config) -> N
     # Every cell that differs from the ground floor lies under a roof seen from outside.
     plans = _floors(config, "city", 3, 12000)
     changed = plans[1].cells != plans[0].cells
-    assert changed.any() and (plans[0].outside[changed] == ROOF).all()
+    assert changed.any() and roofs(plans[0].outside[changed]).all()
 
 
 def test_a_single_floor_settlement_has_no_stairs(config: Config) -> None:
@@ -224,13 +223,13 @@ def test_the_ground_floor_is_the_same_whichever_floor_is_asked_first(config: Con
 def test_a_building_without_a_storey_this_high_shows_its_roof(config: Config) -> None:
     # Every ground-floor footprint is covered at an upper floor: by its storey or, where it ends below, by its roof.
     plans = _floors(config, "city", 3, 12000)
-    footprint = plans[0].outside == ROOF
+    footprint = roofs(plans[0].outside)
     assert footprint.any() and (plans[2].cells[footprint] != VOID).all()
 
 
 def test_an_upper_floor_has_roofs_over_the_shorter_buildings(config: Config) -> None:
     plans = _floors(config, "city", 3, 12000)
-    assert ROOF in plans[2].cells and (plans[1].cells == ROOF).sum() < (plans[2].cells == ROOF).sum()
+    assert roofs(plans[2].cells).any() and roofs(plans[1].cells).sum() < roofs(plans[2].cells).sum()
 
 
 def test_the_building_that_reaches_the_top_floor_has_no_roof_there(config: Config) -> None:
@@ -240,7 +239,7 @@ def test_the_building_that_reaches_the_top_floor_has_no_roof_there(config: Confi
 
 
 def test_the_ground_floor_has_no_roofs_inside(config: Config) -> None:
-    assert ROOF not in _floors(config, "city", 3, 12000)[0].cells
+    assert not roofs(_floors(config, "city", 3, 12000)[0].cells).any()
 
 
 def _coast(config: Config, tags: tuple[str, ...], water_from: int = 6):
@@ -571,7 +570,7 @@ def test_a_hamlet_builds_at_least_one_house(config: Config) -> None:
     # The hamlet row is a settlement layout smaller than a village; its plan still has a building.
     world = flat_world(14, 10)
     plan = site_plan(add_poi(world, "hamlet", 7, 5, civilized=True, pop=40), 0, config, world)
-    assert plan is not None and bool((plan.outside == HOUSE_ROOF).any())
+    assert plan is not None and bool(roofs(plan.outside).any())
 
 
 # --- the housing kind -------------------------------------------------------------------------------------------------

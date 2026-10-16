@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import math
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 
 import numpy as np
@@ -31,7 +31,7 @@ from ..world.tile import Cell
 from .boat import moor_boat
 from .building import Building, Spec, build_building
 from .carve import Point, nearest_true
-from .kinds import kind_spec, lot_rows, lot_widths, roof_cell
+from .kinds import kind_row, kind_spec, lot_rows, lot_widths, roof_cell, tier_centre, tier_reserve
 from .layout import SiteContext, layout
 from .streets import lay_roads, lay_street
 from .structure import breach
@@ -51,6 +51,7 @@ _RING_STEP = 0.5  # radians between the sample points of a ring street
 _WHEEL = int(Cell.WHEEL)
 _STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 _MILL_TRIES = 40  # candidate spots tried for a mill before giving up
+_CENTRE_TRIES = 12  # candidate spots tried for the centre building at each size
 _SLIVER_PASSES = 2  # passes that pave bare strips between streets
 
 
@@ -193,11 +194,12 @@ def _rings(
     dry: np.ndarray,
     centre: Point,
     stream: random.Random,
+    plaza_rows: int,
 ) -> None:
-    """Lay partial ring streets round the plaza, each a run of arcs that wander in and out a little."""
+    """Lay partial ring streets round the plaza (``plaza_rows`` radius), each a run of arcs that wander in and out."""
     settings = ctx.config.get("sites.settlement")
     radius = math.sqrt(float(np.count_nonzero(town)) / math.pi / ctx.aspect)  # the footprint's mean radius, in rows
-    fractions, last = [], float(ctx.plaza_rows)
+    fractions, last = [], float(plaza_rows)
     for fraction in (float(f) for f in settings["rings"]):
         if fraction * radius - last >= _block(ctx) and (1.0 - fraction) * radius >= _block(ctx) / 2.0:
             fractions.append(fraction)
@@ -386,10 +388,14 @@ def _lots(
     centre: Point,
     stream: random.Random,
     preplaced: Optional[list[Lot]] = None,
+    reserved: int = 0,
+    keep_out: Optional[np.ndarray] = None,
 ) -> tuple[np.ndarray, list[Lot]]:
     """Pack buildings along the streets; return ``(roof mask, the lots)``.
 
-    ``preplaced`` are lots already stamped into ``grid`` (a mill): they count as built and keep their gap clear.
+    ``preplaced`` are lots already stamped into ``grid`` (the centre building, a mill): they count as built and keep
+    their gap clear; a civic one (the centre) is not counted toward the fill. ``reserved`` is the ground of the centre's
+    plot: it is carved out of the ground the fill is a share of, so which centre is drawn changes no other lot.
     """
     settings = ctx.config.get("sites.settlement")
     gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
@@ -398,9 +404,10 @@ def _lots(
     narrowest, widest = lot_widths(ctx.config, "house", aspect)  # the narrowest and widest a house may be
     spec = _spec(ctx)
     rows, cols = grid.shape
-    blocked = ~ground | (grid != _VOID)
+    plot = np.zeros(grid.shape, dtype=bool) if keep_out is None else keep_out
+    blocked = ~ground | (grid != _VOID) | plot
     roofs = np.zeros(grid.shape, dtype=bool)
-    target = float(settings["fill"]) * int(ground.sum())
+    target = float(settings["fill"]) * (int(ground.sum()) - reserved)
     covered = 0
     placed: list[Lot] = list(preplaced or [])
     for lot in placed:
@@ -408,14 +415,15 @@ def _lots(
         blocked[
             max(0, lot.y - gap_y) : lot.y + lot.height + gap_y, max(0, lot.x - gap_x) : lot.x + lot.width + gap_x
         ] = True
-        covered += int(lot.building.footprint.sum())
+        if kind_row(ctx.config, lot.kind)["function"] != "civic":
+            covered += int(lot.building.footprint.sum())
     stride = max(1, round(aspect))
-    street = np.argwhere(np.isin(grid, _STREET))
+    street = np.argwhere(np.isin(grid, _STREET) & ~plot)
     order = sorted(
         (tuple(int(v) for v in cell[::-1]) for cell in street[::stride]),
         key=lambda p: (((p[0] - centre[0]) / aspect) ** 2 + (p[1] - centre[1]) ** 2, p[1], p[0]),
     )
-    streets = np.isin(grid, _STREET)
+    streets = np.isin(grid, _STREET) & ~plot
     for sx, sy in order:
         if covered >= target:
             break
@@ -461,7 +469,7 @@ def _lots(
             grid[y0 : y0 + height, x0 : x0 + width][inside] = building.cells[inside]
             roofs[y0 : y0 + height, x0 : x0 + width] |= building.footprint
             blocked[max(0, y0 - gap_y) : y0 + height + gap_y, max(0, x0 - gap_x) : x0 + width + gap_x] = True
-            streets = np.isin(grid, _STREET)
+            streets = np.isin(grid, _STREET) & ~plot
             covered += int(building.footprint.sum())
             placed.append(Lot(x0, y0, width, height, shape_seed, building))
             break
@@ -489,13 +497,16 @@ def _storeys(
     levels = []
     for lot in lots:
         count = 1
-        while count < top and stream.random() < chance * (1.0 - 0.7 * distance(lot) / reach):
-            count += 1
+        civic = kind_row(ctx.config, lot.kind)["function"] == "civic"
+        while count < top and not civic and stream.random() < chance * (1.0 - 0.7 * distance(lot) / reach):
+            count += 1  # the centre draws nothing from this stream (it is raised to the top below)
         levels.append(count)
     levels[min(range(len(lots)), key=lambda i: (distance(lots[i]), i))] = top
     uppers = [np.zeros_like(grid) for _ in range(top - 1)]
-    spec = _spec(ctx)
+    civic_stairs = rng.derive(ctx.seed, "site.layout", "centre", "stairs")  # the centre's stairs never move the others'
     for index, lot in enumerate(lots):
+        spec = _spec(ctx, lot.kind)
+        chooser = civic_stairs if kind_row(ctx.config, lot.kind)["function"] == "civic" else stream
         floors = [lot.building.cells]
         for storey in range(1, levels[index]):
             upper = build_building(
@@ -521,7 +532,7 @@ def _storeys(
             candidates = sorted((int(c), int(r)) for r, c in np.argwhere(free))
             if not candidates:
                 break
-            stairs.append(candidates[stream.randrange(len(candidates))])
+            stairs.append(candidates[chooser.randrange(len(candidates))])
         for storey, floor_cells in enumerate(floors[: len(stairs) + 1]):
             layer = floor_cells.copy()
             if storey < len(stairs):
@@ -724,19 +735,20 @@ def _try_house(
 
 
 def _ensure_house(
-    ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarray, centre: Point
+    ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarray, centre: Point, kind: str = "house"
 ) -> Optional[Lot]:
-    """Build one house for a settlement whose lots found no room: the smallest, on free dry ground nearest the plaza.
+    """Build one building of ``kind`` (a house) for a settlement whose lots found no room: the smallest, near the plaza.
 
     A settlement with a small footprint (a village on a shore) can have no stretch of ground deep enough beside a street
-    for a lot. A settlement is always at least one house, so the house goes on any free dry ground that fits it, ground
-    in the footprint first, its door joined to the nearest street. Returns the lot, or None if nothing fits.
+    for a lot. A settlement is always at least one house (and one centre building), so it goes on any free dry ground
+    that fits it, ground in the footprint first, its door joined to the nearest street. Returns the lot, or None if
+    nothing fits.
     """
     streets = np.isin(grid, _STREET)
     if not streets.any():
         return None
-    height = lot_rows(ctx.config, "house")[0]
-    width = lot_widths(ctx.config, "house", ctx.aspect)[0]
+    height = lot_rows(ctx.config, kind)[0]
+    width = lot_widths(ctx.config, kind, ctx.aspect)[0]
     free = dry & (grid == _VOID)
     sampling = (1.0, 1.0 / ctx.aspect)
     fits = ndimage.minimum_filter(free.astype(np.uint8), size=(height, width), mode="constant", cval=0) > 0
@@ -745,15 +757,15 @@ def _ensure_house(
         (not ground[y, x], ((x - cx) / ctx.aspect) ** 2 + (y - cy) ** 2, y, x) for y, x in np.argwhere(fits).tolist()
     )[:_MILL_TRIES]
     _, street_at = ndimage.distance_transform_edt(~streets, sampling=sampling, return_indices=True)
-    stream = rng.derive(ctx.seed, "site.layout", "house")
-    spec = _spec(ctx)
+    stream = rng.derive(ctx.seed, "site.layout", "house" if kind == "house" else "centre")
+    spec = _spec(ctx, kind)
     for _, _, mid_y, mid_x in spots:
         rect = (mid_x - width // 2, mid_y - height // 2, width, height)
         street = (int(street_at[1][mid_y, mid_x]), int(street_at[0][mid_y, mid_x]))
         placed = _try_house(ctx, grid, dry, ground, rect, street, stream, spec)
         if placed is not None:
             grid[:] = placed[0]
-            return placed[1]
+            return replace(placed[1], kind=kind)
     return None
 
 
@@ -907,6 +919,67 @@ def _fall(
         remaining = [c for c in remaining if c not in gone]
 
 
+def _plot(ctx: SiteContext, centre: Point, inner: np.ndarray) -> tuple[int, int, int, int]:
+    """Return the centre building's reserved plot ``(x, y, width, height)`` round ``centre``, clipped to ``inner``.
+
+    The plot is the largest footprint of the tier's ``reserve`` kind (the next tier's centre) plus its apron, so a
+    later promotion rebuilds the centre in the same square. It reads the reserve kind only, never the drawn centre.
+    """
+    reserve = tier_reserve(ctx.config, ctx.tier)
+    apron = int(kind_row(ctx.config, reserve)["apron"])
+    height = lot_rows(ctx.config, reserve)[1] + 2 * apron
+    width = lot_widths(ctx.config, reserve, ctx.aspect)[1] + 2 * round(apron * ctx.aspect)
+    rows, cols = inner.shape
+    x0, y0 = max(0, centre[0] - width // 2), max(0, centre[1] - height // 2)
+    return x0, y0, min(cols, centre[0] - width // 2 + width) - x0, min(rows, centre[1] - height // 2 + height) - y0
+
+
+def _centre(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    ground: np.ndarray,
+    centre: Point,
+    toward: Optional[Point],
+) -> Optional[Lot]:
+    """Stamp the tier's centre building at the plaza, its door facing ``toward`` (the busiest street); return its lot.
+
+    Its size is drawn once from its kind's row on its own stream (``site.layout`` ``centre``), so the settlement's main
+    stream never sees it. It stands on the free spot of town ground nearest ``centre`` (on the plot's paved forecourt
+    unless the shore leaves no room there) that takes the drawn size, else the smallest size; with no spot at all the
+    smallest building anywhere (:func:`_ensure_house`). Its front cell is on the forecourt, which the streets reach.
+    """
+    kind = tier_centre(ctx.config, ctx.tier)
+    stream = rng.derive(ctx.seed, "site.layout", "centre")
+    rows_lo, rows_hi = lot_rows(ctx.config, kind)
+    narrow, wide = lot_widths(ctx.config, kind, ctx.aspect)
+    drawn = (stream.randint(rows_lo, rows_hi), stream.randint(narrow, wide))
+    spec = _spec(ctx, kind)
+    rows, cols = grid.shape
+    aim = toward if toward is not None else (centre[0], rows - 1)
+    open_ground = ground & np.isin(grid, (_VOID, _PATH))
+    for height, width in dict.fromkeys((drawn, (rows_lo, narrow))):
+        fits = ndimage.minimum_filter(open_ground.astype(np.uint8), size=(height, width), mode="constant", cval=0) > 0
+        spots = sorted(
+            (((x - centre[0]) / ctx.aspect) ** 2 + (y - centre[1]) ** 2, y, x) for y, x in np.argwhere(fits).tolist()
+        )[:_CENTRE_TRIES]
+        for _, mid_y, mid_x in spots:
+            x0, y0 = mid_x - width // 2, mid_y - height // 2
+            shape_seed = stream.getrandbits(32)
+            building = build_building(
+                height, width, stream, spec, (aim[0] - x0, aim[1] - y0), random.Random(shape_seed)
+            )
+            if building is None or building.front is None:
+                continue
+            front = (x0 + building.front[0], y0 + building.front[1])
+            if not (0 <= front[0] < cols and 0 <= front[1] < rows and int(grid[front[1], front[0]]) == _PATH):
+                continue  # the door must open on the forecourt, which the streets reach
+            inside = building.cells != _VOID
+            grid[y0 : y0 + height, x0 : x0 + width][inside] = building.cells[inside]
+            return Lot(x0, y0, width, height, shape_seed, building, kind)
+    return _ensure_house(ctx, grid, dry, ground, centre, kind)
+
+
 def _roof_cells(ctx: SiteContext, shape: tuple[int, int], lots: list[Lot]) -> np.ndarray:
     """Return the roof cell of every building cell: each lot's kind roof over its footprint (``ROOF`` elsewhere)."""
     cells = np.full(shape, int(Cell.ROOF), dtype=np.uint8)
@@ -917,11 +990,18 @@ def _roof_cells(ctx: SiteContext, shape: tuple[int, int], lots: list[Lot]) -> np
     return cells
 
 
-def _plant(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, stream: random.Random) -> None:
-    """Scatter trees and bushes over free ground, keeping clear of buildings and streets."""
+def _plant(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    roofs: np.ndarray,
+    stream: random.Random,
+    keep_clear: np.ndarray,
+) -> None:
+    """Scatter trees and bushes over free ground, keeping clear of buildings, streets and the centre's plot."""
     share = float(ctx.config.get("sites.settlement.trees"))
     near = ndimage.binary_dilation(roofs | np.isin(grid, _STREET + (_WALL, _DOOR)), iterations=1)
-    free = [(int(x), int(y)) for y, x in np.argwhere((grid == _VOID) & dry & ~near).tolist()]
+    free = [(int(x), int(y)) for y, x in np.argwhere((grid == _VOID) & dry & ~near & ~keep_clear).tolist()]
     for x, y in stream.sample(free, min(len(free), int(len(free) * share))):
         grid[y, x] = int(Cell.TREE) if stream.random() < 0.7 else int(Cell.BUSH)
 
@@ -944,21 +1024,33 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     ground = ground & town
     lay_roads(grid, ctx.patch)
     grid[_plaza(ctx, centre, stream) & dry & town] = _PATH
+    plot_x, plot_y, plot_width, plot_height = _plot(ctx, centre, inner)
+    plot = (slice(plot_y, plot_y + plot_height), slice(plot_x, plot_x + plot_width))
+    reserved = town[plot] & dry[plot]
+    plot_mask = np.zeros(grid.shape, dtype=bool)
+    plot_mask[plot] = True
+    grid[plot][reserved & (grid[plot] == _VOID)] = _PATH  # the plaza square: forecourt round the centre building
     for gate in ctx.patch.gates:
         if (gate.col, gate.row) != centre:
             lay_street(grid, dry, (gate.col, gate.row), centre, ctx.street_rules, town | np.isin(grid, _STREET))
     ends = _spokes(ctx, grid, town, dry, centre, stream)
-    _rings(ctx, grid, town, dry, centre, stream)
+    _rings(ctx, grid, town, dry, centre, stream, max(ctx.plaza_rows, plot_height // 2))
     _lanes(ctx, grid, ground, town, stream)
     _harbour(ctx, grid, dry, centre)
     _join_roads(grid, dry, ctx.patch.road, ctx.aspect, float(ctx.config.get("sites.settlement.road_join_rows")))
     _close_slivers(grid, dry)
+    hall = _centre(
+        ctx, grid, dry, ground, centre, ends[0] if ends else None
+    )  # the busiest street: a gate's spoke first
     mill = _mill(ctx, grid, dry, ground, centre)
-    roofs, lots = _lots(ctx, grid, ground, centre, stream, [mill] if mill is not None else [])
-    if not lots:  # a settlement is at least one house
+    placed = [lot for lot in (hall, mill) if lot is not None]
+    roofs, lots = _lots(ctx, grid, ground, centre, stream, placed, int((ground[plot] & reserved).sum()), plot_mask)
+    if all(
+        kind_row(ctx.config, lot.kind)["function"] == "civic" for lot in lots
+    ):  # at least one house besides the centre
         house = _ensure_house(ctx, grid, dry, ground, centre)
         if house is not None:
-            lots = [house]
+            lots = [*lots, house]
             roofs[house.y : house.y + house.height, house.x : house.x + house.width] |= house.building.footprint
     if ctx.fall is not None and not lots:  # nothing stood here: the caller draws a single fallen building instead
         return None
@@ -966,7 +1058,7 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     wall: tuple[list[Point], list[Point]] = ([], [])
     if ctx.walled:
         wall = _wall(ctx, grid, dry, town, ends)
-    _plant(ctx, grid, dry, roofs, stream)
+    _plant(ctx, grid, dry, roofs, stream, plot_mask)
     if ctx.fall is not None:
         _fall(ctx, grid, roofs, lots, wall)
     kinds = _roof_cells(ctx, grid.shape, lots)
