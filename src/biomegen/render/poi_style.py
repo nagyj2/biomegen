@@ -41,6 +41,11 @@ def _marker(config: Config, kind: str, ascii_only: bool, free: bool) -> tuple[st
     return config.get("render.markers").get(kind, _UNKNOWN), _rgb(style["fg"]), _rgb(style["bg"])
 
 
+def poi_has_marker(config: Config, kind: str) -> bool:
+    """Return whether a ``kind`` POI is marked at any scale (a kind row sets ``marker = false`` for a homestead)."""
+    return config.cached((__name__, "marker", kind), lambda: bool(config.get(f"tables.pois.{kind}.marker", True)))
+
+
 def poi_on_map(config: Config, kind: str) -> bool:
     """Return whether a ``kind`` POI is marked at the map scale (a tier row sets ``map_marker = false`` to hide it)."""
     return config.cached((__name__, "on_map", kind), lambda: bool(config.get(f"tables.tiers.{kind}.map_marker", True)))

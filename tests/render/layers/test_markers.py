@@ -204,3 +204,37 @@ def test_a_held_settlement_keeps_its_ordinary_colour(config) -> None:
 
 def test_a_free_settlement_keeps_its_glyph(config) -> None:
     assert _draw(_town_in_realm(-1), config).glyph[1, 1] == config.get("tables.tiers.town.glyph")
+
+
+def _world_with_homestead():
+    world = make_world(3, 3, Biome.GRASS)
+    world.pois.append(POI(kind="homestead", x=1, y=1, interior_seed=5, style="farm"))
+    world.poi_index[1, 1] = 0
+    return world
+
+
+def test_a_homestead_has_no_marker_at_the_map_scale(config) -> None:
+    # The homestead kind row sets marker = false: its cell is left as terrain.
+    grid = _draw(_world_with_homestead(), config)
+    assert not bool(grid.bold.any()) and not (grid.glyph == "?").any()
+
+
+def test_a_homestead_has_no_marker_at_the_zoom_scale(config) -> None:
+    grid = _draw_detail(_world_with_homestead(), config)
+    assert not bool(grid.bold.any()) and not (grid.glyph == "?").any()
+
+
+def test_a_homestead_has_no_marker_at_the_local_scale(config) -> None:
+    config.data["render"]["detail_marker_scales"] = ["zoom", "local"]
+    grid = _scaled(_world_with_homestead(), config, "local", ("terrain", "markers"))
+    assert not bool(grid.bold.any()) and not (grid.glyph == "?").any()
+
+
+def test_a_homestead_beside_a_tower_leaves_the_towers_marker(config) -> None:
+    # Hiding one kind must not hide its neighbours (the mask is indexed by POI, not by position).
+    world = make_world(4, 3, Biome.GRASS)
+    world.pois.append(POI(kind="homestead", x=1, y=1, interior_seed=5, style="farm"))
+    world.pois.append(POI(kind="tower", x=2, y=1, interior_seed=6))
+    world.poi_index[1, 1], world.poi_index[1, 2] = 0, 1
+    grid = _draw(world, config)
+    assert (grid.glyph[1, 2] == config.get("render.markers.tower")) and not bool(grid.bold[1, 1])

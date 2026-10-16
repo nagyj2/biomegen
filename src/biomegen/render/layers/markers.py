@@ -6,7 +6,7 @@ import numpy as np
 
 from ...sampling.detail import SCALE_SITE, DetailSampler
 from ..grid import CellGrid
-from ..poi_style import poi_marker, poi_on_map
+from ..poi_style import poi_has_marker, poi_marker, poi_on_map
 from . import LAYERS, LayerContext
 
 
@@ -16,7 +16,8 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
 
     A tile is drawn once: at a detail scale only the centre cell of its block carries the glyph. A marker with no
     background colour keeps the terrain's. A detail scale draws POI markers only when it is listed in
-    ``render.detail_marker_scales`` (the zoom scale); the others show the plan itself. Surface edits from the overlay
+    ``render.detail_marker_scales`` (the zoom scale); the others show the plan itself. A kind whose row sets
+    ``marker = false`` (the homestead) is never drawn, at any scale. Surface edits from the overlay
     draw at every scale but the site scale, where the plan covers the ground.
     """
     world = ctx.world
@@ -31,9 +32,11 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
         has_bg = np.array([bg is not None for _glyph, _fg, bg in styles])
         at = np.clip(poi_index, 0, len(world.pois) - 1)
         anchored = ctx.sampler.inside & ctx.sampler.anchor & (poi_index >= 0)
+        marked = np.array([poi_has_marker(ctx.config, poi.kind) for poi in world.pois])  # a homestead has none
+        anchored &= marked[at]
         if not isinstance(sampler, DetailSampler):  # the map scale leaves out kinds whose row hides them there
             on_map = np.array([poi_on_map(ctx.config, poi.kind) for poi in world.pois])
-            anchored &= on_map[np.clip(poi_index, 0, len(world.pois) - 1)]
+            anchored &= on_map[at]
         grid.put(anchored, glyph=glyphs[at], fg=fgs[at], bold=True)
         grid.put(anchored & has_bg[at], bg=bgs[at])
     if ctx.overlay is not None and not (isinstance(sampler, DetailSampler) and sampler.scale == SCALE_SITE):
