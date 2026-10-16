@@ -67,9 +67,56 @@ def test_a_different_seed_gives_a_different_house(config: Config) -> None:
     assert a is not None and b is not None and not np.array_equal(a.cells, b.cells)
 
 
-def test_a_farm_has_a_hedge_and_a_wagon(config: Config) -> None:
+WHEAT, LOG, FLOOR = (int(c) for c in (Cell.WHEAT, Cell.LOG, Cell.FLOOR))
+
+
+def test_a_farm_sows_a_wheat_field_and_keeps_a_wagon(config: Config) -> None:
     _poi, _world, plan = _homestead(config, "farm")
-    assert int((plan.cells == int(Cell.BUSH)).sum()) >= 6 and int((plan.cells == int(Cell.WAGON)).sum()) == 1
+    assert int((plan.cells == WHEAT).sum()) >= 20 and int((plan.cells == int(Cell.WAGON)).sum()) == 1
+
+
+def test_a_farm_has_no_hedge_ring(config: Config) -> None:
+    # The wheat field replaced the ring of bushes: a ring would be dozens of bushes; only the odd scattered one is
+    # left (trees and bushes scatter at the plain wooded share, which a farm leaves at the default).
+    _poi, _world, plan = _homestead(config, "farm")
+    assert int((plan.cells == int(Cell.BUSH)).sum()) <= 12
+
+
+def test_the_wheat_field_is_open_ground_from_outside(config: Config) -> None:
+    # Seen from outside (the map, zoom and local views, and an upper floor) wheat stays wheat: only the house is roofed.
+    _poi, _world, plan = _homestead(config, "farm")
+    assert int((plan.outside == WHEAT).sum()) == int((plan.cells == WHEAT).sum())
+
+
+def test_the_wheat_field_does_not_touch_the_house(config: Config) -> None:
+    # Every wheat cell keeps a cell clear of the walls, so the field never grows into the building.
+    _poi, _world, plan = _homestead(config, "farm")
+    roof = ndimage.binary_dilation(plan.outside == ROOF, iterations=1)
+    assert not (roof & (plan.cells == WHEAT)).any()
+
+
+def test_the_wheat_field_is_one_block(config: Config) -> None:
+    labels, count = ndimage.label(plan_wheat := _homestead(config, "farm")[2].cells == WHEAT)
+    assert count >= 1 and int(plan_wheat.sum()) >= 20
+
+
+def test_a_lodge_has_a_felled_timber_clearing(config: Config) -> None:
+    # A bare working area with felled trunks lying in it, beside the house.
+    _poi, _world, plan = _homestead(config, "lodge")
+    assert int((plan.cells == LOG).sum()) >= 6 and int((plan.cells == FLOOR).sum()) > int((plan.cells == LOG).sum())
+
+
+def test_a_lodges_trunks_lie_on_its_clearing(config: Config) -> None:
+    # Each felled trunk cell has bare floor of the clearing at its side, not woods.
+    _poi, _world, plan = _homestead(config, "lodge")
+    logs = plan.cells == LOG
+    beside = ndimage.binary_dilation(logs, iterations=1) & ~logs
+    assert (plan.cells[beside] == FLOOR).mean() > 0.5
+
+
+def test_a_lodge_scatters_trees_round_it(config: Config) -> None:
+    _poi, _world, plan = _homestead(config, "lodge")
+    assert int((plan.cells == int(Cell.TREE)).sum()) >= 10
 
 
 def test_a_mine_heaps_spoil(config: Config) -> None:

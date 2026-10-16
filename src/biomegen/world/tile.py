@@ -122,6 +122,8 @@ class Cell(IntEnum):
     GRAVE = 34  # a burial mound
     BANNER = 35  # a battle standard, standing or fallen
     BONES = 36  # the remains left on a field
+    WHEAT = 37  # a sown field: open ground, never roofed
+    LOG = 38  # a felled trunk lying in a lodge's working area
 
 
 # Convenient lookup tables for config parsing and HUD display. Names are lower-case so they read

@@ -1,9 +1,10 @@
 """Homesteads: one building in a yard, dressed for what its owner does there (farm, mill, mine, lodge, fishery).
 
 A homestead is the smallest site: a short track, one house nearest the middle of the extent with its door joined to the
-track (or to the world's road when one passes), and the style's dressing round it from existing cells only: a farm's
-hedge and wagon, a mill's water wheel in the river, a mine's spoil heap, a lodge's woodland, a fishery's pier and boats.
-It is not a settlement plan (that would lay a street network round one house).
+track (or to the world's road when one passes), and the style's dressing round it: a farm's wheat field and wagon, a
+mill's water wheel in the river, a mine's spoil heap, a lodge's scattered trees and felled-timber clearing, a fishery's
+pier and boats. A wheat field is open ground, never roofed: seen from outside it stays wheat. It is not a settlement
+plan (that would lay a street network round one house).
 
 Every draw comes from ``rng.derive(seed, "site.homestead", ...)``, so the house is a pure function of the site seed: a
 later phase can rebuild the same building as the first lot of the hamlet the homestead grows into.
@@ -19,7 +20,7 @@ from scipy import ndimage
 
 from ..util import rng
 from ..world.tile import Cell
-from .carve import nearest_true
+from .carve import Rect, fit_rect, nearest_true
 from .furnish import weighted_choice
 from .layout import SiteContext, layout
 from .settlement import Lot, _harbour, _mill, _spec, _try_house
@@ -30,7 +31,7 @@ _PATH = int(Cell.PATH)
 _BRIDGE = int(Cell.BRIDGE)
 _STREET = (_PATH, _BRIDGE)
 _HOUSE_TRIES = 120  # candidate spots tried for the house before giving up
-_HEDGE_GAP_ROWS = 3.0  # clear screen distance (rows) kept in the hedge on each side of the door
+_SOWN = 0.94  # share of a wheat plot that is sown; the rest stays bare
 
 
 def _track(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, col: int, row: int) -> None:
@@ -97,11 +98,6 @@ def _yard(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, lot: Lot) -> np.n
     return near & dry & (grid == _VOID)
 
 
-def _put(grid: np.ndarray, cells: list[tuple[int, int]], cell: int) -> None:
-    for x, y in cells:
-        grid[y, x] = cell
-
-
 def _sample(mask: np.ndarray, count: int, stream: random.Random) -> list[tuple[int, int]]:
     """Up to ``count`` cells of ``mask`` as ``(x, y)``, drawn from the row-major list so the result is deterministic."""
     cells = [(int(x), int(y)) for y, x in np.argwhere(mask).tolist()]
@@ -117,17 +113,65 @@ def _supplies(ctx: SiteContext, grid: np.ndarray, yard: np.ndarray, count: int, 
         grid[y, x] = int(weighted_choice(stream, table))
 
 
-def _hedge(ctx: SiteContext, grid: np.ndarray, yard: np.ndarray, lot: Lot, stream: random.Random) -> None:
-    """Ring the yard with a hedge of bushes, leaving a gap by the door."""
-    outer = yard & ~ndimage.binary_erosion(yard, structure=np.ones((3, 3), bool), border_value=0)
-    front = lot.building.front
-    for y, x in np.argwhere(outer & (grid == _VOID)).tolist():
-        if front is not None:
-            fx, fy = lot.x + front[0], lot.y + front[1]
-            if (((x - fx) / ctx.aspect) ** 2 + (y - fy) ** 2) ** 0.5 < _HEDGE_GAP_ROWS:
-                continue
-        if stream.random() < 0.9:
-            grid[y, x] = int(Cell.BUSH)
+def _plot(
+    ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, lot: Lot, size: list[int]
+) -> Optional[Rect]:
+    """Return the free dry rectangle nearest the house of about ``size`` ``[rows, columns]``, or None.
+
+    It keeps a cell clear of the house and the paths, and shrinks by quarters (down to half) when the full size does
+    not fit, so a small extent still gets a smaller plot.
+    """
+    near = ndimage.binary_dilation(roofs | np.isin(grid, _STREET), iterations=1)
+    free = dry & (grid == _VOID) & ~near
+    middle = (lot.x + lot.width // 2, lot.y + lot.height // 2)
+    for share in (1.0, 0.75, 0.5):
+        rect = fit_rect(free, max(2, round(size[0] * share)), max(4, round(size[1] * share)), middle, ctx.aspect)
+        if rect is not None:
+            return rect
+    return None
+
+
+def _field(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    roofs: np.ndarray,
+    lot: Lot,
+    size: list[int],
+    stream: random.Random,
+) -> None:
+    """Sow a wheat field on the plot nearest the house; a few cells are left bare so the edge is not ruled."""
+    rect = _plot(ctx, grid, dry, roofs, lot, size)
+    if rect is None:
+        return
+    x0, y0, width, height = rect
+    for y in range(y0, y0 + height):
+        for x in range(x0, x0 + width):
+            if stream.random() < _SOWN:
+                grid[y, x] = int(Cell.WHEAT)
+
+
+def _clearing(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    roofs: np.ndarray,
+    lot: Lot,
+    size: list[int],
+    logs: int,
+    stream: random.Random,
+) -> None:
+    """Clear a working area for felled timber: bare ground with ``logs`` felled trunks lying along its rows."""
+    rect = _plot(ctx, grid, dry, roofs, lot, size)
+    if rect is None:
+        return
+    x0, y0, width, height = rect
+    grid[y0 : y0 + height, x0 : x0 + width] = int(Cell.FLOOR)
+    rows = stream.sample(range(y0, y0 + height), min(logs, height))
+    for y in sorted(rows):
+        length = stream.randint(max(2, width // 3), max(3, width - 2))
+        start = x0 + stream.randint(0, width - length)
+        grid[y, start : start + length] = int(Cell.LOG)
 
 
 def _spoil(grid: np.ndarray, yard: np.ndarray, count: int, stream: random.Random) -> None:
@@ -159,10 +203,11 @@ def _dress(
 ) -> None:
     """Dress the homestead for its style: ``ctx.dress`` names a row of ``sites.homestead.dress``."""
     settings = ctx.config.get("sites.homestead.dress").get(ctx.dress, {})
+    if "field" in settings:
+        _field(ctx, grid, dry, roofs, lot, settings["field"], stream)
+    if "clearing" in settings:
+        _clearing(ctx, grid, dry, roofs, lot, settings["clearing"], int(settings.get("logs", 0)), stream)
     yard = _yard(ctx, grid, dry, lot)
-    if settings.get("hedge"):
-        _hedge(ctx, grid, yard, lot, stream)
-        yard = _yard(ctx, grid, dry, lot)
     if int(settings.get("spoil", 0)):
         _spoil(grid, yard, int(settings["spoil"]), stream)
     for _ in range(int(settings.get("wagons", 0))):

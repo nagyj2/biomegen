@@ -163,7 +163,8 @@ grows_with_pop = false
 # A homestead is one house in a yard; its look follows its `style` (POI.style): a row named `homestead_<style>` replaces the
 # plain `homestead` row. `dress` picks the dressing (`sites.homestead.dress`): a farm's hedge and wagon, a mill's water wheel, a
 # mine's spoil, a lodge's woods, a fishery's pier and boats. Sizes are in tiles; the yard needs room round the house. A mill and a
-# fishery are wider, so their extent reaches into the neighbouring river or sea tile (a wheel or pier needs water in the extent).
+# fishery are wider, so their extent reaches into the neighbouring river or sea tile (a wheel or pier needs water in the extent);
+# a farm and a lodge are larger than the rest, for a wheat field and a felled-timber clearing.
 [sites.homestead]
 furniture = "homestead"
 layout = "homestead"
@@ -174,7 +175,7 @@ grows_with_pop = false
 [sites.homestead_farm]
 furniture = "homestead"
 layout = "homestead"
-extent_tiles = [0.8, 0.6]
+extent_tiles = [1.2, 0.85]
 rows_per_tile = 24
 grows_with_pop = false
 dress = "farm"
@@ -198,7 +199,7 @@ dress = "mine"
 [sites.homestead_lodge]
 furniture = "homestead"
 layout = "homestead"
-extent_tiles = [0.8, 0.6]
+extent_tiles = [1.0, 0.75]
 rows_per_tile = 24
 grows_with_pop = false
 dress = "lodge"

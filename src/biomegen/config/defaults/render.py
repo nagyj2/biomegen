@@ -395,6 +395,8 @@ VALUES: Dict[str, Any] = {
         "grave": "∩",
         "banner": "⚑",
         "bones": "x",
+        "wheat": '"',
+        "log": "=",
     },
     # ASCII output replaces any interior glyph that is not 7-bit with the entry here.
     "interior_glyphs_ascii": {
@@ -457,5 +459,7 @@ VALUES: Dict[str, Any] = {
         "grave": [122, 114, 100],
         "banner": [200, 62, 62],
         "bones": [206, 200, 184],
+        "wheat": [214, 184, 70],
+        "log": [140, 100, 62],
     },
 }

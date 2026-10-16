@@ -85,9 +85,10 @@ VALUES: Dict[str, Any] = {
     },
     # A homestead: one house of ``building_rows`` rows (``width`` times as wide as the cell aspect makes it square)
     # beside a yard track ``track_rows`` rows long each way, dressed within ``yard_reach`` [columns, rows] of the house
-    # and ``trees`` of the free ground wooded. ``dress`` gives each dressing (a site row's ``dress`` key): ``hedge``
-    # rings the yard, ``spoil`` heaps that many rock and rubble cells, ``wagons`` and ``supplies`` (the family's
-    # ``yard`` role) are counts, ``trees`` replaces the wooded share.
+    # and ``trees`` of the free ground wooded. ``dress`` gives each dressing (a site row's ``dress`` key): ``field``
+    # sows a wheat plot of about ``[rows, columns]`` beside the house, ``clearing`` bares a plot of that size for
+    # ``logs`` felled trunks, ``spoil`` heaps that many rock and rubble cells, ``wagons`` and ``supplies`` (the
+    # family's ``yard`` role) are counts, ``trees`` replaces the wooded share.
     "homestead": {
         "building_rows": [5, 6],
         "width": 1.5,
@@ -95,10 +96,10 @@ VALUES: Dict[str, Any] = {
         "yard_reach": [8, 4],
         "trees": 0.02,
         "dress": {
-            "farm": {"hedge": True, "wagons": 1, "supplies": 4},
+            "farm": {"field": [5, 16], "wagons": 1, "supplies": 4},
             "mill": {"supplies": 3},
             "mine": {"spoil": 14, "wagons": 1, "supplies": 3},
-            "lodge": {"trees": 0.3, "supplies": 5},
+            "lodge": {"trees": 0.14, "clearing": [4, 14], "logs": 3, "supplies": 3},
             "fishery": {"supplies": 4},
         },
     },
