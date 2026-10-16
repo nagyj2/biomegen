@@ -56,6 +56,30 @@
 #   bandit_radius_km  (optional) how far its bandits' danger reaches
 #   lifespan          (optional) years a dynamic POI stands before it is dismantled
 
+# Styles (the `poi_styles` table below, one row per style) place the lone building (homestead) and the generated hamlet:
+#   source = "style"  a kind placed by the styles pass, not by location or history (the `homestead` kind row)
+#   marker            (optional, default true) false for a kind drawn with no marker at any scale
+#
+# Each style row below has these keys:
+#   generated, dynamic   placed during world generation / minted by a later simulation as a building project
+#   grows_into           (optional) the settlement tier a homestead of this style may grow into (a faction's project, never by
+#                        itself); a style without it never grows. A hamlet is generated only for a style that grows
+#   homestead_km2_per_poi, hamlet_km2_per_poi   (optional) one POI of that kind per this much *suited* land in km² (cells that are
+#                        eligible and score at least `min_score`), times `poi.density`; omitted = none of that kind at generation
+#   min_score            suited land scores at least this (the score is the weighted terms below, there is no base)
+#   min_spacing_km, kind_spacing_km   minimum distance to every POI / to another POI of this style (a homestead; a hamlet also keeps
+#                        its tier's `spacing_km` from every settlement)
+#   biomes, elevation_min_m, elevation_max_m   eligibility, as for a kind
+#   needs_freshwater_km, needs_coast_km   (optional) eligibility: fresh water / the sea within this many km
+#   score terms (all optional weights >= 0 on a [0, 1] term): near_freshwater, coastal, remoteness (the kind terms); fertility (the
+#                        settlement habitability of the cell); relief (how rough the land is); forest (forest cover round the cell);
+#                        near_settlement (closeness to a settlement, falloff `near_settlement_km`); near_road (closeness to a road,
+#                        falloff `near_road_km`; at generation only the trunk roads exist)
+#   building             (optional) the building kind of the style's first building (read by a later phase)
+#   names                name patterns of a homestead (`{n}` once, `{fort}` allowed)
+#   hooks_homestead, hooks_hamlet   story texts per kind (`{name}`); a style needs the first, and the second when it grows
+#   hooks_homestead_near, hooks_hamlet_near   (optional) texts that also name a settlement nearby (`{near}`, needed)
+
 [pois.tower]
 priority = 10
 source = "both"
@@ -284,3 +308,99 @@ max_km = 450.0
 connect = false
 near_freshwater = 0.5
 remoteness = 1.0
+
+# The styles of a homestead (and, for a style that grows, of a hamlet). A farm weights fertility over a settlement's closeness (a far,
+# very fertile area may grow into a settlement); a mill needs a river and keeps its distance from other mills; a lodge weights forest
+# and remoteness and may grow, since a far hamlet extends a realm's reach. Numbers are starting values, tuned by eye on the fixture seeds.
+[poi_styles.farm]
+generated = true
+dynamic = true
+grows_into = "hamlet"
+homestead_km2_per_poi = 120000.0
+hamlet_km2_per_poi = 700000.0
+min_score = 0.6
+min_spacing_km = 60.0
+kind_spacing_km = 60.0
+biomes = ["grass", "savanna", "forest", "jungle", "taiga"]
+fertility = 1.0
+near_freshwater = 0.3
+near_settlement = 0.25
+near_settlement_km = 150.0
+building = "farmhouse"
+names = ["{n} Farm", "{n}'s Farm", "Farm of {n}"]
+hooks_homestead = ["{name} is a lone farm; its family keeps to its own fields.", "The fields of {name} are the only tilled ground for a day's walk."]
+hooks_homestead_near = ["The farm at {name} sends its grain to {near}.", "Folk of {near} buy their eggs from {name}."]
+hooks_hamlet = ["{name} began as one farm, and a few more houses have gathered round it.", "A handful of farms share a lane at {name}."]
+hooks_hamlet_near = ["{name} is a farming hamlet a short ride from {near}."]
+
+[poi_styles.mill]
+generated = true
+dynamic = true
+grows_into = "hamlet"
+homestead_km2_per_poi = 250000.0
+hamlet_km2_per_poi = 900000.0
+min_score = 0.7
+min_spacing_km = 80.0
+kind_spacing_km = 150.0
+biomes = ["grass", "savanna", "forest", "jungle", "taiga", "swamp"]
+needs_freshwater_km = 30.0
+near_freshwater = 0.8
+fertility = 0.4
+near_settlement = 0.5
+near_settlement_km = 120.0
+building = "mill"
+names = ["{n} Mill", "Mill of {n}"]
+hooks_homestead = ["The wheel at {name} has turned for as long as anyone remembers.", "{name} grinds for the farms upstream."]
+hooks_homestead_near = ["Flour from {name} is sold in {near}."]
+hooks_hamlet = ["Cottages have grown up round the mill at {name}.", "{name} is a mill with a few houses leaning on it."]
+hooks_hamlet_near = ["{name} is the mill hamlet that feeds {near}."]
+
+[poi_styles.mine]
+generated = true
+dynamic = true
+homestead_km2_per_poi = 300000.0
+min_score = 0.8
+min_spacing_km = 80.0
+kind_spacing_km = 120.0
+biomes = ["grass", "savanna", "forest", "taiga", "tundra", "snow", "desert"]
+elevation_min_m = 300.0
+relief = 1.0
+remoteness = 0.3
+building = "mine"
+names = ["{n} Mine", "{n} Diggings"]
+hooks_homestead = ["{name} is a shaft in the hillside and a hut beside it.", "Whatever is dug out of {name} goes down the hill on a mule."]
+hooks_homestead_near = ["Ore from {name} is carted to {near}."]
+
+[poi_styles.lodge]
+generated = true
+dynamic = true
+grows_into = "hamlet"
+homestead_km2_per_poi = 250000.0
+hamlet_km2_per_poi = 800000.0
+min_score = 0.8
+min_spacing_km = 80.0
+kind_spacing_km = 100.0
+biomes = ["forest", "taiga", "jungle"]
+forest = 1.0
+remoteness = 0.5
+building = "lodge"
+names = ["{n} Lodge", "Lodge of {n}"]
+hooks_homestead = ["{name} is a woodcutter's lodge at the forest's edge.", "Hunters winter at {name}, and trappers pass through."]
+hooks_homestead_near = ["Timber from {name} floats down to {near} each spring."]
+hooks_hamlet = ["A few families live by the forest at {name}.", "{name} is a clearing in the trees with a handful of roofs."]
+hooks_hamlet_near = ["{name} lies in the woods beyond {near}."]
+
+[poi_styles.fishery]
+generated = true
+dynamic = true
+homestead_km2_per_poi = 200000.0
+min_score = 0.7
+min_spacing_km = 60.0
+kind_spacing_km = 80.0
+biomes = ["grass", "savanna", "forest", "jungle", "taiga", "tundra", "snow", "swamp", "desert"]
+needs_coast_km = 30.0
+coastal = 1.0
+building = "fishery"
+names = ["{n} Fishery", "{n} Landing"]
+hooks_homestead = ["Nets hang drying outside {name}.", "{name} is a hut, a jetty and a boat pulled up on the shingle."]
+hooks_homestead_near = ["Fish from {name} reaches {near} by cart."]

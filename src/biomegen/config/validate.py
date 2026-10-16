@@ -78,6 +78,11 @@ def _validate_biome_names(cfg: Dict[str, Any], errors: List[str]) -> None:
         rule = pois[kind]
         for name in (rule.get("biomes", []) or []) if isinstance(rule, dict) else []:
             check(name, f"tables.pois.{kind}.biomes")
+    styles = cfg.get("tables", {}).get("poi_styles", {}) or {}
+    for style in sorted(styles):
+        rule = styles[style]
+        for name in (rule.get("biomes", []) or []) if isinstance(rule, dict) else []:
+            check(name, f"tables.poi_styles.{style}.biomes")
 
     for habitat, names in (cfg.get("politics", {}).get("habitats", {}) or {}).items():
         for name in names or []:

@@ -72,6 +72,7 @@ _TIER_ROW = {
     "free_fg": "color",
     "hooks_free": "text_list",
     "hooks_remnant": "text_list",
+    "near_target": "bool",
 }
 _SITE_ROW = {
     "layout": "text",
@@ -128,6 +129,38 @@ _POI_ROW = {
     "origins": "weights",
     "fall_origin": "text",
     "holding_origins": "weights",
+    "marker": "bool",
+}
+_POI_STYLE_ROW = {
+    "generated": "bool",
+    "dynamic": "bool",
+    "grows_into": "text",
+    "homestead_km2_per_poi": "positive",
+    "hamlet_km2_per_poi": "positive",
+    "min_score": "nonneg",
+    "min_spacing_km": "positive",
+    "kind_spacing_km": "positive",
+    "biomes": "text_list",
+    "elevation_min_m": "number",
+    "elevation_max_m": "number",
+    "needs_freshwater_km": "positive",
+    "needs_coast_km": "positive",
+    "near_freshwater": "nonneg",
+    "coastal": "nonneg",
+    "remoteness": "nonneg",
+    "fertility": "nonneg",
+    "relief": "nonneg",
+    "forest": "nonneg",
+    "near_settlement": "nonneg",
+    "near_settlement_km": "positive",
+    "near_road": "nonneg",
+    "near_road_km": "positive",
+    "building": "text",
+    "names": "forms",
+    "hooks_homestead": "text_list",
+    "hooks_homestead_near": "text_list",
+    "hooks_hamlet": "text_list",
+    "hooks_hamlet_near": "text_list",
 }
 _POI_FATE_ROW = {"weight": "positive", "sim_only": "bool", "bandits": "bool"}
 _FREE_FATE_ROW = {"weight": "positive", "sim_only": "bool", "factors": "text_list"}
@@ -235,10 +268,40 @@ _POI_OPTIONAL = frozenset(
         "origins",
         "fall_origin",
         "holding_origins",
+        "marker",
     }
 )
 
-POI_SOURCES = ("location", "history", "both")
+#: The style row keys a style may omit: growth, the hamlet count, the optional eligibility and score terms, the texts
+#: of the hamlet kind and the ``_near`` variants (``_validate_poi_styles`` checks which the other keys require).
+_POI_STYLE_OPTIONAL = frozenset(
+    {
+        "grows_into",
+        "homestead_km2_per_poi",
+        "hamlet_km2_per_poi",
+        "kind_spacing_km",
+        "elevation_min_m",
+        "elevation_max_m",
+        "needs_freshwater_km",
+        "needs_coast_km",
+        "near_freshwater",
+        "coastal",
+        "remoteness",
+        "fertility",
+        "relief",
+        "forest",
+        "near_settlement",
+        "near_settlement_km",
+        "near_road",
+        "near_road_km",
+        "building",
+        "hooks_homestead_near",
+        "hooks_hamlet",
+        "hooks_hamlet_near",
+    }
+)
+
+POI_SOURCES = ("location", "history", "both", "style")
 POI_OWNERS = ("realm", "wild")
 TEMPERS = ("aggressive", "passive")
 SITE_LANDS = ("realm", "any")
@@ -303,7 +366,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "detail_relief": (_DETAIL_RELIEF_ROW, frozenset()),
     "tiers": (
         _TIER_ROW,
-        frozenset({"bg", "dynamic", "connect", "map_marker", "free_fg", "hooks_free", "hooks_remnant"}),
+        frozenset({"bg", "dynamic", "connect", "map_marker", "free_fg", "hooks_free", "hooks_remnant", "near_target"}),
     ),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
@@ -312,6 +375,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "poi_fates": (_POI_FATE_ROW, frozenset()),
     "free_fates": (_FREE_FATE_ROW, frozenset()),
     "poi_sites": (_POI_SITE_ROW, frozenset()),
+    "poi_styles": (_POI_STYLE_ROW, _POI_STYLE_OPTIONAL),
     "realm_kinds": (_REALM_KIND_ROW, frozenset()),
     "realm_forms": (_REALM_FORM_ROW, frozenset()),
     "relation_weights": (_RELATION_WEIGHT_ROW, frozenset()),
@@ -653,6 +717,55 @@ def _validate_tier_hooks(tiers: Dict[str, Any], errors: List[str]) -> None:
                     errors.append(f"tables.tiers.{tier}.{key}: {text!r} must use {{{needs}}}")
 
 
+#: Style score terms that name a falloff scale in km: the weight key and the key that must then be present.
+_STYLE_SCALES = (("near_settlement", "near_settlement_km"), ("near_road", "near_road_km"))
+_STYLE_TEXTS: tuple[tuple[str, frozenset[str]], ...] = (
+    ("hooks_homestead", frozenset()),
+    ("hooks_hamlet", frozenset()),
+    ("hooks_homestead_near", frozenset({"near"})),
+    ("hooks_hamlet_near", frozenset({"near"})),
+)
+
+
+def _validate_poi_styles(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check the ``poi_styles`` rows: what a style makes, what growth needs, the scale of each km term and its texts.
+
+    Every style is a homestead style (it needs ``hooks_homestead``). A hamlet count needs ``grows_into`` (a settlement
+    tier), because a hamlet is generated only for a style a homestead could grow by; a style that grows needs
+    ``hooks_hamlet``. A generated style needs a count. A weighted ``near_settlement`` or ``near_road`` needs its scale.
+    """
+    styles = tables.get("poi_styles", {})
+    tiers = tables.get("tiers", {})
+    if not isinstance(styles, dict) or not isinstance(tiers, dict):
+        return
+    for name in sorted(styles):
+        row = styles[name]
+        where = f"tables.poi_styles.{name}"
+        if not isinstance(row, dict):
+            continue
+        counts = [key for key in ("homestead_km2_per_poi", "hamlet_km2_per_poi") if key in row]
+        if row.get("generated") is True and not counts:
+            errors.append(f"{where}: a generated style needs homestead_km2_per_poi or hamlet_km2_per_poi")
+        if "hamlet_km2_per_poi" in row and "grows_into" not in row:
+            errors.append(f"{where}: a style that makes hamlets needs grows_into")
+        if isinstance(row.get("grows_into"), str) and row["grows_into"] not in tiers:
+            errors.append(f"{where}.grows_into: {row['grows_into']!r} is no settlement tier")
+        if "hooks_homestead" not in row:
+            errors.append(f"{where}: needs hooks_homestead")
+        if "grows_into" in row and "hooks_hamlet" not in row:
+            errors.append(f"{where}: a style that grows needs hooks_hamlet")
+        for weight, scale in _STYLE_SCALES:
+            if weight in row and scale not in row:
+                errors.append(f"{where}: {weight} needs {scale}")
+        for text in _listed(row, "names"):
+            _check_tokens(text, _NAME_TOKENS, f"{where}.names", errors)
+        for key, extra in _STYLE_TEXTS:
+            for text in _listed(row, key):
+                _check_tokens(text, _HOOK_TOKENS | extra, f"{where}.{key}", errors)
+                if extra and isinstance(text, str) and "near" not in (_tokens(text) or set()):
+                    errors.append(f"{where}.{key}: {text!r} must use {{near}}")
+
+
 def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
     """Check the POI kinds' history keys, name patterns and hook texts, and the shrine-like sites."""
     pois, styles = tables.get("pois", {}), tables.get("ruling_styles", {})
@@ -667,6 +780,7 @@ def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
     if isinstance(pois.get("ruin"), dict) and isinstance(tables.get("tiers"), dict):
         _validate_ruin_origins(pois["ruin"], tables["tiers"], tables.get("sites", {}), errors)
     _validate_poi_sites(tables.get("poi_sites", {}), pois, errors)
+    _validate_poi_styles(tables, errors)
 
 
 def _validate_chronicle(chronicle: Any, errors: List[str]) -> None:

@@ -41,6 +41,7 @@ def test_shipped_tables_load_and_validate() -> None:
         "geo_names",
         "poi_fates",
         "poi_sites",
+        "poi_styles",
         "pois",
         "realm_colors",
         "realm_forms",
@@ -179,6 +180,7 @@ def test_loader_combines_the_shipped_files() -> None:
         "geo_names",
         "poi_fates",
         "poi_sites",
+        "poi_styles",
         "pois",
         "realm_colors",
         "realm_forms",
@@ -563,3 +565,124 @@ def test_every_wording_of_a_secession_exists_for_both_tags() -> None:
     rows = get_defaults()["tables"]["chronicle"]
     names = {f"secession_{form}_{tag}" for form in ("offshoot", "split", "defection") for tag in ("bitter", "amicable")}
     assert names <= set(rows)
+
+
+def test_the_shipped_styles_are_the_five_homestead_styles() -> None:
+    assert sorted(get_defaults()["tables"]["poi_styles"]) == ["farm", "fishery", "lodge", "mill", "mine"]
+
+
+def test_only_the_growing_styles_make_hamlets() -> None:
+    # A hamlet is generated only for a style a homestead could grow by (farm, mill, lodge); mine and fishery never grow.
+    styles = get_defaults()["tables"]["poi_styles"]
+    hamlet_styles = sorted(name for name, row in styles.items() if "hamlet_km2_per_poi" in row)
+    grows = sorted(name for name, row in styles.items() if "grows_into" in row)
+    assert hamlet_styles == grows == ["farm", "lodge", "mill"]
+
+
+def test_a_growing_style_grows_into_a_settlement_tier() -> None:
+    tables = get_defaults()["tables"]
+    assert all(row["grows_into"] in tables["tiers"] for row in tables["poi_styles"].values() if "grows_into" in row)
+
+
+def test_the_hamlet_is_never_another_places_nearby_settlement() -> None:
+    # near_target is false on the hamlet tier only; the other tiers keep the default (true).
+    tiers = get_defaults()["tables"]["tiers"]
+    assert {name: row.get("near_target", True) for name, row in tiers.items()} == {
+        "capital": True,
+        "city": True,
+        "town": True,
+        "village": True,
+        "hamlet": False,
+    }
+
+
+def test_a_generated_style_needs_a_count() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["poi_styles"]["mine"]["homestead_km2_per_poi"]
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.mine: a generated style needs"):
+        validate(cfg)
+
+
+def test_a_style_with_a_hamlet_count_must_grow() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_styles"]["fishery"]["hamlet_km2_per_poi"] = 500000.0
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.fishery: a style that makes hamlets needs grows_into"):
+        validate(cfg)
+
+
+def test_a_style_cannot_grow_into_an_unknown_tier() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_styles"]["farm"]["grows_into"] = "metropolis"
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.farm\.grows_into: 'metropolis' is no settlement tier"):
+        validate(cfg)
+
+
+def test_a_style_needs_its_homestead_hooks() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["poi_styles"]["mine"]["hooks_homestead"]
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.mine: needs hooks_homestead"):
+        validate(cfg)
+
+
+def test_a_growing_style_needs_its_hamlet_hooks() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["poi_styles"]["lodge"]["hooks_hamlet"]
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.lodge: a style that grows needs hooks_hamlet"):
+        validate(cfg)
+
+
+def test_a_weighted_distance_term_needs_its_scale() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["poi_styles"]["farm"]["near_settlement_km"]
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.farm: near_settlement needs near_settlement_km"):
+        validate(cfg)
+
+
+def test_a_style_near_text_must_name_the_settlement() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_styles"]["mill"]["hooks_homestead_near"] = ["{name} grinds."]
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.mill\.hooks_homestead_near: .* must use \{near\}"):
+        validate(cfg)
+
+
+def test_a_style_hook_may_use_only_its_tokens() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_styles"]["mill"]["hooks_homestead"] = ["{name} grinds for {near}."]
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.mill\.hooks_homestead: unknown token \{near\}"):
+        validate(cfg)
+
+
+def test_a_style_name_pattern_needs_its_root() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_styles"]["farm"]["names"] = ["The Farm"]
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.farm\.names: expected forms"):
+        validate(cfg)
+
+
+def test_a_style_biome_name_must_exist() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_styles"]["farm"]["biomes"] = ["moonscape"]
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.farm\.biomes: unknown biome"):
+        validate(cfg)
+
+
+def test_a_style_row_value_of_the_wrong_kind_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_styles"]["farm"]["fertility"] = -1.0
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.farm\.fertility: expected nonneg"):
+        validate(cfg)
+
+
+def test_a_style_row_with_an_unknown_key_is_rejected() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_styles"]["farm"]["soil"] = 1.0
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.farm: unknown key 'soil'"):
+        validate(cfg)
+
+
+def test_a_poi_row_may_be_placed_by_style_and_hide_its_marker() -> None:
+    # `source = "style"` and `marker = false` are valid row values (the homestead kind row uses both).
+    cfg = get_defaults()
+    cfg["tables"]["pois"]["boat"]["source"] = "style"
+    cfg["tables"]["pois"]["boat"]["marker"] = False
+    validate(cfg)

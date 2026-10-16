@@ -22,6 +22,7 @@
 #   free_fg       (optional) marker colour of a settlement no realm holds (a free settlement); omit to keep `fg`
 #   hooks_free    (optional) one-sentence story texts of a free settlement: `{name}` is the settlement
 #   hooks_remnant (optional) texts of a free settlement that is a remnant of a fallen realm: `{name}` and `{fallen}` (needed)
+#   near_target   (optional, default true) false for a tier other places' texts never name as the settlement nearby (the hamlet)
 
 [tiers.capital]
 label = "Capital"
@@ -98,5 +99,6 @@ backbone = false
 dynamic = true
 connect = false
 map_marker = false
+near_target = false
 free_fg = [150, 200, 205]
 hooks_free = ["{name} is a handful of houses that answer to no one.", "No one has ever claimed {name}; it is too small to be worth the trouble."]
