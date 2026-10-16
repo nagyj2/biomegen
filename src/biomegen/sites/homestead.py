@@ -29,18 +29,18 @@ _VOID = int(Cell.VOID)
 _PATH = int(Cell.PATH)
 _BRIDGE = int(Cell.BRIDGE)
 _STREET = (_PATH, _BRIDGE)
-_HOUSE_TRIES = 40  # candidate spots tried for the house before giving up
+_HOUSE_TRIES = 120  # candidate spots tried for the house before giving up
 _HEDGE_GAP_ROWS = 3.0  # clear screen distance (rows) kept in the hedge on each side of the door
 
 
-def _track(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, centre: tuple[int, int]) -> None:
-    """Lay the yard track: a short east-west path through the middle of the extent, the street the house joins."""
-    cfg = ctx.config.get("sites.homestead")
-    length = max(2, round(int(cfg["track_rows"]) * ctx.aspect))
-    cx, cy = centre
-    for x in range(cx - length, cx + length + 1):
-        if 0 <= x < grid.shape[1] and dry[cy, x] and grid[cy, x] == _VOID:
-            grid[cy, x] = _PATH
+def _track(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, col: int, row: int) -> None:
+    """Lay a yard track: a short east-west path through ``(col, row)`` over free dry cells, for a door to join."""
+    length = max(2, round(int(ctx.config.get("sites.homestead.track_rows")) * ctx.aspect))
+    if not 0 <= row < grid.shape[0]:
+        return
+    for x in range(col - length, col + length + 1):
+        if 0 <= x < grid.shape[1] and dry[row, x] and grid[row, x] == _VOID:
+            grid[row, x] = _PATH
 
 
 def _house(
@@ -51,29 +51,39 @@ def _house(
     centre: tuple[int, int],
     stream: random.Random,
 ) -> Optional[Lot]:
-    """Build the house on free dry ground nearest ``centre`` (inner ground first), its door joined to the track."""
-    streets = np.isin(grid, _STREET)
-    if not streets.any():
-        return None
+    """Build the house on free dry ground nearest ``centre`` (inner ground first).
+
+    Each candidate spot gets its own yard track laid a gap row below the house, which its door joins, so the house
+    needs no room for a track beside it. When no spot takes the drawn size (a shore or a river takes most of the
+    extent) the smallest house is tried, as a settlement always keeps at least one house.
+    """
     lo, hi = (int(v) for v in ctx.config.get("sites.homestead.building_rows"))
     height = stream.randint(lo, hi)
-    width = round(height * ctx.aspect * float(ctx.config.get("sites.homestead.width")))
-    free = dry & (grid == _VOID)
-    fits = ndimage.minimum_filter(free.astype(np.uint8), size=(height, width), mode="constant", cval=0) > 0
+    scale = ctx.aspect * float(ctx.config.get("sites.homestead.width"))
+    sizes = [(height, round(height * scale)), (lo, round(0.8 * lo * ctx.aspect))]
     cx, cy = centre
-    spots = sorted(
-        (not ground[y, x], ((x - cx) / ctx.aspect) ** 2 + (y - cy) ** 2, y, x) for y, x in np.argwhere(fits).tolist()
-    )[:_HOUSE_TRIES]
     sampling = (1.0, 1.0 / ctx.aspect)
-    _, street_at = ndimage.distance_transform_edt(~streets, sampling=sampling, return_indices=True)
     spec = _spec(ctx)
-    for _, _, mid_y, mid_x in spots:
-        rect = (mid_x - width // 2, mid_y - height // 2, width, height)
-        street = (int(street_at[1][mid_y, mid_x]), int(street_at[0][mid_y, mid_x]))
-        placed = _try_house(ctx, grid, dry, ground, rect, street, stream, spec)
-        if placed is not None:
-            grid[:] = placed[0]
-            return placed[1]
+    for height, width in sizes:
+        free = dry & (grid == _VOID)
+        fits = ndimage.minimum_filter(free.astype(np.uint8), size=(height, width), mode="constant", cval=0) > 0
+        spots = sorted(
+            (not ground[y, x], ((x - cx) / ctx.aspect) ** 2 + (y - cy) ** 2, y, x)
+            for y, x in np.argwhere(fits).tolist()
+        )[:_HOUSE_TRIES]
+        for _, _, mid_y, mid_x in spots:
+            rect = (mid_x - width // 2, mid_y - height // 2, width, height)
+            trial = grid.copy()
+            _track(ctx, trial, dry, mid_x, rect[1] + height + 1)
+            streets = np.isin(trial, _STREET)
+            if not streets.any():
+                continue
+            _, street_at = ndimage.distance_transform_edt(~streets, sampling=sampling, return_indices=True)
+            street = (int(street_at[1][mid_y, mid_x]), int(street_at[0][mid_y, mid_x]))
+            placed = _try_house(ctx, trial, dry, ground, rect, street, stream, spec)
+            if placed is not None:
+                grid[:] = placed[0]
+                return placed[1]
     return None
 
 
@@ -176,10 +186,13 @@ def build_homestead(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]
     stream = rng.derive(ctx.seed, "site.homestead")  # one stream for the house and its dressing, in a fixed order
     grid = np.full((rows, cols), _VOID, dtype=np.uint8)
     lay_roads(grid, ctx.patch)
-    _track(ctx, grid, dry, centre)
     if ctx.dress == "fishery":
         _harbour(ctx, grid, dry, centre)
-    lot = _mill(ctx, grid, dry, ground, centre, stream) if ctx.dress == "mill" else None
+    lot = None
+    if ctx.dress == "mill":  # the mill joins a street it finds: lay one below the middle first
+        tallest = int(ctx.config.get("sites.homestead.building_rows")[1])
+        _track(ctx, grid, dry, centre[0], min(rows - 2, centre[1] + tallest // 2 + 2))
+        lot = _mill(ctx, grid, dry, ground, centre, stream)
     lot = lot or _house(ctx, grid, dry, ground, centre, stream)
     if lot is None:
         return None

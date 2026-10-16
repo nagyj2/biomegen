@@ -234,3 +234,21 @@ def test_a_site_keeps_its_own_colours_under_a_data_tint() -> None:
     plain, _, _ = _draw(world, WITH, config=config)
     plan = (with_site.bg != without_site.bg).any(axis=2)
     assert plan.any() and (with_site.bg[plan] == plain.bg[plan]).all()
+
+
+def test_the_site_scale_draws_every_plan_row_exactly_once() -> None:
+    # At the site scale the grid has the site's own cell size, so the extent must cover exactly the plan's box: a box a
+    # row taller (a rounding mismatch) repeats a plan row, such as the top wall of a building. Sizes vary with the seed.
+    from biomegen.render.layers.sites import _extent_cells
+
+    config = load_config(None)
+    for seed in range(1, 41):
+        world = make_world(WORLD, WORLD, Biome.GRASS)
+        world.pois.append(POI(kind="homestead", x=5, y=5, interior_seed=seed, style="lodge"))
+        poi = world.pois[0]
+        geometry = site_geometry(poi, config)
+        sampler = window_sampler(world, config, geometry)
+        plan = site_plan(poi, 0, config, world)
+        assert geometry is not None and plan is not None
+        _row0, _col0, rows, cols = _extent_cells(sampler, geometry)
+        assert (rows, cols) == plan.cells.shape, seed

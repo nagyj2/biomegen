@@ -136,3 +136,30 @@ def test_a_homestead_on_a_one_cell_island_still_gets_a_plan_or_none(config: Conf
     world.water_type[:] = int(WaterType.SALT)
     poi = add_poi(world, "homestead", 7, 5, style="farm")
     assert site_plan(poi, 0, config, world) is None
+
+
+@pytest.mark.parametrize("style", STYLES)
+def test_every_style_gets_a_plan_whatever_its_seeds_size(style: str) -> None:
+    # The extent jitters with the seed, down to 0.75 of its size: a small extent still holds the house and its yard.
+    from biomegen.config import load_config
+
+    config = load_config(None)
+    for seed in range(1, 31):
+        world = flat_world(16, 12)
+        poi = add_poi(world, "homestead", 7, 5, style=style, interior_seed=seed)
+        assert site_plan(poi, 0, config, world) is not None, seed
+
+
+def test_a_homestead_on_a_shore_takes_the_smallest_house_when_the_big_one_does_not_fit(config: Config) -> None:
+    # Water takes all but a corner of the extent; a small house still fits there, so the site is not lost.
+    world = flat_world(16, 12)
+    for row in range(12):
+        world.water_type[row, 7 + row // 3 :] = int(WaterType.SALT)
+        world.biome[row, 7 + row // 3 :] = int(Biome.DEEP)
+    world.water_type[:5, 7:] = int(WaterType.NONE)
+    world.biome[:5, 7:] = int(Biome.GRASS)
+    world.water_type[:, 8:] = int(WaterType.SALT)
+    world.biome[:, 8:] = int(Biome.DEEP)
+    poi = add_poi(world, "homestead", 7, 5, style="farm")
+    plan = site_plan(poi, 0, config, world)
+    assert plan is not None and int((plan.outside == ROOF).sum()) > 0

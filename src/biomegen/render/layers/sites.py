@@ -10,6 +10,8 @@ Outside views show the surface; the inside view shows the chosen floor, with run
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from ...sampling.detail import SCALE_SITE, DetailSampler
@@ -73,12 +75,18 @@ def _stamp(
 
 
 def _extent_cells(sampler: DetailSampler, geometry: SiteGeometry) -> tuple[int, int, int, int]:
-    """Return ``(row0, col0, rows, cols)``: the cells of a detail grid that the site's extent covers."""
+    """Return ``(row0, col0, rows, cols)``: the cells of a detail grid that the site's extent covers.
+
+    A grid with the site's own cell size draws the plan one cell for one, so its box is the plan's own (floored, as in
+    :meth:`SiteGeometry.cell_at`): rounding instead could make it a row taller than the plan and repeat one of its rows.
+    A grid of another cell size scales the plan to a rounded block.
+    """
     left, top, right, bottom = geometry.extent
-    col0 = round((left - (sampler.cam_x - 0.5)) * sampler.cell_w)
-    col1 = round((right - (sampler.cam_x - 0.5)) * sampler.cell_w)
-    row0 = round((top - (sampler.cam_y - 0.5)) * sampler.cell_h)
-    row1 = round((bottom - (sampler.cam_y - 0.5)) * sampler.cell_h)
+    pick = math.floor if (sampler.cell_w, sampler.cell_h) == (geometry.cell_w, geometry.cell_h) else round
+    col0 = pick((left - (sampler.cam_x - 0.5)) * sampler.cell_w)
+    col1 = pick((right - (sampler.cam_x - 0.5)) * sampler.cell_w)
+    row0 = pick((top - (sampler.cam_y - 0.5)) * sampler.cell_h)
+    row1 = pick((bottom - (sampler.cam_y - 0.5)) * sampler.cell_h)
     return row0 - sampler.row0, col0 - sampler.col0, row1 - row0, col1 - col0
 
 
