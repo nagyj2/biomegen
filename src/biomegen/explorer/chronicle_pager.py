@@ -20,7 +20,14 @@ from typing import Callable, Optional, TextIO
 from ..config.model import Config
 from ..render.chronicle import layout_events
 from ..render.grid import RGB, CellGrid, Document
-from ..world.chronicle import ChronicleFilter, chronicle_names, chronicle_title, describe_filter, filter_events
+from ..world.chronicle import (
+    ENTITY_LABELS,
+    ChronicleFilter,
+    chronicle_names,
+    chronicle_title,
+    describe_filter,
+    filter_events,
+)
 from ..world.entities import EVENT_KINDS, ChronicleEvent
 from ..world.world import World
 from .input import Action, KeyReader, make_reader
@@ -70,6 +77,7 @@ _PAGER_HELP = (
     "{filter_kind}   cycle the event-kind filter",
     "{filter_years}   filter by years (100-300, 100-, -300)",
     "{filter_realm}   filter by realm, ruler or settlement name",
+    "      (A|B: A or B     A&B: A and B)",
     "      (Up / Down pick a name, Tab completes it)",
     "{filter_clear}   clear every filter and search",
     "{help}   this help      {quit} or Esc   quit",
@@ -106,7 +114,7 @@ class PagerState:
         scroll: Index of the first line shown.
         current: Index (in the listed events) of the search match the view is on, -1 before the first jump.
         prompt: The open prompt, or ``None``.
-        names: Every realm, ruler and settlement name of the chronicle, for the realm prompt's suggestions.
+        names: Every ``(name, kind)`` of the chronicle's realms, rulers and settlements, for the name suggestions.
         message: A short note for the status line (an unparsable year range, no match, ...).
         layout: The last layout, reused while the width, filter and search stay the same.
     """
@@ -116,7 +124,7 @@ class PagerState:
     scroll: int = 0
     current: int = -1
     prompt: Optional[_Prompt] = None
-    names: Optional[list[str]] = None
+    names: Optional[list[tuple[str, str]]] = None
     message: str = ""
     layout: Optional[_Layout] = None
 
@@ -283,39 +291,56 @@ def compose_pager_frame(
     return screen
 
 
-def suggestions(names: list[str], text: str) -> list[str]:
-    """Return the names containing ``text`` (any case), those that start with it first."""
+def suggestions(names: list[tuple[str, str]], text: str) -> list[tuple[str, str]]:
+    """Return the ``(name, kind)`` pairs whose name contains ``text`` (any case), those that start with it first."""
     needle = text.lower()
-    hits = [name for name in names if needle in name.lower()]
-    return sorted(hits, key=lambda name: not name.lower().startswith(needle))
+    hits = [entry for entry in names if needle in entry[0].lower()]
+    return sorted(hits, key=lambda entry: not entry[0].lower().startswith(needle))
 
 
-def _suggestions_of(world: World, state: PagerState) -> list[str]:
-    """Return the realm prompt's suggestions for what is typed so far (none for the other prompts)."""
+def split_last_term(text: str) -> tuple[str, str]:
+    """Split a typed expression into what precedes its last term (up to and including ``|`` or ``&``) and that term."""
+    cut = max(text.rfind("|"), text.rfind("&")) + 1
+    return text[:cut], text[cut:]
+
+
+def _suggestions_of(world: World, state: PagerState) -> list[tuple[str, str]]:
+    """Return the name prompt's suggestions for the term being typed (none for the other prompts).
+
+    As in the filter, the spaces round the term do not count.
+    """
     if state.prompt is None or state.prompt.kind != "realm":
         return []
     if state.names is None:
         state.names = chronicle_names(world)
-    return suggestions(state.names, state.prompt.text)
+    return suggestions(state.names, split_last_term(state.prompt.text)[1].strip())
 
 
 def _draw_suggestions(screen: CellGrid, config: Config, world: World, state: PagerState, status_row: int) -> None:
-    """List the suggestions in the rows just above the status line, the picked one reversed."""
+    """List the suggestions in the rows just above the status line, the picked one reversed.
+
+    Each row shows the name on the left and, on the extreme right, what kind of name it is in a neutral colour.
+    """
     assert state.prompt is not None
     found = _suggestions_of(world, state)
     shown = min(_MAX_SUGGESTIONS, len(found), max(0, status_row - _HEADER_ROWS))
     first = max(0, state.prompt.choice - shown + 1)
     fg, bg = panel_color(config, "help_fg"), panel_color(config, "help_bg")
-    for offset, name in enumerate(found[first : first + shown]):
+    for offset, (name, kind) in enumerate(found[first : first + shown]):
         picked = first + offset == state.prompt.choice
-        _put(
-            screen,
-            status_row - shown + offset,
-            0,
-            f" {name}".ljust(screen.cols),
-            bg if picked else fg,
-            fg if picked else bg,
-        )
+        row = status_row - shown + offset
+        _put(screen, row, 0, f" {name}".ljust(screen.cols), bg if picked else fg, fg if picked else bg)
+        label = ENTITY_LABELS[kind]
+        tag = config.get(f"history.colors.type_{kind}")
+        if screen.cols > len(name) + len(label) + 3:  # leave the name whole
+            _put(
+                screen,
+                row,
+                screen.cols - len(label) - 1,
+                label,
+                bg if picked else (tag[0], tag[1], tag[2]),
+                fg if picked else bg,
+            )
 
 
 def _reveal(state: PagerState, layout: _Layout, position: int, shown_rows: int) -> None:
@@ -355,7 +380,7 @@ def _submit_prompt(world: World, config: Config, state: PagerState, size: Size) 
     kind, text = state.prompt.kind, state.prompt.text
     found = _suggestions_of(world, state)
     if 0 <= state.prompt.choice < len(found):
-        text = found[state.prompt.choice]
+        text = split_last_term(text)[0] + found[state.prompt.choice][0]
     state.prompt = None
     if kind == "search":
         state.query = text
@@ -371,7 +396,7 @@ def _submit_prompt(world: World, config: Config, state: PagerState, size: Size) 
             return
         state.chronicle_filter = replace(state.chronicle_filter, year_from=year_from, year_to=year_to)
     else:
-        state.chronicle_filter = replace(state.chronicle_filter, realm=text.strip())
+        state.chronicle_filter = replace(state.chronicle_filter, realm=text)
     state.scroll = 0
     state.current = -1
 
@@ -382,16 +407,17 @@ def _complete(world: World, state: PagerState) -> None:
     found = _suggestions_of(world, state)
     if not found:
         return
-    text = state.prompt.text
+    before, term = split_last_term(state.prompt.text)
     if 0 <= state.prompt.choice < len(found):
-        text = found[state.prompt.choice]
+        term = found[state.prompt.choice][0]
     else:
-        lower = [name.lower() for name in found]
+        lower = [entry[0].lower() for entry in found]
         shared = os.path.commonprefix(lower)
-        if all(name.startswith(text.lower()) for name in lower) and len(shared) > len(text):
-            text = found[0][: len(shared)]
+        if all(name.startswith(term.strip().lower()) for name in lower) and len(shared) > len(term.strip()):
+            term = found[0][0][: len(shared)]
         else:
-            text = found[0]
+            term = found[0][0]
+    text = before + term
     state.prompt = _Prompt(state.prompt.kind, text)
 
 

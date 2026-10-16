@@ -188,3 +188,21 @@ def test_no_search_marks_nothing(cfg: Config) -> None:
     world = _tiny()
     lines, _, matches = layout_events(world, cfg, world.chronicle, 60)
     assert (matches, all(span.bg is None for span in lines[0])) == ([], True)
+
+
+def test_every_term_of_an_expression_is_marked(cfg: Config) -> None:
+    lines, _, _ = layout_events(_tiny(), cfg, _tiny().chronicle, 60, "kingdom|FOUNDED")
+    marked = [span.text for span in lines[0] if span.bg == tuple(cfg.get("history.colors.match"))]
+    assert marked == ["Kingdom", "founded"]
+
+
+def test_an_and_expression_matches_only_events_with_every_term(cfg: Config) -> None:
+    world = _tiny()
+    world.chronicle.append(ChronicleEvent(1, 150, "war", [0], text="A fights."))
+    assert layout_events(world, cfg, world.chronicle, 60, "a&fights")[2] == [1]
+
+
+def test_an_and_expression_marks_nothing_in_an_event_that_lacks_a_term(cfg: Config) -> None:
+    world = _tiny()
+    lines, _, _ = layout_events(world, cfg, world.chronicle, 60, "founded&nothing")
+    assert all(span.bg is None for span in lines[0])

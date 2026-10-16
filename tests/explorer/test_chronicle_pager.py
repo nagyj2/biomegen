@@ -8,12 +8,14 @@ from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.explorer.chronicle_pager import (
     PagerState,
+    _suggestions_of,
     apply_action,
     compose_pager_frame,
     parse_years,
     resolve_pager_action,
     run_chronicle,
 )
+from biomegen.explorer.panel import panel_color
 from biomegen.world.chronicle import ChronicleFilter
 from biomegen.world.entities import EVENT_KINDS, POI, ChronicleEvent, Realm, Ruler
 from biomegen.world.world import World
@@ -397,13 +399,14 @@ def test_the_realm_prompt_lists_matching_names_above_the_status_line(cfg: Config
     world = _named_world()
     _press(world, cfg, state, "p", *"m")
     screen = _screen(world, cfg, state)
-    assert [line.strip() for line in screen[7:10]] == ["Dunmere", "Kingdom of A", "Queen Mab"]
+    assert [line.split("  ")[0].strip() for line in screen[7:10]] == ["Dunmere", "Kingdom of A", "Queen Mab"]
 
 
 def test_suggestions_put_prefix_matches_first() -> None:
     from biomegen.explorer.chronicle_pager import suggestions
 
-    assert suggestions(["Adun", "Dunmere", "Mundun"], "dun") == ["Dunmere", "Adun", "Mundun"]
+    names = [("Adun", "realm"), ("Dunmere", "poi"), ("Mundun", "ruler")]
+    assert suggestions(names, "dun") == [names[1], names[0], names[2]]
 
 
 def test_down_then_enter_takes_the_picked_suggestion(cfg: Config) -> None:
@@ -487,3 +490,85 @@ def test_the_status_line_says_which_match_it_is_on(cfg: Config) -> None:
     state = PagerState()
     _press(_world(), cfg, state, "/", *"event 1", "\r", "n")
     assert "2/11 found" in _screen(_world(), cfg, state)[10]
+
+
+def test_the_whole_help_title_is_highlighted(cfg: Config) -> None:
+    grid = compose_pager_frame(_world(), cfg, PagerState(), SIZE, help_open=True)
+    row = next(i for i, line in enumerate(_screen(_world(), cfg, PagerState(), True)) if "Chronicle keys" in line)
+    col = _screen(_world(), cfg, PagerState(), True)[row].index("Chronicle keys")
+    head = tuple(panel_color(cfg, "head"))
+    assert all(tuple(grid.fg[row, col + i]) == head for i in range(len("Chronicle keys")))
+
+
+def _suggestion_rows(cfg: Config) -> tuple:
+    state = PagerState()
+    world = _named_world()
+    _press(world, cfg, state, "p", *"m")
+    return compose_pager_frame(world, cfg, state, SIZE), _screen(world, cfg, state)
+
+
+def test_each_suggestion_ends_with_what_kind_of_name_it_is(cfg: Config) -> None:
+    _, screen = _suggestion_rows(cfg)
+    assert [line.split(maxsplit=1)[1].rsplit("  ", 1)[-1].strip() for line in screen[7:10]] == [
+        "settlement",
+        "realm",
+        "ruler",
+    ]
+
+
+def test_the_kind_tag_is_at_the_right_edge(cfg: Config) -> None:
+    _, screen = _suggestion_rows(cfg)
+    assert screen[7].endswith("settlement ") or screen[7].endswith("settlement")
+
+
+def test_the_kind_tag_has_its_neutral_colour(cfg: Config) -> None:
+    grid, screen = _suggestion_rows(cfg)
+    col = screen[7].index("settlement")
+    assert tuple(grid.fg[7, col]) == tuple(cfg.get("history.colors.type_poi"))
+
+
+def test_the_kinds_have_different_colours(cfg: Config) -> None:
+    colours = {
+        tuple(cfg.get(f"history.colors.type_{kind}")) for kind in ("realm", "fallen", "predecessor", "ruler", "poi")
+    }
+    assert len(colours) == 5
+
+
+def test_the_last_term_is_what_gets_suggestions(cfg: Config) -> None:
+    state = PagerState()
+    _press(_named_world(), cfg, state, "p", *"kingdom of a|dun")
+    assert [name for name, _kind in _suggestions_of(_named_world(), state)] == ["Dunmere"]
+
+
+def test_tab_completes_only_the_last_term(cfg: Config) -> None:
+    state = PagerState()
+    _press(_named_world(), cfg, state, "p", *"king&dun", "\t")
+    assert state.prompt.text == "king&Dunmere"
+
+
+def test_a_picked_suggestion_replaces_only_the_last_term(cfg: Config) -> None:
+    state = PagerState()
+    _press(_named_world(), cfg, state, "p", *"queen|d", "down", "\r")
+    assert state.chronicle_filter.realm == "queen|Dunmere"
+
+
+def test_the_name_filter_ignores_spaces_round_its_terms(cfg: Config) -> None:
+    state = PagerState()
+    _press(_named_world(), cfg, state, "p", *"queen | dunmere ", "\r")
+    assert [e.id for e in state.layout.events] == [4]
+
+
+def test_suggestions_ignore_spaces_after_an_operator(cfg: Config) -> None:
+    state = PagerState()
+    _press(_named_world(), cfg, state, "p", *"queen & dun")
+    assert [name for name, _kind in _suggestions_of(_named_world(), state)] == ["Dunmere"]
+
+
+def test_a_search_with_or_finds_both(cfg: Config) -> None:
+    state = PagerState()
+    _press(_world(), cfg, state, "/", *"event 3 |dragon", "\r")
+    assert [state.current] + _hits_of(state) == [3, 3, 20]
+
+
+def _hits_of(state: PagerState) -> list[int]:
+    return state.layout.matches

@@ -414,11 +414,11 @@ use `history.colors` too. The places a reason names are marked too (`Relation.wh
 
 On a terminal `--chronicle` opens the **chronicle pager** (`explorer/chronicle_pager.py`, text format only; `--no-pager` or a pipe
 prints instead). Filters narrow the events (`ChronicleFilter`, `world/chronicle.py`: `--kind` (repeatable, comma lists), `--from-year`,
-`--to-year`, `--realm` (a substring of the name of a realm, fallen realm, old realm, ruler or settlement the event involves: its ids and the names in its text; `event_names`), `--search` (a substring of year,
+`--to-year`, `--realm` (a substring of the name of a realm, fallen realm, old realm, ruler or settlement the event involves: its ids and the names in its text; `event_names`). `--realm` and `--search` (and the pager's `/` and `p`) are expressions: `|` is or, `&` is and (binding tighter), whitespace round a term is trimmed (`HI |Lo` and `HI|Lo` both mean `"hi"` or `"lo"`), empty terms are dropped, and each `&` term of a name filter may be found in any of the event's names (`parse_expression`); suggestions and Tab complete only the term being typed, `--search` (a substring of year,
 kind or text)) and apply to the printed text and JSON as well (the JSON keeps every realm and settlement, so ids resolve). In the pager the
 filters are the start state and `--search` also starts the highlight. Keys follow the explorer's `keys` table: arrows / WASD / HJKL scroll
 (shift or capitals `controls.fast_step` lines), space / Page Down / Page Up page, `g` / `G` ends, `/` search (highlights, jumps), `n` / `N`
-matches (the current match has its own colour, `history.colors.match_current`), `v` cycles the kind, `y` asks a year range, `p` a name (Up / Down pick from the names containing what is typed, Tab completes), `c` clears, `?` help, `q` / Esc quits. `layout_events` wraps each event
+matches (the current match has its own colour, `history.colors.match_current`), `v` cycles the kind, `y` asks a year range, `p` a name (Up / Down pick from the names containing what is typed, Tab completes; each suggestion is tagged at the right edge with what it is, in the neutral `history.colors.type_*`), `c` clears, `?` help, `q` / Esc quits. `layout_events` wraps each event
 to the width (continuations indented under the text) and marks the match in `history.colors.match`; a name is coloured as in the full
 chronicle even when filtered.
 

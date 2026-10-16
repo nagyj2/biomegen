@@ -27,8 +27,8 @@ class ChronicleFilter:
         year_from: Keep events in this year or later.
         year_to: Keep events in this year or earlier.
         realm: Keep events involving a realm, fallen or old realm, ruler or settlement whose name contains this text
-            (any case); see :func:`event_names`.
-        text: Keep events whose year, kind or text contains this text (any case).
+            (any case); see :func:`event_names`. An expression: ``|`` is or, ``&`` is and (:func:`parse_expression`).
+        text: Keep events whose year, kind or text contains this text (any case); also an expression.
     """
 
     kinds: tuple[str, ...] = ()
@@ -43,54 +43,92 @@ class ChronicleFilter:
         return self != ChronicleFilter()
 
 
+def parse_expression(text: str) -> list[list[str]]:
+    """Split a filter into alternatives (``|``) of required terms (``&``), lowercased; ``&`` binds tighter than ``|``.
+
+    Whitespace round a term is trimmed, so ``"HI |Lo"`` and ``"HI|Lo"`` are both ``"hi"`` or ``"lo"``; spaces inside
+    a term stay. Empty terms are dropped, so an expression of only operators has no alternatives and keeps everything.
+    """
+    groups = [[term.strip().lower() for term in part.split("&") if term.strip()] for part in text.split("|")]
+    return [[term.strip() for term in group] for group in groups if group]
+
+
+def expression_terms(groups: list[list[str]]) -> list[str]:
+    """Return each distinct term of ``groups``, in order of appearance."""
+    return list(dict.fromkeys(term for group in groups for term in group))
+
+
+def matches_expression(groups: list[list[str]], haystacks: Sequence[str]) -> bool:
+    """Return whether some alternative of ``groups`` has every term inside at least one of the lowercase ``haystacks``.
+
+    No alternatives at all matches everything.
+    """
+    return not groups or any(all(any(term in text for text in haystacks) for term in group) for group in groups)
+
+
 def event_line_text(event: ChronicleEvent) -> str:
     """Return the event as one plain line without padding: ``year kind text`` (what a search matches)."""
     return f"{event.year} {event.kind} {event.text}"
 
 
-def event_names(world: World, event: ChronicleEvent) -> list[str]:
-    """Return the names of the realms, fallen and old realms, rulers and settlements an event involves (no repeats).
+#: What each kind of named entity is called in a listing.
+ENTITY_LABELS = {
+    REF_REALM: "realm",
+    REF_FALLEN: "fallen realm",
+    REF_PREDECESSOR: "old realm",
+    REF_RULER: "ruler",
+    REF_POI: "settlement",
+}
 
-    That is the entities its ids list and the ones its text names (``refs``); a river, range or other named land is not
-    included.
+
+def event_entities(world: World, event: ChronicleEvent) -> list[tuple[str, str]]:
+    """Return ``(name, kind)`` for the realms, fallen and old realms, rulers and settlements an event involves.
+
+    ``kind`` is a key of :data:`ENTITY_LABELS`. That is the entities its ids list and the ones its text names
+    (``refs``), each once; a river, range or other named land is not included.
     """
-    names = [world.realms[i].name for i in event.realm_ids]
-    names += [world.fallen_realms[i].name for i in event.fallen_ids]
-    names += [world.predecessors[i].name for i in event.predecessor_ids]
-    names += [world.pois[i].name for i in event.poi_ids]
+    found = [(world.realms[i].name, REF_REALM) for i in event.realm_ids]
+    found += [(world.fallen_realms[i].name, REF_FALLEN) for i in event.fallen_ids]
+    found += [(world.predecessors[i].name, REF_PREDECESSOR) for i in event.predecessor_ids]
+    found += [(world.pois[i].name, REF_POI) for i in event.poi_ids]
     for _start, _end, kind, ref in event.refs:
         if kind == REF_REALM:
-            names.append(world.realms[ref].name)
+            found.append((world.realms[ref].name, kind))
         elif kind == REF_RULER:
-            names.append(world.rulers[ref].name)
+            found.append((world.rulers[ref].name, kind))
         elif kind == REF_FALLEN:
-            names.append(world.fallen_realms[ref].name)
+            found.append((world.fallen_realms[ref].name, kind))
         elif kind == REF_PREDECESSOR:
-            names.append(world.predecessors[ref].name)
+            found.append((world.predecessors[ref].name, kind))
         elif kind == REF_POI:
-            names.append(world.pois[ref].name)
-    return list(dict.fromkeys(name for name in names if name))
+            found.append((world.pois[ref].name, kind))
+    return list(dict.fromkeys(entry for entry in found if entry[0]))
 
 
-def chronicle_names(world: World) -> list[str]:
-    """Return every name :func:`event_names` finds in the chronicle, sorted by name without regard to case."""
-    names = {name for event in world.chronicle for name in event_names(world, event)}
-    return sorted(names, key=lambda name: (name.lower(), name))
+def event_names(world: World, event: ChronicleEvent) -> list[str]:
+    """Return the names of :func:`event_entities` (no repeats)."""
+    return list(dict.fromkeys(name for name, _kind in event_entities(world, event)))
+
+
+def chronicle_names(world: World) -> list[tuple[str, str]]:
+    """Return every ``(name, kind)`` :func:`event_entities` finds in the chronicle, sorted by name (any case)."""
+    found = {entry for event in world.chronicle for entry in event_entities(world, event)}
+    return sorted(found, key=lambda entry: (entry[0].lower(), entry[0], entry[1]))
 
 
 def filter_events(world: World, chronicle_filter: ChronicleFilter) -> list[ChronicleEvent]:
     """Return the chronicle's events that pass ``chronicle_filter``, in chronicle order."""
     kinds = set(chronicle_filter.kinds)
-    realm = chronicle_filter.realm.lower()
-    text = chronicle_filter.text.lower()
+    realm = parse_expression(chronicle_filter.realm)
+    text = parse_expression(chronicle_filter.text)
     return [
         event
         for event in world.chronicle
         if (not kinds or event.kind in kinds)
         and (chronicle_filter.year_from is None or event.year >= chronicle_filter.year_from)
         and (chronicle_filter.year_to is None or event.year <= chronicle_filter.year_to)
-        and (not realm or any(realm in name.lower() for name in event_names(world, event)))
-        and (not text or text in event_line_text(event).lower())
+        and matches_expression(realm, [name.lower() for name in event_names(world, event)])
+        and matches_expression(text, [event_line_text(event).lower()])
     ]
 
 

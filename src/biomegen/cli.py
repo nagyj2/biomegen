@@ -148,14 +148,17 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="NAME",
         help=(
             "Keep chronicle events involving a realm, fallen realm, ruler or settlement whose name contains NAME "
-            "(any case)."
+            "(any case); | is or, & is and."
         ),
     )
     parser.add_argument(
         "--search",
         default="",
         metavar="TEXT",
-        help="Keep chronicle events whose year, kind or text contains TEXT (any case); the pager highlights it.",
+        help=(
+            "Keep chronicle events whose year, kind or text contains TEXT (any case; | is or, & is and); "
+            "the pager highlights it."
+        ),
     )
     parser.add_argument(
         "--no-pager",

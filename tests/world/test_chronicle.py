@@ -15,7 +15,10 @@ from biomegen.world.chronicle import (
     chronicle_json,
     chronicle_text,
     describe_filter,
+    expression_terms,
     filter_events,
+    matches_expression,
+    parse_expression,
 )
 from biomegen.world.entities import ChronicleEvent, FallenRealm, Realm
 from biomegen.world.world import World
@@ -252,3 +255,73 @@ def test_describe_filter_is_empty_without_a_filter() -> None:
 def test_describe_filter_names_each_part() -> None:
     text = describe_filter(ChronicleFilter(kinds=("war",), year_from=100, realm="a", text="b"))
     assert text == "kind war  years 100-  name 'a'  text 'b'"
+
+
+def test_or_splits_alternatives_and_trims_spaces() -> None:
+    assert parse_expression("HI |Lo") == [["hi"], ["lo"]]
+
+
+def test_or_without_spaces_has_the_same_terms() -> None:
+    assert parse_expression("HI|Lo") == [["hi"], ["lo"]]
+
+
+def test_spaces_round_an_and_term_are_trimmed() -> None:
+    assert parse_expression("a & b") == [["a", "b"]]
+
+
+def test_spaces_inside_a_term_stay() -> None:
+    assert parse_expression(" old realm | x") == [["old realm"], ["x"]]
+
+
+def test_and_binds_tighter_than_or() -> None:
+    assert parse_expression("a&b|c") == [["a", "b"], ["c"]]
+
+
+def test_empty_terms_are_dropped() -> None:
+    assert parse_expression("|a&|") == [["a"]]
+
+
+def test_only_operators_means_no_alternatives() -> None:
+    assert parse_expression("|&|") == []
+
+
+def test_expression_terms_are_distinct_in_order() -> None:
+    assert expression_terms(parse_expression("b&a|a&c")) == ["b", "a", "c"]
+
+
+def test_no_alternatives_match_everything() -> None:
+    assert matches_expression([], ["anything"])
+
+
+def test_an_and_term_may_be_in_different_haystacks() -> None:
+    assert matches_expression(parse_expression("old&kingdom"), ["old realm", "kingdom of a"])
+
+
+def test_text_filter_or_keeps_either() -> None:
+    assert _ids(_tiny(), text="founded|falls") == [0, 1]
+
+
+def test_text_filter_and_needs_both() -> None:
+    assert _ids(_tiny(), text="a is&founded") == [0]
+
+
+def test_text_filter_and_drops_events_missing_one() -> None:
+    assert _ids(_tiny(), text="founded&falls") == []
+
+
+def test_a_term_with_a_trailing_space_still_matches() -> None:
+    assert _ids(_tiny(), text="falls |nothing") == [1]
+
+
+def test_a_term_that_is_only_spaces_is_ignored() -> None:
+    assert _ids(_tiny(), text="  | falls") == [1]
+
+
+def test_name_filter_or_matches_either_name() -> None:
+    assert _ids(_tiny(), realm="kingdom|old") == [0, 1]
+
+
+def test_name_filter_and_needs_every_term_among_the_names() -> None:
+    world = _tiny()
+    world.chronicle[0].fallen_ids = [0]
+    assert _ids(world, realm="kingdom&old") == [0]

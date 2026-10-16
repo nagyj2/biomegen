@@ -11,6 +11,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
+#: The ``history.colors`` entries that tag the kinds of name in the chronicle pager's suggestions.
+_NAME_TYPE_COLORS = ("type_realm", "type_fallen", "type_predecessor", "type_ruler", "type_poi")
+
 
 class ConfigError(ValueError):
     """Raised when the merged config has one or more problems. Message lists them all."""
@@ -144,7 +147,7 @@ def _validate_history(history: Dict[str, Any], errors: List[str]) -> None:
             _clamp(secession, "max_per_world", 0, 1_000_000, errors, "history.secession")
     colors = history.get("colors")
     if colors is not None:
-        needed = {"year", "settlement", "place", "match", "match_current", *EVENT_KINDS}
+        needed = {"year", "settlement", "place", "match", "match_current", *_NAME_TYPE_COLORS, *EVENT_KINDS}
         if not isinstance(colors, dict) or not needed <= set(colors):
             errors.append(f"history.colors needs a colour for each of: {', '.join(sorted(needed))}")
         else:

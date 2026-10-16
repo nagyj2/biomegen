@@ -92,6 +92,11 @@ VALUES: Dict[str, Any] = {
         "settlement": [232, 222, 190],
         "place": [150, 185, 205],
         "match": [90, 80, 20],  # background of a search match in the chronicle pager
+        "type_realm": [196, 176, 128],  # neutral tags of the name kinds in the chronicle pager's name suggestions
+        "type_fallen": [160, 140, 150],
+        "type_predecessor": [140, 150, 165],
+        "type_ruler": [190, 150, 140],
+        "type_poi": [140, 175, 150],
         "match_current": [170, 120, 30],  # ... of the match the pager is on
     },
     # A place named in an event ({near}) must be a settlement on the same landmass within this distance.

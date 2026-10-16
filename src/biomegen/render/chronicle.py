@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Optional, Sequence
 
 from ..config.model import Config
-from ..world.chronicle import KIND_WIDTH, chronicle_title
+from ..world.chronicle import KIND_WIDTH, chronicle_title, expression_terms, matches_expression, parse_expression
 from ..world.entities import REF_FALLEN, REF_FEATURE, REF_POI, REF_PREDECESSOR, REF_REALM, REF_RULER, ChronicleEvent
 from ..world.world import World
 from .grid import RGB, Document, Span
@@ -120,7 +120,7 @@ def _spans(cells: list[tuple[str, tuple]]) -> list[Span]:
 def layout_events(
     world: World, config: Config, events: Sequence[ChronicleEvent], width: int, query: str = "", current: int = -1
 ) -> tuple[Document, list[int], list[int]]:
-    """Wrap ``events`` to ``width`` columns and mark where ``query`` (any case) matches.
+    """Wrap ``events`` to ``width`` columns and mark where ``query`` (any case; ``|`` or, ``&`` and) matches.
 
     Returns ``(lines, starts, matches)``: the wrapped lines of every event in turn (a continuation line is indented
     under the text column), the line each event starts on, and the indices into ``events`` of those the query matches.
@@ -129,23 +129,24 @@ def layout_events(
     """
     rows = event_rows(world, config)
     palette = _palette(config)
-    needle = query.lower()
+    groups = parse_expression(query)
+    terms = expression_terms(groups)
     indent = 5 + 2 + KIND_WIDTH + 2
     lines: Document = []
     starts: list[int] = []
     matches: list[int] = []
     for position, event in enumerate(events):
         cells = [(char, (span.fg, span.bg, span.bold)) for span in rows[event.id] for char in span.text]
-        if needle:
-            plain = "".join(char for char, _ in cells).lower()
-            hit = plain.find(needle)
-            if hit >= 0:
-                matches.append(position)
-            while hit >= 0:
-                for index in range(hit, hit + len(needle)):
-                    char, (fg, _bg, bold) = cells[index]
-                    cells[index] = (char, (fg, palette["match_current" if position == current else "match"], bold))
-                hit = plain.find(needle, hit + len(needle))
+        plain = "".join(char for char, _ in cells).lower()
+        if groups and matches_expression(groups, [plain]):
+            matches.append(position)
+            for term in terms:  # every term of the expression is marked wherever it occurs
+                hit = plain.find(term)
+                while hit >= 0:
+                    for index in range(hit, hit + len(term)):
+                        char, (fg, _bg, bold) = cells[index]
+                        cells[index] = (char, (fg, palette["match_current" if position == current else "match"], bold))
+                    hit = plain.find(term, hit + len(term))
         starts.append(len(lines))
         lines.extend(_spans(line) for line in _wrap(cells, max(width, indent + 1), indent))
     return lines, starts, matches
