@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..world.tile import Cell
+from ..world.tile import KIND_ROOF_BASE, KIND_ROOF_SLOTS, Cell
 
 VOID = int(Cell.VOID)  # not part of the site: the terrain shows through
 
@@ -41,6 +41,9 @@ for _cell in (Cell.PATH, Cell.BRIDGE, Cell.BRIDGE_WALL, Cell.DOOR, Cell.WHEEL, C
     OUTSIDE_PRIORITY[int(_cell)] = 2
 for _cell in (Cell.ROOF, Cell.STONE, Cell.WALL, Cell.HULL, Cell.TENT):
     OUTSIDE_PRIORITY[int(_cell)] = 3
+OUTSIDE_PRIORITY[KIND_ROOF_BASE : KIND_ROOF_BASE + KIND_ROOF_SLOTS] = (
+    3  # a building kind's roof is a roof; the higher id wins a tie
+)
 
 NO_WALL = 255  # ``wall_index`` of a cell that is not a wall
 

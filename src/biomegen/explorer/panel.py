@@ -13,6 +13,7 @@ from ..render.colors import biome_style, interior_style
 from ..render.grid import RGB, CellGrid
 from ..render.layers import Seen
 from ..sampling.detail import SCALE_MAP
+from ..sites.kinds import cell_name
 from ..world.entities import POI
 from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
@@ -109,7 +110,7 @@ def _legend(canvas: _Canvas, config: Config, seen: Seen, top: int, bottom: int, 
         row, column = row + 1, _LEGEND_INDENT
         canvas.text(row, 0, " items: ", canvas.fg)
         for cell in items:
-            name = Cell(cell).name.lower()
+            name = cell_name(config, cell)
             entry = f"{interior.glyph[cell]} {name}  "
             if column + len(entry) >= canvas.grid.cols:
                 row, column = row + 1, _LEGEND_INDENT

@@ -98,3 +98,38 @@ def test_bones_sit_on_the_floor_fill_in_their_own_colour() -> None:
     style = interior_style(config)
     assert style.bg[int(Cell.BONES)].tolist() == config.get("render.interior_palette.floor")
     assert style.fg[int(Cell.BONES)].tolist() == config.get("render.interior_palette.bones")
+
+
+def test_a_building_kind_roof_takes_its_rows_glyph_and_colour() -> None:
+    # A kind roof is styled from its building row: its glyph, its colour as the fill, a lighter glyph colour.
+    from biomegen.config import load_config
+    from biomegen.render.colors import interior_style
+    from biomegen.sites.kinds import kind_row, roof_cell
+
+    config = load_config(None)
+    style = interior_style(config)
+    roof = kind_row(config, "chapel")["roof"]
+    cell = roof_cell(config, "chapel")
+    assert (str(style.glyph[cell]), style.bg[cell].tolist()) == (roof["glyph"], roof["color"])
+    assert (style.fg[cell] >= style.bg[cell]).all()
+
+
+def test_the_ascii_style_draws_a_kind_roof_with_its_ascii_glyph() -> None:
+    from biomegen.config import load_config
+    from biomegen.render.colors import interior_style
+    from biomegen.sites.kinds import kind_row, roof_cell
+
+    config = load_config(None)
+    cell = roof_cell(config, "mill")
+    assert str(interior_style(config, True).glyph[cell]) == kind_row(config, "mill")["roof"]["ascii"]
+
+
+def test_every_building_kind_has_a_drawable_roof() -> None:
+    from biomegen.config import load_config
+    from biomegen.render.colors import interior_style
+    from biomegen.sites.kinds import roof_cell
+
+    config = load_config(None)
+    style = interior_style(config)
+    cells = [roof_cell(config, kind) for kind in config.get("tables.buildings")]
+    assert all(str(style.glyph[cell]) != "?" and style.bg[cell].any() for cell in cells)

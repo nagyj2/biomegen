@@ -14,7 +14,7 @@ from typing import Any, Callable
 import numpy as np
 
 from ..config.model import Config
-from ..world.tile import BIOME_NAME, Biome, Cell, Relief
+from ..world.tile import BIOME_NAME, KIND_ROOF_BASE, Biome, Cell, Relief
 
 RGB = tuple[int, int, int]
 
@@ -200,14 +200,16 @@ def _build_interior_style(config: Config, ascii_only: bool = False) -> InteriorS
     Cells named in ``render.interior_subtle`` (rubble and small clutter) take the floor colour, so they barely show;
     those in ``render.interior_on_floor`` (bones) take the floor fill but keep their own colour for the glyph.
 
-    With ``ascii_only``, ``render.interior_glyphs_ascii`` replaces the glyphs that are not 7-bit.
+    A building kind's roof cell (``KIND_ROOF_BASE`` plus its rank) takes the glyph and colour of its building row.
+
+    With ``ascii_only``, ``render.interior_glyphs_ascii`` replaces the glyphs that are not 7-bit (a roof its ``ascii``).
     """
     glyphs = dict(config.get("render.interior_glyphs"))
     if ascii_only:
         glyphs.update(config.get("render.interior_glyphs_ascii"))
     palette = config.get("render.interior_palette")
     detail = config.get("render.detail_colors")
-    count = max(int(c) for c in Cell) + 1
+    count = 256  # a plan cell is a uint8: the enum, then the reserved blocks (a kind's roof)
     glyph = np.full(count, "?", dtype="U1")
     fg = np.zeros((count, 3), dtype=np.uint8)
     bg = np.zeros((count, 3), dtype=np.uint8)
@@ -231,6 +233,12 @@ def _build_interior_style(config: Config, ascii_only: bool = False) -> InteriorS
         elif name in palette:
             bg[index] = palette[name]
             fg[index] = scale_colors(palette[name], boost)
+    for _kind, row in sorted(config.get("tables.buildings").items()):  # a kind's roof cell (see sites/kinds.py)
+        index = KIND_ROOF_BASE + int(row["rank"])
+        roof = row["roof"]
+        glyph[index] = roof["ascii" if ascii_only else "glyph"]
+        bg[index] = roof["color"]
+        fg[index] = scale_colors(roof["color"], boost)
     return InteriorStyle(glyph, fg, bg)
 
 

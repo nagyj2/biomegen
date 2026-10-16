@@ -146,3 +146,11 @@ def test_poi_line_gives_the_style_of_a_homestead(config: Config) -> None:
     world.pois.append(POI(kind="homestead", x=2, y=1, interior_seed=1, name="Oak Farm", style="farm"))
     world.poi_index[1, 2] = 0
     assert "Oak Farm (homestead, farm)" in _panel(world, config)[5]
+
+
+def test_legend_names_a_building_kind_roof_by_its_label(config: Config) -> None:
+    from biomegen.sites.kinds import roof_cell
+
+    seen = Seen(cells={roof_cell(config, "cathedral")})
+    text = "\n".join(_panel(make_world(6, 3), config, seen=seen))
+    assert "cathedral" in text
