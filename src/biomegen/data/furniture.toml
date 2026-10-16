@@ -5,7 +5,8 @@
 #
 # Roles a layout uses: homes `hall` (the largest room), `kitchen`, `bedroom`, `storage`; dungeons `hall`, `cell`, `vault`,
 # `passage` (corridors: rubble only); towers `study`, `bedroom`, `storage`, `lookout`; ruins `hall`, `debris`; boats
-# `deck`, `cabin`; camps `supplies`; battlefields `debris`; shrines `altar`; watchtowers the tower roles. A role that is missing leaves its rooms bare.
+# `deck`, `cabin`; camps `supplies`; battlefields `debris`; shrines `altar`; watchtowers the tower roles; the centre buildings of
+# data/buildings.toml the roles their `roles` list names (a family per civic kind). A role that is missing leaves its rooms bare.
 # Dungeons add depth-scaled chest weight to every role that has `chest` (sites.furnish.chest_depth_gain).
 
 [furniture.home.hall]
@@ -181,3 +182,103 @@ shelf = 6.0
 barrel = 10.0
 crate = 10.0
 cargo = 3.0
+
+# The centre buildings (data/buildings.toml, civic kinds). An altar is a `hearth`; pews are `chair`.
+[furniture.gathering_point.commons]
+table = 12.0
+chair = 14.0
+hearth = 8.0
+barrel = 4.0
+
+[furniture.gathering_point.storage]
+barrel = 12.0
+crate = 12.0
+shelf = 6.0
+
+[furniture.chapel.nave]
+chair = 20.0
+hearth = 2.0
+banner = 2.0
+
+[furniture.chapel.vestry]
+shelf = 10.0
+chest = 8.0
+table = 6.0
+chair = 4.0
+
+[furniture.chapel.storage]
+barrel = 8.0
+crate = 8.0
+shelf = 8.0
+chest = 4.0
+
+[furniture.hall.hall]
+table = 14.0
+chair = 16.0
+banner = 4.0
+hearth = 6.0
+
+[furniture.hall.office]
+table = 10.0
+chair = 8.0
+shelf = 8.0
+chest = 6.0
+
+[furniture.hall.archive]
+shelf = 18.0
+chest = 8.0
+table = 4.0
+
+[furniture.hall.storage]
+barrel = 10.0
+crate = 10.0
+chest = 6.0
+shelf = 6.0
+
+[furniture.cathedral.nave]
+chair = 26.0
+hearth = 3.0
+banner = 4.0
+
+[furniture.cathedral.chapel]
+chair = 10.0
+hearth = 6.0
+banner = 2.0
+
+[furniture.cathedral.vestry]
+shelf = 10.0
+chest = 8.0
+table = 6.0
+
+[furniture.cathedral.storage]
+barrel = 8.0
+crate = 8.0
+shelf = 8.0
+chest = 4.0
+
+[furniture.palace.throne_room]
+banner = 8.0
+table = 6.0
+chair = 10.0
+chest = 4.0
+hearth = 6.0
+
+[furniture.palace.chamber]
+bed = 12.0
+chest = 8.0
+chair = 6.0
+shelf = 4.0
+table = 3.0
+
+[furniture.palace.kitchen]
+hearth = 14.0
+table = 10.0
+barrel = 10.0
+crate = 8.0
+shelf = 8.0
+
+[furniture.palace.storage]
+barrel = 12.0
+crate = 12.0
+chest = 6.0
+shelf = 6.0

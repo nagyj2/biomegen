@@ -22,11 +22,15 @@
 #   free_fg       (optional) marker colour of a settlement no realm holds (a free settlement); omit to keep `fg`
 #   hooks_free    (optional) one-sentence story texts of a free settlement: `{name}` is the settlement
 #   hooks_remnant (optional) texts of a free settlement that is a remnant of a fallen realm: `{name}` and `{fallen}` (needed)
+#   centre        the civic building kind (data/buildings.toml) that stands at the plaza and defines a settlement of this tier
+#   reserve       (optional) the civic kind whose plot the plaza keeps clear: the next tier's centre, so a promotion rebuilds the
+#                 centre in the same square. Absent means the tier's own `centre` (the capital has no next tier)
 #   near_target   (optional, default true) false for a tier too small to count as a settlement of note: other places' texts never
 #                 name it as the settlement nearby and the legend leaves it out of a realm's settlement count (the hamlet)
 
 [tiers.capital]
 label = "Capital"
+centre = "palace"
 rank = 0
 glyph = "Ω"
 ascii = "@"
@@ -40,6 +44,8 @@ backbone = true
 
 [tiers.city]
 label = "City"
+centre = "cathedral"
+reserve = "palace"
 rank = 1
 glyph = "●"
 ascii = "O"
@@ -56,6 +62,8 @@ hooks_remnant = ["{name} outlived the fall of {fallen} and still keeps the old c
 
 [tiers.town]
 label = "Town"
+centre = "hall"
+reserve = "cathedral"
 rank = 2
 glyph = "○"
 ascii = "o"
@@ -71,6 +79,8 @@ hooks_remnant = ["{name} outlived the fall of {fallen} and has gone its own way 
 
 [tiers.village]
 label = "Village"
+centre = "chapel"
+reserve = "hall"
 rank = 3
 glyph = "•"
 ascii = "+"
@@ -88,6 +98,8 @@ hooks_remnant = ["{name} outlived the fall of {fallen}; its people still tell of
 # (`connect = false`). Its marker is hidden on the map and drawn from the zoom scale down (`map_marker = false`).
 [tiers.hamlet]
 label = "Hamlet"
+centre = "gathering_point"
+reserve = "chapel"
 rank = 4
 glyph = "·"
 ascii = "."

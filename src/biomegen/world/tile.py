@@ -126,6 +126,15 @@ class Cell(IntEnum):
     LOG = 38  # a felled trunk lying in a lodge's working area
 
 
+# Plan cell values above the ``Cell`` enum are data driven, in two reserved blocks (a plan stays one ``uint8`` array):
+# a building kind's roof is ``KIND_ROOF_BASE + its rank`` (``tables.buildings``) and a dress variant's cell is
+# ``DRESS_BASE + its rank`` (``tables.dress``). Neither block may meet the enum or the other.
+KIND_ROOF_BASE = 64
+KIND_ROOF_SLOTS = 64
+DRESS_BASE = 128
+DRESS_SLOTS = 64
+
+
 # Convenient lookup tables for config parsing and HUD display. Names are lower-case so they read
 # naturally both in TOML (e.g. ``biomes = ["grass", "forest"]``) and in status text.
 BIOME_BY_NAME: dict[str, Biome] = {b.name.lower(): b for b in Biome}

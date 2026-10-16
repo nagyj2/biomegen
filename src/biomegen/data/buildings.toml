@@ -1,0 +1,194 @@
+# Building kinds, keyed by kind name. Loaded into the config tree as `tables.buildings`; override with e.g.
+# `[tables.buildings.chapel]` + `rows = [7, 9]` in a user config.
+#
+# A building kind is what a lot holds: how big it is, how it is furnished, how it looks from outside and, for the kinds a
+# settlement is chosen to have, what suits it. Three functions:
+#   housing     the plain house: supports extra population and holds stock (the numbers are data only until a simulation reads them)
+#   production  works a resource at the edge of what it needs: farmhouse, mill, mine, lodge, fishery (the `building` of a `poi_styles` row)
+#   civic       the centre building of a settlement tier (a `centre` or `reserve` of a tier row in tiers.toml)
+#
+# Keys, every row:
+#   label       display name
+#   rank        unique, below `KIND_ROOF_SLOTS` (64): a kind's roof cell is `KIND_ROOF_BASE + rank` (world/tile.py). When a plan is drawn
+#               smaller the higher id wins a tie, so the civic kinds rank last
+#   function    housing, production or civic
+#   rows        [min, max] outer height in plan rows, walls included
+#   width       [lo, hi] outer width as a multiple of `rows` times the cell aspect: the narrowest is `lo * rows[0]`, the widest `hi * rows[1]`
+#   shapes      footprints it may take: rect, L, T
+#   roles       room roles, best first: the largest room takes the first (a role with no weights in its furniture family stays bare)
+#   furniture   its furniture family (data/furniture.toml)
+#   roof        how it looks from outside: `glyph`, `ascii` (7-bit) and `color` (the cell's colour; the glyph is drawn lighter)
+# housing:
+#   capacity_pop  people it houses; storage  stock it holds (units of one resource; data only for now)
+# production:
+#   suits         what the land round a settlement must offer, weights of: fertility, forest, roughness, fresh_water, coast
+#   min_score     the lowest suitability a settlement may choose it at
+#   max_per_kind  most of this kind one settlement holds
+#   siting        where it stands: river (a bank, with a water wheel), shore (beside the pier), edge (the outer ground), any
+#   tries         candidate spots tried before it is dropped for housing
+#   needs_tag     (optional) a POI site tag it needs: port, river or lake
+#   dress         (optional) the dressing laid beside it (sites.homestead.dress)
+# civic:
+#   apron         rows of paved forecourt kept round it in the plaza (columns widen by the cell aspect)
+
+[buildings.house]
+label = "House"
+rank = 0
+function = "housing"
+rows = [5, 8]
+width = [0.8, 1.6]
+shapes = ["rect", "L", "T"]
+roles = ["hall", "kitchen", "bedroom", "storage"]
+furniture = "home"
+roof = { glyph = "░", ascii = "^", color = [120, 74, 58] }
+capacity_pop = 6
+storage = 4
+
+[buildings.farmhouse]
+label = "Farmhouse"
+rank = 1
+function = "production"
+rows = [5, 6]
+width = [1.2, 1.5]
+shapes = ["rect", "L"]
+roles = ["hall", "kitchen", "bedroom", "storage"]
+furniture = "homestead"
+roof = { glyph = "▒", ascii = "n", color = [166, 124, 62] }
+suits = { fertility = 1.0, fresh_water = 0.3 }
+min_score = 0.5
+max_per_kind = 2
+siting = "edge"
+tries = 8
+dress = "farm"
+
+[buildings.mill]
+label = "Mill"
+rank = 2
+function = "production"
+rows = [5, 6]
+width = [1.2, 1.2]
+shapes = ["rect"]
+roles = ["hall", "storage"]
+furniture = "homestead"
+roof = { glyph = "▒", ascii = "m", color = [150, 140, 128] }
+suits = { fresh_water = 0.8, fertility = 0.4 }
+min_score = 0.4
+max_per_kind = 1
+siting = "river"
+tries = 40
+needs_tag = "river"
+dress = "mill"
+
+[buildings.mine]
+label = "Mine"
+rank = 3
+function = "production"
+rows = [5, 6]
+width = [1.0, 1.5]
+shapes = ["rect"]
+roles = ["hall", "storage"]
+furniture = "homestead"
+roof = { glyph = "▒", ascii = "v", color = [96, 98, 108] }
+suits = { roughness = 1.0 }
+min_score = 0.5
+max_per_kind = 1
+siting = "edge"
+tries = 8
+dress = "mine"
+
+[buildings.lodge]
+label = "Lodge"
+rank = 4
+function = "production"
+rows = [5, 6]
+width = [1.2, 1.5]
+shapes = ["rect", "L"]
+roles = ["hall", "bedroom", "storage"]
+furniture = "homestead"
+roof = { glyph = "▒", ascii = "A", color = [88, 108, 62] }
+suits = { forest = 1.0 }
+min_score = 0.5
+max_per_kind = 1
+siting = "edge"
+tries = 8
+dress = "lodge"
+
+[buildings.fishery]
+label = "Fishery"
+rank = 5
+function = "production"
+rows = [5, 6]
+width = [1.2, 1.5]
+shapes = ["rect"]
+roles = ["hall", "storage"]
+furniture = "homestead"
+roof = { glyph = "▒", ascii = "u", color = [80, 114, 136] }
+suits = { coast = 1.0 }
+min_score = 0.4
+max_per_kind = 1
+siting = "shore"
+tries = 8
+needs_tag = "port"
+dress = "fishery"
+
+# The centre buildings, one per settlement tier from the hamlet up (a tier row's `centre`; the plaza keeps room for the next
+# tier's, its `reserve`). Their furniture families are their own; the altar of a chapel or cathedral is a hearth.
+[buildings.gathering_point]
+label = "Gathering point"
+rank = 6
+function = "civic"
+rows = [5, 6]
+width = [1.2, 1.5]
+shapes = ["rect"]
+roles = ["commons", "storage"]
+furniture = "gathering_point"
+roof = { glyph = "▓", ascii = "&", color = [176, 134, 82] }
+apron = 1
+
+[buildings.chapel]
+label = "Chapel"
+rank = 7
+function = "civic"
+rows = [6, 8]
+width = [1.0, 1.5]
+shapes = ["rect", "T"]
+roles = ["nave", "vestry", "storage"]
+furniture = "chapel"
+roof = { glyph = "▓", ascii = "+", color = [168, 160, 190] }
+apron = 2
+
+[buildings.hall]
+label = "Hall"
+rank = 8
+function = "civic"
+rows = [8, 10]
+width = [1.0, 1.6]
+shapes = ["rect", "L"]
+roles = ["hall", "office", "archive", "storage"]
+furniture = "hall"
+roof = { glyph = "▓", ascii = "H", color = [166, 72, 56] }
+apron = 2
+
+[buildings.cathedral]
+label = "Cathedral"
+rank = 9
+function = "civic"
+rows = [10, 13]
+width = [1.0, 1.6]
+shapes = ["T"]
+roles = ["nave", "chapel", "vestry", "storage"]
+furniture = "cathedral"
+roof = { glyph = "█", ascii = "C", color = [198, 192, 214] }
+apron = 2
+
+[buildings.palace]
+label = "Palace"
+rank = 10
+function = "civic"
+rows = [12, 16]
+width = [1.0, 1.8]
+shapes = ["rect", "L", "T"]
+roles = ["throne_room", "chamber", "kitchen", "storage"]
+furniture = "palace"
+roof = { glyph = "█", ascii = "@", color = [206, 164, 58] }
+apron = 3

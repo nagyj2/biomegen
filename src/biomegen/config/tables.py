@@ -73,6 +73,8 @@ _TIER_ROW = {
     "hooks_free": "text_list",
     "hooks_remnant": "text_list",
     "near_target": "bool",
+    "centre": "text",
+    "reserve": "text",
 }
 _SITE_ROW = {
     "layout": "text",
@@ -86,7 +88,43 @@ _SITE_ROW = {
     "ruin_wall_fall": "unit_pair",
     "ruin_extent_share": "positive",
     "dress": "text",
+    "specialized": "range",
 }
+
+BUILDING_FUNCTIONS = ("housing", "production", "civic")
+BUILDING_SHAPES = ("rect", "L", "T")
+BUILDING_SITINGS = ("river", "shore", "edge", "any")
+SUIT_TERMS = ("fertility", "forest", "roughness", "fresh_water", "coast")
+SITE_TAGS = ("port", "river", "lake")  # the traits a POI's ``tags`` may hold (``needs_tag`` of a building kind)
+_BUILDING_ROW = {
+    "label": "text",
+    "rank": "rank",
+    "function": "function",
+    "rows": "range",
+    "width": "span",
+    "shapes": "shapes",
+    "roles": "text_list",
+    "furniture": "text",
+    "roof": "roof",
+    "capacity_pop": "count",
+    "storage": "nonneg",
+    "suits": "suits",
+    "min_score": "nonneg",
+    "max_per_kind": "count",
+    "siting": "siting",
+    "tries": "count",
+    "needs_tag": "site_tag",
+    "dress": "text",
+    "apron": "rank",
+}
+#: The keys a function requires of its rows (a production kind also has the optional ``needs_tag`` and ``dress``);
+#: no other function may use them.
+_BUILDING_KEYS = {
+    "housing": frozenset({"capacity_pop", "storage"}),
+    "production": frozenset({"suits", "min_score", "max_per_kind", "siting", "tries"}),
+    "civic": frozenset({"apron"}),
+}
+_BUILDING_PRODUCTION_OPTIONAL = frozenset({"needs_tag", "dress"})
 _POI_ROW = {
     "priority": "rank",
     "source": "source",
@@ -369,13 +407,31 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "detail_relief": (_DETAIL_RELIEF_ROW, frozenset()),
     "tiers": (
         _TIER_ROW,
-        frozenset({"bg", "dynamic", "connect", "map_marker", "free_fg", "hooks_free", "hooks_remnant", "near_target"}),
+        frozenset(
+            {
+                "bg",
+                "dynamic",
+                "connect",
+                "map_marker",
+                "free_fg",
+                "hooks_free",
+                "hooks_remnant",
+                "near_target",
+                "reserve",
+            }
+        ),
+    ),
+    "buildings": (
+        _BUILDING_ROW,
+        frozenset(key for keys in _BUILDING_KEYS.values() for key in keys) | _BUILDING_PRODUCTION_OPTIONAL,
     ),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
     "sites": (
         _SITE_ROW,
-        frozenset({"plaza_tiles", "walled", "ruin_standing", "ruin_wall_fall", "ruin_extent_share", "dress"}),
+        frozenset(
+            {"plaza_tiles", "walled", "ruin_standing", "ruin_wall_fall", "ruin_extent_share", "dress", "specialized"}
+        ),
     ),
     "pois": (_POI_ROW, _POI_OPTIONAL),
     "poi_fates": (_POI_FATE_ROW, frozenset()),
@@ -422,6 +478,22 @@ def _is_floors(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 1
 
 
+def _check_roof(row: Dict[str, Any], key: str, where: str, errors: List[str]) -> None:
+    """Check a building's ``roof`` look: a ``glyph`` (one character), an ``ascii`` (one 7-bit) and a ``color``."""
+    look = row[key]
+    if not isinstance(look, dict) or set(look) != {"glyph", "ascii", "color"}:
+        errors.append(f"{where}.{key}: expected a table of glyph, ascii and color, got {look!r}")
+        return
+    if not (isinstance(look["glyph"], str) and len(look["glyph"]) == 1):
+        errors.append(f"{where}.{key}.glyph: expected one character, got {look['glyph']!r}")
+    if not (isinstance(look["ascii"], str) and len(look["ascii"]) == 1 and look["ascii"].isascii()):
+        errors.append(f"{where}.{key}.ascii: expected one 7-bit character, got {look['ascii']!r}")
+    try:
+        look["color"] = list(_coerce_color(look["color"]))
+    except (TypeError, ValueError) as exc:
+        errors.append(f"{where}.{key}.color: {exc}")
+
+
 def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: List[str]) -> None:
     """Check (and for colours, coerce) ``row[key]`` against ``kind``; record a problem if it fails."""
     value = row[key]
@@ -431,7 +503,22 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         except (TypeError, ValueError) as exc:
             errors.append(f"{where}.{key}: {exc}")
         return
+    if kind == "roof":
+        _check_roof(row, key, where, errors)
+        return
     checks = {
+        "function": lambda v: v in BUILDING_FUNCTIONS,
+        "siting": lambda v: v in BUILDING_SITINGS,
+        "site_tag": lambda v: v in SITE_TAGS,
+        "shapes": lambda v: (
+            isinstance(v, list) and len(v) > 0 and all(s in BUILDING_SHAPES for s in v) and len(set(v)) == len(v)
+        ),
+        "suits": lambda v: (
+            isinstance(v, dict)
+            and len(v) > 0
+            and all(k in SUIT_TERMS and _is_number(w) and w >= 0.0 for k, w in v.items())
+            and any(w > 0.0 for w in v.values())
+        ),
         "text": lambda v: isinstance(v, str),
         "char": lambda v: isinstance(v, str) and len(v) == 1,
         "char?": lambda v: isinstance(v, str) and len(v) <= 1,
@@ -772,6 +859,73 @@ def _validate_poi_styles(tables: Dict[str, Any], errors: List[str]) -> None:
                     errors.append(f"{where}.{key}: {text!r} must use {{near}}")
 
 
+def _validate_building_keys(where: str, row: Dict[str, Any], errors: List[str]) -> None:
+    """Check that a building row has exactly the keys of its function (production adds two optional ones)."""
+    function = row.get("function")
+    if function not in _BUILDING_KEYS:
+        return
+    for owner, keys in _BUILDING_KEYS.items():
+        for key in sorted(keys):
+            if owner == function and key not in row:
+                errors.append(f"{where}: a {function} kind needs {key!r}")
+            elif owner != function and key in row:
+                errors.append(f"{where}.{key}: only a {owner} kind has this key")
+    if function != "production":
+        for key in sorted(_BUILDING_PRODUCTION_OPTIONAL & set(row)):
+            errors.append(f"{where}.{key}: only a production kind has this key")
+
+
+def _validate_building_names(tables: Dict[str, Any], kinds: Dict[str, str], errors: List[str]) -> None:
+    """Check that a tier's ``centre`` and ``reserve`` name civic kinds and a style's ``building`` a production kind."""
+    tiers, styles = tables.get("tiers", {}), tables.get("poi_styles", {})
+    for tier in sorted(tiers) if isinstance(tiers, dict) else []:
+        tier_row = tiers[tier]
+        for key in ("centre", "reserve"):
+            if isinstance(tier_row, dict) and key in tier_row and kinds.get(tier_row[key]) != "civic":
+                errors.append(f"tables.tiers.{tier}.{key}: {tier_row[key]!r} is no civic building kind")
+    for style in sorted(styles) if isinstance(styles, dict) else []:
+        style_row = styles[style]
+        if isinstance(style_row, dict) and "building" in style_row and kinds.get(style_row["building"]) != "production":
+            errors.append(
+                f"tables.poi_styles.{style}.building: {style_row['building']!r} is no production building kind"
+            )
+
+
+def _validate_buildings(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check the building kinds' ranks, their function's keys, furniture families and the rows that name a kind.
+
+    Ranks are unique and below ``KIND_ROOF_SLOTS`` (a rank is a roof cell id offset). A kind has exactly the keys of its
+    function (a housing kind its population and storage, a production kind its suits, siting and counts, a civic kind
+    its apron).
+    """
+    from ..world.tile import KIND_ROOF_SLOTS
+
+    buildings = tables.get("buildings", {})
+    if not isinstance(buildings, dict):
+        return
+    furniture = tables.get("furniture", {})
+    kinds: Dict[str, str] = {}
+    ranks: Dict[int, str] = {}
+    for name in sorted(buildings):
+        row = buildings[name]
+        where = f"tables.buildings.{name}"
+        if not isinstance(row, dict):
+            continue
+        if isinstance(row.get("function"), str):
+            kinds[name] = row["function"]
+        rank = row.get("rank")
+        if isinstance(rank, int) and not isinstance(rank, bool):
+            if rank >= KIND_ROOF_SLOTS:
+                errors.append(f"{where}.rank: {rank} does not fit the roof block of {KIND_ROOF_SLOTS} kinds")
+            if rank in ranks:
+                errors.append(f"{where}.rank: {rank} is also the rank of {ranks[rank]!r}")
+            ranks[rank] = name
+        _validate_building_keys(where, row, errors)
+        if isinstance(furniture, dict) and row.get("furniture") not in furniture:
+            errors.append(f"{where}.furniture: no furniture family named {row.get('furniture')!r}")
+    _validate_building_names(tables, kinds, errors)
+
+
 def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
     """Check the POI kinds' history keys, name patterns and hook texts, and the shrine-like sites."""
     pois, styles = tables.get("pois", {}), tables.get("ruling_styles", {})
@@ -859,6 +1013,7 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     _validate_polity(tables, errors)
     _validate_chronicle(tables.get("chronicle", {}), errors)
     _validate_pois(tables, errors)
+    _validate_buildings(tables, errors)
     _validate_secession(tables, errors)
 
     styles = tables.get("styles", {})

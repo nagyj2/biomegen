@@ -33,6 +33,7 @@ def test_shipped_tables_load_and_validate() -> None:
     # The packaged data files give their tables and pass their own schema.
     assert sorted(load_config(None).get("tables")) == [
         "biomes",
+        "buildings",
         "chronicle",
         "detail",
         "detail_relief",
@@ -172,6 +173,7 @@ def test_loader_combines_the_shipped_files() -> None:
     # chronicle.toml chronicle.
     assert sorted(_load(DATA_DIR, DATA_FILES)) == [
         "biomes",
+        "buildings",
         "chronicle",
         "detail",
         "detail_relief",
@@ -291,7 +293,7 @@ def test_a_negative_furniture_weight_is_rejected() -> None:
 
 def test_a_site_row_must_name_an_existing_furniture_set() -> None:
     cfg = get_defaults()
-    cfg["tables"]["sites"]["village"]["furniture"] = "palace"
+    cfg["tables"]["sites"]["village"]["furniture"] = "no_such_family"
     with pytest.raises(ConfigError):
         validate(cfg)
 
@@ -688,3 +690,143 @@ def test_a_poi_row_may_be_placed_by_style_and_hide_its_marker() -> None:
     cfg["tables"]["pois"]["boat"]["source"] = "style"
     cfg["tables"]["pois"]["boat"]["marker"] = False
     validate(cfg)
+
+
+# --- building kinds (data/buildings.toml) -----------------------------------------------------------------------
+
+
+def test_the_shipped_building_kinds() -> None:
+    # One housing kind, the five production kinds the poi styles name, and a civic kind per settlement tier.
+    rows = get_defaults()["tables"]["buildings"]
+    by_function = {
+        f: sorted(n for n, r in rows.items() if r["function"] == f) for f in ("housing", "production", "civic")
+    }
+    assert by_function == {
+        "housing": ["house"],
+        "production": ["farmhouse", "fishery", "lodge", "mill", "mine"],
+        "civic": ["cathedral", "chapel", "gathering_point", "hall", "palace"],
+    }
+
+
+def test_building_ranks_are_unique_and_civic_kinds_rank_last() -> None:
+    # A rank is a roof cell offset, and a tie between roofs goes to the higher id: civic kinds must outrank the rest.
+    rows = get_defaults()["tables"]["buildings"]
+    ranks = [row["rank"] for row in rows.values()]
+    civic = [row["rank"] for row in rows.values() if row["function"] == "civic"]
+    other = [row["rank"] for row in rows.values() if row["function"] != "civic"]
+    assert len(ranks) == len(set(ranks)) and min(civic) > max(other)
+
+
+def test_every_tier_names_a_civic_centre_in_tier_order() -> None:
+    tiers = get_defaults()["tables"]["tiers"]
+    centres = [tiers[name]["centre"] for name in sorted(tiers, key=lambda name: -tiers[name]["rank"])]
+    assert centres == ["gathering_point", "chapel", "hall", "cathedral", "palace"]
+
+
+def test_a_tier_reserves_the_next_tiers_centre_and_the_capital_none() -> None:
+    # The plaza keeps room for the next tier's centre; the capital has no next tier and omits the key.
+    tiers = get_defaults()["tables"]["tiers"]
+    assert {name: row.get("reserve") for name, row in tiers.items()} == {
+        "capital": None,
+        "city": "palace",
+        "town": "cathedral",
+        "village": "hall",
+        "hamlet": "chapel",
+    }
+
+
+def test_every_style_building_is_a_production_kind() -> None:
+    tables = get_defaults()["tables"]
+    assert {row["building"] for row in tables["poi_styles"].values()} == {
+        name for name, row in tables["buildings"].items() if row["function"] == "production"
+    }
+
+
+def test_settlement_tiers_have_specialized_slots() -> None:
+    sites = get_defaults()["tables"]["sites"]
+    assert [sites[tier]["specialized"] for tier in ("hamlet", "village", "town", "city", "capital")] == [
+        [1, 1],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [4, 5],
+    ]
+
+
+def test_a_building_rank_must_fit_the_roof_block() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["buildings"]["palace"]["rank"] = 64
+    with pytest.raises(ConfigError, match=r"tables\.buildings\.palace\.rank: 64 does not fit the roof block"):
+        validate(cfg)
+
+
+def test_two_building_kinds_cannot_share_a_rank() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["buildings"]["mine"]["rank"] = cfg["tables"]["buildings"]["mill"]["rank"]
+    with pytest.raises(ConfigError, match=r"tables\.buildings\.mine\.rank: 2 is also the rank of 'mill'"):
+        validate(cfg)
+
+
+def test_a_production_kind_needs_its_siting() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["buildings"]["lodge"]["siting"]
+    with pytest.raises(ConfigError, match=r"tables\.buildings\.lodge: a production kind needs 'siting'"):
+        validate(cfg)
+
+
+def test_a_civic_kind_cannot_have_production_keys() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["buildings"]["chapel"]["tries"] = 8
+    with pytest.raises(ConfigError, match=r"tables\.buildings\.chapel\.tries: only a production kind has this key"):
+        validate(cfg)
+
+
+def test_a_building_names_an_existing_furniture_family() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["buildings"]["hall"]["furniture"] = "no_such_family"
+    with pytest.raises(ConfigError, match=r"tables\.buildings\.hall\.furniture: no furniture family"):
+        validate(cfg)
+
+
+def test_a_tier_centre_must_be_a_civic_kind() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["tiers"]["village"]["centre"] = "house"
+    with pytest.raises(ConfigError, match=r"tables\.tiers\.village\.centre: 'house' is no civic building kind"):
+        validate(cfg)
+
+
+def test_a_tier_reserve_must_be_a_civic_kind() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["tiers"]["town"]["reserve"] = "mill"
+    with pytest.raises(ConfigError, match=r"tables\.tiers\.town\.reserve: 'mill' is no civic building kind"):
+        validate(cfg)
+
+
+def test_a_style_building_must_be_a_production_kind() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["poi_styles"]["farm"]["building"] = "chapel"
+    with pytest.raises(ConfigError, match=r"tables\.poi_styles\.farm\.building: 'chapel' is no production building"):
+        validate(cfg)
+
+
+def test_a_roof_look_needs_its_three_parts() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["buildings"]["house"]["roof"]["ascii"]
+    with pytest.raises(
+        ConfigError, match=r"tables\.buildings\.house\.roof: expected a table of glyph, ascii and color"
+    ):
+        validate(cfg)
+
+
+def test_a_building_shape_must_be_a_known_footprint() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["buildings"]["house"]["shapes"] = ["rect", "circle"]
+    with pytest.raises(ConfigError, match=r"tables\.buildings\.house\.shapes: expected shapes"):
+        validate(cfg)
+
+
+def test_a_suit_weight_must_name_a_known_term() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["buildings"]["mill"]["suits"] = {"moisture": 1.0}
+    with pytest.raises(ConfigError, match=r"tables\.buildings\.mill\.suits: expected suits"):
+        validate(cfg)
