@@ -97,7 +97,7 @@ cardinal_only = false           # true routes every road north, east, south or w
 meander_strength = 0.30
 
 [render]
-zoom_scale = 5                  # ZOOM (mid) scale: detail-cell height per biome tile (aspect-corrected)
+zoom_scale = 4                  # ZOOM (mid) scale: detail-cell height per biome tile (aspect-corrected)
 local_rows = 4                  # LOCAL (close) scale: ~this many biome tiles fill the screen height
 cell_aspect = 2.0               # widen detail cells so a world tile reads ~square (both detail scales)
 blend_strength = 0.85           # soften biome boundaries at detail scales (0 = crisp grid)

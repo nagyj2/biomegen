@@ -136,18 +136,18 @@ def test_the_exported_map_has_no_cursor(config: Config) -> None:
 
 
 def test_zoom_highlights_the_whole_tile_block(config: Config) -> None:
-    # A 10 x 5 zoom block is reversed: 50 cells differ from the map as drawn.
+    # An 8 x 4 zoom block is reversed: 32 cells differ from the map as drawn.
     state = ViewState(cx=20, cy=10, scale=SCALE_ZOOM, recenter=True)
     frame = _frame(_world(), config, state)
     rows = frame.map_grid.rows
     differs = (frame.screen.bg[:rows, : frame.map_grid.cols] != frame.map_grid.bg).any(axis=-1)
-    assert int(differs.sum()) == 50
+    assert int(differs.sum()) == 32
 
 
 def test_zoom_centres_the_camera_on_the_cursor(config: Config) -> None:
     state = ViewState(cx=20, cy=10, scale=SCALE_ZOOM, recenter=True)
     _frame(_world(), config, state)
-    assert (state.cam_x, state.recenter) == (15, False)
+    assert (state.cam_x, state.recenter) == (14, False)
 
 
 def test_one_to_one_map_pans_with_the_cursor(config: Config) -> None:

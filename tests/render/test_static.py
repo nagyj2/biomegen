@@ -64,9 +64,9 @@ def test_color_test_lists_the_environment() -> None:
 
 
 def test_detail_render_fills_whole_tiles_of_the_area(config) -> None:
-    # A 120 x 36 area with 10 x 5 zoom cells holds 12 x 7 tiles: 120 columns by 35 rows.
+    # A 120 x 36 area with 8 x 4 zoom cells holds 15 x 9 tiles: 120 columns by 36 rows.
     static = render_detail(_world(), config, "zoom", area=(120, 36))
-    assert (static.grid.rows, static.grid.cols) == (35, 120)
+    assert (static.grid.rows, static.grid.cols) == (36, 120)
 
 
 def test_detail_render_is_the_bare_grid(config) -> None:

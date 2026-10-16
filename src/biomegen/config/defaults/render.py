@@ -8,7 +8,7 @@ VALUES: Dict[str, Any] = {
     # Detail views. There are three view scales: the biome map, "zoom" (mid), and "local" (close).
     # Both detail scales are aspect-corrected: cell HEIGHT sets the magnification and cell width is
     # widened by cell_aspect so a biome tile reads ~square (terminal cells are taller than wide).
-    "zoom_scale": 5,  # ZOOM scale: detail-cell height per biome tile (width = x cell_aspect)
+    "zoom_scale": 4,  # ZOOM scale: detail-cell height per biome tile (width = x cell_aspect)
     # LOCAL scale: the screen shows roughly this many biome tiles vertically, each magnified.
     "local_rows": 4,
     "cell_aspect": 2.0,  # detail-cell width / height; terminal cells are ~2:1 tall

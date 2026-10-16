@@ -35,7 +35,7 @@ def _patchwork_world(width: int = 8, height: int = 6):
 
 def test_zoom_cells_are_aspect_corrected(config: Config) -> None:
     # Zoom height is render.zoom_scale; width is widened by render.cell_aspect.
-    assert detail_cell_size(SCALE_ZOOM, config, 120, 36) == (10, 5)
+    assert detail_cell_size(SCALE_ZOOM, config, 120, 36) == (8, 4)
 
 
 def test_local_cell_height_fits_the_configured_tile_rows(config: Config) -> None:
@@ -44,9 +44,9 @@ def test_local_cell_height_fits_the_configured_tile_rows(config: Config) -> None
 
 
 def test_grid_holds_whole_tiles_only(config: Config) -> None:
-    # A 125 x 37 area with 10 x 5 cells fits 12 x 7 tiles: 120 columns by 35 rows.
+    # A 125 x 37 area with 8 x 4 cells fits 15 x 9 tiles: 120 columns by 36 rows.
     sampler = detail_sampler(make_world(30, 20), config, SCALE_ZOOM, 125, 37, 0, 0)
-    assert (sampler.cols, sampler.rows) == (120, 35)
+    assert (sampler.cols, sampler.rows) == (120, 36)
 
 
 def test_each_cell_block_reads_its_own_tile_without_warp() -> None:

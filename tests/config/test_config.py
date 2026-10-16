@@ -18,9 +18,9 @@ def test_defaults_load_without_a_file() -> None:
 
 def test_dotted_get_and_section() -> None:
     cfg = load_config(None)
-    assert cfg.get("render.zoom_scale") == 5
+    assert cfg.get("render.zoom_scale") == 4
     render = cfg.section("render")
-    assert render.get("zoom_scale") == 5
+    assert render.get("zoom_scale") == 4
 
 
 def test_missing_key_raises_without_default() -> None:

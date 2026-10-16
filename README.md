@@ -221,7 +221,7 @@ weights in `furniture.toml`.
 #### `[render]`
 | Key | Default | Description |
 |-----|---------|-------------|
-| `zoom_scale` | `5` | Zoom detail: cell height (in terminal rows) per biome tile |
+| `zoom_scale` | `4` | Zoom detail: cell height (in terminal rows) per biome tile |
 | `local_rows` | `4` | Local detail: biome tiles shown vertically on screen |
 | `cell_aspect` | `2.0` | Widen detail cells so world tiles read ~square |
 | `blend_strength` | `0.85` | Biome boundary bleed at detail scales (0 = crisp grid) |
