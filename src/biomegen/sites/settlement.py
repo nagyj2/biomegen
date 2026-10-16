@@ -871,7 +871,8 @@ def _fall(
 ) -> None:
     """Let a ruined settlement fall: most buildings fall in, a few stand, the wall breaks and its gates open.
 
-    A building stands with chance ``ctx.fall.standing`` (the lot a seeded draw picks always does). A fallen one has
+    A building stands with chance ``ctx.fall.standing`` (the centre building always does: the stone hall outlasts the
+    houses; with none, the lot a seeded draw picks). A fallen one has
     breaches, cracked floors, trees growing in and a roof only over the rooms that kept it; a standing one has a few
     cracks. Wall stretches fall until ``ctx.fall.wall`` of the wall is down, and every gate becomes rubble. The draws
     use their own streams, so the streets and lots are exactly the settlement's.
@@ -881,7 +882,9 @@ def _fall(
     stream = rng.derive(ctx.seed, "site.erode", "settlement")
     standing = {index for index in range(len(lots)) if stream.random() < fall.standing}
     if lots:
-        standing.add(stream.randrange(len(lots)))
+        pick = stream.randrange(len(lots))  # always drawn, so the stream stays aligned
+        civic = [index for index, lot in enumerate(lots) if kind_row(ctx.config, lot.kind)["function"] == "civic"]
+        standing.add(civic[0] if civic else pick)
     crack = fall.erosion * float(ctx.config.get("sites.furnish.ruin_crack"))
     for index, lot in enumerate(lots):
         if index in standing:

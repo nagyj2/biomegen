@@ -9,6 +9,7 @@ import pytest
 
 from biomegen.config.model import Config
 from biomegen.sites import SitePlan, site_geometry, site_plan
+from biomegen.sites.kinds import roof_cell, tier_centre
 from biomegen.world.tile import Cell
 from tests.sites.conftest import add_poi, flat_world, roofs
 
@@ -113,3 +114,17 @@ def test_an_origin_with_no_site_row_falls_back_to_the_single_building(config: Co
     world = flat_world(16, 12)
     ruin = add_poi(world, "ruin", 8, 6, ruin_of="fortress", floor_count=1)
     assert site_plan(ruin, 0, config, world) is not None
+
+
+@pytest.mark.parametrize("tier", ["hamlet", "village", "town", "city", "capital"])
+@pytest.mark.parametrize("seed", range(6))
+def test_the_centre_building_always_stands_in_a_ruin(full: Config, tier: str, seed: int) -> None:
+    # The stone centre outlasts the houses: however old the ruin or the draws, its tier's centre roof is there.
+    _town, ruin = _plans(full, tier, fell=None, seed=seed, pop=300)
+    assert roof_cell(full, tier_centre(full, tier)) in ruin.outside
+
+
+def test_a_ruin_shows_the_centre_while_most_houses_fell(full: Config) -> None:
+    # A fully eroded town keeps its hall roofed (standing), and has lost more roofs than the town it was kept.
+    town, ruin = _plans(full, "town", fell=None)
+    assert roof_cell(full, "hall") in ruin.outside and roofs(ruin.outside).sum() < roofs(town.outside).sum()
