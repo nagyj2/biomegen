@@ -49,6 +49,10 @@ VALUES: Dict[str, Any] = {
         "wobble": [0.16, 0.1, 0.07],  # amplitude of the outline's first three harmonics, as a share of the radius
         "road_join_rows": 3.0,  # a street this close (rows) beside the world road, not touching it, is run into it
         "storey_chance": 0.6,  # chance a building has another storey, each, near the plaza (less with distance)
+        # An upper storey is cut back so a tall building steps in (a tower on an L, not a block): an L or T keeps its
+        # whole outline on its first upper storey with chance ``whole``, else (and above) it is one wing; a plain
+        # rectangle is shortened along its longer side to a share in ``shrink`` of its length, at each storey.
+        "upper": {"whole": 0.35, "shrink": [0.6, 0.85]},
         "road_stretch": 0.3,  # how far the outline bulges towards each road gate, as a share of the radius
         "spokes": [3, 5],  # streets from the plaza to the outline, besides the ones towards road gates
         "rings": [0.4, 0.72],  # ring streets, each at this share of the way from the plaza to the outline

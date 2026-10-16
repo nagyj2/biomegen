@@ -663,3 +663,34 @@ def test_asking_past_the_roof_level_gives_the_roof_level(config: Config) -> None
     poi = add_poi(world, "town", 8, 6, pop=3000, floor_count=2)
     roof, beyond = site_plan(poi, 2, config, world), site_plan(poi, 9, config, world)
     assert roof is not None and beyond is not None and beyond.floor == 2 and np.array_equal(roof.cells, beyond.cells)
+
+
+# --- upper storeys are cut back ------------------------------------------------------------------------------------
+
+
+def _storey_cells(cells: np.ndarray, plan) -> np.ndarray:
+    """The cells under a building's roof that hold a storey (not bare, not the roof of a lower storey)."""
+    inside = np.zeros(cells.shape, dtype=bool)
+    for building in plan.buildings:
+        rows, cols = slice(building.y, building.y + building.height), slice(building.x, building.x + building.width)
+        inside[rows, cols] |= building.footprint
+    return inside & (cells != VOID) & ~roofs(cells)
+
+
+def test_a_tall_building_loses_part_of_its_floor_plan_above(config: Config) -> None:
+    # Some building has a storey on the top floor and, beside it, the roof of the lower storey it was cut back from.
+    plans = _floors(config, "city", 3, 12000)
+    top = plans[2]
+    cut = [
+        b
+        for b in top.buildings
+        if _storey_cells(top.cells, top)[b.y : b.y + b.height, b.x : b.x + b.width].any()
+        and (roofs(top.cells[b.y : b.y + b.height, b.x : b.x + b.width]) & b.footprint).any()
+    ]
+    assert cut
+
+
+def test_an_upper_storey_never_reaches_beyond_the_one_below(config: Config) -> None:
+    plans = _floors(config, "city", 3, 12000)
+    below, above = _storey_cells(plans[1].cells, plans[1]), _storey_cells(plans[2].cells, plans[2])
+    assert not (above & ~below).any()

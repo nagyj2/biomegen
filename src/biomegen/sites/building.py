@@ -43,6 +43,7 @@ class Building:
         doors: Every door cell, the street door first.
         roles: ``(role, floor cells)`` per room, largest first.
         rooms: Each room's outer rectangle ``(x, y, w, h)`` (walls included), in the order the rooms were cut.
+        wings: The outer rectangle of each wing of the footprint (one for a rectangle, two for an L or a T), main first.
     """
 
     cells: np.ndarray
@@ -51,6 +52,7 @@ class Building:
     doors: tuple[Point, ...]
     roles: tuple[tuple[str, int], ...]
     rooms: tuple[Rect, ...]
+    wings: tuple[Rect, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -174,7 +176,8 @@ def build_building(
     flip_x = outline.random() < 0.5
     flip_y = outline.random() < 0.5
     rooms: list[Rect] = []
-    for wing in _wings(rows, cols, shape, outline):
+    wings = _wings(rows, cols, shape, outline)
+    for wing in wings:
         rooms += (
             _split(rgen, wing, spec.min_room_rows, spec.aspect, 3 * spec.min_room_rows + 1)
             if spec.subdivide
@@ -191,9 +194,11 @@ def build_building(
     if flip_x:
         grid, footprint = grid[:, ::-1].copy(), footprint[:, ::-1].copy()
         rooms = [(cols - x - w, y, w, h) for x, y, w, h in rooms]
+        wings = [(cols - x - w, y, w, h) for x, y, w, h in wings]
     if flip_y:
         grid, footprint = grid[::-1].copy(), footprint[::-1].copy()
         rooms = [(x, rows - y - h, w, h) for x, y, w, h in rooms]
+        wings = [(x, rows - y - h, w, h) for x, y, w, h in wings]
 
     entrance = _entrance(grid, footprint, toward, spec.aspect) if toward is not None else None
     start = 0
@@ -237,7 +242,7 @@ def build_building(
                 doors.append(door)
 
     roles = _furnish(grid, rooms, start, rgen, spec, doors)
-    return Building(grid, footprint, front, tuple(doors), roles, tuple(rooms))
+    return Building(grid, footprint, front, tuple(doors), roles, tuple(rooms), tuple(wings))
 
 
 def _furnish(

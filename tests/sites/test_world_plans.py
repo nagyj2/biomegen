@@ -81,10 +81,13 @@ def test_doors_and_stairs_are_mutually_reachable(world: World, cfg: Config) -> N
 
 
 def _side(cells: np.ndarray, road: np.ndarray, y: int, x: int) -> int:
-    """The cell at ``(y, x)``, where the road's own cells (void in the plan) count as path and off the plan as void."""
+    """The cell at ``(y, x)``, where the road's own cells (void in the plan) count as path and off the plan as void.
+
+    A roof is the open air above a lower storey that is cut back, so it counts as path too.
+    """
     if not (0 <= y < cells.shape[0] and 0 <= x < cells.shape[1]):
         return VOID
-    return int(Cell.PATH) if road[y, x] else int(cells[y, x])
+    return int(Cell.PATH) if road[y, x] or roofs(cells[y : y + 1, x : x + 1])[0, 0] else int(cells[y, x])
 
 
 def test_no_building_door_opens_onto_bare_ground(world: World, cfg: Config) -> None:

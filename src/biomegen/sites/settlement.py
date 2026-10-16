@@ -30,7 +30,7 @@ from ..util import rng
 from ..world.tile import Cell
 from .boat import moor_boat
 from .building import Building, Spec, build_building
-from .carve import Point, nearest_true
+from .carve import Point, Rect, nearest_true
 from .dress import Dressing, lay_dress, wear_dress
 from .kinds import kind_row, kind_spec, lot_rows, lot_widths, roof_cell, tier_centre, tier_reserve
 from .layout import SiteBuilding, SiteContext, layout
@@ -477,6 +477,50 @@ def _lots(
     return roofs, placed
 
 
+def _shrink(rect: Rect, stream: random.Random, aspect: float, low: float, high: float, spec: Spec) -> Rect:
+    """Return ``rect`` shortened along its longer side to ``low`` to ``high`` of its length, kept at one end.
+
+    A rectangle already as short as the smallest building (a room and its walls) is returned as it is.
+    """
+    x, y, width, height = rect
+    min_rows, min_cols = spec.min_room_rows + 2, math.ceil(spec.min_room_rows * aspect) + 2
+    factor = stream.uniform(low, high)
+    from_start = stream.random() < 0.5
+    if width / aspect >= height:
+        new = max(min_cols, round(width * factor))
+        return (x if from_start else x + width - new, y, new, height) if new < width else rect
+    new = max(min_rows, round(height * factor))
+    return (x, y if from_start else y + height - new, width, new) if new < height else rect
+
+
+def _storey_rects(ctx: SiteContext, lot: Lot, index: int, count: int) -> list[Rect]:
+    """Return the outer rectangle, within the lot, of each of ``count`` upper storeys of ``lot``, lowest first.
+
+    Each storey lies within the one below, so a tall building steps in: an L or a T keeps its whole outline on the first
+    storey with chance ``sites.settlement.upper.whole`` and then only one of its wings (the large or the small), which
+    reads as a tower on the building; a plain rectangle loses a share of its length at one end. Further storeys shrink
+    again. The draws are on their own stream (``site.layout`` ``cut``), keyed on the lot.
+    """
+    cfg = ctx.config.get("sites.settlement.upper")
+    low, high = (float(v) for v in cfg["shrink"])
+    stream = rng.derive(ctx.seed, "site.layout", "cut", index)
+    spec = _spec(ctx, lot.kind)
+    whole: Rect = (0, 0, lot.width, lot.height)
+    wings = list(lot.building.wings) or [whole]
+    stack: list[Rect] = []
+    if len(wings) > 1:
+        by_size = sorted(range(len(wings)), key=lambda i: (wings[i][2] * wings[i][3], i))
+        pick = by_size[0] if stream.random() < 0.5 else by_size[-1]
+        if stream.random() < float(cfg["whole"]):
+            stack.append(whole)
+        stack.append(wings[pick])
+    else:
+        stack.append(_shrink(whole, stream, ctx.aspect, low, high, spec))
+    while len(stack) < count:
+        stack.append(_shrink(stack[-1], stream, ctx.aspect, low, high, spec))
+    return stack[:count]
+
+
 def _storeys(
     ctx: SiteContext, grid: np.ndarray, lots: list[Lot], centre: Point, stream: random.Random
 ) -> list[np.ndarray]:
@@ -509,18 +553,33 @@ def _storeys(
         spec = _spec(ctx, lot.kind)
         chooser = civic_stairs if kind_row(ctx.config, lot.kind)["function"] == "civic" else stream
         floors = [lot.building.cells]
+        rects = _storey_rects(ctx, lot, index, levels[index] - 1)
         for storey in range(1, levels[index]):
+            x, y, width, height = rects[storey - 1]
+            whole = (width, height) == (lot.width, lot.height)
             upper = build_building(
-                lot.height,
-                lot.width,
+                height,
+                width,
                 rng.derive(ctx.seed, "site.layout", "upper", index, storey),
-                spec,
+                spec if whole else replace(spec, shapes=("rect",)),
                 None,
                 random.Random(lot.shape_seed),
             )
+            if upper is None and not whole:  # a cut too small to build in: this storey spans the lot
+                x, y, width, height = 0, 0, lot.width, lot.height
+                upper = build_building(
+                    height,
+                    width,
+                    rng.derive(ctx.seed, "site.layout", "upper", index, storey),
+                    spec,
+                    None,
+                    random.Random(lot.shape_seed),
+                )
             if upper is None:
                 break
-            floors.append(upper.cells)
+            cells = np.zeros_like(lot.building.cells)  # the part that is cut away shows the roof of the storey below
+            cells[y : y + height, x : x + width][upper.cells != _VOID] = upper.cells[upper.cells != _VOID]
+            floors.append(cells)
         stairs: list[Point] = []
         for storey in range(len(floors) - 1):
             doors = (floors[storey] == _DOOR) | (floors[storey + 1] == _DOOR)
