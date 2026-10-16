@@ -363,3 +363,35 @@ def test_the_generated_world_is_the_same_twice() -> None:
     a, b = _generate(7), _generate(7)
     key = lambda world: [(p.kind, p.x, p.y, p.style, p.pop, p.founded, p.tags) for p in world.pois]  # noqa: E731
     assert key(a) == key(b)
+
+
+def test_a_styles_min_land_replaces_the_global_footprint_rule() -> None:
+    # A shore cell has sea in part of the fishery's wide plan: eligible with min_land 0, not with min_land 1.
+    world = _island()
+    strict, loose = _config("fishery", min_land=1.0), _config("fishery", min_land=0.0)
+    shore_strict = poi_styles.style_score(world, strict, 7, "fishery")[15, 3]
+    shore_loose = poi_styles.style_score(world, loose, 7, "fishery")[15, 3]
+    assert not np.isfinite(shore_strict) and np.isfinite(shore_loose)
+
+
+# --------------------------------------------------------------------------- count bands on the fixture seeds
+BANDS = {"farm": (10, 70), "mill": (1, 15), "mine": (1, 8), "lodge": (1, 25), "fishery": (1, 6)}
+
+
+def _fixture_worlds() -> dict[int, World]:
+    return {seed: _generate(seed) for seed in (42, 7, 1337, 11, 15)}
+
+
+def test_every_style_stays_in_its_count_band_on_the_fixture_seeds() -> None:
+    # Tuned by eye (task 9): no style vanishes from a world and none floods it. A change that leaves a band is a
+    # re-tune, not a bug: move the band with the numbers in data/pois.toml.
+    for seed, world in _fixture_worlds().items():
+        for style, (low, high) in BANDS.items():
+            count = sum(1 for p in world.pois if p.kind == "homestead" and p.style == style)
+            assert low <= count <= high, (seed, style, count)
+
+
+def test_the_growing_styles_make_a_few_hamlets_on_the_fixture_seeds() -> None:
+    for seed, world in _fixture_worlds().items():
+        hamlets = _placed(world, "hamlet")
+        assert 3 <= len(hamlets) <= 20 and {p.style for p in hamlets} == {"farm", "mill", "lodge"}, seed

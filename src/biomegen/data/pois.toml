@@ -70,6 +70,8 @@
 #   min_spacing_km, kind_spacing_km   minimum distance to every POI / to another POI of this style (a homestead; a hamlet also keeps
 #                        its tier's `spacing_km` from every settlement)
 #   biomes, elevation_min_m, elevation_max_m   eligibility, as for a kind
+#   min_land             (optional) the share of its largest plan that must be dry land, replacing `poi.min_footprint_land` (a
+#                        fishery's plan is half sea by design)
 #   needs_freshwater_km, needs_coast_km   (optional) eligibility: fresh water / the sea within this many km
 #   score terms (all optional weights >= 0 on a [0, 1] term): near_freshwater, coastal, remoteness (the kind terms); fertility (the
 #                        settlement habitability of the cell); relief (how rough the land is); forest (forest cover round the cell);
@@ -337,8 +339,8 @@ hooks_hamlet_near = ["{name} is a farming hamlet a short ride from {near}."]
 generated = true
 dynamic = true
 grows_into = "hamlet"
-homestead_km2_per_poi = 250000.0
-hamlet_km2_per_poi = 900000.0
+homestead_km2_per_poi = 35000.0
+hamlet_km2_per_poi = 100000.0
 min_score = 0.7
 min_spacing_km = 80.0
 kind_spacing_km = 150.0
@@ -358,8 +360,8 @@ hooks_hamlet_near = ["{name} is the mill hamlet that feeds {near}."]
 [poi_styles.mine]
 generated = true
 dynamic = true
-homestead_km2_per_poi = 300000.0
-min_score = 0.8
+homestead_km2_per_poi = 120000.0
+min_score = 0.5
 min_spacing_km = 80.0
 kind_spacing_km = 120.0
 biomes = ["grass", "savanna", "forest", "taiga", "tundra", "snow", "desert"]
@@ -393,8 +395,9 @@ hooks_hamlet_near = ["{name} lies in the woods beyond {near}."]
 [poi_styles.fishery]
 generated = true
 dynamic = true
-homestead_km2_per_poi = 200000.0
+homestead_km2_per_poi = 40000.0
 min_score = 0.7
+min_land = 0.25
 min_spacing_km = 60.0
 kind_spacing_km = 80.0
 biomes = ["grass", "savanna", "forest", "jungle", "taiga", "tundra", "snow", "swamp", "desert"]

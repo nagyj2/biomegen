@@ -131,7 +131,8 @@ def style_score(
     """
     row = config.get(f"tables.poi_styles.{style}")
     grids = fields or style_fields(world, config, seed, realm_id=realm_id, road=road)
-    mask = pois.eligible_mask(world, row, style_footprint(config, style), float(config.get("poi.min_footprint_land")))
+    min_land = float(row.get("min_land", config.get("poi.min_footprint_land")))
+    mask = pois.eligible_mask(world, row, style_footprint(config, style), min_land)
     if "needs_freshwater_km" in row:
         mask &= grids.fresh_km <= float(row["needs_freshwater_km"])
     if "needs_coast_km" in row:

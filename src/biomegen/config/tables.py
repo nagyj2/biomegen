@@ -139,6 +139,7 @@ _POI_STYLE_ROW = {
     "homestead_km2_per_poi": "positive",
     "hamlet_km2_per_poi": "positive",
     "min_score": "nonneg",
+    "min_land": "unit",
     "min_spacing_km": "positive",
     "kind_spacing_km": "positive",
     "biomes": "text_list",
@@ -278,6 +279,7 @@ _POI_OPTIONAL = frozenset(
 _POI_STYLE_OPTIONAL = frozenset(
     {
         "grows_into",
+        "min_land",
         "homestead_km2_per_poi",
         "hamlet_km2_per_poi",
         "kind_spacing_km",
