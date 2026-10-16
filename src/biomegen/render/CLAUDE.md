@@ -33,6 +33,9 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   `DetailSampler` over a site window (optionally just a region of it); the layer reads extents through the sampler's
   `col0` / `row0`, so a region draws exactly like the whole window. The roads layer draws the road
   everywhere, under the plans: a plan leaves the road's own cells void and adds only its lanes, buildings and walls.
+  A plan cell is a `uint8` above the `Cell` enum too: a building kind's roof (`KIND_ROOF_BASE + rank`) and a dress variant with a look of its own
+  (`DRESS_BASE + rank`) are styled by `interior_style` (256 entries) from their `tables.buildings` and `tables.dress` rows; the legend and
+  the panel name them through `sites.kinds.cell_name`.
 - **Numpy-only hot paths.** No per-cell Python loops. Loops over POIs or road links are fine; inside them,
   paint a numpy window (`DetailSampler.cell_window`).
 - **No literals.** Glyphs and colours come from `tables.biomes`, `tables.relief`, `tables.detail`,

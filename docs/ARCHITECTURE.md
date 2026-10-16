@@ -63,7 +63,10 @@ src/biomegen/
     plan.py             site_plan(): the per-floor plan, memoised; SitePlan
     layout.py           SiteContext and the layout registry
     building.py         Thin-walled building model: footprint, subdivided rooms, doors, roles, furniture
-    settlement.py structure.py camp.py boat.py homestead.py   The layouts (structure = dungeon, tower, ruin; homestead = one house in a yard, dressed by style)
+    settlement.py structure.py camp.py boat.py homestead.py   The layouts (structure = dungeon, tower, ruin; homestead = one building of its style's kind in a yard, dressed)
+    kinds.py            Building kinds (`tables.buildings`): roof cells, sizes, specs, a tier's centre and reserve; the legend names of kind and dress cells
+    surroundings.py     settlement_kinds(): the specialized buildings a settlement is chosen to have, from the terrain round it (pure, memoised)
+    dress.py            Dressings (`tables.dress`): variants by condition, laying a field, clearing, spoil, supplies; the Dressing record and a ruin's wear
     carve.py partition.py shapes.py furnish.py circulation.py streets.py   the layout toolkit
     cells.py            Cell groups, outside priority, wall autotile index
     coverage.py blit.py Which tiles and cells a site covers; scaling a plan into a grid (priority-aware)
@@ -615,15 +618,38 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   street door, assigns roles by size and furnishes them from `tables.furniture.<family>.<role>`. `settlement.py` grows an irregular town: a
   wobbling outline (stretched towards each road), a plaza, spokes from it to the outline, partial rings, lanes into any
   ground still too far from a street, then lots fitted to the free ground beside the streets (each a building whose door
-  faces its street), and for walled tiers a wall along the outline with gates where spokes and the road meet it. `structure.py` builds dungeon (a surface gatehouse plus underground rock floors of rooms and
+  faces its street), and for walled tiers a wall along the outline with gates where spokes and the road meet it (the
+  buildings of a settlement are kinds: see **Building kinds** below). `structure.py` builds dungeon (a surface gatehouse plus underground rock floors of rooms and
   corridors or caves), tower (tapering single-room floors, aligned stairs, a lookout; a watchtower is the same layout in its
   own furniture), ruin (a building with breaches, rubble, trees and partial roofs, eroded more the longer ago it fell; a ruin with a `ruin_of` is
-  instead its tier's settlement plan with a fall pass: each building stands with a chance that falls with age, at least one
-  always does, the others fall in, the wall breaks in stretches and every gate is rubble; the numbers are `ruin_standing`,
+  instead its tier's settlement plan with a fall pass: each building survives with a chance that falls with age (the
+  centre building always does), a survivor is damaged (breaches, stripped furniture, cracked floor, few roofed rooms:
+  `sites.ruin_damage`) and every other building is destroyed to rubble and bare ground (`sites.ruin_rubble`), the dressings
+  wear back into the terrain, the wall breaks in stretches and every gate is rubble; the numbers are `ruin_standing`,
   `ruin_wall_fall` and `ruin_extent_share` on the tier's `sites.toml` row, and the single building is kept for a ruin with no
   origin or no room) and
   shrine (one walled room with an altar); the entrance faces a gate. `camp.py`, `battlefield.py` and `boat.py` are open-air
   (tents, a trampled field with debris and wrecked wagons, hull); a camp's `purpose` picks its site row (`camp_<purpose>`).
+- **Building kinds** (`data/buildings.toml`, `kinds.py`). A lot holds a kind: `housing` (the house), `production`
+  (farmhouse, mill, mine, lodge, fishery: the `building` of a `poi_styles` row) or `civic` (the centre of a tier). A row
+  gives its `rows` and `width`, shapes, room roles, furniture family and roof look. A kind's roof is a plan cell of its
+  own in a reserved block (`KIND_ROOF_BASE + rank`, `world/tile.py`), so a plan stays one `uint8` array and the outside
+  view shows each kind in its colour; inside, a kind is told by its rooms and furniture.
+- **The centre** (`settlement._centre`, `_plot`). Every tier row names a `centre` kind (hamlet gathering point, village
+  chapel, town hall, city cathedral, capital palace) and optionally a `reserve` (the next tier's centre). The plaza is a
+  paved square, the *reserved plot*, sized for the reserve kind plus an apron; the centre stands in it at the plaza point,
+  its door facing the busiest street, on its own random streams, and the plot is carved out of the ground the `fill` share
+  counts. Swapping the centre kind therefore changes nothing outside the plot (the rule behind growth never redrawing a
+  plan: a promotion rebuilds only the centre). A ruin keeps its centre as its guaranteed survivor.
+- **Specialized buildings** (`surroundings.settlement_kinds`). A pure rule reads small windows of terrain round the
+  settlement (fertility, forest, roughness, fresh water, sea), scores each production kind by its `suits` weights
+  (`needs_tag`, `min_score`), and shares the tier's `specialized` slots (more with population) by score (D'Hondt,
+  `max_per_kind`); a hamlet's style kind is first. The layout preplaces them: `edge` kinds on the outer ground, the mill
+  at the river bank with its wheel, the fishery beside the harbour's pier; a kind with no room leaves its slot to housing.
+- **Dressings** (`data/dress.toml`, `dress.py`). A dressing has variants drawn by condition (`standing` or `ruin`) and POI
+  kind: a field is full or harvested rows, or in a ruin harvested or dead. A variant is an existing cell or a look of its
+  own in the dress cell block (`DRESS_BASE + rank`). In a ruin each dressing (field, clearing, spoil, pier, boats, wheel,
+  supplies) is recorded as it is laid and worn by its `wear` shares: bare terrain, rubble or overgrowth.
 - **Scales.** One plan per face, scaled into the cells its extent covers by `blit.sample_rect`. Where a view is coarser
   than the plan, the cell of highest `OUTSIDE_PRIORITY` wins, so a one-cell wall survives. Void is transparent. The
   world's road is drawn everywhere (roads layer, under the plans); a plan leaves its cells void and adds only lanes.
@@ -637,7 +663,9 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
 - **Cache and overlay.** Plans are memoised per world and config in a bounded cache (`sites.cache_size`), read-only.
   Runtime edits compose on top via `Overlay.apply_interior` (copy-on-write), keyed by the site seed and floor.
 - **Colour.** Plan cells take glyphs from `render.interior_glyphs` (`interior_glyphs_ascii` for ASCII) and colours from
-  `render.interior_palette`; bridge cells use the deck and wall colours of `render.detail_colors`.
+  `render.interior_palette`; bridge cells use the deck and wall colours of `render.detail_colors`; a building kind's
+  roof and a dress variant's own look take theirs from their `tables.buildings` and `tables.dress` rows (`interior_style`
+  covers all 256 cell ids).
 
 A new kind is a row in `data/sites.toml` and, if it needs a new pattern, a `@layout("name")` function registered in
 `sites/` (render and explorer iterate the sites generically).

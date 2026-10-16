@@ -15,14 +15,12 @@ import numpy as np
 from scipy import ndimage
 
 from ..config.model import Config
+from ..config.tables import DRESS_WEAR
 from ..util import rng
 from ..world.tile import DRESS_BASE, DRESS_SLOTS, Cell
 from .carve import Rect, fit_rect
 from .furnish import weighted_choice
 from .layout import SiteContext
-
-CONDITIONS = ("standing", "ruin")
-DRESS_WEAR = ("void", "rubble", "overgrown")  # what a worn dressing cell becomes (the keys of a ``wear`` table)
 
 
 def _variants(config: Config, dress: str) -> dict[str, dict]:

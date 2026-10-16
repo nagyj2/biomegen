@@ -9,7 +9,7 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 - `config/defaults/tables.py` reads every file in `DATA_FILES` with `tomllib` and puts each top-level
   table under the `tables` config section (`tables.biomes`, `tables.relief` from `biomes.toml`;
   `tables.detail`, `tables.detail_relief` from `detail.toml`; `tables.tiers`; `tables.styles` from `terrain.toml`;
-  `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.pois`, `tables.poi_fates`, `tables.poi_sites` and `tables.poi_styles` from `pois.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
+  `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.buildings` from `buildings.toml`; `tables.dress` from `dress.toml`; `tables.pois`, `tables.poi_fates`, `tables.poi_sites` and `tables.poi_styles` from `pois.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
   `tables.relation_weights` and `tables.realm_colors` from `polity.toml`; `tables.reasons` and `tables.reason_tokens` from
   `reasons.toml`; `tables.ruling_styles` from `rulers.toml`; `tables.chronicle` from `chronicle.toml`; `tables.secession_terms`,
   `tables.secession_relations` and `tables.secession_forms` from `secession.toml`; `tables.free_fates` from `pois.toml`).
@@ -76,6 +76,22 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 - `tiers.toml` rows may set `dynamic` (a later simulation mints it; the settlements stage skips it), `connect` (roads link
   it), `map_marker` (false hides the marker at the map scale) and `near_target` (false: other places' texts never name it as
   the settlement nearby and the legend leaves it out of settlement counts): the hamlet tier does all four.
+- Every `tiers.toml` row needs a `centre` (a civic kind of `buildings.toml`: the building that stands at the plaza and defines a settlement
+  of the tier) and may set `reserve` (the civic kind whose plot the plaza keeps clear: the next tier's centre; absent means its own).
+  A `sites.toml` settlement row may set `specialized` (`[min, max]` specialized buildings, more with population).
+
+## Buildings and dressings
+
+- `buildings.toml` has one row per building kind (the header documents every key): `function` is `housing`, `production` or `civic`
+  and decides the keys the row must have (`validate_tables` checks them). `rank` is unique below 64 and sets the kind's roof cell
+  (`KIND_ROOF_BASE + rank`); civic kinds rank last. `rows` and `width` size a lot, `shapes`, `roles` and `furniture` its rooms, `roof`
+  its look (`glyph`, `ascii`, `color`). A production kind's `suits` weights (`fertility`, `forest`, `roughness`, `fresh_water`,
+  `coast`) feed `sites/surroundings.py`, with `needs_tag`, `min_score`, `max_per_kind`, `siting` (`river`, `shore`, `edge`, `any`),
+  `tries` and a `dress` set. A `poi_styles` row's `building` names a production kind, a tier's `centre` and `reserve` civic kinds.
+- `dress.toml` has one row per dressing: `variants` (each an existing `cell` or a look of its own with a `rank` below 64, a weight
+  per condition `standing` and `ruin`, and optional `kinds`) and `wear` (the shares a ruin turns its cells to `void`, `rubble` or
+  `overgrown`). A row may have only `wear` (a pier, a boat). A site asks for the dress for its kind in its condition, so a standing
+  field is full or harvested rows and a ruin's harvested or dead.
 
 ## Politics
 
