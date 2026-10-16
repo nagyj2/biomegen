@@ -86,8 +86,9 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=("map", "zoom", "local", "site"),
         default=None,
         help=(
-            "Draw a magnified part of the world (zoom or local), or with --at the whole site of a point of interest "
-            "(site), instead of the whole map; implies --view terrain."
+            "Draw a magnified part of the world (zoom or local), or with --at the site of a point of interest "
+            "(site: a plan cell per terminal cell, centred on the tile and clipped to the terminal), instead of the "
+            "whole map; implies --view terrain."
         ),
     )
     parser.add_argument(

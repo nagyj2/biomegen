@@ -97,16 +97,32 @@ def test_data_view_works_at_detail_scale(config) -> None:
     assert len({tuple(rgb) for rgb in grid.bg.reshape(-1, 3).tolist()}) > 3
 
 
-def test_site_render_draws_the_whole_window_of_a_poi(config) -> None:
+def test_site_render_is_clipped_to_the_area_and_centred_on_the_tile(config) -> None:
     from biomegen.sites import site_geometry
     from biomegen.world.entities import POI
 
     world = make_world(12, 8)
     poi = POI(kind="village", x=6, y=4, interior_seed=3, pop=500)
     world.pois.append(poi)
-    static = render_detail(world, config, "site", at=(6, 4), color=False)
     geometry = site_geometry(poi, config)
-    assert geometry is not None and static.grid.glyph.shape == (geometry.rows, geometry.cols)
+    assert geometry is not None
+    small = render_detail(world, config, "site", at=(6, 4), area=(40, 20), color=False)
+    whole = render_detail(world, config, "site", at=(6, 4), area=(10_000, 10_000), color=False)
+    col, row = geometry.cell_at(6.0, 4.0)
+    col0, row0 = max(0, min(col - 20, geometry.cols - 40)), max(0, min(row - 10, geometry.rows - 20))
+    assert small.grid.glyph.shape == (20, 40) and whole.grid.glyph.shape == (geometry.rows, geometry.cols)
+    assert (small.grid.glyph == whole.grid.glyph[row0 : row0 + 20, col0 : col0 + 40]).all()
+
+
+def test_site_render_asks_for_a_tile_with_no_site_and_names_the_nearest(config) -> None:
+    import pytest
+
+    from biomegen.world.entities import POI
+
+    world = make_world(12, 8)
+    world.pois.append(POI(kind="village", x=2, y=2, interior_seed=3, pop=500, name="Oakford"))
+    with pytest.raises(ValueError, match=r"no site at tile 11,7 \(nearest site: Oakford \(village\) at 2,2\)"):
+        render_detail(world, config, "site", at=(11, 7))
 
 
 def test_site_render_without_a_poi_is_an_error(config) -> None:
