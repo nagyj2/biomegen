@@ -70,13 +70,16 @@ def pan(cam: int, cursor: int, view: int, world_size: int, margin: int, mode: st
 
 
 def pan_viewport(cam: int, cursor: int, view: int, world_size: int, margin: int, delta: int) -> tuple[int, int]:
-    """Scroll the camera by ``delta`` and drag the cursor along if it would leave the viewport.
+    """Scroll the camera by ``delta`` and carry the cursor with it, so the same screen position stays selected.
 
-    Returns ``(camera origin, cursor)``. A world no larger than the viewport has nothing to scroll, so the camera stays.
+    Returns ``(camera origin, cursor)``. The cursor moves by what the camera actually moved (none at the world's edge)
+    and stays inside the margin. A world no larger than the viewport has nothing to scroll, so the camera stays.
     """
+    moved = 0
     if world_size > view:
-        cam = clamp(cam + delta, 0, world_size - view)
-    return cam, clamp(cursor, cam + margin, cam + view - 1 - margin)
+        new_cam = clamp(cam + delta, 0, world_size - view)
+        moved, cam = new_cam - cam, new_cam
+    return cam, clamp(cursor + moved, cam + margin, cam + view - 1 - margin)
 
 
 @dataclass

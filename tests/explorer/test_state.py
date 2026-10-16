@@ -18,6 +18,7 @@ from biomegen.explorer.state import (
     initial_cursor,
     move_cursor,
     pan,
+    pan_viewport,
     poi_under_cursor,
     step_in,
     step_out,
@@ -385,3 +386,13 @@ def test_a_dungeon_has_no_roof_level(site_config: Config) -> None:
 
     world = _dungeon_world()
     assert floor_label(world.pois[0], site_config, -1) == "-1"
+
+
+def test_pan_viewport_moves_the_cursor_by_the_camera_step() -> None:
+    # One step left of the camera takes the cursor one tile left, so the same screen position stays selected.
+    assert pan_viewport(10, 15, 20, 100, 1, -1) == (9, 14)
+
+
+def test_pan_viewport_leaves_the_cursor_when_the_camera_is_at_the_world_edge() -> None:
+    # The camera cannot go below 0, so the cursor does not move either.
+    assert pan_viewport(0, 5, 20, 100, 1, -1) == (0, 5)

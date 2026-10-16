@@ -156,14 +156,14 @@ def test_one_to_one_map_pans_with_the_cursor(config: Config) -> None:
     assert state.cam_x > 0
 
 
-def test_pan_scrolls_the_viewport_and_keeps_the_cursor_inside(config: Config) -> None:
-    # Panning right from a centred camera moves the camera; the cursor is dragged only if it would leave the view.
+def test_pan_carries_the_cursor_with_the_viewport(config: Config) -> None:
+    # Panning right from a centred camera moves the camera and the cursor by the same amount (clamped to the margin).
     world = _world()
     state = ViewState(cx=15, cy=10, mode="onetoone", cam_x=5, cam_y=0, recenter=False)
     _frame(world, config, state, size=(20, 20))
     state.pan_x = 12
     _frame(world, config, state, size=(20, 20))
-    assert (state.cam_x, state.cx) == (17, 18)
+    assert (state.cam_x, state.cx) == (17, 27)
 
 
 def test_pan_on_the_fit_map_moves_the_cursor(config: Config) -> None:
