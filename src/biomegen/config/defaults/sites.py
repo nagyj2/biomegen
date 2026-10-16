@@ -25,6 +25,13 @@ VALUES: Dict[str, Any] = {
     # A building of a ruined settlement that does not survive is destroyed completely: its wall cells and the rest of
     # its footprint each stay rubble with these shares, and the others are bare ground (the terrain shows through).
     "ruin_rubble": {"wall": 0.8, "floor": 0.45},
+    # What a settlement is chosen to have (sites/surroundings.py): the land within ``radius_km`` of it is read for five
+    # terms, each a share that saturates (counts as 1) at its ``saturate`` value: mean habitability (fertility), forest
+    # cover and roughness of the land, and the share of the area that is fresh water (lakes, rivers) and sea (coast).
+    "kinds": {
+        "radius_km": 60.0,
+        "saturate": {"fertility": 0.6, "forest": 0.5, "roughness": 0.4, "fresh_water": 0.04, "coast": 0.08},
+    },
     # A building that survives is damaged by how far the ruin has worn (its erosion over ``ruin_erosion``): at full wear
     # it has ``breaches`` per room, ``crack`` of its floor cracked into rubble, ``strip`` of its furniture gone and
     # ``roof`` of its rooms unroofed.

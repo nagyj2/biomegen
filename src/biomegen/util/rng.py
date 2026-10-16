@@ -60,6 +60,7 @@ LABELS: frozenset[str] = frozenset(
         "site.furnish",  # furniture scatter, keyed on the site seed and floor
         "site.erode",  # ruin erosion: which walls collapse and floors crack into rubble
         "site.homestead",  # a homestead's house and dressing, keyed on the site seed (a grown hamlet rebuilds it)
+        "site.kinds",  # which specialized buildings a settlement is chosen to have (tie-breaks), keyed on the site seed
         "roads",  # road graph edge selection
         "roads.meander",  # per-edge road meander noise
         "naming",  # name/lore generation
