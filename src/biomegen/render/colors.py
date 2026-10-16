@@ -241,7 +241,7 @@ def _build_interior_style(config: Config, ascii_only: bool = False) -> InteriorS
         bg[index] = roof["color"]
         fg[index] = scale_colors(roof["color"], boost)
     for _dress, rows in sorted(config.get("tables.dress").items()):  # a dress variant with a look of its own
-        for _name, variant in sorted(rows["variants"].items()):
+        for _name, variant in sorted(rows.get("variants", {}).items()):
             if "cell" in variant:
                 continue
             index = DRESS_BASE + int(variant["rank"])

@@ -425,7 +425,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
             }
         ),
     ),
-    "dress": (_DRESS_ROW, frozenset({"wear"})),
+    "dress": (_DRESS_ROW, frozenset({"variants", "wear"})),
     "buildings": (
         _BUILDING_ROW,
         frozenset(key for keys in _BUILDING_KEYS.values() for key in keys) | _BUILDING_PRODUCTION_OPTIONAL,
@@ -1025,6 +1025,8 @@ def _validate_dress(tables: Dict[str, Any], errors: List[str]) -> None:
     ranks: Dict[int, str] = {}
     for name in sorted(dress):
         row = dress[name]
+        if isinstance(row, dict) and not ({"variants", "wear"} & set(row)):
+            errors.append(f"tables.dress.{name}: needs variants or wear")
         variants = row.get("variants") if isinstance(row, dict) else None
         if not isinstance(variants, dict):
             continue

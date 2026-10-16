@@ -31,7 +31,7 @@ from ..world.tile import Cell
 from .boat import moor_boat
 from .building import Building, Spec, build_building
 from .carve import Point, nearest_true
-from .dress import lay_dress
+from .dress import Dressing, lay_dress, wear_dress
 from .kinds import kind_row, kind_spec, lot_rows, lot_widths, roof_cell, tier_centre, tier_reserve
 from .layout import SiteContext, layout
 from .streets import lay_roads, lay_street
@@ -1110,6 +1110,7 @@ def _place_kinds(
     keep_out: np.ndarray,
     taken: list[Lot],
     landing: Optional[Point] = None,
+    dressing: Optional[Dressing] = None,
 ) -> list[Lot]:
     """Preplace the specialized buildings the settlement is chosen to have that stand on the outer ground.
 
@@ -1152,6 +1153,7 @@ def _place_kinds(
                 (built.x, built.y, built.width, built.height),
                 rng.derive(ctx.seed, "site.layout", "dress", index),
                 condition=condition,
+                dressing=dressing,
                 plant=False,
             )
     return placed
@@ -1213,16 +1215,26 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     ends = _spokes(ctx, grid, town, dry, centre, stream)
     _rings(ctx, grid, town, dry, centre, stream, max(ctx.plaza_rows, plot_height // 2))
     _lanes(ctx, grid, ground, town, stream)
+    dressing = Dressing(grid.shape) if ctx.fall is not None else None  # a ruin's dressings are worn by its fall
+    before = grid.copy() if dressing is not None else grid
     landing = _harbour(ctx, grid, dry, centre)
+    if dressing is not None:
+        dressing.note("pier", before, grid, (_BRIDGE,))
+        dressing.add("boat", (grid != before) & ~np.isin(grid, _STREET))
     _join_roads(grid, dry, ctx.patch.road, ctx.aspect, float(ctx.config.get("sites.settlement.road_join_rows")))
     _close_slivers(grid, dry)
     hall = _centre(
         ctx, grid, dry, ground, centre, ends[0] if ends else None
     )  # the busiest street: a gate's spoke first
-    specialized = _place_kinds(ctx, grid, dry, ground, centre, plot_mask, [hall] if hall is not None else [], landing)
+    specialized = _place_kinds(
+        ctx, grid, dry, ground, centre, plot_mask, [hall] if hall is not None else [], landing, dressing
+    )
+    before = grid.copy() if dressing is not None else grid
     mill = _mill(ctx, grid, dry, ground, centre, kind="mill") if "mill" in ctx.kinds else None
     if mill is None and ctx.style and ctx.config.get(f"tables.poi_styles.{ctx.style}.building", "") == "mill":
         mill = _ensure_house(ctx, grid, dry, ground, centre, "mill")  # a mill hamlet always has its mill
+    if dressing is not None:
+        dressing.note("wheel", before, grid, (_WHEEL, int(Cell.AXLE_H), int(Cell.AXLE_V)))
     placed = [lot for lot in (hall, *specialized, mill) if lot is not None]
     roofs, lots = _lots(ctx, grid, ground, centre, stream, placed, int((ground[plot] & reserved).sum()), plot_mask)
     if all(
@@ -1241,6 +1253,8 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     _plant(ctx, grid, dry, roofs, stream, plot_mask)
     if ctx.fall is not None:
         _fall(ctx, grid, roofs, uppers, lots, wall)
+        if dressing is not None:
+            wear_dress(ctx, grid, dressing)
     kinds = _roof_cells(ctx, grid.shape, lots)
     if ctx.floor > 0:
         layer = uppers[ctx.floor - 1] if ctx.floor - 1 < len(uppers) else np.zeros_like(grid)

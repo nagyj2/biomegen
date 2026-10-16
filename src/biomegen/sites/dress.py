@@ -15,17 +15,19 @@ import numpy as np
 from scipy import ndimage
 
 from ..config.model import Config
+from ..util import rng
 from ..world.tile import DRESS_BASE, DRESS_SLOTS, Cell
 from .carve import Rect, fit_rect
 from .furnish import weighted_choice
 from .layout import SiteContext
 
 CONDITIONS = ("standing", "ruin")
+DRESS_WEAR = ("void", "rubble", "overgrown")  # what a worn dressing cell becomes (the keys of a ``wear`` table)
 
 
 def _variants(config: Config, dress: str) -> dict[str, dict]:
     """The variants of ``dress``, by name."""
-    return dict(config.get(f"tables.dress.{dress}.variants"))
+    return dict(config.get(f"tables.dress.{dress}.variants", {}))
 
 
 def variant_cell(config: Config, dress: str, variant: str) -> int:
@@ -209,6 +211,47 @@ def woods(grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, share: float, st
         grid[y, x] = int(Cell.TREE) if stream.random() < 0.7 else int(Cell.BUSH)
 
 
+class Dressing:
+    """The cells each dressing laid, by dress name (``tables.dress`` row): what a ruin's fall pass wears."""
+
+    def __init__(self, shape: tuple[int, int]) -> None:
+        self.shape = shape
+        self.cells: dict[str, np.ndarray] = {}
+
+    def add(self, name: str, mask: np.ndarray) -> None:
+        """Note the cells of ``mask`` as laid by the dressing ``name``."""
+        self.cells[name] = self.cells.get(name, np.zeros(self.shape, dtype=bool)) | mask
+
+    def note(self, name: str, before: np.ndarray, grid: np.ndarray, only: Optional[tuple[int, ...]] = None) -> None:
+        """Note the cells of ``grid`` that differ from ``before`` (and, with ``only``, hold one of those cells)."""
+        changed = grid != before
+        self.add(name, changed if only is None else changed & np.isin(grid, only))
+
+
+def wear_dress(ctx: SiteContext, grid: np.ndarray, dressing: Dressing) -> None:
+    """Wear every dressing of a ruin: each of its cells goes bare, to rubble or overgrown by the dress row's ``wear``.
+
+    The shares are those of full wear (``tables.dress.<name>.wear``) times how far the ruin has worn (its erosion over
+    ``sites.ruin_erosion``). Bare ground shows the natural terrain, so a worn dressing fades back into it; overgrown
+    cells become trees and bushes. Draws are on their own streams (``site.erode`` ``dress``), so nothing else moves.
+    """
+    fall = ctx.fall
+    assert fall is not None
+    wear = min(1.0, fall.erosion / float(ctx.config.get("sites.ruin_erosion")))
+    for name in sorted(dressing.cells):
+        shares = ctx.config.get(f"tables.dress.{name}.wear", {})
+        void, rubble, grown = (float(shares.get(key, 0.0)) * wear for key in DRESS_WEAR)
+        stream = rng.derive_numpy(ctx.seed, "site.erode", "dress", name)
+        roll, pick = stream.random(grid.shape), stream.random(grid.shape)
+        mask = dressing.cells[name]
+        gone = mask & (roll < void)
+        fallen = mask & (roll >= void) & (roll < void + rubble)
+        grew = mask & (roll >= void + rubble) & (roll < void + rubble + grown)
+        grid[gone] = _VOID
+        grid[fallen] = int(Cell.RUBBLE)
+        grid[grew] = np.where(pick[grew] < 0.7, int(Cell.TREE), int(Cell.BUSH))
+
+
 def lay_dress(
     ctx: SiteContext,
     grid: np.ndarray,
@@ -219,23 +262,39 @@ def lay_dress(
     *,
     condition: Optional[str] = None,
     plant: bool = True,
+    dressing: Optional[Dressing] = None,
 ) -> None:
     """Dress a building for its style: ``ctx.dress`` names a row of ``sites.homestead.dress``.
 
     ``condition`` (``standing`` or ``ruin``) picks the field's variants (None: full wheat); ``plant`` False leaves the
-    woods out (a settlement plants its own).
+    woods out (a settlement plants its own); ``dressing`` notes the cells each element laid, for a ruin's wear.
     """
     settings = ctx.config.get("sites.homestead.dress").get(ctx.dress, {})
+    before = grid.copy() if dressing is not None else grid
     if "field" in settings:
         field(ctx, grid, dry, roofs, rect, settings["field"], stream, condition)
+        if dressing is not None:
+            dressing.note("field", before, grid)
+            before = grid.copy()
     if "clearing" in settings:
         clearing(ctx, grid, dry, roofs, rect, settings["clearing"], int(settings.get("logs", 0)), stream)
+        if dressing is not None:
+            dressing.note("clearing", before, grid)
+            before = grid.copy()
     free = yard(ctx, grid, dry, rect)
     if int(settings.get("spoil", 0)):
         spoil(grid, free, int(settings["spoil"]), stream)
+        if dressing is not None:
+            dressing.note("spoil", before, grid)
+            before = grid.copy()
     for _ in range(int(settings.get("wagons", 0))):
         wagon(grid, free, stream)
+    if dressing is not None:
+        dressing.note("wagon", before, grid)
+        before = grid.copy()
     supplies(ctx, grid, yard(ctx, grid, dry, rect), int(settings.get("supplies", 0)), stream)
+    if dressing is not None:
+        dressing.note("supplies", before, grid)
     if plant:
         share = float(settings.get("trees", ctx.config.get("sites.homestead.trees")))
         woods(grid, dry, roofs, share, stream)

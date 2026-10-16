@@ -905,3 +905,16 @@ def test_a_dress_wear_must_sum_to_at_most_one() -> None:
     cfg["tables"]["dress"]["field"]["wear"] = {"void": 0.7, "rubble": 0.7}
     with pytest.raises(ConfigError, match=r"tables\.dress\.field\.wear: expected shares"):
         validate(cfg)
+
+
+def test_a_dress_row_may_have_only_wear() -> None:
+    # The other dressings (a pier, a boat, a wheel) have no variants yet, only the wear a ruin gives them.
+    row = get_defaults()["tables"]["dress"]["pier"]
+    assert "variants" not in row and row["wear"]["void"] > 0
+
+
+def test_a_dress_row_needs_variants_or_wear() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["dress"]["pier"] = {}
+    with pytest.raises(ConfigError, match=r"tables\.dress\.pier: needs variants or wear"):
+        validate(cfg)

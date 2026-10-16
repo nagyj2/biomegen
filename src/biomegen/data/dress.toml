@@ -7,7 +7,7 @@
 # Each variant is drawn with a weight per condition, so a standing field is full or harvested and a ruin's harvested or dead.
 #
 # Keys of a dressing:
-#   variants   a table of variants; each has
+#   variants   (optional) a table of variants; each has
 #                cell | glyph + ascii + color + label + rank   either an existing `Cell` (`cell = "wheat"`), or a look of its own: one
 #                                                              character, a 7-bit one, a colour, a legend label, and a unique `rank`
 #                                                              below `DRESS_SLOTS` (64), which makes its plan cell `DRESS_BASE + rank`
@@ -41,3 +41,28 @@ label = "dead field"
 rank = 1
 standing = 0.0
 ruin = 2.0
+
+# The other dressings have no variants yet, only the wear a ruin gives them (`field` above also has variants).
+# Ground cover (a clearing, spoil, a wagon, supplies) goes bare, rubble or overgrown; structure standing in the water
+# (a pier's planks, a moored boat, a water wheel and its axle) simply loses pieces.
+
+[dress.clearing]
+wear = { void = 0.2, rubble = 0.1, overgrown = 0.6 }
+
+[dress.spoil]
+wear = { void = 0.3, rubble = 0.0, overgrown = 0.3 }
+
+[dress.wagon]
+wear = { void = 0.5, rubble = 0.3, overgrown = 0.0 }
+
+[dress.supplies]
+wear = { void = 0.7, rubble = 0.1, overgrown = 0.0 }
+
+[dress.pier]
+wear = { void = 0.5, rubble = 0.0, overgrown = 0.0 }
+
+[dress.boat]
+wear = { void = 0.7, rubble = 0.0, overgrown = 0.0 }
+
+[dress.wheel]
+wear = { void = 0.5, rubble = 0.0, overgrown = 0.0 }
