@@ -92,3 +92,65 @@ def test_a_building_that_needs_a_river_is_not_placed_as_an_edge_kind(config: Con
     # Mills and fisheries have their own siting (river and shore): an edge pass never builds them.
     plan = _plan(config, "city", 20000)
     assert roof_cell(config, "mill") not in plan.outside and roof_cell(config, "fishery") not in plan.outside
+
+
+# --- river and shore kinds ------------------------------------------------------------------------------------------
+
+
+def _fresh(config: Config) -> Config:
+    """A copy of the test config for editing one building row."""
+    other = load_config(None)
+    other.data["sites"]["size_jitter"] = 0.0
+    other.data["sites"]["pop_scale"] = [1.0, 1.0]
+    return other
+
+
+def test_a_river_town_has_a_mill_with_its_wheel(config: Config) -> None:
+    from tests.sites.test_settlement import _riverside
+
+    _, plan = _riverside(config, ("river",))
+    assert roof_cell(config, "mill") in plan.outside and int(Cell.WHEEL) in plan.cells
+
+
+def test_a_mill_that_is_not_chosen_builds_no_wheel(config: Config) -> None:
+    from tests.sites.test_settlement import _riverside
+
+    other = _fresh(config)
+    other.data["tables"]["buildings"]["mill"]["min_score"] = 2.0  # no land suits it that well
+    _, plan = _riverside(other, ("river",))
+    assert roof_cell(other, "mill") not in plan.outside and int(Cell.WHEEL) not in plan.cells
+
+
+def test_a_port_town_has_a_fishery_beside_its_pier(config: Config) -> None:
+    from tests.sites.test_settlement import _coast
+
+    _, plan = _coast(config, ("port",))
+    pier = plan.cells == int(Cell.BRIDGE)
+    fishery = plan.outside == roof_cell(config, "fishery")
+    distance = ndimage.distance_transform_edt(~pier, sampling=(1.0, 0.5))
+    assert pier.any() and fishery.any() and float(distance[fishery].min()) <= 18.0
+
+
+def test_a_port_whose_fishery_is_not_chosen_still_has_its_harbour(config: Config) -> None:
+    from tests.sites.test_settlement import _coast
+
+    other = _fresh(config)
+    other.data["tables"]["buildings"]["fishery"]["min_score"] = 2.0
+    _, plan = _coast(other, ("port",))
+    assert int(Cell.BRIDGE) in plan.cells and roof_cell(other, "fishery") not in plan.outside
+
+
+def test_a_mill_hamlet_always_has_its_mill(config: Config) -> None:
+    # No river bank in the extent: the mill hamlet still has its style's building, a plain mill.
+    plan = _plan(config, "hamlet", 40, style="mill")
+    assert roof_cell(config, "mill") in plan.outside
+
+
+def test_a_fishery_and_a_mill_are_drawn_from_their_own_rows(config: Config) -> None:
+    from tests.sites.test_settlement import _coast, _riverside
+
+    _, coast = _coast(config, ("port",))
+    _, river = _riverside(config, ("river",))
+    assert {roof_cell(config, "fishery"), roof_cell(config, "mill")} <= set(
+        np.unique(np.concatenate([coast.outside.ravel(), river.outside.ravel()])).tolist()
+    )
