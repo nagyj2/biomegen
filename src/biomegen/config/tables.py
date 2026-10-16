@@ -8,7 +8,7 @@ Problems are appended to the caller's error list so validation still reports eve
 from __future__ import annotations
 
 import string
-from typing import Any, Dict, List
+from typing import Any, Dict, List, TypeGuard
 
 from .validate import _coerce_color
 
@@ -125,6 +125,10 @@ _BUILDING_KEYS = {
     "civic": frozenset({"apron"}),
 }
 _BUILDING_PRODUCTION_OPTIONAL = frozenset({"needs_tag", "dress"})
+
+DRESS_CONDITIONS = ("standing", "ruin")  # what a dressing is drawn for: a site that stands, a ruin
+DRESS_WEAR = ("void", "rubble", "overgrown")  # what a worn dressing cell becomes
+_DRESS_ROW = {"variants": "dress_variants", "wear": "dress_wear"}
 _POI_ROW = {
     "priority": "rank",
     "source": "source",
@@ -421,6 +425,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
             }
         ),
     ),
+    "dress": (_DRESS_ROW, frozenset({"wear"})),
     "buildings": (
         _BUILDING_ROW,
         frozenset(key for keys in _BUILDING_KEYS.values() for key in keys) | _BUILDING_PRODUCTION_OPTIONAL,
@@ -452,7 +457,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
 }
 
 
-def _is_number(value: Any) -> bool:
+def _is_number(value: Any) -> TypeGuard[float]:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
@@ -476,6 +481,86 @@ def _is_floors(value: Any) -> bool:
             and 1 <= value[0] <= value[1]
         )
     return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+
+
+_VARIANT_KEYS = frozenset({"cell", "glyph", "ascii", "color", "label", "rank", "standing", "ruin", "kinds"})
+_VARIANT_LOOK = ("glyph", "ascii", "color", "label", "rank")
+
+
+def _check_variant(variant: Any, where: str, errors: List[str]) -> None:
+    """Check one dress variant: an existing cell or a look of its own, a weight per condition, optional kinds."""
+    from ..world.tile import Cell
+
+    if not isinstance(variant, dict):
+        errors.append(f"{where}: expected a table")
+        return
+    for key in sorted(set(variant) - _VARIANT_KEYS):
+        errors.append(f"{where}: unknown key {key!r}")
+    own = [key for key in _VARIANT_LOOK if key in variant]
+    if "cell" in variant:
+        if own:
+            errors.append(f"{where}: has a cell and a look of its own ({', '.join(own)}); needs one or the other")
+        elif not (isinstance(variant["cell"], str) and variant["cell"].upper() in Cell.__members__):
+            errors.append(f"{where}.cell: no cell named {variant['cell']!r}")
+    elif len(own) != len(_VARIANT_LOOK):
+        missing = [key for key in _VARIANT_LOOK if key not in variant]
+        errors.append(f"{where}: needs a cell, or a look of its own: missing {', '.join(missing)}")
+    else:
+        _check_roof_like(variant, where, errors)
+    for condition in DRESS_CONDITIONS:
+        raw = variant.get(condition)
+        if not (_is_number(raw) and raw >= 0.0):
+            errors.append(f"{where}.{condition}: expected a weight >= 0, got {raw!r}")
+    kinds = variant.get("kinds")
+    if "kinds" in variant and not (isinstance(kinds, list) and kinds and all(isinstance(k, str) for k in kinds)):
+        errors.append(f"{where}.kinds: expected a non-empty list of POI kinds, got {kinds!r}")
+
+
+def _check_roof_like(variant: Dict[str, Any], where: str, errors: List[str]) -> None:
+    """Check the look of a variant of its own: one glyph, one 7-bit character, a colour, a label and a rank."""
+    if not (isinstance(variant["glyph"], str) and len(variant["glyph"]) == 1):
+        errors.append(f"{where}.glyph: expected one character, got {variant['glyph']!r}")
+    if not (isinstance(variant["ascii"], str) and len(variant["ascii"]) == 1 and variant["ascii"].isascii()):
+        errors.append(f"{where}.ascii: expected one 7-bit character, got {variant['ascii']!r}")
+    if not isinstance(variant["label"], str):
+        errors.append(f"{where}.label: expected text, got {variant['label']!r}")
+    rank = variant["rank"]
+    if not (isinstance(rank, int) and not isinstance(rank, bool) and rank >= 0):
+        errors.append(f"{where}.rank: expected an int >= 0, got {rank!r}")
+    try:
+        variant["color"] = list(_coerce_color(variant["color"]))
+    except (TypeError, ValueError) as exc:
+        errors.append(f"{where}.color: {exc}")
+
+
+def _check_variants(row: Dict[str, Any], key: str, where: str, errors: List[str]) -> None:
+    """Check a dressing's ``variants``: each valid, and each condition has a variant with a weight above 0."""
+    variants = row[key]
+    if not (isinstance(variants, dict) and variants):
+        errors.append(f"{where}.{key}: expected a non-empty table of variants, got {variants!r}")
+        return
+    for name in sorted(variants):
+        _check_variant(variants[name], f"{where}.{key}.{name}", errors)
+    for condition in DRESS_CONDITIONS:
+        weights = [v.get(condition) for v in variants.values() if isinstance(v, dict)]
+        if not any(_is_number(w) and w > 0.0 for w in weights):
+            errors.append(f"{where}.{key}: needs a variant with a {condition} weight above 0")
+
+
+def _check_wear(row: Dict[str, Any], key: str, where: str, errors: List[str]) -> None:
+    """Check a dressing's ``wear``: shares of ``void``, ``rubble`` and ``overgrown`` in [0, 1], at most 1 together."""
+    wear = row[key]
+    shares = wear if isinstance(wear, dict) else {}
+    ok = (
+        isinstance(wear, dict)
+        and set(wear) <= set(DRESS_WEAR)
+        and all(_is_number(v) and 0.0 <= v <= 1.0 for v in shares.values())
+        and sum(shares.values()) <= 1.0
+    )
+    if not ok:
+        errors.append(
+            f"{where}.{key}: expected shares of {', '.join(DRESS_WEAR)} in [0, 1] summing to at most 1, got {wear!r}"
+        )
 
 
 def _check_roof(row: Dict[str, Any], key: str, where: str, errors: List[str]) -> None:
@@ -502,6 +587,9 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
             row[key] = list(_coerce_color(value))
         except (TypeError, ValueError) as exc:
             errors.append(f"{where}.{key}: {exc}")
+        return
+    if kind in ("dress_variants", "dress_wear"):
+        (_check_variants if kind == "dress_variants" else _check_wear)(row, key, where, errors)
         return
     if kind == "roof":
         _check_roof(row, key, where, errors)
@@ -926,6 +1014,36 @@ def _validate_buildings(tables: Dict[str, Any], errors: List[str]) -> None:
     _validate_building_names(tables, kinds, errors)
 
 
+def _validate_dress(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check the dress tables' cross references: unique ranks below ``DRESS_SLOTS``; variant kinds are POI kinds."""
+    from ..world.tile import DRESS_SLOTS
+
+    dress = tables.get("dress", {})
+    if not isinstance(dress, dict):
+        return
+    known = set(tables.get("pois", {})) | set(tables.get("tiers", {}))
+    ranks: Dict[int, str] = {}
+    for name in sorted(dress):
+        row = dress[name]
+        variants = row.get("variants") if isinstance(row, dict) else None
+        if not isinstance(variants, dict):
+            continue
+        for variant_name in sorted(variants):
+            variant, where = variants[variant_name], f"tables.dress.{name}.variants.{variant_name}"
+            if not isinstance(variant, dict):
+                continue
+            rank = variant.get("rank")
+            if isinstance(rank, int) and not isinstance(rank, bool):
+                if rank >= DRESS_SLOTS:
+                    errors.append(f"{where}.rank: {rank} does not fit the dress block of {DRESS_SLOTS} variants")
+                if rank in ranks:
+                    errors.append(f"{where}.rank: {rank} is also the rank of {ranks[rank]}")
+                ranks[rank] = f"{name}.{variant_name}"
+            for kind in variant.get("kinds", []) if isinstance(variant.get("kinds"), list) else []:
+                if known and kind not in known:
+                    errors.append(f"{where}.kinds: {kind!r} is no POI kind")
+
+
 def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
     """Check the POI kinds' history keys, name patterns and hook texts, and the shrine-like sites."""
     pois, styles = tables.get("pois", {}), tables.get("ruling_styles", {})
@@ -1014,6 +1132,7 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     _validate_chronicle(tables.get("chronicle", {}), errors)
     _validate_pois(tables, errors)
     _validate_buildings(tables, errors)
+    _validate_dress(tables, errors)
     _validate_secession(tables, errors)
 
     styles = tables.get("styles", {})

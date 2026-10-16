@@ -2,7 +2,7 @@
 
 Each data file contributes its top-level tables (``biomes`` and ``relief`` from ``biomes.toml``, ``detail`` and
 ``detail_relief`` from ``detail.toml``, ``tiers`` from ``tiers.toml``, ``styles`` from ``terrain.toml``,
-``buildings`` from ``buildings.toml``, ``geo_names``
+``buildings`` from ``buildings.toml``, ``dress`` from ``dress.toml``, ``geo_names``
 from ``geography.toml``, ``sites`` from ``sites.toml``, ``pois``, ``poi_fates``, ``poi_sites``, ``poi_styles`` and
 ``free_fates`` from ``pois.toml``,
 ``furniture`` from ``furniture.toml``, ``realm_kinds``, ``realm_forms``, ``relation_weights`` and ``realm_colors`` from
@@ -30,6 +30,7 @@ DATA_FILES: tuple[str, ...] = (
     "terrain.toml",
     "geography.toml",
     "sites.toml",
+    "dress.toml",
     "buildings.toml",
     "pois.toml",
     "furniture.toml",

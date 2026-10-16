@@ -12,6 +12,7 @@ from ..config.model import Config
 from ..world.entities import POI
 from ..world.tile import KIND_ROOF_BASE, KIND_ROOF_SLOTS, Cell
 from .building import Spec
+from .dress import variant_of_cell
 from .layout import SiteContext
 
 
@@ -42,10 +43,13 @@ def kind_of_cell(config: Config, cell: int) -> Optional[str]:
 
 
 def cell_name(config: Config, cell: int) -> str:
-    """Return the lower-case name of a plan cell for a legend: the enum name, or a kind's label for its roof."""
+    """Return the lower-case legend name of a plan cell: its enum name, or the label of a kind roof or dress variant."""
     kind = kind_of_cell(config, cell)
     if kind is not None:
         return str(config.get(f"tables.buildings.{kind}.label")).lower()
+    found = variant_of_cell(config, cell)
+    if found is not None:
+        return str(config.get(f"tables.dress.{found[0]}.variants.{found[1]}.label")).lower()
     return Cell(cell).name.lower()
 
 

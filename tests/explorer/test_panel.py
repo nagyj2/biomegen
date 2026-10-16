@@ -154,3 +154,10 @@ def test_legend_names_a_building_kind_roof_by_its_label(config: Config) -> None:
     seen = Seen(cells={roof_cell(config, "cathedral")})
     text = "\n".join(_panel(make_world(6, 3), config, seen=seen))
     assert "cathedral" in text
+
+
+def test_legend_names_a_dress_variant_by_its_label(config: Config) -> None:
+    from biomegen.sites.dress import variant_cell
+
+    seen = Seen(cells={variant_cell(config, "field", "dead")})
+    assert "dead field" in "\n".join(_panel(make_world(6, 3), config, seen=seen))

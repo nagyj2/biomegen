@@ -37,6 +37,7 @@ def test_shipped_tables_load_and_validate() -> None:
         "chronicle",
         "detail",
         "detail_relief",
+        "dress",
         "free_fates",
         "furniture",
         "geo_names",
@@ -177,6 +178,7 @@ def test_loader_combines_the_shipped_files() -> None:
         "chronicle",
         "detail",
         "detail_relief",
+        "dress",
         "free_fates",
         "furniture",
         "geo_names",
@@ -829,4 +831,77 @@ def test_a_suit_weight_must_name_a_known_term() -> None:
     cfg = get_defaults()
     cfg["tables"]["buildings"]["mill"]["suits"] = {"moisture": 1.0}
     with pytest.raises(ConfigError, match=r"tables\.buildings\.mill\.suits: expected suits"):
+        validate(cfg)
+
+
+# --- dress variants (data/dress.toml) ---------------------------------------------------------------------------------
+
+
+def test_the_shipped_wheat_field_has_three_variants() -> None:
+    # Full is the existing wheat cell; harvested and dead are looks of their own.
+    variants = get_defaults()["tables"]["dress"]["field"]["variants"]
+    assert (sorted(variants), variants["full"]["cell"]) == (["dead", "full", "harvested"], "wheat")
+
+
+def test_a_standing_field_never_goes_dead_and_a_ruin_never_full() -> None:
+    variants = get_defaults()["tables"]["dress"]["field"]["variants"]
+    assert (variants["dead"]["standing"], variants["full"]["ruin"]) == (0.0, 0.0)
+
+
+def test_a_variant_needs_a_cell_or_a_whole_look() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["dress"]["field"]["variants"]["dead"]["glyph"]
+    with pytest.raises(ConfigError, match=r"tables\.dress\.field\.variants\.dead: needs a cell, or a look of its own"):
+        validate(cfg)
+
+
+def test_a_variant_cannot_have_a_cell_and_a_look() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["dress"]["field"]["variants"]["harvested"]["cell"] = "wheat"
+    with pytest.raises(ConfigError, match=r"variants\.harvested: has a cell and a look of its own"):
+        validate(cfg)
+
+
+def test_a_variant_cell_must_exist() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["dress"]["field"]["variants"]["full"]["cell"] = "no_such_cell"
+    with pytest.raises(ConfigError, match=r"variants\.full\.cell: no cell named 'no_such_cell'"):
+        validate(cfg)
+
+
+def test_two_variants_cannot_share_a_dress_rank() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["dress"]["field"]["variants"]["dead"]["rank"] = 0
+    with pytest.raises(ConfigError, match=r"variants\.harvested\.rank: 0 is also the rank of field\.dead"):
+        validate(cfg)
+
+
+def test_a_dress_rank_must_fit_the_dress_block() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["dress"]["field"]["variants"]["dead"]["rank"] = 64
+    with pytest.raises(ConfigError, match=r"variants\.dead\.rank: 64 does not fit the dress block"):
+        validate(cfg)
+
+
+def test_every_condition_needs_a_variant_with_weight() -> None:
+    cfg = get_defaults()
+    for variant in cfg["tables"]["dress"]["field"]["variants"].values():
+        variant["ruin"] = 0.0
+    with pytest.raises(
+        ConfigError, match=r"tables\.dress\.field\.variants: needs a variant with a ruin weight above 0"
+    ):
+        validate(cfg)
+
+
+def test_a_variant_kind_must_be_a_poi_kind() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["dress"]["field"]["variants"]["full"]["kinds"] = ["metropolis"]
+    with pytest.raises(ConfigError, match=r"variants\.full\.kinds: 'metropolis' is no POI kind"):
+        validate(cfg)
+
+
+def test_a_dress_wear_must_sum_to_at_most_one() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["dress"]["field"]["wear"] = {"void": 0.7, "rubble": 0.7}
+    with pytest.raises(ConfigError, match=r"tables\.dress\.field\.wear: expected shares"):
         validate(cfg)

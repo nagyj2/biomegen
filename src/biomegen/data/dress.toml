@@ -1,0 +1,43 @@
+# Dressings, keyed by dressing: the ground cover and small works laid round a building (a field, a clearing, spoil, a pier).
+# Loaded into the config tree as `tables.dress`; override with e.g. `[tables.dress.field.variants.dead]` + `ruin = 0.0`.
+#
+# A dressing has *variants*, and a site asks for "the dress for this kind of site in this condition":
+#   standing    a settlement or homestead that stands
+#   ruin        a ruin (the site's `fall` is set)
+# Each variant is drawn with a weight per condition, so a standing field is full or harvested and a ruin's harvested or dead.
+#
+# Keys of a dressing:
+#   variants   a table of variants; each has
+#                cell | glyph + ascii + color + label + rank   either an existing `Cell` (`cell = "wheat"`), or a look of its own: one
+#                                                              character, a 7-bit one, a colour, a legend label, and a unique `rank`
+#                                                              below `DRESS_SLOTS` (64), which makes its plan cell `DRESS_BASE + rank`
+#                standing, ruin                                 weights (>= 0) in each condition; each condition needs one above 0
+#                kinds                                          (optional) the POI kinds it may appear at (default: every kind)
+#   wear       (optional) in a ruin, the shares of its cells at full wear turned to `void` (the terrain shows), `rubble` or
+#              `overgrown` (trees and bushes); together at most 1
+
+[dress.field]
+wear = { void = 0.3, rubble = 0.1, overgrown = 0.3 }
+
+[dress.field.variants.full]
+cell = "wheat"
+standing = 3.0
+ruin = 0.0
+
+[dress.field.variants.harvested]
+glyph = "≡"
+ascii = "="
+color = [112, 84, 52]
+label = "tilled field"
+rank = 0
+standing = 1.0
+ruin = 1.0
+
+[dress.field.variants.dead]
+glyph = ";"
+ascii = ";"
+color = [134, 124, 84]
+label = "dead field"
+rank = 1
+standing = 0.0
+ruin = 2.0

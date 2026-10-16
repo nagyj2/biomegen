@@ -14,7 +14,7 @@ from typing import Any, Callable
 import numpy as np
 
 from ..config.model import Config
-from ..world.tile import BIOME_NAME, KIND_ROOF_BASE, Biome, Cell, Relief
+from ..world.tile import BIOME_NAME, DRESS_BASE, KIND_ROOF_BASE, Biome, Cell, Relief
 
 RGB = tuple[int, int, int]
 
@@ -200,7 +200,8 @@ def _build_interior_style(config: Config, ascii_only: bool = False) -> InteriorS
     Cells named in ``render.interior_subtle`` (rubble and small clutter) take the floor colour, so they barely show;
     those in ``render.interior_on_floor`` (bones) take the floor fill but keep their own colour for the glyph.
 
-    A building kind's roof cell (``KIND_ROOF_BASE`` plus its rank) takes the glyph and colour of its building row.
+    A building kind's roof cell (``KIND_ROOF_BASE`` plus its rank) takes the glyph and colour of its building row, and a
+    dress variant with a look of its own (``DRESS_BASE`` plus its rank) those of its ``tables.dress`` variant.
 
     With ``ascii_only``, ``render.interior_glyphs_ascii`` replaces the glyphs that are not 7-bit (a roof its ``ascii``).
     """
@@ -239,6 +240,14 @@ def _build_interior_style(config: Config, ascii_only: bool = False) -> InteriorS
         glyph[index] = roof["ascii" if ascii_only else "glyph"]
         bg[index] = roof["color"]
         fg[index] = scale_colors(roof["color"], boost)
+    for _dress, rows in sorted(config.get("tables.dress").items()):  # a dress variant with a look of its own
+        for _name, variant in sorted(rows["variants"].items()):
+            if "cell" in variant:
+                continue
+            index = DRESS_BASE + int(variant["rank"])
+            glyph[index] = variant["ascii" if ascii_only else "glyph"]
+            bg[index] = variant["color"]
+            fg[index] = scale_colors(variant["color"], boost)
     return InteriorStyle(glyph, fg, bg)
 
 

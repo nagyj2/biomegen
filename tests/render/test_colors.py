@@ -133,3 +133,25 @@ def test_every_building_kind_has_a_drawable_roof() -> None:
     style = interior_style(config)
     cells = [roof_cell(config, kind) for kind in config.get("tables.buildings")]
     assert all(str(style.glyph[cell]) != "?" and style.bg[cell].any() for cell in cells)
+
+
+def test_a_dress_variant_takes_its_looks_glyph_and_colour() -> None:
+    from biomegen.config import load_config
+    from biomegen.render.colors import interior_style
+    from biomegen.sites.dress import variant_cell
+
+    config = load_config(None)
+    variant = config.get("tables.dress.field.variants.dead")
+    cell = variant_cell(config, "field", "dead")
+    style = interior_style(config)
+    assert (str(style.glyph[cell]), style.bg[cell].tolist()) == (variant["glyph"], variant["color"])
+
+
+def test_the_ascii_style_draws_a_dress_variant_with_its_ascii_glyph() -> None:
+    from biomegen.config import load_config
+    from biomegen.render.colors import interior_style
+    from biomegen.sites.dress import variant_cell
+
+    config = load_config(None)
+    cell = variant_cell(config, "field", "harvested")
+    assert str(interior_style(config, True).glyph[cell]) == config.get("tables.dress.field.variants.harvested.ascii")
