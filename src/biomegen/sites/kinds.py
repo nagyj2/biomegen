@@ -6,14 +6,17 @@ is ``KIND_ROOF_BASE + rank`` (the reserved block of ``world/tile.py``), with the
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from ..config.model import Config
 from ..world.entities import POI
 from ..world.tile import KIND_ROOF_BASE, KIND_ROOF_SLOTS, Cell
 from .building import Spec
 from .dress import variant_of_cell
-from .layout import SiteContext
+from .layout import SiteBuilding, SiteContext
+
+if TYPE_CHECKING:
+    from .plan import SitePlan
 
 
 def kind_row(config: Config, kind: str) -> dict[str, Any]:
@@ -116,3 +119,23 @@ def tier_centre(config: Config, tier: str) -> str:
 def tier_reserve(config: Config, tier: str) -> str:
     """Return the civic kind whose plot a ``tier`` plaza keeps: the next tier's centre, else its own."""
     return str(config.get(f"tables.tiers.{tier}.reserve", tier_centre(config, tier)))
+
+
+def building_counts(buildings: tuple[SiteBuilding, ...]) -> list[tuple[str, int]]:
+    """Return ``(kind, how many)`` for the buildings of a plan, in the order each kind first appears."""
+    counts: dict[str, int] = {}
+    for building in buildings:
+        counts[building.kind] = counts.get(building.kind, 0) + 1
+    return list(counts.items())
+
+
+def building_at(plan: SitePlan, col: int, row: int) -> Optional[str]:
+    """Return the kind of the building under window cell ``(col, row)`` of ``plan``'s site, or None.
+
+    The cell is in the site's window (as the explorer's site cursor is); the plan covers its box.
+    """
+    left, top, _right, _bottom = plan.geometry.box
+    for building in plan.buildings:
+        if building.contains(col - left, row - top):
+            return building.kind
+    return None

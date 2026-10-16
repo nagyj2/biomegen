@@ -17,7 +17,10 @@ from ..world.tile import Cell
 from .patch import SitePatch
 from .streets import StreetRules
 
-Layout = Callable[["SiteContext"], Optional[np.ndarray | tuple[np.ndarray, np.ndarray]]]
+Layout = Callable[
+    ["SiteContext"],
+    Optional[np.ndarray | tuple[np.ndarray, np.ndarray] | tuple[np.ndarray, np.ndarray, tuple["SiteBuilding", ...]]],
+]
 LAYOUTS: dict[str, Layout] = {}
 
 
@@ -29,6 +32,32 @@ def layout(name: str) -> Callable[[Layout], Layout]:
         return function
 
     return register
+
+
+@dataclass(frozen=True)
+class SiteBuilding:
+    """A building that stands in a site plan: what the explorer names, and what a later manifest records.
+
+    Attributes:
+        kind: Its building kind (a ``tables.buildings`` row).
+        x: Column of its top-left plan cell.
+        y: Row of its top-left plan cell.
+        width: Its outer width in cells.
+        height: Its outer height in cells.
+        footprint: ``[height, width]`` bool grid of the cells under its roof.
+    """
+
+    kind: str
+    x: int
+    y: int
+    width: int
+    height: int
+    footprint: np.ndarray
+
+    def contains(self, col: int, row: int) -> bool:
+        """Whether plan cell ``(col, row)`` is under this building's roof."""
+        x, y = col - self.x, row - self.y
+        return 0 <= x < self.width and 0 <= y < self.height and bool(self.footprint[y, x])
 
 
 @dataclass(frozen=True)

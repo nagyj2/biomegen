@@ -78,3 +78,76 @@ def test_a_tier_reserves_the_next_tiers_centre_and_the_capital_its_own() -> None
         "palace",
         "palace",
     ]
+
+
+# --- the buildings of a plan ---------------------------------------------------------------------------------------
+
+
+def _town_plan():
+    from biomegen.sites import site_plan
+    from tests.sites.conftest import add_poi, flat_world
+
+    config = load_config(None)
+    config.data["sites"]["size_jitter"] = 0.0
+    config.data["sites"]["pop_scale"] = [1.0, 1.0]
+    world = flat_world(16, 12)
+    poi = add_poi(world, "town", 8, 6, pop=3000, civilized=True)
+    plan = site_plan(poi, 0, config, world)
+    assert plan is not None
+    return config, plan
+
+
+def test_a_plan_lists_its_buildings_centre_first() -> None:
+    _config, plan = _town_plan()
+    assert plan.buildings[0].kind == "hall" and len(plan.buildings) >= 2
+
+
+def test_building_counts_group_the_kinds_in_order() -> None:
+    import numpy as np
+
+    from biomegen.sites.layout import SiteBuilding
+
+    one = np.ones((2, 2), dtype=bool)
+    buildings = tuple(SiteBuilding(kind, 0, 0, 2, 2, one) for kind in ("hall", "house", "house", "mill"))
+    from biomegen.sites.kinds import building_counts
+
+    assert building_counts(buildings) == [("hall", 1), ("house", 2), ("mill", 1)]
+
+
+def test_a_cell_under_a_roof_names_its_building() -> None:
+    from biomegen.sites.kinds import building_at
+
+    _config, plan = _town_plan()
+    hall = plan.buildings[0]
+    left, top, _r, _b = plan.geometry.box
+    cell = (left + hall.x + hall.width // 2, top + hall.y + hall.height // 2)
+    assert building_at(plan, *cell) == "hall"
+
+
+def test_a_cell_off_every_roof_names_no_building() -> None:
+    from biomegen.sites.kinds import building_at
+
+    _config, plan = _town_plan()
+    assert building_at(plan, plan.geometry.box[0], plan.geometry.box[1]) is None
+
+
+def test_a_ruin_lists_only_the_buildings_that_stand() -> None:
+    from biomegen.sites import site_plan
+    from tests.sites.conftest import add_poi, flat_world
+
+    config = load_config(None)
+    world = flat_world(16, 12)
+    world.year = 1200
+    ruin = add_poi(world, "ruin", 8, 6, pop=3000, ruin_of="town", floor_count=1)
+    plan = site_plan(ruin, 0, config, world)
+    assert plan is not None and plan.buildings[0].kind == "hall"
+
+
+def test_a_homestead_lists_its_one_building() -> None:
+    from biomegen.sites import site_plan
+    from tests.sites.conftest import add_poi, flat_world
+
+    config = load_config(None)
+    world = flat_world(16, 12)
+    plan = site_plan(add_poi(world, "homestead", 7, 5, style="mine"), 0, config, world)
+    assert plan is not None and [b.kind for b in plan.buildings] == ["mine"]

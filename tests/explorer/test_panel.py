@@ -161,3 +161,45 @@ def test_legend_names_a_dress_variant_by_its_label(config: Config) -> None:
 
     seen = Seen(cells={variant_cell(config, "field", "dead")})
     assert "dead field" in "\n".join(_panel(make_world(6, 3), config, seen=seen))
+
+
+def _site_state(config: Config, world, poi, col_offset: int = 0):
+    from biomegen.sampling.detail import SCALE_SITE
+    from biomegen.sites import site_geometry
+
+    geometry = site_geometry(poi, config)
+    assert geometry is not None
+    px, py = geometry.cell_at(poi.x, poi.y)
+    return ViewState(cx=poi.x, cy=poi.y, scale=SCALE_SITE, poi=poi, px=px + col_offset, py=py)
+
+
+def test_the_site_panel_lists_the_buildings_that_stand(config: Config) -> None:
+    from tests.sites.conftest import add_poi, flat_world
+
+    world = flat_world(16, 12)
+    poi = add_poi(world, "town", 8, 6, pop=3000, civilized=True)
+    lines = _panel(world, config, state=_site_state(config, world, poi), width=140)
+    assert "buildings: Hall" in lines[6]
+
+
+def test_the_site_panel_names_the_building_under_the_cursor(config: Config) -> None:
+    from biomegen.sites import site_plan
+    from tests.sites.conftest import add_poi, flat_world
+
+    world = flat_world(16, 12)
+    poi = add_poi(world, "town", 8, 6, pop=3000, civilized=True)
+    plan = site_plan(poi, 0, config, world)
+    assert plan is not None
+    hall = plan.buildings[0]
+    left, top, _r, _b = plan.geometry.box
+    state = _site_state(config, world, poi)
+    state.px, state.py = left + hall.x + hall.width // 2, top + hall.y + hall.height // 2
+    assert "under cursor: Hall" in _panel(world, config, state=state, width=160)[6]
+
+
+def test_the_panel_lists_no_buildings_outside_a_site(config: Config) -> None:
+    from tests.sites.conftest import add_poi, flat_world
+
+    world = flat_world(16, 12)
+    add_poi(world, "town", 8, 6, pop=3000, civilized=True)
+    assert "buildings:" not in "\n".join(_panel(world, config, state=ViewState(cx=8, cy=6), width=140))

@@ -33,7 +33,7 @@ from .building import Building, Spec, build_building
 from .carve import Point, nearest_true
 from .dress import Dressing, lay_dress, wear_dress
 from .kinds import kind_row, kind_spec, lot_rows, lot_widths, roof_cell, tier_centre, tier_reserve
-from .layout import SiteContext, layout
+from .layout import SiteBuilding, SiteContext, layout
 from .streets import lay_roads, lay_street
 from .structure import breach
 
@@ -949,14 +949,14 @@ def _fall(
     uppers: list[np.ndarray],
     lots: list[Lot],
     wall: tuple[list[Point], list[Point]],
-) -> None:
+) -> set[int]:
     """Let a ruined settlement fall: most buildings are destroyed, a few survive damaged, the wall breaks, gates open.
 
     A building survives with chance ``ctx.fall.standing`` (the centre building always does: the stone hall outlasts the
     houses; with none, the lot a seeded draw picks). A survivor is damaged (:func:`_damage`) and every other building
     is destroyed completely (:func:`_destroy`: rubble and bare ground where it stood). Wall stretches fall until
     ``ctx.fall.wall`` of the wall is down, and every gate becomes rubble. The draws use their own streams, so the
-    streets and lots are exactly the settlement's.
+    streets and lots are exactly the settlement's. Returns the indices of the lots that survive.
     """
     fall = ctx.fall
     assert fall is not None
@@ -986,6 +986,7 @@ def _fall(
         fallen += len(near)
         gone = set(near)
         remaining = [c for c in remaining if c not in gone]
+    return survivors
 
 
 def _plot(ctx: SiteContext, centre: Point, inner: np.ndarray) -> tuple[int, int, int, int]:
@@ -1189,7 +1190,7 @@ def _plant(
 
 
 @layout("settlement")
-def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray, tuple[SiteBuilding, ...]]]:
     """A settlement floor, seen from inside and from outside."""
     rows, cols = ctx.rows, ctx.cols
     dry = ctx.patch.dry
@@ -1254,19 +1255,24 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     if ctx.walled:
         wall = _wall(ctx, grid, dry, town, ends)
     _plant(ctx, grid, dry, roofs, stream, plot_mask)
+    standing = lots  # the buildings that stand: all of them, or a ruin's survivors
     if ctx.fall is not None:
-        _fall(ctx, grid, roofs, uppers, lots, wall)
+        survivors = _fall(ctx, grid, roofs, uppers, lots, wall)
+        standing = [lot for index, lot in enumerate(lots) if index in survivors]
         if dressing is not None:
             wear_dress(ctx, grid, dressing)
+    buildings = tuple(
+        SiteBuilding(lot.kind, lot.x, lot.y, lot.width, lot.height, lot.building.footprint) for lot in standing
+    )
     kinds = _roof_cells(ctx, grid.shape, lots)
     if ctx.floor > 0:
         layer = uppers[ctx.floor - 1] if ctx.floor - 1 < len(uppers) else np.zeros_like(grid)
         cells = grid.copy()  # the ground as it is: streets, trees, the wall and its gates, the harbour and the mill
         cells[roofs] = kinds[roofs]  # every building is a roof of its kind...
         cells[layer != _VOID] = layer[layer != _VOID]  # ...except where it has a storey this high
-        return cells, np.zeros_like(layer)
+        return cells, np.zeros_like(layer), buildings
     outside = grid.copy()
     outside[roofs] = kinds[roofs]
     outside[(grid == _WALL) & ~roofs] = int(Cell.STONE)
     outside[(grid == _DOOR) & ~roofs] = _PATH  # a gate in the wall, not a door under a roof
-    return grid, outside
+    return grid, outside, buildings

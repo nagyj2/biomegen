@@ -22,7 +22,7 @@ from . import battlefield, boat, camp, homestead, settlement, structure  # noqa:
 from .cells import VOID
 from .geometry import SiteGeometry, site_geometry, site_row_for
 from .kinds import family_weights
-from .layout import LAYOUTS, Fall, SiteContext
+from .layout import LAYOUTS, Fall, SiteBuilding, SiteContext
 from .patch import read_patch
 from .streets import clear_roads
 from .surroundings import settlement_kinds
@@ -38,12 +38,14 @@ class SitePlan:
         cells: ``Cell`` values over the extent box (``box_rows x box_cols``, read-only), seen from inside; void shows
             the terrain.
         outside: The same box seen from outside (the map, zoom and local scales): buildings as roofs, walls solid.
+        buildings: The buildings that stand in the plan (kind and rectangle), in lot order; empty for a site with none.
     """
 
     geometry: SiteGeometry
     floor: int
     cells: np.ndarray
     outside: np.ndarray
+    buildings: tuple[SiteBuilding, ...] = ()
 
     def window_cells(self, cells: Optional[np.ndarray] = None) -> np.ndarray:
         """Return ``cells`` (default: this plan's) embedded in a window-sized grid, void outside the extent box."""
@@ -154,11 +156,17 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         )
     plan = None
     if built is not None:
-        cells, outside = built if isinstance(built, tuple) else (built, built)
+        buildings: tuple[SiteBuilding, ...] = ()
+        if not isinstance(built, tuple):
+            cells, outside = built, built
+        elif len(built) == 3:
+            cells, outside, buildings = built
+        else:
+            cells, outside = built
         cells, outside = clear_roads(cells, context.patch), clear_roads(outside, context.patch)
         cells.setflags(write=False)
         outside.setflags(write=False)
-        plan = SitePlan(geometry, floor, cells, outside)
+        plan = SitePlan(geometry, floor, cells, outside, buildings)
     if len(cache) >= int(config.get("sites.cache_size")):
         cache.pop(next(iter(cache)))
     cache[key] = plan

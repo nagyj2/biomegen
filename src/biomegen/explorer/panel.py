@@ -12,8 +12,9 @@ from ..config.model import Config
 from ..render.colors import biome_style, interior_style
 from ..render.grid import RGB, CellGrid
 from ..render.layers import Seen
-from ..sampling.detail import SCALE_MAP
-from ..sites.kinds import cell_name
+from ..sampling.detail import SCALE_MAP, SCALE_SITE
+from ..sites import site_plan
+from ..sites.kinds import building_at, building_counts, cell_name
 from ..world.entities import POI
 from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
@@ -69,6 +70,28 @@ def _poi_line(poi: Optional[POI]) -> str:
         detail.append(f"pop {poi.pop:,}")
     detail.extend(poi.tags)
     return f" POI: {poi.name or poi.kind} ({', '.join(detail)})"
+
+
+def _buildings_line(world: World, config: Config, state: ViewState, poi: Optional[POI]) -> str:
+    """In an open site, the buildings that stand there (``Hall, Farmhouse, House x9``) and the one under the cursor.
+
+    Empty outside a site view or for a site with no buildings. A building shows by its kind's label.
+    """
+    if state.scale != SCALE_SITE or poi is None:
+        return ""
+    plan = site_plan(poi, 0, config, world)
+    if plan is None or not plan.buildings:
+        return ""
+
+    def label(kind: str) -> str:
+        return str(config.get(f"tables.buildings.{kind}.label"))
+
+    parts = [
+        label(kind) if count == 1 else f"{label(kind)} x{count}" for kind, count in building_counts(plan.buildings)
+    ]
+    line = f" buildings: {', '.join(parts)}"
+    here = building_at(plan, state.px, state.py)
+    return f"{line}   under cursor: {label(here)}" if here is not None else line
 
 
 def controls_line(config: Config) -> str:
@@ -162,9 +185,13 @@ def build_panel(
         canvas.text(3, 0, " realm: open water" if tile.is_water else " realm: none (wild land)")
     poi = poi_under_cursor(world, config, state)
     canvas.text(5, 0, _poi_line(poi))
+    buildings = _buildings_line(world, config, state, poi)
+    if buildings:
+        canvas.text(6, 0, buildings)
+    first = 7 if buildings else 6
     last = height - 1
-    if config.get("render.show_legend", True) and 6 < last:
-        _legend(canvas, config, seen, 6, last, ascii_only)
+    if config.get("render.show_legend", True) and first < last:
+        _legend(canvas, config, seen, first, last, ascii_only)
     message = state.last_message
     controls = controls_line(config)
     if message:
