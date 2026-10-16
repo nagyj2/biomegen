@@ -14,7 +14,6 @@ VALUES: Dict[str, Any] = {
     "margin_tiles": 0.5,  # terrain kept around the extent in the site window (drawn in the POI view)
     "max_gates": 3,  # road gates cut into a site's edge, one per distinct side the roads arrive from
     "room_rows": [3, 6],  # room height range in rows; the width is this times render.cell_aspect
-    "building_rows": [5, 8],  # settlement building outer height range in rows, walls included
     "street_gap": [1, 1],  # clear ground [columns, rows] between a settlement building and the street it faces
     "clutter_density": 0.10,  # fraction of free floor cells that get furniture
     "shape": "mixed",  # outline of solid structures: "rectangle", "blob", "cellular", "drunkard", "diamond", "cross"

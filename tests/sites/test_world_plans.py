@@ -12,6 +12,7 @@ from biomegen.config.model import Config
 from biomegen.sites import PASSABLE, read_patch, site_geometry, site_plan
 from biomegen.world.tile import Cell
 from biomegen.world.world import World
+from tests.sites.conftest import HOUSE_ROOF
 
 VOID = int(Cell.VOID)
 OVER_WATER = {int(Cell.BRIDGE), int(Cell.BRIDGE_WALL)}
@@ -113,7 +114,7 @@ def test_every_settlement_has_at_least_one_house(world: World, cfg: Config) -> N
     for poi in world.pois:
         if poi.civilized:
             plan = site_plan(poi, 0, cfg, world)
-            if plan is None or not (plan.outside == int(Cell.ROOF)).any():
+            if plan is None or not (plan.outside == HOUSE_ROOF).any():
                 empty.append((poi.kind, poi.x, poi.y))
     assert empty == []
 
@@ -123,7 +124,7 @@ def test_a_village_on_a_shore_with_no_room_for_lots_still_has_a_house(cfg: Confi
     shore = pipeline.generate(cfg, 42)
     poi = next(p for p in shore.pois if (p.x, p.y) == (165, 7))
     plan = site_plan(poi, 0, cfg, shore)
-    assert plan is not None and (plan.outside == int(Cell.ROOF)).any() and (plan.cells == int(Cell.DOOR)).any()
+    assert plan is not None and (plan.outside == HOUSE_ROOF).any() and (plan.cells == int(Cell.DOOR)).any()
 
 
 def test_the_house_of_a_crowded_shore_village_is_reached_by_a_street(cfg: Config) -> None:

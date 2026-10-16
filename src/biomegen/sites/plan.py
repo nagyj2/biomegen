@@ -21,6 +21,7 @@ from ..world.world import World
 from . import battlefield, boat, camp, homestead, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
 from .geometry import SiteGeometry, site_geometry, site_row_for
+from .kinds import family_weights
 from .layout import LAYOUTS, Fall, SiteContext
 from .patch import read_patch
 from .streets import clear_roads
@@ -71,10 +72,7 @@ def clear_cache() -> None:
 
 def _furniture(config: Config, row: dict) -> dict[str, list[tuple[Cell, float]]]:
     """The furniture weights of a site row's family, per room role."""
-    return {
-        role: [(Cell[name.upper()], float(weight)) for name, weight in sorted(weights.items())]
-        for role, weights in sorted(config.get(f"tables.furniture.{row['furniture']}").items())
-    }
+    return family_weights(config, str(row["furniture"]))
 
 
 def _fall(config: Config, row: dict, age_years: Optional[int]) -> Fall:

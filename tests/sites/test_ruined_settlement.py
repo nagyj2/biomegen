@@ -10,9 +10,10 @@ import pytest
 from biomegen.config.model import Config
 from biomegen.sites import SitePlan, site_geometry, site_plan
 from biomegen.world.tile import Cell
-from tests.sites.conftest import add_poi, flat_world
+from tests.sites.conftest import HOUSE_ROOF, add_poi, flat_world
 
-PATH, RUBBLE, ROOF, DOOR = (int(c) for c in (Cell.PATH, Cell.RUBBLE, Cell.ROOF, Cell.DOOR))
+PATH, RUBBLE, DOOR = (int(c) for c in (Cell.PATH, Cell.RUBBLE, Cell.DOOR))
+ROOF = HOUSE_ROOF
 SEED = 77
 
 

@@ -78,7 +78,6 @@ size_jitter = 0.25              # each site's extent is scaled by a seeded facto
 margin_tiles = 0.5              # terrain kept round the extent in the site view
 max_gates = 3                   # road gates cut into a site's edge
 room_rows = [3, 6]              # room height range in rows (widths are widened by render.cell_aspect)
-building_rows = [5, 8]          # settlement building outer height range in rows, walls included
 street_gap = [1, 1]             # clear ground [columns, rows] kept round each settlement building
 clutter_density = 0.10          # fraction of free floor cells furnished
 shape = "mixed"                 # solid-building outline: rectangle|blob|cellular|drunkard|diamond|cross|mixed

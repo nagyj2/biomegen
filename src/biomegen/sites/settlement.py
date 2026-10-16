@@ -31,6 +31,7 @@ from ..world.tile import Cell
 from .boat import moor_boat
 from .building import Building, Spec, build_building
 from .carve import Point, nearest_true
+from .kinds import kind_spec, lot_rows, lot_widths, roof_cell
 from .layout import SiteContext, layout
 from .streets import lay_roads, lay_street
 from .structure import breach
@@ -44,7 +45,6 @@ _FLOOR = int(Cell.FLOOR)
 _UP = int(Cell.STAIRS_UP)
 _DOWN = int(Cell.STAIRS_DOWN)
 _STREET = (_PATH, _BRIDGE)
-_ROLES = ("hall", "kitchen", "bedroom", "storage")
 _MIN_TOWN = 0.2  # a footprint smaller than this share of the extent falls back to the whole extent
 _RUBBLE = int(Cell.RUBBLE)
 _RING_STEP = 0.5  # radians between the sample points of a ring street
@@ -65,6 +65,7 @@ class Lot:
         height: Its outer height in cells.
         shape_seed: Seeds its footprint, so every storey of it has the same outline.
         building: Its ground floor.
+        kind: Its building kind (a ``tables.buildings`` row), which sets its roof.
     """
 
     x: int
@@ -73,18 +74,17 @@ class Lot:
     height: int
     shape_seed: int
     building: Building
+    kind: str = "house"
 
 
-def _spec(ctx: SiteContext) -> Spec:
-    """What a settlement building is built to: homes, furnished at the home density."""
-    furniture = {role: ctx.weights(role) for role in _ROLES}
-    density = float(ctx.setting("clutter_density")) * float(ctx.config.get("sites.furnish.home_density"))
-    return Spec(int(ctx.setting("room_rows")[0]), ctx.aspect, _ROLES, furniture, density)
+def _spec(ctx: SiteContext, kind: str = "house") -> Spec:
+    """What a settlement building of ``kind`` (the plain house by default) is built to."""
+    return kind_spec(ctx, kind)
 
 
 def _block(ctx: SiteContext) -> int:
     """Rows between two parallel streets: a lot's depth, its gap to the street, and a lane's width."""
-    rows_hi = int(ctx.setting("building_rows")[1])
+    rows_hi = lot_rows(ctx.config, "house")[1]
     return rows_hi + 2 * int(ctx.setting("street_gap")[1]) + 2
 
 
@@ -248,7 +248,7 @@ def _lanes(ctx: SiteContext, grid: np.ndarray, ground: np.ndarray, town: np.ndar
     like the side streets of an old town. Lots need ``building_rows`` deep of ground beside a street, so ground
     farther than the shallowest building is served.
     """
-    rows_lo = int(ctx.setting("building_rows")[0])
+    rows_lo = lot_rows(ctx.config, "house")[0]
     reach = float(rows_lo + int(ctx.setting("street_gap")[1]) + 1)  # in rows
     street = np.isin(grid, _STREET)
     if not street.any():
@@ -393,10 +393,9 @@ def _lots(
     """
     settings = ctx.config.get("sites.settlement")
     gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
-    rows_lo, rows_hi = (int(v) for v in ctx.setting("building_rows"))
+    rows_lo, rows_hi = lot_rows(ctx.config, "house")
     aspect = ctx.aspect
-    widest = round(rows_hi * aspect * 1.6)  # the widest a building may be
-    narrowest = round(0.8 * rows_lo * aspect)
+    narrowest, widest = lot_widths(ctx.config, "house", aspect)  # the narrowest and widest a house may be
     spec = _spec(ctx)
     rows, cols = grid.shape
     blocked = ~ground | (grid != _VOID)
@@ -736,8 +735,8 @@ def _ensure_house(
     streets = np.isin(grid, _STREET)
     if not streets.any():
         return None
-    height = int(ctx.setting("building_rows")[0])
-    width = round(0.8 * height * ctx.aspect)
+    height = lot_rows(ctx.config, "house")[0]
+    width = lot_widths(ctx.config, "house", ctx.aspect)[0]
     free = dry & (grid == _VOID)
     sampling = (1.0, 1.0 / ctx.aspect)
     fits = ndimage.minimum_filter(free.astype(np.uint8), size=(height, width), mode="constant", cval=0) > 0
@@ -779,7 +778,7 @@ def _mill(
     if "river" not in ctx.tags or not river.any() or not streets.any():
         return None
     cfg = ctx.config.get("sites.settlement.mill")
-    height = int(ctx.setting("building_rows")[0])
+    height = lot_rows(ctx.config, "house")[0]
     width = round(height * ctx.aspect * float(cfg["width"]))
     wheel_rows = int(cfg["wheel_rows"])
     free = ground & dry & (grid == _VOID)
@@ -908,6 +907,16 @@ def _fall(
         remaining = [c for c in remaining if c not in gone]
 
 
+def _roof_cells(ctx: SiteContext, shape: tuple[int, int], lots: list[Lot]) -> np.ndarray:
+    """Return the roof cell of every building cell: each lot's kind roof over its footprint (``ROOF`` elsewhere)."""
+    cells = np.full(shape, int(Cell.ROOF), dtype=np.uint8)
+    for lot in lots:
+        cells[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width][lot.building.footprint] = roof_cell(
+            ctx.config, lot.kind
+        )
+    return cells
+
+
 def _plant(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, stream: random.Random) -> None:
     """Scatter trees and bushes over free ground, keeping clear of buildings and streets."""
     share = float(ctx.config.get("sites.settlement.trees"))
@@ -960,14 +969,15 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
     _plant(ctx, grid, dry, roofs, stream)
     if ctx.fall is not None:
         _fall(ctx, grid, roofs, lots, wall)
+    kinds = _roof_cells(ctx, grid.shape, lots)
     if ctx.floor > 0:
         layer = uppers[ctx.floor - 1] if ctx.floor - 1 < len(uppers) else np.zeros_like(grid)
         cells = grid.copy()  # the ground as it is: streets, trees, the wall and its gates, the harbour and the mill
-        cells[roofs] = int(Cell.ROOF)  # every building is a roof...
+        cells[roofs] = kinds[roofs]  # every building is a roof of its kind...
         cells[layer != _VOID] = layer[layer != _VOID]  # ...except where it has a storey this high
         return cells, np.zeros_like(layer)
     outside = grid.copy()
-    outside[roofs] = int(Cell.ROOF)
+    outside[roofs] = kinds[roofs]
     outside[(grid == _WALL) & ~roofs] = int(Cell.STONE)
     outside[(grid == _DOOR) & ~roofs] = _PATH  # a gate in the wall, not a door under a roof
     return grid, outside

@@ -6,10 +6,13 @@ import pytest
 
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.sites.kinds import roof_cell
 from biomegen.world.entities import POI
 from biomegen.world.tile import Biome
 from biomegen.world.world import World
 from tests.render.conftest import make_world
+
+HOUSE_ROOF = roof_cell(load_config(None), "house")  # the roof cell of a settlement house seen from outside
 
 
 @pytest.fixture(scope="module")

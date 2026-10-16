@@ -5,13 +5,15 @@ from __future__ import annotations
 import numpy as np
 from scipy import ndimage
 
+from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.sites import clear_cache, site_plan
 from biomegen.world.tile import Biome, Cell, WaterType
-from tests.sites.conftest import add_poi, flat_world
+from tests.sites.conftest import HOUSE_ROOF, add_poi, flat_world
 
 VOID, FLOOR, WALL, DOOR, PATH = (int(c) for c in (Cell.VOID, Cell.FLOOR, Cell.WALL, Cell.DOOR, Cell.PATH))
-ROOF, STONE, TREE, BUSH = (int(c) for c in (Cell.ROOF, Cell.STONE, Cell.TREE, Cell.BUSH))
+STONE, TREE, BUSH = (int(c) for c in (Cell.STONE, Cell.TREE, Cell.BUSH))
+ROOF = HOUSE_ROOF
 
 
 def _plan(config: Config, kind: str, world=None, pop: int = 2000):
@@ -569,4 +571,40 @@ def test_a_hamlet_builds_at_least_one_house(config: Config) -> None:
     # The hamlet row is a settlement layout smaller than a village; its plan still has a building.
     world = flat_world(14, 10)
     plan = site_plan(add_poi(world, "hamlet", 7, 5, civilized=True, pop=40), 0, config, world)
-    assert plan is not None and bool((plan.outside == int(Cell.ROOF)).any())
+    assert plan is not None and bool((plan.outside == HOUSE_ROOF).any())
+
+
+# --- the housing kind -------------------------------------------------------------------------------------------------
+
+
+def test_a_settlement_draws_no_plain_roof_only_its_kinds(config: Config) -> None:
+    # Every building seen from outside is a roof of its kind: the plain ROOF cell (towers, old ruins) never appears.
+    plan = _plan(config, "town")
+    assert int(Cell.ROOF) not in plan.outside and HOUSE_ROOF in plan.outside
+
+
+def test_an_upper_floor_shows_the_kind_roof_not_the_plain_one(config: Config) -> None:
+    plans = _floors(config, "city", 3, 12000)
+    assert int(Cell.ROOF) not in plans[2].cells and HOUSE_ROOF in plans[2].cells
+
+
+def test_a_house_row_sets_the_height_of_a_settlement_lot(config: Config) -> None:
+    # The house kind's `rows` is the lot height range: no roof is taller than its tallest allowed house.
+    tall = _plan(config, "town")
+    short_config = load_config(None)
+    short_config.data["sites"]["size_jitter"] = 0.0
+    short_config.data["sites"]["pop_scale"] = [1.0, 1.0]
+    short_config.data["tables"]["buildings"]["house"]["rows"] = [5, 5]
+
+    def tallest(plan) -> int:
+        labels, _count = ndimage.label(plan.outside == HOUSE_ROOF)
+        return max(int(box[0].stop - box[0].start) for box in ndimage.find_objects(labels))
+
+    assert tallest(_plan(short_config, "town")) <= 5 < tallest(tall)
+
+
+def test_a_settlement_plan_is_deterministic(config: Config) -> None:
+    first = _plan(config, "town")
+    clear_cache()
+    second = _plan(config, "town")
+    assert np.array_equal(first.cells, second.cells) and np.array_equal(first.outside, second.outside)
