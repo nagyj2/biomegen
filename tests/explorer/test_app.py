@@ -292,7 +292,7 @@ def test_zooming_in_twice_on_a_poi_opens_its_site(config: Config) -> None:
 
 
 def test_the_panel_describes_the_poi_in_a_site(config: Config) -> None:
-    assert "Dunmere (village, pop 800, river)" in _screen(_run(_village_world(), config, "z", "z"))
+    assert "Dunmere (village, pop 800, centre chapel, river)" in _screen(_run(_village_world(), config, "z", "z"))
 
 
 def test_the_site_cursor_is_one_cell(config: Config) -> None:

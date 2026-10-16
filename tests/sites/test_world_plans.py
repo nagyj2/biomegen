@@ -137,3 +137,12 @@ def test_the_house_of_a_crowded_shore_village_is_reached_by_a_street(cfg: Config
     assert plan is not None
     streets = nd.binary_dilation(plan.cells == int(Cell.PATH), structure=np.ones((3, 3), bool))
     assert (streets & (plan.cells == int(Cell.DOOR))).any()
+
+
+def test_a_poi_is_civilized_exactly_when_its_tier_has_a_centre(world: World, cfg: Config) -> None:
+    # A settlement is defined by its centre building: a civilized POI has its tier's centre, no other POI is civilized,
+    # and the only others with a centre kind are ruins that were a tier.
+    civilized_without_centre = [p.kind for p in world.pois if p.civilized and centre_kind(cfg, p) is None]
+    centred_but_not_civilized = [p.kind for p in world.pois if centre_kind(cfg, p) is not None and not p.civilized]
+    assert civilized_without_centre == [] and set(centred_but_not_civilized) <= {"ruin"}
+    assert all(p.ruin_of for p in world.pois if p.kind == "ruin" and centre_kind(cfg, p) is not None)
