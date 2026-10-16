@@ -166,7 +166,7 @@ width = [1.0, 1.3]
 shapes = ["rect", "L"]
 roles = ["hall", "office", "archive", "storage"]
 furniture = "hall"
-roof = { glyph = "▓", ascii = "H", color = [166, 72, 56] }
+roof = { glyph = "▓", ascii = "H", color = [198, 192, 214] }
 apron = 1
 
 [buildings.cathedral]
@@ -178,7 +178,7 @@ width = [1.0, 1.3]
 shapes = ["T"]
 roles = ["nave", "chapel", "vestry", "storage"]
 furniture = "cathedral"
-roof = { glyph = "█", ascii = "C", color = [198, 192, 214] }
+roof = { glyph = "█", ascii = "C", color = [166, 72, 56] }
 apron = 1
 
 [buildings.palace]
