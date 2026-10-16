@@ -57,10 +57,13 @@ def view_label(state: ViewState) -> str:
 
 
 def _poi_line(poi: Optional[POI]) -> str:
-    """The panel's POI line: name, kind, and for settlements the population and tags."""
+    """The panel's POI line: name, kind, the style of a homestead or generated hamlet, and for settlements the
+    population and tags."""
     if poi is None:
         return " POI: -"
     detail = [poi.kind]
+    if poi.style:
+        detail.append(poi.style)
     if poi.pop:
         detail.append(f"pop {poi.pop:,}")
     detail.extend(poi.tags)

@@ -191,9 +191,11 @@ def _realms(text: _Text, world: World, config: Config, ascii_only: bool) -> None
     members = {realm.id: 0 for realm in world.realms}
     free = 0
     for poi in world.pois:
-        if poi.civilized and poi.realm_id >= 0:
+        if not poi.civilized or not config.get(f"tables.tiers.{poi.kind}.near_target", True):
+            continue  # a hamlet is too small to count among a realm's settlements
+        if poi.realm_id >= 0:
             members[poi.realm_id] += 1
-        elif poi.civilized:
+        else:
             free += 1
     text.header("REALMS")
 

@@ -139,3 +139,10 @@ def test_help_follows_rebinding() -> None:
 
 def test_help_fits_a_tiny_screen_without_error(config: Config) -> None:
     draw_help(CellGrid(4, 20), config)
+
+
+def test_poi_line_gives_the_style_of_a_homestead(config: Config) -> None:
+    world = make_world(6, 3)
+    world.pois.append(POI(kind="homestead", x=2, y=1, interior_seed=1, name="Oak Farm", style="farm"))
+    world.poi_index[1, 2] = 0
+    assert "Oak Farm (homestead, farm)" in _panel(world, config)[5]

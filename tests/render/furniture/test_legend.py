@@ -233,3 +233,24 @@ def test_a_realm_of_a_split_is_listed_with_the_old_realm(config) -> None:
 
 def test_a_realm_founded_outright_has_no_origin_line(config) -> None:
     assert "Broke from" not in _origin_text(config) and "split of" not in _origin_text(config)
+
+
+def _political_text_with(config, *extra) -> str:
+    world = _political_world()
+    world.pois.extend(extra)
+    return to_plain(build_legend(world, config, POLITICAL, 100, False))
+
+
+def test_a_hamlet_is_not_counted_among_a_realms_settlements(config) -> None:
+    from biomegen.world.entities import POI
+
+    held = POI(kind="hamlet", x=13, y=6, interior_seed=9, civilized=True, name="Tiny", realm_id=0, pop=30)
+    realms = lambda text: text[text.index("REALMS") :]  # noqa: E731  (the marker list above it gains a hamlet swatch)
+    assert realms(_political_text_with(config, held)) == realms(_political_text(config))
+
+
+def test_a_free_hamlet_is_not_counted_among_the_free_settlements(config) -> None:
+    from biomegen.world.entities import POI
+
+    free = POI(kind="hamlet", x=6, y=6, interior_seed=9, civilized=True, name="Tiny", realm_id=-1, pop=30)
+    assert "holding 1 free settlement." in _political_text_with(config, free)

@@ -352,3 +352,14 @@ def test_the_json_lists_each_events_salience() -> None:
 
 def test_a_filter_showing_minor_events_is_described() -> None:
     assert "minor" in describe_filter(ChronicleFilter(salience="all"))
+
+
+def test_stats_count_the_styles_of_hamlets_and_homesteads(generated: World) -> None:
+    stats = pipeline.stats(generated)["poi_styles"]
+    for kind in ("hamlet", "homestead"):
+        assert sum(stats[kind].values()) == sum(1 for p in generated.pois if p.kind == kind and p.style)  # type: ignore[index]
+
+
+def test_the_json_settlements_carry_their_style(generated: World) -> None:
+    data = chronicle_data(generated)
+    assert {s["style"] for s in data["settlements"] if s["kind"] == "hamlet"} <= {"farm", "mill", "lodge"}

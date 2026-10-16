@@ -255,6 +255,7 @@ def chronicle_data(world: World, events: Optional[Sequence[ChronicleEvent]] = No
                 "id": i,
                 "name": p.name,
                 "kind": p.kind,
+                "style": p.style,
                 "realm_id": None if p.realm_id < 0 else p.realm_id,
                 "founded": p.founded,
             }
