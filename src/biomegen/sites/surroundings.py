@@ -30,28 +30,41 @@ _CACHES: "weakref.WeakKeyDictionary[World, dict[int, _Cache]]" = weakref.WeakKey
 
 
 def _terms(world: World, config: Config, poi: POI) -> dict[str, float]:
-    """Return the five terms of the land round ``poi``, each in ``[0, 1]``: fertility, forest, roughness, water, sea."""
+    """Return the five terms of the land round ``poi``, each in ``[0, 1]``: fertility, forest, roughness, water, sea.
+
+    Each term is a share of the land (or of the area, for water and sea) within its own ``sites.kinds.radius_km``, over
+    its ``saturate`` value: hills are rarer near settlements than fields, so they are read over a wider area.
+    """
     settings = config.get("sites.kinds")
-    radius = float(settings["radius_km"])
+    radii = {term: float(km) for term, km in settings["radius_km"].items()}
     scale = world.scale
-    rx, ry = max(1, math.ceil(radius / scale.km_per_col)), max(1, math.ceil(radius / scale.km_per_row))
+    widest = max(radii.values())
+    rx, ry = max(1, math.ceil(widest / scale.km_per_col)), max(1, math.ceil(widest / scale.km_per_row))
     x0, x1 = max(0, poi.x - rx), min(world.width, poi.x + rx + 1)
     y0, y1 = max(0, poi.y - ry), min(world.height, poi.y + ry + 1)
     window = (slice(y0, y1), slice(x0, x1))
     yy, xx = np.ogrid[y0:y1, x0:x1]
-    inside = (((xx - poi.x) * scale.km_per_col) ** 2 + ((yy - poi.y) * scale.km_per_row) ** 2) <= radius**2
+    distance2 = ((xx - poi.x) * scale.km_per_col) ** 2 + ((yy - poi.y) * scale.km_per_row) ** 2
     biome, relief, water = world.biome[window], world.relief[window], world.water_type[window]
-    land = inside & (water == int(WaterType.NONE))
+    dry = water == int(WaterType.NONE)
     mul = config.table_array("relief", "habitability_mul", RELIEF_NAME)[relief]
     base = config.table_array("biomes", "habitability", BIOME_NAME)[biome]
     wooded = np.isin(biome, [int(biome_from_name(name)) for name in config.get("poi.forest_biomes")])
-    count = max(1, int(inside.sum()))
+
+    def land_share(term: str, values: np.ndarray) -> float:
+        land = (distance2 <= radii[term] ** 2) & dry
+        return float(values[land].mean()) if land.any() else 0.0
+
+    def area_share(term: str, wet: np.ndarray) -> float:
+        inside = distance2 <= radii[term] ** 2
+        return float((inside & wet).sum()) / max(1, int(inside.sum()))
+
     shares = {
-        "fertility": float((base * mul)[land].mean()) if land.any() else 0.0,
-        "forest": float(wooded[land].mean()) if land.any() else 0.0,
-        "roughness": float((1.0 - mul)[land].mean()) if land.any() else 0.0,
-        "fresh_water": float((inside & (water == int(WaterType.FRESH))).sum()) / count,
-        "coast": float((inside & (water == int(WaterType.SALT))).sum()) / count,
+        "fertility": land_share("fertility", base * mul),
+        "forest": land_share("forest", wooded),
+        "roughness": land_share("roughness", relief > 0),
+        "fresh_water": area_share("fresh_water", water == int(WaterType.FRESH)),
+        "coast": area_share("coast", water == int(WaterType.SALT)),
     }
     saturate = settings["saturate"]
     return {term: min(1.0, share / max(1e-9, float(saturate[term]))) for term, share in shares.items()}

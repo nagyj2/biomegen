@@ -211,7 +211,7 @@ scores the land its own way and sets how much suited land makes one.
 | `shape` | `"mixed"` | Outline for solid buildings: `rectangle`/`blob`/`cellular`/`drunkard`/`diamond`/`cross`/`mixed` |
 | `ruin_erosion` | `0.45` | Fraction of a ruin's walls that have collapsed once it is old (`ruin_erosion_young` and `ruin_erosion_years` set how fast a new ruin gets there) |
 | `ruin_damage` / `ruin_rubble` | see `config.example.toml` | How hard a ruin damages a building that survives (breaches per room, share of floor cracked, furniture stripped, rooms unroofed, at full wear) and how much of a destroyed building stays rubble |
-| `kinds.*` | — | What a settlement is chosen to have: `radius_km` of land read round it and the `saturate` value of each term (fertility, forest, roughness, fresh water, coast) |
+| `kinds.*` | — | What a settlement is chosen to have: the `radius_km` of land read round it and the `saturate` value of each term (fertility, forest, hilly share, fresh water, coast) |
 | `bridge_max_rows` | `6` | The widest water a settlement street will bridge |
 | `settlement.*` | — | Settlement growth: `fill` (share of ground built on), `trees`, `radius`, `wobble`, `road_stretch` (outline shape), `spokes`, `rings`, `ring_gap`, `max_lanes` (street network), `wall_inset`, `lot_tries` |
 

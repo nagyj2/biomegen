@@ -114,3 +114,26 @@ def test_the_choice_is_remembered_per_world(config: Config) -> None:
     first = settlement_kinds(world, config, poi)
     world.biome[:] = int(Biome.GRASS)  # a changed world is the same world to the cache: the answer stays
     assert settlement_kinds(world, config, poi) == first
+
+
+def test_hills_beyond_the_roughness_radius_do_not_suit_a_mine(config: Config) -> None:
+    # Roughness has its own radius (hills are rare beside a settlement): a belt of hills 12 to 20 km off is read at the
+    # default 150 km and missed when the radius is 10 km.
+    from biomegen.world.tile import Relief
+
+    near = load_config(None)
+    near.data["sites"]["kinds"]["radius_km"]["roughness"] = 10.0
+    world = _world(Biome.GRASS)
+    world.relief[:, :8] = int(Relief.HILLS)
+    assert "mine" in _kinds(world, config, "city", 20000) and "mine" not in _kinds(world, near, "city", 20000)
+
+
+def test_the_hilly_share_is_the_roughness_term(config: Config) -> None:
+    from biomegen.sites.surroundings import _terms
+    from biomegen.world.tile import Relief
+
+    world = _world(Biome.GRASS)
+    poi = add_poi(world, "town", 20, 12, pop=3000, civilized=True)
+    flat = _terms(world, config, poi)["roughness"]
+    world.relief[:] = int(Relief.HILLS)
+    assert (flat, _terms(world, config, poi)["roughness"]) == (0.0, 1.0)
