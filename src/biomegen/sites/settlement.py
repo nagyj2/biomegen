@@ -778,16 +778,15 @@ def _mill(
     ground: np.ndarray,
     centre: Point,
     stream: Optional[random.Random] = None,
-    kind: str = "house",
+    kind: str = "mill",
 ) -> Optional[Lot]:
-    """Build a mill for a river settlement: a house beside the river, a water wheel set into it and an axle between.
+    """Build a mill for a river settlement: a building beside the river, a water wheel set into it and an axle between.
 
     The house goes on the free ground nearest the plaza within ``mill.reach`` rows of the river, its door joined to the
     nearest street, and the wheel turns in the river on whichever side of the house the bank allows (see
     :func:`_wheel_geometry`). Returns the house as a lot (so it is roofed and may have storeys), or None when the extent
-    has no river beside free ground that takes a wheel. ``stream`` draws the house (default: the settlement's mill
-    stream); a homestead passes its own. ``kind`` is the building kind the lot is (a settlement's mill is the ``mill``
-    kind, sized and furnished by its row; the default keeps the house a homestead still draws).
+    has no river beside free ground that takes a wheel. ``stream`` draws the building (default: the settlement's mill
+    stream); a homestead passes its own. ``kind`` is the building kind the lot is, sized and furnished by its row.
     """
     river = ctx.patch.river
     streets = np.isin(grid, _STREET)
@@ -795,11 +794,7 @@ def _mill(
         return None
     cfg = ctx.config.get("sites.settlement.mill")
     height = lot_rows(ctx.config, kind)[0]
-    width = (
-        lot_widths(ctx.config, kind, ctx.aspect)[0]
-        if kind != "house"
-        else round(height * ctx.aspect * float(cfg["width"]))
-    )
+    width = lot_widths(ctx.config, kind, ctx.aspect)[0]
     wheel_rows = int(cfg["wheel_rows"])
     free = ground & dry & (grid == _VOID)
     sampling = (1.0, 1.0 / ctx.aspect)

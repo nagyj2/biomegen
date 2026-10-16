@@ -57,12 +57,12 @@ VALUES: Dict[str, Any] = {
         # A port (a POI tagged ``port``) builds a harbour when open water lies within ``reach_rows`` rows of the
         # plaza: a pier ``pier_rows`` rows long (columns scale with the cell aspect) from the dry shore nearest the
         # plaza, joined to it by a street, with up to ``boats`` boats of ``boat_length`` by ``boat_beam`` rows moored
-        # beside it. A river settlement with a river in its extent builds a mill: a house ``width`` times as wide as
-        # the shortest building on free ground within ``reach`` rows of the river. A water wheel ``wheel_rows`` rows
+        # beside it. A river settlement with a river in its extent builds a mill (a building kind, with its own size)
+        # on free ground within ``reach`` rows of the river. A water wheel ``wheel_rows`` rows
         # tall (as wide as the cell aspect makes it round) turns in the river, set a cell into the water, and an axle
         # runs from the middle of the house's wall to its hub.
         "harbour": {"pier_rows": 6, "boats": 2, "boat_length": 5, "boat_beam": 4, "reach_rows": 45},
-        "mill": {"reach": 2.0, "width": 1.2, "wheel_rows": 3},
+        "mill": {"reach": 2.0, "wheel_rows": 3},
     },
     "extra_corridors": {"dungeon": 0.34, "tower": 0.15, "ruin": 0.2},  # extra room-to-room links per room, by layout
     "furnish": {
@@ -96,15 +96,13 @@ VALUES: Dict[str, Any] = {
         "graves": [8, 18],  # burial mounds laid out in rows in one corner of the field
         "banners": 2,  # the armies' standards, one at each end of the field
     },
-    # A homestead: one house of ``building_rows`` rows (``width`` times as wide as the cell aspect makes it square)
-    # beside a yard track ``track_rows`` rows long each way, dressed within ``yard_reach`` [columns, rows] of the house
+    # A homestead: one building of its style's kind (``tables.buildings``: its size, roof and furniture)
+    # beside a yard track ``track_rows`` rows long each way, dressed within ``yard_reach`` [columns, rows] of it
     # and ``trees`` of the free ground wooded. ``dress`` gives each dressing (a site row's ``dress`` key): ``field``
     # sows a wheat plot of about ``[rows, columns]`` beside the house, ``clearing`` bares a plot of that size for
     # ``logs`` felled trunks, ``spoil`` heaps that many rock and rubble cells, ``wagons`` and ``supplies`` (the
     # family's ``yard`` role) are counts, ``trees`` replaces the wooded share.
     "homestead": {
-        "building_rows": [5, 6],
-        "width": 1.5,
         "track_rows": 3,
         "yard_reach": [8, 4],
         "trees": 0.02,

@@ -10,9 +10,9 @@ from biomegen.config.model import Config
 from biomegen.sites import clear_cache, read_patch, site_geometry, site_plan
 from biomegen.sites.geometry import site_row_for
 from biomegen.world.tile import Biome, Cell, WaterType
-from tests.sites.conftest import add_poi, flat_world
+from tests.sites.conftest import add_poi, flat_world, roofs
 
-ROOF, DOOR, WHEEL, BRIDGE = (int(c) for c in (Cell.ROOF, Cell.DOOR, Cell.WHEEL, Cell.BRIDGE))
+DOOR, WHEEL, BRIDGE = (int(c) for c in (Cell.DOOR, Cell.WHEEL, Cell.BRIDGE))
 STYLES = ("farm", "mill", "mine", "lodge", "fishery")
 
 
@@ -43,7 +43,7 @@ def test_a_homestead_is_one_building(config: Config, style: str) -> None:
     # Roofs seen from outside form a single connected blob: one house, however it is dressed.
     tags = {"mill": ("river",), "fishery": ("port",)}.get(style, ())
     _poi, _world, plan = _homestead(config, style, tags=tags)
-    _labels, count = ndimage.label(plan.outside == ROOF)
+    _labels, count = ndimage.label(roofs(plan.outside))
     assert count == 1
 
 
@@ -91,7 +91,7 @@ def test_the_wheat_field_is_open_ground_from_outside(config: Config) -> None:
 def test_the_wheat_field_does_not_touch_the_house(config: Config) -> None:
     # Every wheat cell keeps a cell clear of the walls, so the field never grows into the building.
     _poi, _world, plan = _homestead(config, "farm")
-    roof = ndimage.binary_dilation(plan.outside == ROOF, iterations=1)
+    roof = ndimage.binary_dilation(roofs(plan.outside), iterations=1)
     assert not (roof & (plan.cells == WHEAT)).any()
 
 
@@ -209,4 +209,48 @@ def test_a_homestead_on_a_shore_takes_the_smallest_house_when_the_big_one_does_n
     world.biome[:, 8:] = int(Biome.DEEP)
     poi = add_poi(world, "homestead", 7, 5, style="farm")
     plan = site_plan(poi, 0, config, world)
-    assert plan is not None and int((plan.outside == ROOF).sum()) > 0
+    assert plan is not None and int((roofs(plan.outside)).sum()) > 0
+
+
+# --- the homestead's building is its style's kind ------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("style", STYLES)
+def test_a_homestead_draws_its_styles_kind_roof(config: Config, style: str) -> None:
+    from biomegen.sites.kinds import roof_cell
+
+    tags = {"mill": ("river",), "fishery": ("port",)}.get(style, ())
+    _poi, _world, plan = _homestead(config, style, tags=tags)
+    kind = config.get(f"tables.poi_styles.{style}.building")
+    assert roof_cell(config, kind) in plan.outside and int(Cell.ROOF) not in plan.outside
+
+
+def test_a_plain_homestead_is_a_house(config: Config) -> None:
+    from biomegen.sites.kinds import roof_cell
+
+    poi = add_poi(flat_world(16, 12), "homestead", 7, 5)
+    plan = site_plan(poi, 0, config, flat_world(16, 12))
+    assert plan is not None and roof_cell(config, "house") in plan.outside
+
+
+def test_the_building_is_the_same_on_two_builds(config: Config) -> None:
+    # 9b rebuilds it as the first lot of the hamlet it grows into: the same site seed gives the same building.
+    poi, world, plan = _homestead(config, "lodge")
+    clear_cache()
+    again = site_plan(poi, 0, config, world)
+    assert again is not None and np.array_equal(roofs(again.outside), roofs(plan.outside))
+
+
+def test_a_standing_farm_field_is_full_and_harvested_never_dead(config: Config) -> None:
+    from biomegen.sites.dress import variant_cell
+
+    _poi, _world, plan = _homestead(config, "farm")
+    assert variant_cell(config, "field", "dead") not in plan.outside
+    assert {int(Cell.WHEAT), variant_cell(config, "field", "harvested")} & set(np.unique(plan.outside).tolist())
+
+
+def test_the_style_kind_sets_the_buildings_size(config: Config) -> None:
+    # The kind row gives the rows: a mine of rows [5, 6] is never taller than 6.
+    _poi, _world, plan = _homestead(config, "mine")
+    labels, _count = ndimage.label(roofs(plan.outside))
+    assert max(int(box[0].stop - box[0].start) for box in ndimage.find_objects(labels)) <= 6

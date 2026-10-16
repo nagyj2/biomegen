@@ -13,6 +13,7 @@ later phase can rebuild the same building as the first lot of the hamlet the hom
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from typing import Optional
 
 import numpy as np
@@ -22,6 +23,7 @@ from ..util import rng
 from ..world.tile import Cell
 from .carve import nearest_true
 from .dress import lay_dress
+from .kinds import kind_row, lot_rows, lot_widths, roof_cell
 from .layout import SiteContext, layout
 from .settlement import Lot, _harbour, _mill, _spec, _try_house
 from .streets import lay_roads
@@ -50,20 +52,21 @@ def _house(
     ground: np.ndarray,
     centre: tuple[int, int],
     stream: random.Random,
+    kind: str = "house",
 ) -> Optional[Lot]:
-    """Build the house on free dry ground nearest ``centre`` (inner ground first).
+    """Build the building of ``kind`` (the style's) on free dry ground nearest ``centre`` (inner ground first).
 
     Each candidate spot gets its own yard track laid a gap row below the house, which its door joins, so the house
     needs no room for a track beside it. When no spot takes the drawn size (a shore or a river takes most of the
     extent) the smallest house is tried, as a settlement always keeps at least one house.
     """
-    lo, hi = (int(v) for v in ctx.config.get("sites.homestead.building_rows"))
+    lo, hi = lot_rows(ctx.config, kind)
+    wide = float(kind_row(ctx.config, kind)["width"][1])
     height = stream.randint(lo, hi)
-    scale = ctx.aspect * float(ctx.config.get("sites.homestead.width"))
-    sizes = [(height, round(height * scale)), (lo, round(0.8 * lo * ctx.aspect))]
+    sizes = [(height, round(height * ctx.aspect * wide)), (lo, lot_widths(ctx.config, kind, ctx.aspect)[0])]
     cx, cy = centre
     sampling = (1.0, 1.0 / ctx.aspect)
-    spec = _spec(ctx)
+    spec = _spec(ctx, kind)
     for height, width in sizes:
         free = dry & (grid == _VOID)
         fits = ndimage.minimum_filter(free.astype(np.uint8), size=(height, width), mode="constant", cval=0) > 0
@@ -83,7 +86,7 @@ def _house(
             placed = _try_house(ctx, trial, dry, ground, rect, street, stream, spec)
             if placed is not None:
                 grid[:] = placed[0]
-                return placed[1]
+                return replace(placed[1], kind=kind)
     return None
 
 
@@ -98,22 +101,23 @@ def build_homestead(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]
     )
     if centre is None:
         return None
-    stream = rng.derive(ctx.seed, "site.homestead")  # one stream for the house and its dressing, in a fixed order
+    stream = rng.derive(ctx.seed, "site.homestead")  # one stream for the building and its dressing, in a fixed order
+    kind = str(ctx.config.get(f"tables.poi_styles.{ctx.style}.building", "house")) if ctx.style else "house"
     grid = np.full((rows, cols), _VOID, dtype=np.uint8)
     lay_roads(grid, ctx.patch)
     if ctx.dress == "fishery":
         _harbour(ctx, grid, dry, centre)
     lot = None
     if ctx.dress == "mill":  # the mill joins a street it finds: lay one below the middle first
-        tallest = int(ctx.config.get("sites.homestead.building_rows")[1])
+        tallest = lot_rows(ctx.config, kind)[1]
         _track(ctx, grid, dry, centre[0], min(rows - 2, centre[1] + tallest // 2 + 2))
-        lot = _mill(ctx, grid, dry, ground, centre, stream)
-    lot = lot or _house(ctx, grid, dry, ground, centre, stream)
+        lot = _mill(ctx, grid, dry, ground, centre, stream, kind)
+    lot = lot or _house(ctx, grid, dry, ground, centre, stream, kind)
     if lot is None:
         return None
     roofs = np.zeros(grid.shape, dtype=bool)
     roofs[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width] |= lot.building.footprint
-    lay_dress(ctx, grid, dry, roofs, (lot.x, lot.y, lot.width, lot.height), stream)
+    lay_dress(ctx, grid, dry, roofs, (lot.x, lot.y, lot.width, lot.height), stream, condition="standing")
     outside = grid.copy()
-    outside[roofs] = int(Cell.ROOF)
+    outside[roofs] = roof_cell(ctx.config, kind)
     return grid, outside
