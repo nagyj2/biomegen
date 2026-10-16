@@ -21,9 +21,10 @@ realm by grid lookup. History placement comes first: every event of the finished
   ``poi_sites`` band round the realm's seat; the previous ruler's temper picks the site (an aggressive one a quiet
   spot in the realm near the seat, a passive one a cell far off, ``connect = false``).
 
-The location pass (:func:`biomegen.pipeline.pois.place_by_location`) then fills the rest by score. With
+The location pass (:func:`biomegen.pipeline.pois.place_by_location`) then fills the rest by score, and the styles pass
+(:func:`.poi_styles.place_styles`) last adds the generated hamlets and homesteads, so no earlier POI moves. With
 ``history.start = "dawn"`` there are no realms and no events, so only the kinds whose ``source`` is "both" are placed,
-by location: a few ruins, towers and dungeons already stand at year 0.
+by location (a few ruins, towers and dungeons already stand at year 0), and the styles pass places nothing.
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ from ...world.world import World
 from .. import pois
 from ..civilization.diplomacy import front_cells
 from ..civilization.settlements import habitability
+from . import poi_styles
 from .poi_rules import PoiPlan, event_key, poi_for_event
 
 
@@ -284,3 +286,5 @@ def run(world: World, config: Config, seed: int) -> None:
                 elif plan.kind == "shrine":
                     _place_shrine(world, config, seed, event, plan, _fields())
     pois.place_by_location(world, config, seed, ("both",) if dawn else ("location", "both"))
+    if not dawn:
+        poi_styles.place_styles(world, config, seed)

@@ -109,8 +109,9 @@ def test_settlements_are_founded_by_the_present(world: World) -> None:
 
 
 def test_wild_pois_placed_by_location_stay_undated(world: World) -> None:
-    # Only a POI an event made (a fallen realm's ruin) takes a date; the rest of the wild ones have none.
-    assert all(p.founded == 0 for p in world.pois if not p.civilized and not p.event_ids)
+    # Only a POI an event made (a fallen realm's ruin) takes a date; the rest of the wild ones have none (a homestead
+    # is dated by the styles pass).
+    assert all(p.founded == 0 for p in world.pois if not p.civilized and not p.event_ids and not p.style)
 
 
 def test_each_vassal_tie_is_one_conquest(world: World) -> None:
@@ -256,7 +257,7 @@ def test_ruins_lie_on_habitable_land(world: World, cfg: Config) -> None:
 
 def test_ruins_keep_their_distance_from_settlements(world: World, cfg: Config) -> None:
     spacing = cfg.get("history.fall_spacing_km")
-    settled = [p for p in world.pois if p.civilized]
+    settled = [p for p in world.pois if p.civilized and not p.style]  # the styles pass places its hamlets later
     nearest = [min(world.scale.distance_km(*f.location, p.x, p.y) for p in settled) for f in world.fallen_realms]
     assert nearest and min(nearest) >= spacing
 

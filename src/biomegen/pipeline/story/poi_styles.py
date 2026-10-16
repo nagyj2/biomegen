@@ -15,6 +15,7 @@ generated ones, and every shared grid is built once in :func:`style_fields`.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import NamedTuple
 
 import numpy as np
@@ -23,10 +24,11 @@ from scipy import ndimage
 from ...config.model import Config
 from ...util import geometry as geo
 from ...util import rng
+from ...world.entities import POI
 from ...world.tile import RELIEF_NAME, WaterType, biome_from_name
 from ...world.world import World
 from .. import pois
-from ..civilization.settlements import habitability
+from ..civilization.settlements import habitability, reach_masks, settlement_tags
 
 KINDS = ("homestead", "hamlet")
 
@@ -169,3 +171,94 @@ def style_count(world: World, config: Config, style: str, kind: str, score: np.n
         return 0
     suited_km2 = float(suited_mask(config, style, score).sum()) * world.scale.cell_area_km2
     return round(suited_km2 / float(per) * float(config.get("poi.density")))
+
+
+def _km_to_pois(world: World, config: Config, wanted: Callable[[POI], bool]) -> np.ndarray:
+    """Km distance from every cell to the nearest POI for which ``wanted`` is true (``inf`` when there is none)."""
+    mask = np.zeros((world.height, world.width), dtype=bool)
+    for poi in world.pois:
+        if wanted(poi):
+            mask[poi.y, poi.x] = True
+    return _km_to(world, config, mask)
+
+
+def _spaced(world: World, config: Config, style: str, kind: str, score: np.ndarray) -> tuple[np.ndarray, float]:
+    """Return ``(score kept where the spacing allows, the spacing among the new POIs)`` for one style and kind.
+
+    A cell keeps its score only when it is suited, ``min_spacing_km`` from every POI, ``kind_spacing_km`` from every
+    POI of the same style, and (a hamlet) the tier's ``spacing_km`` from every settlement.
+    """
+    row = config.get(f"tables.poi_styles.{style}")
+    keep = suited_mask(config, style, score)
+    among = float(row["min_spacing_km"])
+    keep &= _km_to_pois(world, config, lambda poi: True) >= among
+    if "kind_spacing_km" in row:
+        among = max(among, float(row["kind_spacing_km"]))
+        keep &= _km_to_pois(world, config, lambda poi: poi.style == style) >= float(row["kind_spacing_km"])
+    if kind == "hamlet":
+        tier = float(config.get(f"tables.tiers.{row['grows_into']}.spacing_km"))
+        keep &= _km_to_pois(world, config, lambda poi: poi.civilized) >= tier
+        among = max(among, tier)
+    return np.where(keep, score, -np.inf), among
+
+
+def _commit(world: World, config: Config, seed: int, style: str, kind: str, x: int, y: int, reach: dict) -> None:
+    """Place one homestead or hamlet of ``style`` at ``(x, y)``: realm from the map, numbers from a cell stream."""
+    stream = rng.derive(seed, "poi", "style", style, kind, x, y)
+    lo, hi = (int(v) for v in config.get("poi.style_founded_years")[kind])
+    founded = max(1, world.year - stream.randint(lo, hi))
+    if kind == "hamlet":
+        tier = config.get("tables.tiers.hamlet")
+        pop = stream.randint(*(int(v) for v in tier["pop"]))
+        floors = (max(1, stream.randint(*(int(v) for v in tier["floors"]))), 0)
+        pois.commit(
+            world,
+            seed,
+            "hamlet",
+            x,
+            y,
+            floors,
+            style=style,
+            connect=bool(tier.get("connect", True)),
+            civilized=True,
+            founded=founded,
+            pop=pop,
+            tags=settlement_tags(reach, x, y),
+        )
+        return
+    row = config.get("tables.pois.homestead")
+    pois.commit(
+        world,
+        seed,
+        "homestead",
+        x,
+        y,
+        pois.draw_floors("homestead", row, stream),
+        style=style,
+        connect=bool(row.get("connect", False)),
+        founded=founded,
+        tags=settlement_tags(reach, x, y),
+    )
+
+
+def place_styles(world: World, config: Config, seed: int) -> None:
+    """Place the generated hamlets, then the generated homesteads, of every ``generated`` style, appending to the world.
+
+    Hamlets go first so a homestead keeps its distance from them. Each (style, kind) step scores the land, counts the
+    suited land (:func:`style_count`), keeps the spacing from every POI placed so far and picks best score first by blue
+    noise. A POI appends to ``world.pois``, so no earlier POI, realm, road or event moves.
+    """
+    styles = [
+        name for name in sorted(config.get("tables.poi_styles")) if config.get(f"tables.poi_styles.{name}.generated")
+    ]
+    fields = style_fields(world, config, seed)
+    reach = reach_masks(world, config)
+    for kind in ("hamlet", "homestead"):
+        for style in styles:
+            score = style_score(world, config, seed, style, kind, fields=fields)
+            count = style_count(world, config, style, kind, score)
+            if count <= 0:
+                continue
+            kept, among = _spaced(world, config, style, kind, score)
+            for x, y in pois.pick_blue_noise(kept, count, among, [], world):
+                _commit(world, config, seed, style, kind, x, y, reach)

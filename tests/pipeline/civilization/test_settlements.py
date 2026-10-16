@@ -167,6 +167,7 @@ def test_a_settlement_never_goes_underground(generated: World) -> None:
 
 
 def test_a_dynamic_tier_is_never_placed(cfg: Config, generated: World) -> None:
-    # The hamlet tier is minted by a later simulation: its row asks for settlements by area but none is placed.
+    # The settlements stage never places the hamlet tier (it is a later simulation's, or the styles pass's): every
+    # hamlet of a generated world comes with a style, which only the styles pass gives.
     assert cfg.get("tables.tiers.hamlet.dynamic") is True
-    assert all(poi.kind != "hamlet" for poi in generated.pois)
+    assert all(poi.style for poi in generated.pois if poi.kind == "hamlet")

@@ -128,7 +128,8 @@ def test_no_poi_name_or_hook_keeps_an_unfilled_token(story):
 
 
 def test_a_poi_placed_by_location_has_a_hook(story):
-    assert all(p.hook for p in story.pois if not p.event_ids and not p.civilized)
+    # (Homesteads take their hooks from their style: the naming task of phase 8c adds them.)
+    assert all(p.hook for p in story.pois if not p.event_ids and not p.civilized and not p.style)
 
 
 def test_a_poi_an_event_made_takes_that_events_text_as_its_hook(story):

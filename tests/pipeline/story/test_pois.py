@@ -73,7 +73,8 @@ def test_a_holding_keeps_its_spacing_from_every_other_poi(world: World, cfg: Con
     for fallen in world.fallen_realms:
         for poi in _fall_ruins(world, fallen.id):
             if (poi.x, poi.y) != fallen.location:
-                others = [q for q in world.pois if q is not poi and q.event_ids != poi.event_ids]
+                # The styles pass comes last and keeps its own spacing, so a homestead or hamlet may stand nearer.
+                others = [q for q in world.pois if q is not poi and q.event_ids != poi.event_ids and not q.style]
                 assert all(world.scale.distance_km(poi.x, poi.y, q.x, q.y) >= spacing - 1e-6 for q in others)
 
 

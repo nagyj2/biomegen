@@ -200,3 +200,166 @@ def test_a_kind_the_style_does_not_make_has_no_count() -> None:
     world, cfg = _island(), load_config(None)
     score = poi_styles.style_score(world, cfg, 7, "mine", "hamlet")
     assert poi_styles.style_count(world, cfg, "mine", "hamlet", score) == 0
+
+
+# --------------------------------------------------------------------------- the generation pass
+def _placed(world: World, kind: str) -> list[POI]:
+    return [poi for poi in world.pois if poi.kind == kind]
+
+
+def _spread_config(**row: object) -> Config:
+    """A farm that makes homesteads over any grass, spaced 60 km, with no hamlets and no other style."""
+    cfg = _config(homestead_km2_per_poi=400000.0, min_spacing_km=60.0, **row)
+    cfg.data["tables"]["poi_styles"] = {"farm": cfg.data["tables"]["poi_styles"]["farm"]}
+    cfg.data["tables"]["poi_styles"]["farm"]["generated"] = True
+    return cfg
+
+
+def test_the_pass_places_as_many_homesteads_as_the_count_says() -> None:
+    # With room to spare, the number placed is the suited land over km2_per_poi.
+    world, cfg = _island(), _spread_config()
+    expected = poi_styles.style_count(world, cfg, "farm", "homestead", poi_styles.style_score(world, cfg, 7, "farm"))
+    poi_styles.place_styles(world, cfg, 7)
+    assert len(_placed(world, "homestead")) == expected > 0
+
+
+def test_homesteads_stand_only_on_held_land() -> None:
+    world, cfg = _island(), _spread_config()
+    world.realm_id[:, :30] = -1
+    poi_styles.place_styles(world, cfg, 7)
+    homesteads = _placed(world, "homestead")
+    assert homesteads and all(poi.realm_id >= 0 and poi.x >= 30 for poi in homesteads)
+
+
+def test_new_homesteads_keep_their_spacing_in_km() -> None:
+    world, cfg = _island(), _spread_config()
+    poi_styles.place_styles(world, cfg, 7)
+    homesteads = _placed(world, "homestead")
+    gaps = [world.scale.distance_km(a.x, a.y, b.x, b.y) for i, a in enumerate(homesteads) for b in homesteads[i + 1 :]]
+    assert gaps and min(gaps) >= 60.0
+
+
+def test_a_homestead_is_a_lone_unnamed_building_with_its_style() -> None:
+    world, cfg = _island(), _spread_config()
+    poi_styles.place_styles(world, cfg, 7)
+    poi = _placed(world, "homestead")[0]
+    assert (poi.style, poi.civilized, poi.pop, poi.connect, poi.floor_count) == ("farm", False, 0, False, 1)
+
+
+def test_a_generated_hamlet_is_a_small_civilized_settlement() -> None:
+    world, cfg = _island(), _spread_config(hamlet_km2_per_poi=400000.0, grows_into="hamlet", hooks_hamlet=["{name}."])
+    poi_styles.place_styles(world, cfg, 7)
+    lo, hi = cfg.get("tables.tiers.hamlet.pop")
+    hamlets = _placed(world, "hamlet")
+    assert hamlets and all(p.civilized and lo <= p.pop <= hi and p.style == "farm" and not p.connect for p in hamlets)
+
+
+def test_a_hamlet_keeps_the_tier_spacing_from_every_settlement() -> None:
+    world, cfg = _island(), _spread_config(hamlet_km2_per_poi=400000.0, grows_into="hamlet", hooks_hamlet=["{name}."])
+    _village(world, 30, 15)
+    poi_styles.place_styles(world, cfg, 7)
+    spacing = float(cfg.get("tables.tiers.hamlet.spacing_km"))
+    hamlets = _placed(world, "hamlet")
+    assert hamlets and all(world.scale.distance_km(p.x, p.y, 30, 15) >= spacing for p in hamlets)
+
+
+def test_a_hamlet_may_stand_on_free_land() -> None:
+    world, cfg = _island(), _spread_config(hamlet_km2_per_poi=400000.0, grows_into="hamlet", hooks_hamlet=["{name}."])
+    world.realm_id[:] = -1
+    poi_styles.place_styles(world, cfg, 7)
+    assert _placed(world, "hamlet") and not _placed(world, "homestead")
+
+
+def test_the_founding_year_lies_in_the_configured_span() -> None:
+    world, cfg = _island(), _spread_config()
+    world.year = 1200
+    poi_styles.place_styles(world, cfg, 7)
+    lo, hi = cfg.get("poi.style_founded_years")["homestead"]
+    assert all(1200 - hi <= poi.founded <= 1200 - lo for poi in _placed(world, "homestead"))
+
+
+def test_the_pass_is_deterministic() -> None:
+    cfg = _spread_config()
+    a, b = _island(), _island()
+    poi_styles.place_styles(a, cfg, 7)
+    poi_styles.place_styles(b, cfg, 7)
+    assert [(p.x, p.y, p.pop, p.founded) for p in a.pois] == [(p.x, p.y, p.pop, p.founded) for p in b.pois]
+
+
+def test_a_style_that_is_not_generated_places_nothing() -> None:
+    world, cfg = _island(), _spread_config()
+    cfg.data["tables"]["poi_styles"]["farm"]["generated"] = False
+    poi_styles.place_styles(world, cfg, 7)
+    assert not world.pois
+
+
+def test_the_homestead_takes_its_realm_from_the_map() -> None:
+    world, cfg = _island(), _spread_config()
+    cfg.data["tables"]["poi_styles"]["farm"]["homestead_km2_per_poi"] = 80000.0
+    world.realm_id[:, 30:] = 4
+    poi_styles.place_styles(world, cfg, 7)
+    assert {poi.realm_id for poi in _placed(world, "homestead")} == {0, 4}
+
+
+# --------------------------------------------------------------------------- a generated world
+def _generate(seed: int, **history: object) -> World:
+    from biomegen import pipeline
+
+    cfg = load_config(None)
+    for key, value in history.items():
+        cfg.data["history"][key] = value
+    return pipeline.generate(cfg, seed)
+
+
+def _without_styles(seed: int) -> World:
+    from biomegen import pipeline
+
+    cfg = load_config(None)
+    for row in cfg.data["tables"]["poi_styles"].values():
+        row["generated"] = False
+    return pipeline.generate(cfg, seed)
+
+
+def test_the_generated_world_gains_hamlets_and_homesteads() -> None:
+    world = _generate(42)
+    assert len(_placed(world, "hamlet")) > 0 and len(_placed(world, "homestead")) > 0
+
+
+def test_the_styles_pass_leaves_every_earlier_poi_where_it_was() -> None:
+    # The pass runs last and only appends, so the POIs of a world without styles are a prefix of the one with them.
+    plain, styled = _without_styles(42), _generate(42)
+    keys = lambda world: [(p.kind, p.x, p.y, p.realm_id, p.event_ids) for p in world.pois]  # noqa: E731
+    assert keys(styled)[: len(plain.pois)] == keys(plain)
+
+
+def test_every_generated_hamlet_has_a_growing_style() -> None:
+    world = _generate(42)
+    grows = {name for name, row in load_config(None).get("tables.poi_styles").items() if "grows_into" in row}
+    assert {p.style for p in _placed(world, "hamlet")} <= grows
+
+
+def test_every_homestead_in_a_generated_world_is_held_and_unlinked() -> None:
+    world = _generate(42)
+    assert all(p.realm_id >= 0 and not p.connect and not p.civilized for p in _placed(world, "homestead"))
+
+
+def test_generated_hamlets_keep_the_tier_spacing_from_every_settlement() -> None:
+    world, cfg = _generate(42), load_config(None)
+    spacing = float(cfg.get("tables.tiers.hamlet.spacing_km"))
+    settled = [p for p in world.pois if p.civilized]
+    hamlets = _placed(world, "hamlet")
+    for hamlet in hamlets:
+        for other in settled:
+            if other is not hamlet:
+                assert world.scale.distance_km(hamlet.x, hamlet.y, other.x, other.y) >= spacing
+
+
+def test_a_dawn_world_has_no_hamlets_or_homesteads() -> None:
+    world = _generate(42, start="dawn")
+    assert not _placed(world, "hamlet") and not _placed(world, "homestead")
+
+
+def test_the_generated_world_is_the_same_twice() -> None:
+    a, b = _generate(7), _generate(7)
+    key = lambda world: [(p.kind, p.x, p.y, p.style, p.pop, p.founded, p.tags) for p in world.pois]  # noqa: E731
+    assert key(a) == key(b)

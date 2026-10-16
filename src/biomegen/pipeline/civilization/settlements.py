@@ -54,6 +54,11 @@ def _reach_masks(world: World, config: Config) -> dict[str, np.ndarray]:
     }
 
 
+def reach_masks(world: World, config: Config) -> dict[str, np.ndarray]:
+    """Bool grids per ``river`` / ``coast`` / ``lake``: where that water is in reach (for :func:`settlement_tags`)."""
+    return _reach_masks(world, config)
+
+
 def settlement_tags(reach: dict[str, np.ndarray], x: int, y: int) -> tuple[str, ...]:
     """The ``port`` / ``river`` / ``lake`` tags a settlement at ``(x, y)`` earns from the water in ``reach``."""
     return tuple(tag for tag, key in _TAGS if reach[key][y, x])
