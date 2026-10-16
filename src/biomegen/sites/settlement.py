@@ -1111,13 +1111,15 @@ def _place_kinds(
     taken: list[Lot],
     landing: Optional[Point] = None,
     dressing: Optional[Dressing] = None,
+    town: Optional[np.ndarray] = None,
 ) -> list[Lot]:
     """Preplace the specialized buildings the settlement is chosen to have that stand on the outer ground.
 
     Each kind of ``ctx.kinds`` whose ``siting`` is ``edge`` or ``any`` is built where :func:`_place_edge` finds room,
     then dressed (a farmhouse's field, a lodge's clearing, a mine's spoil: ``sites.homestead.dress``; the settlement
-    plants its own trees). A kind that finds no room is simply left out: its slot is housing. One nearest-street
-    transform serves them all. ``taken`` are the lots already stamped (the centre), kept clear.
+    plants its own trees; a walled settlement's dressings stay inside the wall, in ``town``). A kind that finds no room
+    is simply left out: its slot is housing. One nearest-street transform serves them all. ``taken`` are the lots
+    already stamped (the centre), kept clear.
     """
     kinds = [kind for kind in ctx.kinds if kind_row(ctx.config, kind)["siting"] in ("edge", "any", "shore")]
     streets = np.isin(grid, _STREET)
@@ -1129,6 +1131,7 @@ def _place_kinds(
     for lot in taken:
         roofs[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width] |= lot.building.footprint
     condition = "standing" if ctx.fall is None else "ruin"
+    dress_land = dry & town if ctx.walled and town is not None else dry  # the wall ring lies just outside the town
     style_kind = str(ctx.config.get(f"tables.poi_styles.{ctx.style}.building", "")) if ctx.style else ""
     placed: list[Lot] = []
     for index, kind in enumerate(kinds):
@@ -1148,7 +1151,7 @@ def _place_kinds(
             lay_dress(
                 replace(ctx, dress=dress),
                 grid,
-                dry,
+                dress_land,
                 roofs,
                 (built.x, built.y, built.width, built.height),
                 rng.derive(ctx.seed, "site.layout", "dress", index),
@@ -1227,7 +1230,7 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
         ctx, grid, dry, ground, centre, ends[0] if ends else None
     )  # the busiest street: a gate's spoke first
     specialized = _place_kinds(
-        ctx, grid, dry, ground, centre, plot_mask, [hall] if hall is not None else [], landing, dressing
+        ctx, grid, dry, ground, centre, plot_mask, [hall] if hall is not None else [], landing, dressing, town
     )
     before = grid.copy() if dressing is not None else grid
     mill = _mill(ctx, grid, dry, ground, centre, kind="mill") if "mill" in ctx.kinds else None

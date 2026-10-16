@@ -154,3 +154,17 @@ def test_a_fishery_and_a_mill_are_drawn_from_their_own_rows(config: Config) -> N
     assert {roof_cell(config, "fishery"), roof_cell(config, "mill")} <= set(
         np.unique(np.concatenate([coast.outside.ravel(), river.outside.ravel()])).tolist()
     )
+
+
+# --- walls and dressings ---------------------------------------------------------------------------------------------
+
+
+def test_a_walled_cities_dressings_stay_inside_its_wall(config: Config) -> None:
+    # A field, clearing or spoil never spills over or past the wall: none is reachable from the plan's edge without
+    # crossing a wall or a gate.
+    plan = _plan(config, "capital", 90000)
+    dress = np.isin(plan.cells, FIELD_CELLS + [int(Cell.LOG), int(Cell.ROCK)])
+    walls = np.isin(plan.cells, [int(Cell.WALL), int(Cell.DOOR)])
+    labels, _count = ndimage.label(~walls)
+    outside = labels == labels[0, 0]
+    assert dress.any() and walls.any() and not (dress & outside).any()
