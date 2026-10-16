@@ -79,7 +79,8 @@ tile coordinate — and an info panel under the map shows the tile, region, poin
 
 | Key | Action |
 |-----|--------|
-| Arrow keys / `WASD` / `HJKL` | Move the cursor (pans the viewport at the edges) |
+| Arrow keys / `HJKL` | Move the cursor (pans the viewport at the edges) |
+| `WASD` | Scroll the viewport, dragging the cursor if it would leave (moves the cursor on the fit map) |
 | `Shift`+arrows / capital `WASD` · `HJKL` | Fast-move (`controls.fast_step` tiles at a time) |
 | `Space` | Step **out** one scale: biome↔zoom, local→zoom |
 | `z` | Step **in** one scale: biome→zoom→local |

@@ -69,6 +69,16 @@ def pan(cam: int, cursor: int, view: int, world_size: int, margin: int, mode: st
     return clamp(cursor - view // 2, 0, world_size - view)
 
 
+def pan_viewport(cam: int, cursor: int, view: int, world_size: int, margin: int, delta: int) -> tuple[int, int]:
+    """Scroll the camera by ``delta`` and drag the cursor along if it would leave the viewport.
+
+    Returns ``(camera origin, cursor)``. A world no larger than the viewport has nothing to scroll, so the camera stays.
+    """
+    if world_size > view:
+        cam = clamp(cam + delta, 0, world_size - view)
+    return cam, clamp(cursor, cam + margin, cam + view - 1 - margin)
+
+
 @dataclass
 class ViewState:
     """Mutable explorer state driven by the input loop.
@@ -88,6 +98,8 @@ class ViewState:
         site_cam_x: First window column shown at the site scale.
         site_cam_y: First window row shown.
         recenter: Centre the camera on the cursor at the next draw.
+        pan_x: Viewport scroll requested since the last draw, in tiles (site cells at the site scale).
+        pan_y: Viewport scroll requested since the last draw, rows.
         messages: Recent status messages, newest last.
     """
 
@@ -105,6 +117,8 @@ class ViewState:
     site_cam_x: int = 0
     site_cam_y: int = 0
     recenter: bool = False
+    pan_x: int = 0
+    pan_y: int = 0
     messages: list[str] = field(default_factory=list)
 
     @property
@@ -245,6 +259,15 @@ def move_cursor(world: World, config: Config, state: ViewState, dx: int, dy: int
         return
     state.cx = clamp(state.cx + dx, 0, world.width - 1)
     state.cy = clamp(state.cy + dy, 0, world.height - 1)
+
+
+def pan_view(world: World, config: Config, state: ViewState, dx: int, dy: int) -> None:
+    """Scroll the viewport by ``(dx, dy)``, at the next draw; the fit map has no viewport, so the cursor moves."""
+    if state.scale == SCALE_MAP and state.mode == MODE_FIT:
+        move_cursor(world, config, state, dx, dy)
+        return
+    state.pan_x += dx
+    state.pan_y += dy
 
 
 def _move_in_site(world: World, config: Config, state: ViewState, dx: int, dy: int) -> None:

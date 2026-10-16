@@ -4,9 +4,9 @@ Reading is split from meaning. A reader (termios on POSIX, msvcrt on Windows) yi
 character (``"a"``, ``" "``) or a name (``"up"``, ``"shift-left"``, ``"esc"``, ``"resize"``). :func:`resolve_action`
 maps a token to an action tuple using the rebindable ``keys`` table, so the loop reads as a clean switch.
 
-Actions: ``("move", dx, dy)``, ``("zoom",)``, ``("local",)``, ``("toggle_scale",)``, ``("cycle_view",)``,
-``("floor", +1 | -1)``, ``("export", "view" | "world")``, ``("help",)``, ``("quit",)``, ``("resize",)``,
-``("none",)``.
+Actions: ``("move", dx, dy)``, ``("pan", dx, dy)`` (scroll the viewport), ``("zoom",)``, ``("local",)``,
+``("toggle_scale",)``, ``("cycle_view",)``, ``("floor", +1 | -1)``, ``("export", "view" | "world")``,
+``("help",)``, ``("quit",)``, ``("resize",)``, ``("none",)``.
 """
 
 from __future__ import annotations
@@ -37,7 +37,8 @@ _STEPS = {
     "left": (-1, 0),
     "right": (1, 0),
 }
-_LETTER_STEPS = {"w": "up", "s": "down", "a": "left", "d": "right", "k": "up", "j": "down", "h": "left", "l": "right"}
+_LETTER_STEPS = {"k": "up", "j": "down", "h": "left", "l": "right"}  # move the cursor
+_PAN_LETTERS = {"w": "up", "s": "down", "a": "left", "d": "right"}  # scroll the viewport
 _BOUND_ACTIONS = (
     ("zoom", ("zoom",), " "),
     ("local", ("local",), "z"),
@@ -108,6 +109,10 @@ def resolve_action(token: str, config: Config) -> Action:
         dx, dy = _STEPS[_LETTER_STEPS[lower]]
         scale = step if token.isupper() else 1
         return ("move", dx * scale, dy * scale)
+    if len(token) == 1 and lower in _PAN_LETTERS and token not in _bound_keys(keys):
+        dx, dy = _STEPS[_PAN_LETTERS[lower]]
+        scale = step if token.isupper() else 1
+        return ("pan", dx * scale, dy * scale)
     for name, action, default in _BOUND_ACTIONS:
         if token == keys.get(name, default):
             return action
@@ -115,7 +120,7 @@ def resolve_action(token: str, config: Config) -> Action:
 
 
 def _bound_keys(keys: dict) -> set[str]:
-    """The keys the user bound to actions, which win over the WASD / HJKL movement letters."""
+    """The keys the user bound to actions, which win over the WASD / HJKL letters."""
     return {keys.get(name, default) for name, _action, default in _BOUND_ACTIONS} | {keys.get("quit", "q")}
 
 

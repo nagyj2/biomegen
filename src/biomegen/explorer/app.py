@@ -39,6 +39,8 @@ from .state import (
     initial_cursor,
     move_cursor,
     pan,
+    pan_view,
+    pan_viewport,
     step_in,
     step_out,
     sync_floor,
@@ -99,6 +101,14 @@ def _reverse(grid: CellGrid, rows: slice, cols: slice) -> None:
     grid.bg[rows, cols] = fg
 
 
+def _apply_pan(state: ViewState, world: World, view_w: int, view_h: int) -> None:
+    """Scroll the map camera by the pending pan, dragging the cursor if it would leave the viewport."""
+    if not (state.pan_x or state.pan_y):
+        return
+    state.cam_x, state.cx = pan_viewport(state.cam_x, state.cx, view_w, world.width, 1, state.pan_x)
+    state.cam_y, state.cy = pan_viewport(state.cam_y, state.cy, view_h, world.height, 1, state.pan_y)
+
+
 def _map_sampler(world: World, config: Config, state: ViewState, area: Size) -> Sampler:
     """Return the sampler for the current scale and mode, moving the camera as the cursor needs."""
     cols, rows = area
@@ -110,20 +120,25 @@ def _map_sampler(world: World, config: Config, state: ViewState, area: Size) -> 
             state.cam_x = centre_camera(state.cx, tiles_w, world.width)
             state.cam_y = centre_camera(state.cy, tiles_h, world.height)
         else:
+            _apply_pan(state, world, tiles_w, tiles_h)
             state.cam_x = pan(state.cam_x, state.cx, tiles_w, world.width, 1, mode)
             state.cam_y = pan(state.cam_y, state.cy, tiles_h, world.height, 1, mode)
         state.recenter = False
+        state.pan_x = state.pan_y = 0
         return DetailSampler(world, config, cell_w, cell_h, state.cam_x, state.cam_y, tiles_w, tiles_h, state.scale)
     if state.mode == MODE_ONE_TO_ONE:
         if state.recenter:
             state.cam_x = centre_camera(state.cx, cols, world.width)
             state.cam_y = centre_camera(state.cy, rows, world.height)
         else:
+            _apply_pan(state, world, cols, rows)
             state.cam_x = pan(state.cam_x, state.cx, cols, world.width, 1, mode)
             state.cam_y = pan(state.cam_y, state.cy, rows, world.height, 1, mode)
         state.recenter = False
+        state.pan_x = state.pan_y = 0
         return Sampler.viewport(world, rows, cols, x0=float(state.cam_x), y0=float(state.cam_y))
     state.recenter = False
+    state.pan_x = state.pan_y = 0
     return FitSampler(world, config, cols, rows)
 
 
@@ -139,6 +154,16 @@ def _highlight_cursor(grid: CellGrid, sampler: Sampler, state: ViewState) -> Non
     cell = sampler.cell_of(state.cx, state.cy)
     if cell is not None:
         _reverse(grid, slice(cell[1], cell[1] + 1), slice(cell[0], cell[0] + 1))
+
+
+def _apply_site_pan(state: ViewState, geometry: SiteGeometry, cols: int, rows: int, margin: int) -> None:
+    """Scroll the site camera by the pending pan, dragging the cell cursor (and its tile) if it would leave the view."""
+    if not (state.pan_x or state.pan_y):
+        return
+    state.site_cam_x, state.px = pan_viewport(state.site_cam_x, state.px, cols, geometry.cols, margin, state.pan_x)
+    state.site_cam_y, state.py = pan_viewport(state.site_cam_y, state.py, rows, geometry.rows, margin, state.pan_y)
+    x, y = geometry.position_of(state.px, state.py)
+    state.cx, state.cy = round(x), round(y)
 
 
 def _site_view(
@@ -165,10 +190,12 @@ def _site_view(
         state.site_cam_x = centre_camera(state.px, cols, geometry.cols)
         state.site_cam_y = centre_camera(state.py, rows, geometry.rows)
     else:
+        _apply_site_pan(state, geometry, cols, rows, margin)
         mode = str(config.get("controls.pan"))
         state.site_cam_x = pan(state.site_cam_x, state.px, cols, geometry.cols, margin, mode)
         state.site_cam_y = pan(state.site_cam_y, state.py, rows, geometry.rows, margin, mode)
     state.recenter = False
+    state.pan_x = state.pan_y = 0
     view = CellGrid(rows, cols)
     sampler: Optional[Sampler] = None
     src_rows = slice(max(0, state.site_cam_y), min(geometry.rows, state.site_cam_y + rows))
@@ -286,9 +313,12 @@ def _drain_moves(world: World, config: Config, state: ViewState, reader: KeyRead
     """
     while reader.pending():
         action = resolve_action(reader.read_key(), config)
-        if action[0] != "move":
+        if action[0] == "move":
+            move_cursor(world, config, state, action[1], action[2])
+        elif action[0] == "pan":
+            pan_view(world, config, state, action[1], action[2])
+        else:
             return action
-        move_cursor(world, config, state, action[1], action[2])
     return None
 
 
@@ -358,6 +388,9 @@ def run(
                     break
                 if name == "move":
                     move_cursor(world, config, state, action[1], action[2])
+                    queued = _drain_moves(world, config, state, reader)
+                elif name == "pan":
+                    pan_view(world, config, state, action[1], action[2])
                     queued = _drain_moves(world, config, state, reader)
                 elif name == "zoom":
                     step_out(state)

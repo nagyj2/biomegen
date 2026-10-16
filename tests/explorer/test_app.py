@@ -12,7 +12,7 @@ import numpy as np
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.explorer.app import compose_frame, run
-from biomegen.explorer.state import ViewState, move_cursor, step_in
+from biomegen.explorer.state import ViewState, move_cursor, pan_view, step_in
 from biomegen.sampling.detail import SCALE_LOCAL, SCALE_SITE, SCALE_ZOOM
 from biomegen.sites import site_geometry
 from biomegen.world.entities import POI
@@ -154,6 +154,24 @@ def test_one_to_one_map_pans_with_the_cursor(config: Config) -> None:
     state = ViewState(cx=39, cy=10, mode="onetoone", recenter=False)
     _frame(_world(), config, state, size=(30, 20))
     assert state.cam_x > 0
+
+
+def test_pan_scrolls_the_viewport_and_keeps_the_cursor_inside(config: Config) -> None:
+    # Panning right from a centred camera moves the camera; the cursor is dragged only if it would leave the view.
+    world = _world()
+    state = ViewState(cx=15, cy=10, mode="onetoone", cam_x=5, cam_y=0, recenter=False)
+    _frame(world, config, state, size=(20, 20))
+    state.pan_x = 12
+    _frame(world, config, state, size=(20, 20))
+    assert (state.cam_x, state.cx) == (17, 18)
+
+
+def test_pan_on_the_fit_map_moves_the_cursor(config: Config) -> None:
+    # The fit map shows the whole world, so there is no viewport to scroll.
+    world = _world()
+    state = ViewState(cx=5, cy=5)
+    pan_view(world, config, state, 1, 0)
+    assert (state.cx, state.pan_x) == (6, 0)
 
 
 def test_tiny_terminal_shows_a_notice(config: Config) -> None:

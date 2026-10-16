@@ -76,7 +76,7 @@ def controls_line(config: Config) -> str:
         return "space" if key == " " else key
 
     return (
-        f"[arrows] move  [{show('zoom')}] zoom  [{show('local')}] local  [{show('toggle_scale')}] fit/1:1  "
+        f"[arrows] move  [WSAD] pan  [{show('zoom')}] zoom  [{show('local')}] local  [{show('toggle_scale')}] fit/1:1  "
         f"[{show('cycle_view')}] view  [{show('help')}] help  [{show('export_view')}/{show('export_world')}] export  "
         f"[{show('quit')}] quit"
     )
@@ -171,7 +171,8 @@ def build_panel(
 _HELP_LINES = (
     "Keys",
     "",
-    "arrows / WASD / HJKL   move the cursor (shift or capitals: {step} tiles)",
+    "arrows / HJKL   move the cursor (shift or capitals: {step} tiles)",
+    "WASD   scroll the viewport (capitals: {step} tiles); on the fit map they move the cursor",
     "{zoom}   step out: map <-> zoom, local or a site -> zoom",
     "{local}   step in: map -> zoom -> local, or into the site of a POI (arrows then move one cell)",
     "{toggle_scale}   fit-to-screen <-> 1:1 (map only)",
