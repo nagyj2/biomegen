@@ -61,7 +61,8 @@ def run(world: World, config: Config, seed: int) -> None:
     chronicle.name_fallen_realms(world, config, seed)
     for poi in world.pois:
         row = config.get(f"tables.pois.{poi.kind}", None)
-        forms, extra = (row["names"] if row else None), None
+        style = config.get(f"tables.poi_styles.{poi.style}", None) if poi.style else None
+        forms, extra = (style["names"] if style else row["names"] if row else None), None
         fallen = _fallen_of_capital_ruin(world, poi)
         if row and fallen is not None and "names_fallen" in row:
             name = fallen.name

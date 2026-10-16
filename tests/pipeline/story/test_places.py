@@ -87,3 +87,22 @@ def test_no_points_name_nothing(world: World, cfg: Config) -> None:
 def test_only_the_kind_asked_for_is_returned(world: World, cfg: Config) -> None:
     _river(world, "Near", [(5, y) for y in range(10)])
     assert nearest_feature(world, cfg, "range", [(7, 4)]) == -1
+
+
+def test_a_hamlet_is_never_the_nearest_settlement(world: World, cfg: Config) -> None:
+    # near_target is false on the hamlet tier: a village farther off is named rather than a hamlet next door.
+    from biomegen.pipeline.story.places import nearest_settlement
+    from biomegen.world.entities import POI
+
+    world.pois.append(POI(kind="village", x=12, y=5, interior_seed=1, civilized=True, pop=300))
+    world.pois.append(POI(kind="hamlet", x=6, y=5, interior_seed=2, civilized=True, pop=30))
+    assert nearest_settlement(world, cfg, 5, 5) == 0
+
+
+def test_a_town_next_door_is_the_nearest_settlement(world: World, cfg: Config) -> None:
+    from biomegen.pipeline.story.places import nearest_settlement
+    from biomegen.world.entities import POI
+
+    world.pois.append(POI(kind="village", x=12, y=5, interior_seed=1, civilized=True, pop=300))
+    world.pois.append(POI(kind="village", x=6, y=5, interior_seed=2, civilized=True, pop=300))
+    assert nearest_settlement(world, cfg, 5, 5) == 1

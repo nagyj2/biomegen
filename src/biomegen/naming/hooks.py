@@ -1,10 +1,12 @@
 """Hooks: the story text of a POI, stored on it (``POI.hook`` and ``POI.hook_refs``).
 
 A POI an event made or marks takes its first event's text and name spans. Any other POI takes a template from its
-kind's row in ``tables.pois`` (``hooks``, plus ``hooks_near`` when a settlement is near), with ``{name}`` the POI's own
-name and ``{near}`` the settlement's. A kind with neither (a village no event dates) has an empty hook. Runs after the
-chronicle's text is rendered and the POIs are named; every draw is keyed on the POI's cell, so a hook never depends
-on processing order. A later simulation calls :func:`describe_hook` for a POI it mints.
+kind's row in ``tables.pois`` (``hooks``, plus ``hooks_near`` when a settlement is near), or, when it has a style (a
+homestead or a generated hamlet), from its style's row in ``tables.poi_styles`` (``hooks_<kind>``, plus
+``hooks_<kind>_near``), with ``{name}`` the POI's own name and ``{near}`` the settlement's. A kind with neither (a
+village no event dates) has an empty hook. Runs after the chronicle's text is rendered and the POIs are named; every
+draw is keyed on the POI's cell, so a hook never depends on processing order. A later simulation calls
+:func:`describe_hook` for a POI it mints.
 """
 
 from __future__ import annotations
@@ -48,6 +50,17 @@ def _describe_free(world: World, config: Config, seed: int, index: int) -> bool:
     return True
 
 
+def _pool(config: Config, poi: POI, near_index: int) -> list[str]:
+    """The hook templates of a POI: its style's per-kind texts (``hooks_<kind>``, plus ``_near``) or its kind's row."""
+    style = config.get(f"tables.poi_styles.{poi.style}", None) if poi.style else None
+    if style is not None:
+        pool = list(style.get(f"hooks_{poi.kind}", []))
+        return pool + list(style.get(f"hooks_{poi.kind}_near", [])) if near_index >= 0 else pool
+    row = config.get(f"tables.pois.{poi.kind}", None)
+    pool = list(row.get("hooks", [])) if row else []
+    return pool + list(row.get("hooks_near", [])) if row and near_index >= 0 else pool
+
+
 def describe_hook(world: World, config: Config, seed: int, index: int, near_index: int) -> None:
     """Fill ``hook`` and ``hook_refs`` of ``world.pois[index]``; ``near_index`` is its qualifying settlement or -1."""
     poi: POI = world.pois[index]
@@ -58,10 +71,7 @@ def describe_hook(world: World, config: Config, seed: int, index: int, near_inde
         event = world.chronicle[poi.event_ids[0]]
         poi.hook, poi.hook_refs = event.text, list(event.refs)
         return
-    row = config.get(f"tables.pois.{poi.kind}", None)
-    pool = list(row.get("hooks", [])) if row else []
-    if row and near_index >= 0:
-        pool += list(row.get("hooks_near", []))
+    pool = _pool(config, poi, near_index)
     if not pool:
         return
     stream = rng.derive(seed, "naming", "hook", poi.x, poi.y)

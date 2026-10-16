@@ -20,8 +20,9 @@ from ...world.world import World
 def nearest_settlement(world: World, config: Config, x: int, y: int, exclude: Collection[int] = ()) -> int:
     """Return the index in ``world.pois`` of the nearest settlement to cell ``(x, y)``, or -1 when none qualifies.
 
-    Only civilized POIs on the same landmass within ``history.near_km`` count, and those in ``exclude`` never do. The
-    cell must be on a landmass; the nearest settlement wins, a lower index breaking a tie.
+    Only civilized POIs on the same landmass within ``history.near_km`` count, and those in ``exclude`` never do, nor a
+    POI of a tier whose row sets ``near_target = false`` (a hamlet is too small to name). The cell must be on a
+    landmass; the nearest settlement wins, a lower index breaking a tie.
     """
     landmass = int(world.landmass_id[y, x])
     if landmass < 0:
@@ -30,6 +31,8 @@ def nearest_settlement(world: World, config: Config, x: int, y: int, exclude: Co
     best_km, best = math.inf, -1
     for index, poi in enumerate(world.pois):
         if not poi.civilized or index in exclude or int(world.landmass_id[poi.y, poi.x]) != landmass:
+            continue
+        if not config.get(f"tables.tiers.{poi.kind}.near_target", True):
             continue
         km = world.scale.distance_km(x, y, poi.x, poi.y)
         if km <= cap_km and km < best_km:

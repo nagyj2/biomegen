@@ -128,8 +128,7 @@ def test_no_poi_name_or_hook_keeps_an_unfilled_token(story):
 
 
 def test_a_poi_placed_by_location_has_a_hook(story):
-    # (Homesteads take their hooks from their style: the naming task of phase 8c adds them.)
-    assert all(p.hook for p in story.pois if not p.event_ids and not p.civilized and not p.style)
+    assert all(p.hook for p in story.pois if not p.event_ids and not p.civilized)
 
 
 def test_a_poi_an_event_made_takes_that_events_text_as_its_hook(story):
@@ -165,3 +164,37 @@ def test_a_holding_is_not_named_for_the_fallen_realm(story):
 
 def test_a_shrine_name_uses_a_shrine_word(story):
     assert all("Shrine" in p.name or "Chapel" in p.name for p in story.pois if p.kind == "shrine")
+
+
+def _style_pois(story, kind):
+    return [p for p in story.pois if p.kind == kind and p.style]
+
+
+def test_a_homestead_is_named_from_its_styles_patterns(story, cfg):
+    # Each pattern of the style has a fixed word ("Farm", "Mill", ...): the name carries one of them.
+    homesteads = _style_pois(story, "homestead")
+    assert homesteads
+
+    def words(style):
+        patterns = cfg.get(f"tables.poi_styles.{style}.names")
+        return {w for pattern in patterns for w in pattern.replace("{n}'s", "").replace("{n}", "").split()}
+
+    assert all(any(word in p.name for word in words(p.style)) for p in homesteads)
+
+
+def test_a_homestead_hook_comes_from_its_style_and_names_it(story):
+    homesteads = _style_pois(story, "homestead")
+    assert homesteads and all(p.name in p.hook for p in homesteads)
+
+
+def test_a_generated_hamlet_has_a_hook(story):
+    hamlets = _style_pois(story, "hamlet")
+    assert hamlets and all(p.hook for p in hamlets)
+
+
+def test_a_hamlet_is_never_named_as_another_places_nearby_settlement(story):
+    from biomegen.world.entities import REF_POI
+
+    hamlets = {i for i, p in enumerate(story.pois) if p.kind == "hamlet"}
+    named = {ref[3] for i, p in enumerate(story.pois) for ref in p.hook_refs if ref[2] == REF_POI and ref[3] != i}
+    assert not named & hamlets
