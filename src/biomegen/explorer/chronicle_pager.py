@@ -46,6 +46,7 @@ _BOUND_ACTIONS = (
     ("search_next", ("match", 1)),
     ("search_prev", ("match", -1)),
     ("filter_kind", ("cycle_kind",)),
+    ("filter_salience", ("toggle_salience",)),
     ("filter_years", ("prompt", "years")),
     ("filter_realm", ("prompt", "realm")),
     ("filter_clear", ("clear",)),
@@ -58,6 +59,7 @@ _DEFAULT_KEYS = {
     "search_next": "n",
     "search_prev": "N",
     "filter_kind": "v",
+    "filter_salience": "m",
     "filter_years": "y",
     "filter_realm": "p",
     "filter_clear": "c",
@@ -75,6 +77,7 @@ _PAGER_HELP = (
     "{top} / {bottom}   first / last event",
     "{search}   search (highlights)   {search_next} / {search_prev}   next / previous",
     "{filter_kind}   cycle the event-kind filter",
+    "{filter_salience}   toggle major only / major and minor events",
     "{filter_years}   filter by years (100-300, 100-, -300)",
     "{filter_realm}   filter by realm, ruler or settlement name",
     "      (A|B: A or B     A&B: A and B)",
@@ -133,6 +136,7 @@ def resolve_pager_action(token: str, config: Config, prompting: bool = False) ->
     """Translate a key token into a pager action.
 
     Actions: ``("scroll", n)``, ``("page", ±1)``, ``("top",)``, ``("bottom",)``, ``("match", ±1)``, ``("cycle_kind",)``,
+    ``("toggle_salience",)``,
     ``("prompt", "search" | "years" | "realm")``, ``("clear",)``, ``("help",)``, ``("quit",)``, ``("resize",)``,
     ``("none",)``; while a prompt is open also ``("type", char)``, ``("backspace",)``, ``("submit",)``, ``("cancel",)``,
     ``("choice", ±1)`` (Up / Down) and ``("complete",)`` (Tab).
@@ -231,7 +235,8 @@ def _hint_line(config: Config, prompt: Optional[_Prompt]) -> str:
         return f" [Enter] apply{choose}  [Esc] cancel"
     return (
         f" [arrows] scroll  [{show('search')}] search  [{show('search_next')}/{show('search_prev')}] next/prev  "
-        f"[{show('filter_kind')}] kind  [{show('filter_years')}] years  [{show('filter_realm')}] name  "
+        f"[{show('filter_kind')}] kind  [{show('filter_salience')}] minor  [{show('filter_years')}] years  "
+        f"[{show('filter_realm')}] name  "
         f"[{show('filter_clear')}] clear  [{show('help')}] help  [{show('quit')}] quit"
     )
 
@@ -466,6 +471,12 @@ def apply_action(world: World, config: Config, state: PagerState, action: Action
     elif name == "cycle_kind":
         _cycle_kind(state)
         state.message = f"kind: {state.chronicle_filter.kinds[0] if state.chronicle_filter.kinds else 'all'}"
+    elif name == "toggle_salience":
+        show_all = state.chronicle_filter.salience != "all"
+        state.chronicle_filter = replace(state.chronicle_filter, salience="all" if show_all else "major")
+        state.scroll = 0
+        state.current = -1
+        state.message = "showing major and minor events" if show_all else "showing major events only"
     elif name == "prompt":
         initial = {"search": state.query, "years": "", "realm": state.chronicle_filter.realm}[action[1]]
         state.prompt = _Prompt(action[1], initial)

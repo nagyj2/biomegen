@@ -325,3 +325,30 @@ def test_name_filter_and_needs_every_term_among_the_names() -> None:
     world = _tiny()
     world.chronicle[0].fallen_ids = [0]
     assert _ids(world, realm="kingdom&old") == [0]
+
+
+def _with_minor_event() -> World:
+    world = _tiny()
+    world.chronicle.append(ChronicleEvent(2, 95, "succession", [0], text="A crowns a new ruler.", salience="minor"))
+    return world
+
+
+def test_an_event_is_major_unless_marked() -> None:
+    assert ChronicleEvent(0, 1, "founding").salience == "major"
+
+
+def test_the_default_filter_hides_minor_events() -> None:
+    assert _ids(_with_minor_event()) == [0, 1]
+
+
+def test_the_all_salience_filter_keeps_minor_events() -> None:
+    assert _ids(_with_minor_event(), salience="all") == [0, 1, 2]
+
+
+def test_the_json_lists_each_events_salience() -> None:
+    events = chronicle_data(_with_minor_event())["events"]
+    assert [e["salience"] for e in events] == ["major", "major", "minor"]
+
+
+def test_a_filter_showing_minor_events_is_described() -> None:
+    assert "minor" in describe_filter(ChronicleFilter(salience="all"))

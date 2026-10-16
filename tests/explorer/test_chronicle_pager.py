@@ -572,3 +572,13 @@ def test_a_search_with_or_finds_both(cfg: Config) -> None:
 
 def _hits_of(state: PagerState) -> list[int]:
     return state.layout.matches
+
+
+def test_the_salience_key_toggles_between_major_only_and_all(cfg: Config) -> None:
+    state = PagerState()
+    world = _world()
+    seen = []
+    for _ in range(3):
+        _press(world, cfg, state, "m")
+        seen.append(state.chronicle_filter.salience)
+    assert seen == ["all", "major", "all"]

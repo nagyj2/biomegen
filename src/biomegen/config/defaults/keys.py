@@ -22,6 +22,7 @@ VALUES: Dict[str, Any] = {
     "search_next": "n",  # jump to the next match
     "search_prev": "N",  # jump to the previous match
     "filter_kind": "v",  # cycle the event-kind filter (all, founding, secession, ...)
+    "filter_salience": "m",  # toggle major only <-> major and minor events
     "filter_years": "y",  # ask for a year range, e.g. 100-300
     "filter_realm": "p",  # ask for a realm name to keep
     "filter_clear": "c",  # drop every filter

@@ -36,6 +36,7 @@ class Ledger:
         location: tuple[int, int] = NO_LOCATION,
         near_poi: int = -1,
         tags: Sequence[str] = (),
+        salience: str = "major",
     ) -> None:
         """Record an event of ``kind`` worded by chronicle row ``row``; skipped when its kind is switched off."""
         if kind not in self._enabled:
@@ -55,6 +56,7 @@ class Ledger:
             near_poi=near_poi,
             template=str(stream.choice(pool)),
             tags=tuple(tags),
+            salience=salience,
         )
         self._pending.append((year, EVENT_KINDS.index(kind), len(self._pending), event))
 

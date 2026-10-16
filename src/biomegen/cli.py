@@ -140,6 +140,12 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="KINDS",
         help="Keep chronicle events of these kinds (comma separated or repeated, e.g. war,battle).",
     )
+    parser.add_argument(
+        "--salience",
+        choices=("major", "all"),
+        default="major",
+        help="Chronicle events to keep: major only (default), or all (major and minor).",
+    )
     parser.add_argument("--from-year", type=int, default=None, help="Keep chronicle events in this year or later.")
     parser.add_argument("--to-year", type=int, default=None, help="Keep chronicle events in this year or earlier.")
     parser.add_argument(
@@ -410,6 +416,7 @@ def _show_chronicle(world: Any, config: Config, args: argparse.Namespace) -> Non
         year_to=args.to_year,
         realm=args.realm,
         text=args.search,
+        salience=args.salience,
     )
     mode = _detect_color() if args.color == "auto" else args.color
     interactive = sys.stdout.isatty() and sys.stdin.isatty() and args.chronicle_format == "text" and not args.no_pager
@@ -427,7 +434,8 @@ def _print_chronicle(world: Any, config: Config, args: argparse.Namespace, chron
     from biomegen.render.chronicle import chronicle_document
     from biomegen.world.chronicle import chronicle_json, chronicle_text, filter_events
 
-    events = filter_events(world, chronicle_filter) if chronicle_filter.active else None
+    kept = filter_events(world, chronicle_filter)
+    events = kept if chronicle_filter.active or len(kept) != len(world.chronicle) else None  # None: the whole chronicle
     if args.chronicle_format == "json":
         print(chronicle_json(world, events))
         return

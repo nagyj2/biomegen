@@ -29,6 +29,7 @@ class ChronicleFilter:
         realm: Keep events involving a realm, fallen or old realm, ruler or settlement whose name contains this text
             (any case); see :func:`event_names`. An expression: ``|`` is or, ``&`` is and (:func:`parse_expression`).
         text: Keep events whose year, kind or text contains this text (any case); also an expression.
+        salience: ``"major"`` keeps major events only (the default); ``"all"`` also keeps minor ones.
     """
 
     kinds: tuple[str, ...] = ()
@@ -36,6 +37,7 @@ class ChronicleFilter:
     year_to: Optional[int] = None
     realm: str = ""
     text: str = ""
+    salience: str = "major"
 
     @property
     def active(self) -> bool:
@@ -121,10 +123,12 @@ def filter_events(world: World, chronicle_filter: ChronicleFilter) -> list[Chron
     kinds = set(chronicle_filter.kinds)
     realm = parse_expression(chronicle_filter.realm)
     text = parse_expression(chronicle_filter.text)
+    show_minor = chronicle_filter.salience == "all"
     return [
         event
         for event in world.chronicle
         if (not kinds or event.kind in kinds)
+        and (show_minor or event.salience == "major")
         and (chronicle_filter.year_from is None or event.year >= chronicle_filter.year_from)
         and (chronicle_filter.year_to is None or event.year <= chronicle_filter.year_to)
         and matches_expression(realm, [name.lower() for name in event_names(world, event)])
@@ -145,6 +149,8 @@ def describe_filter(chronicle_filter: ChronicleFilter) -> str:
         parts.append(f"name {chronicle_filter.realm!r}")
     if chronicle_filter.text:
         parts.append(f"text {chronicle_filter.text!r}")
+    if chronicle_filter.salience == "all":
+        parts.append("major and minor")
     return "  ".join(parts)
 
 
@@ -183,6 +189,7 @@ def chronicle_data(world: World, events: Optional[Sequence[ChronicleEvent]] = No
                 "kind": e.kind,
                 "text": e.text,
                 "tags": list(e.tags),
+                "salience": e.salience,
                 "location": None if e.location == (-1, -1) else list(e.location),
                 "realm_ids": e.realm_ids,
                 "poi_ids": e.poi_ids,

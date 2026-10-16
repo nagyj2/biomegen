@@ -28,6 +28,7 @@ EVENT_KINDS: Tuple[str, ...] = (
     "peace",
     "fall",
 )
+SALIENCES: Tuple[str, ...] = ("major", "minor")  # how noteworthy a chronicle event is; minor is hidden by default
 TRAITS: Tuple[str, ...] = ("aggression", "greed", "trust", "expansionism", "caution")  # a ruler's personality
 NO_LOCATION: Tuple[int, int] = (-1, -1)  # a chronicle event not tied to a cell
 REF_KINDS: Tuple[str, ...] = (
@@ -258,6 +259,7 @@ class ChronicleEvent:
     template: str = ""
     text: str = ""
     tags: Tuple[str, ...] = ()
+    salience: str = "major"  # one of SALIENCES; the derived history emits only major events
     near_poi: int = -1  # the settlement {near} names (same landmass, within history.near_km), -1 when none
     refs: List[Tuple[int, int, str, int]] = field(
         default_factory=list
