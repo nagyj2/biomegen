@@ -16,8 +16,8 @@
 #   walled           (optional) true when a settlement has a wall with a gate where each road arrives
 #   specialized      (settlement tiers) [min, max] how many specialized buildings (production kinds of data/buildings.toml) the
 #                    settlement is chosen to have
-#   ruin_standing    [young, old] share of a ruined settlement's buildings that still stand, just fallen and once old
-#                    (`sites.ruin_erosion_years`); at least one building always stands
+#   ruin_standing    [young, old] share of a ruined settlement's buildings that survive (damaged; the rest are destroyed), just fallen and once old
+#                    (`sites.ruin_erosion_years`); the centre building always survives
 #   ruin_wall_fall   [young, old] share of a ruined settlement's wall that has fallen; its gates are always breached
 #   ruin_extent_share  factor on the extent of a ruin that was this tier, so a big ruin does not overlap its neighbours
 #                    (1 draws it as the settlement was). All three are needed by every tier a ruin may have been
@@ -33,7 +33,7 @@ grows_with_pop = true
 specialized = [4, 5]
 plaza_tiles = 0.25
 walled = true
-ruin_standing = [0.5, 0.1]
+ruin_standing = [0.85, 0.4]
 ruin_wall_fall = [0.3, 0.7]
 ruin_extent_share = 0.5
 
@@ -46,7 +46,7 @@ grows_with_pop = true
 specialized = [3, 4]
 plaza_tiles = 0.18
 walled = true
-ruin_standing = [0.5, 0.1]
+ruin_standing = [0.85, 0.4]
 ruin_wall_fall = [0.3, 0.7]
 ruin_extent_share = 0.7
 
@@ -58,7 +58,7 @@ rows_per_tile = 22
 grows_with_pop = true
 specialized = [2, 3]
 plaza_tiles = 0.12
-ruin_standing = [0.5, 0.1]
+ruin_standing = [0.85, 0.4]
 ruin_wall_fall = [0.3, 0.7]
 ruin_extent_share = 0.9
 
@@ -70,7 +70,7 @@ rows_per_tile = 20
 grows_with_pop = true
 specialized = [1, 2]
 plaza_tiles = 0.08
-ruin_standing = [0.5, 0.1]
+ruin_standing = [0.85, 0.4]
 ruin_wall_fall = [0.3, 0.7]
 ruin_extent_share = 1.0
 
@@ -118,7 +118,7 @@ rows_per_tile = 20
 grows_with_pop = true
 specialized = [1, 1]
 plaza_tiles = 0.05
-ruin_standing = [0.5, 0.1]
+ruin_standing = [0.85, 0.4]
 ruin_wall_fall = [0.3, 0.7]
 ruin_extent_share = 1.0
 

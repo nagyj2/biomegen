@@ -25,6 +25,10 @@ VALUES: Dict[str, Any] = {
     # A building of a ruined settlement that does not survive is destroyed completely: its wall cells and the rest of
     # its footprint each stay rubble with these shares, and the others are bare ground (the terrain shows through).
     "ruin_rubble": {"wall": 0.8, "floor": 0.45},
+    # A building that survives is damaged by how far the ruin has worn (its erosion over ``ruin_erosion``): at full wear
+    # it has ``breaches`` per room, ``crack`` of its floor cracked into rubble, ``strip`` of its furniture gone and
+    # ``roof`` of its rooms unroofed.
+    "ruin_damage": {"breaches": 6.0, "crack": 0.6, "strip": 0.85, "roof": 0.8},
     "coast_margin_rows": 1,  # bare ground kept between a solid structure and any water, in rows
     "street_water_cost": 6.0,  # cost of a street cell over water relative to dry ground (it becomes a bridge)
     "bridge_max_rows": 6,  # the widest water, in rows, a settlement street will bridge

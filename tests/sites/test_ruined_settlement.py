@@ -165,3 +165,31 @@ def test_most_buildings_of_an_old_ruin_are_destroyed(full: Config) -> None:
     labels, count = ndimage.label(roofs(town.outside))
     standing = sum((ruin.cells[labels == i] == int(Cell.WALL)).any() for i in range(1, count + 1))
     assert standing < count / 2
+
+
+def _survivors(ruin: SitePlan, town: SitePlan) -> int:
+    """How many buildings of the standing settlement still have a wall in the ruin."""
+    labels, count = ndimage.label(roofs(town.outside))
+    return sum(bool((ruin.cells[labels == i] == int(Cell.WALL)).any()) for i in range(1, count + 1))
+
+
+def test_an_old_city_ruin_keeps_more_than_its_centre(full: Config) -> None:
+    # The survivor chance is high enough that an old ruin shows several damaged buildings, not the centre alone.
+    town, ruin = _plans(full, "city", fell=None, pop=20000)
+    assert _survivors(ruin, town) >= 3
+
+
+def test_a_young_ruin_keeps_at_least_as_many_buildings_as_an_old_one(full: Config) -> None:
+    town, young = _plans(full, "city", fell=1195, pop=20000)
+    _t, old = _plans(full, "city", fell=None, pop=20000)
+    assert _survivors(young, town) >= _survivors(old, town)
+
+
+def test_a_surviving_building_is_stripped_of_most_of_its_furniture(full: Config) -> None:
+    # Looted and rotted: an old ruin's centre has lost well over half the furniture it had.
+    town, ruin = _plans(full, "city", fell=None, pop=20000)
+    footprint = _centre_footprint(full, town, "city")
+    furniture = (Cell.BED, Cell.TABLE, Cell.CHAIR, Cell.CHEST, Cell.HEARTH, Cell.BARREL, Cell.CRATE, Cell.SHELF)
+    before = np.isin(town.cells[footprint], [int(c) for c in furniture]).sum()
+    after = np.isin(ruin.cells[footprint], [int(c) for c in furniture]).sum()
+    assert before > 0 and after < 0.5 * before

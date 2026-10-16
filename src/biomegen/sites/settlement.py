@@ -892,18 +892,49 @@ def _destroy(
         grid[cy, cx] = int(Cell.TREE) if stream.random() < 0.5 else int(Cell.BUSH)
 
 
+_FURNITURE = tuple(
+    int(cell)
+    for cell in (
+        Cell.BED,
+        Cell.TABLE,
+        Cell.CHAIR,
+        Cell.CHEST,
+        Cell.HEARTH,
+        Cell.BARREL,
+        Cell.CRATE,
+        Cell.SHELF,
+        Cell.BANNER,
+    )
+)
+
+
+def _strip(grid: np.ndarray, lot: Lot, share: float, ctx: SiteContext, index: int) -> None:
+    """Strip ``share`` of a lot's furniture (looted or rotted away), leaving bare floor (a draw per cell)."""
+    window = grid[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width]
+    roll = rng.derive_numpy(ctx.seed, "site.erode", "strip", index).random(window.shape)
+    window[np.isin(window, _FURNITURE) & (roll < share)] = _FLOOR
+
+
 def _damage(ctx: SiteContext, grid: np.ndarray, roofs: np.ndarray, lot: Lot, index: int, stream: random.Random) -> None:
-    """Damage a surviving building: breaches in its walls, cracked floors, trees growing in, a roof over some rooms."""
+    """Damage a surviving building: breaches in its walls, stripped rooms, cracked floors, a roof over few rooms, trees.
+
+    How far it has gone is the ruin's wear, ``fall.erosion`` over the full ``sites.ruin_erosion``; ``sites.ruin_damage``
+    gives the breaches per room, the share of floor cracked, of furniture stripped and of rooms unroofed at full wear.
+    """
     fall = ctx.fall
     assert fall is not None
+    damage = ctx.config.get("sites.ruin_damage")
+    wear = min(1.0, fall.erosion / float(ctx.config.get("sites.ruin_erosion")))
     building = lot.building
-    breach(grid, (lot.x, lot.y, lot.width, lot.height), stream, max(2, round(fall.erosion * len(building.rooms) * 3)))
-    _crack(grid, lot, fall.erosion * float(ctx.config.get("sites.furnish.ruin_crack")), ctx, index)
+    breaches = max(2, round(wear * len(building.rooms) * float(damage["breaches"])))
+    breach(grid, (lot.x, lot.y, lot.width, lot.height), stream, breaches)
+    _strip(grid, lot, wear * float(damage["strip"]), ctx, index)
+    _crack(grid, lot, wear * float(damage["crack"]), ctx, index)
     window = (slice(lot.y, lot.y + lot.height), slice(lot.x, lot.x + lot.width))
     roofs[window][building.footprint] = False
     covered = np.zeros(building.footprint.shape, dtype=bool)
     for rx, ry, rw, rh in building.rooms:
-        if stream.random() >= fall.erosion:
+        if stream.random() >= wear * float(damage["roof"]):
             covered[ry : ry + rh, rx : rx + rw] = True
     roofs[window] |= covered & building.footprint
     free = [(cx + lot.x, cy + lot.y) for cy, cx in np.argwhere((grid[window] == _FLOOR) & ~covered).tolist()]
