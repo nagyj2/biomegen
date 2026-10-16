@@ -85,6 +85,7 @@ _SITE_ROW = {
     "ruin_standing": "unit_pair",
     "ruin_wall_fall": "unit_pair",
     "ruin_extent_share": "positive",
+    "dress": "text",
 }
 _POI_ROW = {
     "priority": "rank",
@@ -370,7 +371,10 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     ),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
-    "sites": (_SITE_ROW, frozenset({"plaza_tiles", "walled", "ruin_standing", "ruin_wall_fall", "ruin_extent_share"})),
+    "sites": (
+        _SITE_ROW,
+        frozenset({"plaza_tiles", "walled", "ruin_standing", "ruin_wall_fall", "ruin_extent_share", "dress"}),
+    ),
     "pois": (_POI_ROW, _POI_OPTIONAL),
     "poi_fates": (_POI_FATE_ROW, frozenset()),
     "free_fates": (_FREE_FATE_ROW, frozenset()),

@@ -297,10 +297,12 @@ def test_a_site_row_must_name_an_existing_furniture_set() -> None:
 
 
 def test_every_poi_kind_has_a_site_row_and_a_marker() -> None:
-    # Each kind in pois.toml needs a site row and a map marker, or it could not be zoomed into or drawn.
+    # Each kind in pois.toml needs a site row, and a map marker unless its row hides it (`marker = false`), or it could
+    # not be zoomed into or drawn.
     cfg = get_defaults()
-    assert set(cfg["tables"]["pois"]) <= set(cfg["tables"]["sites"])
-    assert set(cfg["tables"]["pois"]) <= set(cfg["render"]["markers"])
+    pois = cfg["tables"]["pois"]
+    assert set(pois) <= set(cfg["tables"]["sites"])
+    assert {kind for kind, row in pois.items() if row.get("marker", True)} <= set(cfg["render"]["markers"])
 
 
 @pytest.mark.parametrize(

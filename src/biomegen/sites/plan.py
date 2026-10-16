@@ -18,7 +18,7 @@ from ..config.model import Config
 from ..world.entities import POI
 from ..world.tile import Cell
 from ..world.world import World
-from . import battlefield, boat, camp, settlement, structure  # noqa: F401  (imported for their @layout registrations)
+from . import battlefield, boat, camp, homestead, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
 from .geometry import SiteGeometry, site_geometry, site_row_for
 from .layout import LAYOUTS, Fall, SiteContext
@@ -100,6 +100,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     key = (
         poi.kind,
         poi.purpose,
+        poi.style,
         poi.ruin_of,
         poi.x,
         poi.y,
@@ -135,6 +136,7 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         age_years=age_years,
         purpose=poi.purpose,
         fall=_fall(config, row, age_years) if poi.kind == "ruin" and "ruin_standing" in row else None,
+        dress=str(row.get("dress", "")),
     )
     built = LAYOUTS[row["layout"]](context)
     if built is None and context.fall is not None:  # no room for the settlement: a single fallen building instead

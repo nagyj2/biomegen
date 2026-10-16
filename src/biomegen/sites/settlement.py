@@ -758,13 +758,21 @@ def _ensure_house(
     return None
 
 
-def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarray, centre: Point) -> Optional[Lot]:
+def _mill(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    ground: np.ndarray,
+    centre: Point,
+    stream: Optional[random.Random] = None,
+) -> Optional[Lot]:
     """Build a mill for a river settlement: a house beside the river, a water wheel set into it and an axle between.
 
     The house goes on the free ground nearest the plaza within ``mill.reach`` rows of the river, its door joined to the
     nearest street, and the wheel turns in the river on whichever side of the house the bank allows (see
     :func:`_wheel_geometry`). Returns the house as a lot (so it is roofed and may have storeys), or None when the extent
-    has no river beside free ground that takes a wheel.
+    has no river beside free ground that takes a wheel. ``stream`` draws the house (default: the settlement's mill
+    stream); a homestead passes its own.
     """
     river = ctx.patch.river
     streets = np.isin(grid, _STREET)
@@ -784,7 +792,7 @@ def _mill(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, ground: np.ndarra
         (((x - cx) / ctx.aspect) ** 2 + (y - cy) ** 2, y, x) for y, x in np.argwhere(fits & touches).tolist()
     )[:_MILL_TRIES]
     _, street_at = ndimage.distance_transform_edt(~streets, sampling=sampling, return_indices=True)
-    stream = rng.derive(ctx.seed, "site.layout", "mill")
+    stream = stream or rng.derive(ctx.seed, "site.layout", "mill")
     spec = _spec(ctx)
     for _, mid_y, mid_x in spots:
         x0, y0 = mid_x - width // 2, mid_y - height // 2

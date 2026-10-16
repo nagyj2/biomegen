@@ -404,3 +404,16 @@ building = "fishery"
 names = ["{n} Fishery", "{n} Landing"]
 hooks_homestead = ["Nets hang drying outside {name}.", "{name} is a hut, a jetty and a boat pulled up on the shingle."]
 hooks_homestead_near = ["Fish from {name} reaches {near} by cart."]
+
+# A homestead is one building placed by the styles pass (a row of `poi_styles` decides where and what it is); this row carries
+# what is shared. Its names, hooks and counts come from its style. It draws no marker at any scale.
+[pois.homestead]
+priority = 90
+source = "style"
+min_spacing_km = 60.0
+floors = 1
+owner = "realm"
+dynamic = true
+connect = false
+marker = false
+names = ["{n} Homestead"]

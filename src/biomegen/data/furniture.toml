@@ -149,3 +149,35 @@ chest = 2.0
 barrel = 4.0
 crate = 2.0
 rock = 2.0
+
+# A homestead's house is furnished as a home; `yard` is what lies about outside it (a homestead's dressing).
+[furniture.homestead.hall]
+table = 14.0
+chair = 14.0
+hearth = 10.0
+shelf = 8.0
+chest = 3.0
+
+[furniture.homestead.kitchen]
+hearth = 14.0
+table = 10.0
+barrel = 10.0
+crate = 8.0
+shelf = 8.0
+
+[furniture.homestead.bedroom]
+bed = 18.0
+chest = 8.0
+shelf = 6.0
+chair = 4.0
+
+[furniture.homestead.storage]
+barrel = 12.0
+crate = 12.0
+chest = 6.0
+shelf = 6.0
+
+[furniture.homestead.yard]
+barrel = 10.0
+crate = 10.0
+cargo = 3.0

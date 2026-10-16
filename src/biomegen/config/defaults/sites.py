@@ -83,6 +83,25 @@ VALUES: Dict[str, Any] = {
         "graves": [8, 18],  # burial mounds laid out in rows in one corner of the field
         "banners": 2,  # the armies' standards, one at each end of the field
     },
+    # A homestead: one house of ``building_rows`` rows (``width`` times as wide as the cell aspect makes it square)
+    # beside a yard track ``track_rows`` rows long each way, dressed within ``yard_reach`` [columns, rows] of the house
+    # and ``trees`` of the free ground wooded. ``dress`` gives each dressing (a site row's ``dress`` key): ``hedge``
+    # rings the yard, ``spoil`` heaps that many rock and rubble cells, ``wagons`` and ``supplies`` (the family's
+    # ``yard`` role) are counts, ``trees`` replaces the wooded share.
+    "homestead": {
+        "building_rows": [5, 6],
+        "width": 1.5,
+        "track_rows": 3,
+        "yard_reach": [8, 4],
+        "trees": 0.02,
+        "dress": {
+            "farm": {"hedge": True, "wagons": 1, "supplies": 4},
+            "mill": {"supplies": 3},
+            "mine": {"spoil": 14, "wagons": 1, "supplies": 3},
+            "lodge": {"trees": 0.3, "supplies": 5},
+            "fishery": {"supplies": 4},
+        },
+    },
     "boat": {"cabin_share": 0.25},  # the deckhouse is this share of the deck's length
     "cache_size": 256,  # site plans kept in memory
 }

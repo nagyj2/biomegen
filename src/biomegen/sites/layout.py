@@ -65,6 +65,7 @@ class SiteContext:
         age_years: Years since the POI fell (a ruin fell in with them); None when it is undated or still stands.
         purpose: The POI's purpose (a camp's: founding, bandit or army), which a layout may dress differently.
         fall: Set for a ruin of a settlement tier: the settlement layout then lays the settlement and lets it fall.
+        dress: A homestead's dressing (the ``dress`` key of its site row: farm, mill, mine, lodge, fishery, or none).
     """
 
     kind: str
@@ -81,6 +82,7 @@ class SiteContext:
     age_years: Optional[int] = None
     purpose: str = ""
     fall: Optional[Fall] = None
+    dress: str = ""
 
     def weights(self, role: str) -> list[tuple[Cell, float]]:
         """The furniture weights of a room role (empty: the role is left bare)."""

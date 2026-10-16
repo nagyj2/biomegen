@@ -20,6 +20,7 @@
 #   ruin_extent_share  factor on the extent of a ruin that was this tier, so a big ruin does not overlap its neighbours
 #                    (1 draws it as the settlement was). All three are needed by every tier a ruin may have been
 #                    (tables.pois.ruin origins); tuned by eye
+#   dress            (optional) a homestead row's dressing: farm, mill, mine, lodge or fishery (see `sites.homestead.dress`)
 
 [sites.capital]
 furniture = "home"
@@ -158,3 +159,54 @@ layout = "shrine"
 extent_tiles = [0.6, 0.5]
 rows_per_tile = 24
 grows_with_pop = false
+
+# A homestead is one house in a yard; its look follows its `style` (POI.style): a row named `homestead_<style>` replaces the
+# plain `homestead` row. `dress` picks the dressing (`sites.homestead.dress`): a farm's hedge and wagon, a mill's water wheel, a
+# mine's spoil, a lodge's woods, a fishery's pier and boats. Sizes are in tiles; the yard needs room round the house. A mill and a
+# fishery are wider, so their extent reaches into the neighbouring river or sea tile (a wheel or pier needs water in the extent).
+[sites.homestead]
+furniture = "homestead"
+layout = "homestead"
+extent_tiles = [0.7, 0.55]
+rows_per_tile = 24
+grows_with_pop = false
+
+[sites.homestead_farm]
+furniture = "homestead"
+layout = "homestead"
+extent_tiles = [0.8, 0.6]
+rows_per_tile = 24
+grows_with_pop = false
+dress = "farm"
+
+[sites.homestead_mill]
+furniture = "homestead"
+layout = "homestead"
+extent_tiles = [1.6, 0.9]
+rows_per_tile = 24
+grows_with_pop = false
+dress = "mill"
+
+[sites.homestead_mine]
+furniture = "homestead"
+layout = "homestead"
+extent_tiles = [0.8, 0.6]
+rows_per_tile = 24
+grows_with_pop = false
+dress = "mine"
+
+[sites.homestead_lodge]
+furniture = "homestead"
+layout = "homestead"
+extent_tiles = [0.8, 0.6]
+rows_per_tile = 24
+grows_with_pop = false
+dress = "lodge"
+
+[sites.homestead_fishery]
+furniture = "homestead"
+layout = "homestead"
+extent_tiles = [1.6, 0.9]
+rows_per_tile = 24
+grows_with_pop = false
+dress = "fishery"

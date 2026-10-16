@@ -59,6 +59,7 @@ LABELS: frozenset[str] = frozenset(
         "site.shaft",  # stair positions (floor-independent, so floors stack)
         "site.furnish",  # furniture scatter, keyed on the site seed and floor
         "site.erode",  # ruin erosion: which walls collapse and floors crack into rubble
+        "site.homestead",  # a homestead's house and dressing, keyed on the site seed (a grown hamlet rebuilds it)
         "roads",  # road graph edge selection
         "roads.meander",  # per-edge road meander noise
         "naming",  # name/lore generation

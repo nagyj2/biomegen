@@ -85,10 +85,13 @@ class SiteGeometry:
         return left - 0.5 < tile_x < right + 0.5 and top - 0.5 < tile_y < bottom + 0.5
 
 
-def site_row_name(config: Config, kind: str, purpose: str = "") -> str:
-    """Return the ``tables.sites`` row that draws a POI: ``<kind>_<purpose>`` when that row exists, else ``kind``."""
-    named = f"{kind}_{purpose}"
-    return named if purpose and config.get(f"tables.sites.{named}", None) is not None else kind
+def site_row_name(config: Config, kind: str, variant: str = "") -> str:
+    """Return the ``tables.sites`` row that draws a POI: ``<kind>_<variant>`` when that row exists, else ``kind``.
+
+    The variant is a camp's purpose or a homestead's style.
+    """
+    named = f"{kind}_{variant}"
+    return named if variant and config.get(f"tables.sites.{named}", None) is not None else kind
 
 
 def site_row_for(config: Config, poi: POI) -> str:
@@ -99,7 +102,7 @@ def site_row_for(config: Config, poi: POI) -> str:
     """
     if poi.kind == "ruin" and poi.ruin_of and config.get(f"tables.sites.{poi.ruin_of}", None) is not None:
         return poi.ruin_of
-    return site_row_name(config, poi.kind, poi.purpose)
+    return site_row_name(config, poi.kind, poi.purpose or poi.style)
 
 
 def _scale(poi: POI, config: Config, row: dict) -> float:
