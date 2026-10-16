@@ -11,8 +11,14 @@ from __future__ import annotations
 import random
 from typing import Optional
 
+import numpy as np
+from scipy import ndimage
+
 from ..config.model import Config
 from ..world.tile import DRESS_BASE, DRESS_SLOTS, Cell
+from .carve import Rect, fit_rect
+from .furnish import weighted_choice
+from .layout import SiteContext
 
 CONDITIONS = ("standing", "ruin")
 
@@ -70,3 +76,145 @@ def variant_of_cell(config: Config, cell: int) -> Optional[tuple[str, str]]:
             if "cell" not in row and int(row["rank"]) == rank:
                 return dress, name
     return None
+
+
+# --- laying a dressing ----------------------------------------------------------------------------------------------
+# What a homestead (and later a settlement) lays round a building: a yard, a wheat field or a felled-timber clearing
+# beside it, spoil, wagons, supplies and woods. ``rect`` is the building's outer ``(x, y, width, height)``. Every draw
+# is on the caller's stream, in a fixed order, so a building and its dressing are a pure function of the site seed.
+
+_VOID = int(Cell.VOID)
+_PATH = int(Cell.PATH)
+_BRIDGE = int(Cell.BRIDGE)
+_STREET = (_PATH, _BRIDGE)
+_SOWN = 0.94  # share of a wheat plot that is sown; the rest stays bare
+
+
+def yard(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, rect: Rect) -> np.ndarray:
+    """Bool grid: the free dry cells within ``sites.homestead.yard_reach`` ``[columns, rows]`` of the building."""
+    reach_x, reach_y = (int(v) for v in ctx.config.get("sites.homestead.yard_reach"))
+    x, y, width, height = rect
+    near = np.zeros(grid.shape, dtype=bool)
+    near[max(0, y - reach_y) : y + height + reach_y, max(0, x - reach_x) : x + width + reach_x] = True
+    return near & dry & (grid == _VOID)
+
+
+def sample(mask: np.ndarray, count: int, stream: random.Random) -> list[tuple[int, int]]:
+    """Up to ``count`` cells of ``mask`` as ``(x, y)``, drawn from the row-major list so the result is deterministic."""
+    cells = [(int(x), int(y)) for y, x in np.argwhere(mask).tolist()]
+    return stream.sample(cells, min(count, len(cells)))
+
+
+def supplies(ctx: SiteContext, grid: np.ndarray, free: np.ndarray, count: int, stream: random.Random) -> None:
+    """Scatter barrels, crates and the like (the family's ``yard`` role) over the free cells of ``free``."""
+    table = ctx.weights("yard")
+    if not table:
+        return
+    for x, y in sample(free & (grid == _VOID), count, stream):
+        grid[y, x] = int(weighted_choice(stream, table))
+
+
+def plot(
+    ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, rect: Rect, size: list[int]
+) -> Optional[Rect]:
+    """Return the free dry rectangle nearest the building of about ``size`` ``[rows, columns]``, or None.
+
+    It keeps a cell clear of the building and the paths, and shrinks by quarters (down to half) when the full size does
+    not fit, so a small extent still gets a smaller plot.
+    """
+    near = ndimage.binary_dilation(roofs | np.isin(grid, _STREET), iterations=1)
+    free = dry & (grid == _VOID) & ~near
+    x, y, width, height = rect
+    middle = (x + width // 2, y + height // 2)
+    for share in (1.0, 0.75, 0.5):
+        found = fit_rect(free, max(2, round(size[0] * share)), max(4, round(size[1] * share)), middle, ctx.aspect)
+        if found is not None:
+            return found
+    return None
+
+
+def field(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    roofs: np.ndarray,
+    rect: Rect,
+    size: list[int],
+    stream: random.Random,
+) -> None:
+    """Sow a wheat field on the plot nearest the building; a few cells are left bare so the edge is not ruled."""
+    found = plot(ctx, grid, dry, roofs, rect, size)
+    if found is None:
+        return
+    x0, y0, width, height = found
+    for y in range(y0, y0 + height):
+        for x in range(x0, x0 + width):
+            if stream.random() < _SOWN:
+                grid[y, x] = int(Cell.WHEAT)
+
+
+def clearing(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    roofs: np.ndarray,
+    rect: Rect,
+    size: list[int],
+    logs: int,
+    stream: random.Random,
+) -> None:
+    """Clear a working area for felled timber: bare ground with ``logs`` felled trunks lying along its rows."""
+    found = plot(ctx, grid, dry, roofs, rect, size)
+    if found is None:
+        return
+    x0, y0, width, height = found
+    grid[y0 : y0 + height, x0 : x0 + width] = int(Cell.FLOOR)
+    rows = stream.sample(range(y0, y0 + height), min(logs, height))
+    for y in sorted(rows):
+        length = stream.randint(max(2, width // 3), max(3, width - 2))
+        start = x0 + stream.randint(0, width - length)
+        grid[y, start : start + length] = int(Cell.LOG)
+
+
+def spoil(grid: np.ndarray, free: np.ndarray, count: int, stream: random.Random) -> None:
+    """Heap spoil (rock and rubble) in a cluster on one side of the free cells of ``free``."""
+    cells = [(int(x), int(y)) for y, x in np.argwhere(free & (grid == _VOID)).tolist()]
+    if not cells:
+        return
+    ax, ay = stream.choice(cells)
+    cells.sort(key=lambda c: ((c[0] - ax) / 2.0) ** 2 + (c[1] - ay) ** 2)
+    for x, y in cells[:count]:
+        grid[y, x] = int(Cell.ROCK) if stream.random() < 0.5 else int(Cell.RUBBLE)
+
+
+def wagon(grid: np.ndarray, free: np.ndarray, stream: random.Random) -> None:
+    """Park one wagon on a free cell."""
+    for x, y in sample(free & (grid == _VOID), 1, stream):
+        grid[y, x] = int(Cell.WAGON)
+
+
+def woods(grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, share: float, stream: random.Random) -> None:
+    """Plant trees and bushes over ``share`` of the free ground, clear of the buildings and the paths."""
+    near = ndimage.binary_dilation(roofs | np.isin(grid, _STREET), iterations=1)
+    free = dry & (grid == _VOID) & ~near
+    for x, y in sample(free, int(free.sum() * share), stream):
+        grid[y, x] = int(Cell.TREE) if stream.random() < 0.7 else int(Cell.BUSH)
+
+
+def lay_dress(
+    ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, rect: Rect, stream: random.Random
+) -> None:
+    """Dress a building for its style: ``ctx.dress`` names a row of ``sites.homestead.dress``."""
+    settings = ctx.config.get("sites.homestead.dress").get(ctx.dress, {})
+    if "field" in settings:
+        field(ctx, grid, dry, roofs, rect, settings["field"], stream)
+    if "clearing" in settings:
+        clearing(ctx, grid, dry, roofs, rect, settings["clearing"], int(settings.get("logs", 0)), stream)
+    free = yard(ctx, grid, dry, rect)
+    if int(settings.get("spoil", 0)):
+        spoil(grid, free, int(settings["spoil"]), stream)
+    for _ in range(int(settings.get("wagons", 0))):
+        wagon(grid, free, stream)
+    supplies(ctx, grid, yard(ctx, grid, dry, rect), int(settings.get("supplies", 0)), stream)
+    share = float(settings.get("trees", ctx.config.get("sites.homestead.trees")))
+    woods(grid, dry, roofs, share, stream)

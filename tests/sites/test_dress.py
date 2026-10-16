@@ -81,3 +81,29 @@ def test_a_dress_variant_is_ground_cover_when_a_plan_is_drawn_smaller() -> None:
 
 def test_the_legend_names_a_dress_variant_by_its_label() -> None:
     assert cell_name(_CONFIG, DRESS_BASE) == "tilled field"
+
+
+# --- laying a dressing (moved out of homestead.py) ---------------------------------------------------------------
+
+
+def test_a_wheat_field_is_sown_with_the_full_wheat_cell_for_now() -> None:
+    # Task 10 moves the dressing without changing it: a field still sows the one wheat cell (variants come in task 15).
+    from biomegen.sites import site_plan
+    from tests.sites.conftest import add_poi, flat_world
+
+    world = flat_world(14, 10)
+    poi = add_poi(world, "homestead", 7, 5, style="farm")
+    plan = site_plan(poi, 0, _CONFIG, world)
+    assert plan is not None and (plan.cells == int(Cell.WHEAT)).any()
+
+
+def test_the_dressing_draws_are_a_pure_function_of_the_site_seed() -> None:
+    from biomegen.sites import clear_cache, site_plan
+    from tests.sites.conftest import add_poi, flat_world
+
+    world = flat_world(14, 10)
+    poi = add_poi(world, "homestead", 7, 5, style="lodge", interior_seed=11)
+    first = site_plan(poi, 0, _CONFIG, world)
+    clear_cache()
+    second = site_plan(poi, 0, _CONFIG, world)
+    assert first is not None and second is not None and (first.cells == second.cells).all()
