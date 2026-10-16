@@ -6,6 +6,7 @@ import copy
 
 import numpy as np
 import pytest
+from scipy import ndimage
 
 from biomegen.config.model import Config
 from biomegen.sites import SitePlan, site_geometry, site_plan
@@ -54,13 +55,13 @@ def test_a_ruin_has_fewer_roofs_than_the_town_it_was(full: Config) -> None:
 @pytest.mark.parametrize("seed", range(12))
 def test_at_least_one_building_always_stands(full: Config, seed: int) -> None:
     _town, ruin = _plans(full, "village", fell=None, seed=seed, pop=300)
-    assert roofs(ruin.outside).any()
+    assert (ruin.cells == int(Cell.WALL)).any()
 
 
-def test_a_young_ruin_keeps_more_roofs_than_an_old_one(full: Config) -> None:
+def test_a_young_ruin_keeps_more_floor_than_an_old_one(full: Config) -> None:
     _t, young = _plans(full, "town", fell=1195)
     _t, old = _plans(full, "town", fell=None)
-    assert roofs(young.outside).sum() > roofs(old.outside).sum()
+    assert (young.cells == int(Cell.FLOOR)).sum() > (old.cells == int(Cell.FLOOR)).sum()
 
 
 def test_every_gate_of_a_walled_ruin_is_breached(full: Config) -> None:
@@ -116,15 +117,51 @@ def test_an_origin_with_no_site_row_falls_back_to_the_single_building(config: Co
     assert site_plan(ruin, 0, config, world) is not None
 
 
-@pytest.mark.parametrize("tier", ["hamlet", "village", "town", "city", "capital"])
+TIERS = ["hamlet", "village", "town", "city", "capital"]
+
+
+def _centre_footprint(config: Config, town: SitePlan, tier: str) -> np.ndarray:
+    """The cells of the tier's centre building, seen from outside in the standing settlement."""
+    return town.outside == roof_cell(config, tier_centre(config, tier))
+
+
+@pytest.mark.parametrize("tier", TIERS)
 @pytest.mark.parametrize("seed", range(6))
-def test_the_centre_building_always_stands_in_a_ruin(full: Config, tier: str, seed: int) -> None:
-    # The stone centre outlasts the houses: however old the ruin or the draws, its tier's centre roof is there.
-    _town, ruin = _plans(full, tier, fell=None, seed=seed, pop=300)
-    assert roof_cell(full, tier_centre(full, tier)) in ruin.outside
+def test_the_centre_building_always_survives_a_ruin(full: Config, tier: str, seed: int) -> None:
+    # However old the ruin or the draws, the stone centre keeps walls standing where it stood.
+    town, ruin = _plans(full, tier, fell=None, seed=seed, pop=300)
+    assert (ruin.cells[_centre_footprint(full, town, tier)] == int(Cell.WALL)).any()
 
 
-def test_a_ruin_shows_the_centre_while_most_houses_fell(full: Config) -> None:
-    # A fully eroded town keeps its hall roofed (standing), and has lost more roofs than the town it was kept.
+@pytest.mark.parametrize("tier", TIERS)
+def test_the_surviving_centre_is_damaged_not_whole(full: Config, tier: str) -> None:
+    # A survivor is damaged but not destroyed: it keeps walls, yet its cells are not as they were in the settlement.
+    town, ruin = _plans(full, tier, fell=900, pop=300)
+    footprint = _centre_footprint(full, town, tier)
+    assert not np.array_equal(ruin.cells[footprint], town.cells[footprint])
+
+
+def test_a_building_is_either_a_damaged_survivor_or_wholly_gone(full: Config) -> None:
+    # No half measures: of each building of the town, the ruin keeps its walls (a survivor) or no wall and no floor at
+    # all (destroyed, with rubble where it stood).
     town, ruin = _plans(full, "town", fell=None)
-    assert roof_cell(full, "hall") in ruin.outside and roofs(ruin.outside).sum() < roofs(town.outside).sum()
+    labels, count = ndimage.label(roofs(town.outside))
+    walls = [(ruin.cells[labels == i] == int(Cell.WALL)).any() for i in range(1, count + 1)]
+    floors = [(ruin.cells[labels == i] == int(Cell.FLOOR)).any() for i in range(1, count + 1)]
+    assert all(wall or not floor for wall, floor in zip(walls, floors, strict=True))
+
+
+def test_a_destroyed_building_leaves_rubble_in_its_place(full: Config) -> None:
+    town, ruin = _plans(full, "town", fell=None)
+    labels, count = ndimage.label(roofs(town.outside))
+    gone = [
+        i for i in range(1, count + 1) if not (ruin.cells[labels == i] == int(Cell.WALL)).any()
+    ]  # buildings with no wall left
+    assert gone and all((ruin.cells[labels == i] == RUBBLE).any() for i in gone)
+
+
+def test_most_buildings_of_an_old_ruin_are_destroyed(full: Config) -> None:
+    town, ruin = _plans(full, "town", fell=None)
+    labels, count = ndimage.label(roofs(town.outside))
+    standing = sum((ruin.cells[labels == i] == int(Cell.WALL)).any() for i in range(1, count + 1))
+    assert standing < count / 2

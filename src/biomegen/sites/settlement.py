@@ -862,49 +862,84 @@ def _crack(grid: np.ndarray, lot: Lot, share: float, ctx: SiteContext, index: in
     window[(window == _FLOOR) & (roll < share)] = _RUBBLE
 
 
+def _destroy(
+    ctx: SiteContext,
+    grid: np.ndarray,
+    roofs: np.ndarray,
+    uppers: list[np.ndarray],
+    lot: Lot,
+    index: int,
+    stream: random.Random,
+) -> None:
+    """Destroy a building completely: its footprint becomes rubble and bare ground, with no roof and no upper storey.
+
+    Wall cells (and the door) and the rest of the footprint each stay rubble with a share of ``sites.ruin_rubble``; the
+    others are bare, so the terrain shows through. Trees and bushes then grow on one rubble or bare cell in eight.
+    """
+    window = (slice(lot.y, lot.y + lot.height), slice(lot.x, lot.x + lot.width))
+    footprint = lot.building.footprint
+    cells = grid[window]
+    shares = ctx.config.get("sites.ruin_rubble")
+    roll = rng.derive_numpy(ctx.seed, "site.erode", "rubble", index).random(cells.shape)
+    walls = np.isin(cells, (_WALL, _DOOR))
+    share = np.where(walls, float(shares["wall"]), float(shares["floor"]))
+    cells[footprint] = np.where(roll < share, _RUBBLE, _VOID)[footprint]
+    roofs[window][footprint] = False
+    for upper in uppers:
+        upper[window][footprint] = _VOID
+    free = [(cx + lot.x, cy + lot.y) for cy, cx in np.argwhere(footprint & np.isin(cells, (_RUBBLE, _VOID))).tolist()]
+    for cx, cy in stream.sample(free, len(free) // 8):
+        grid[cy, cx] = int(Cell.TREE) if stream.random() < 0.5 else int(Cell.BUSH)
+
+
+def _damage(ctx: SiteContext, grid: np.ndarray, roofs: np.ndarray, lot: Lot, index: int, stream: random.Random) -> None:
+    """Damage a surviving building: breaches in its walls, cracked floors, trees growing in, a roof over some rooms."""
+    fall = ctx.fall
+    assert fall is not None
+    building = lot.building
+    breach(grid, (lot.x, lot.y, lot.width, lot.height), stream, max(2, round(fall.erosion * len(building.rooms) * 3)))
+    _crack(grid, lot, fall.erosion * float(ctx.config.get("sites.furnish.ruin_crack")), ctx, index)
+    window = (slice(lot.y, lot.y + lot.height), slice(lot.x, lot.x + lot.width))
+    roofs[window][building.footprint] = False
+    covered = np.zeros(building.footprint.shape, dtype=bool)
+    for rx, ry, rw, rh in building.rooms:
+        if stream.random() >= fall.erosion:
+            covered[ry : ry + rh, rx : rx + rw] = True
+    roofs[window] |= covered & building.footprint
+    free = [(cx + lot.x, cy + lot.y) for cy, cx in np.argwhere((grid[window] == _FLOOR) & ~covered).tolist()]
+    for cx, cy in stream.sample(free, len(free) // 8):
+        grid[cy, cx] = int(Cell.TREE) if stream.random() < 0.5 else int(Cell.BUSH)
+
+
 def _fall(
     ctx: SiteContext,
     grid: np.ndarray,
     roofs: np.ndarray,
+    uppers: list[np.ndarray],
     lots: list[Lot],
     wall: tuple[list[Point], list[Point]],
 ) -> None:
-    """Let a ruined settlement fall: most buildings fall in, a few stand, the wall breaks and its gates open.
+    """Let a ruined settlement fall: most buildings are destroyed, a few survive damaged, the wall breaks, gates open.
 
-    A building stands with chance ``ctx.fall.standing`` (the centre building always does: the stone hall outlasts the
-    houses; with none, the lot a seeded draw picks). A fallen one has
-    breaches, cracked floors, trees growing in and a roof only over the rooms that kept it; a standing one has a few
-    cracks. Wall stretches fall until ``ctx.fall.wall`` of the wall is down, and every gate becomes rubble. The draws
-    use their own streams, so the streets and lots are exactly the settlement's.
+    A building survives with chance ``ctx.fall.standing`` (the centre building always does: the stone hall outlasts the
+    houses; with none, the lot a seeded draw picks). A survivor is damaged (:func:`_damage`) and every other building
+    is destroyed completely (:func:`_destroy`: rubble and bare ground where it stood). Wall stretches fall until
+    ``ctx.fall.wall`` of the wall is down, and every gate becomes rubble. The draws use their own streams, so the
+    streets and lots are exactly the settlement's.
     """
     fall = ctx.fall
     assert fall is not None
     stream = rng.derive(ctx.seed, "site.erode", "settlement")
-    standing = {index for index in range(len(lots)) if stream.random() < fall.standing}
+    survivors = {index for index in range(len(lots)) if stream.random() < fall.standing}
     if lots:
         pick = stream.randrange(len(lots))  # always drawn, so the stream stays aligned
         civic = [index for index, lot in enumerate(lots) if kind_row(ctx.config, lot.kind)["function"] == "civic"]
-        standing.add(civic[0] if civic else pick)
-    crack = fall.erosion * float(ctx.config.get("sites.furnish.ruin_crack"))
+        survivors.add(civic[0] if civic else pick)
     for index, lot in enumerate(lots):
-        if index in standing:
-            _crack(grid, lot, crack * float(ctx.config.get("sites.furnish.ruin_standing_crack")), ctx, index)
-            continue
-        building = lot.building
-        breach(
-            grid, (lot.x, lot.y, lot.width, lot.height), stream, max(2, round(fall.erosion * len(building.rooms) * 3))
-        )
-        _crack(grid, lot, crack, ctx, index)
-        window = (slice(lot.y, lot.y + lot.height), slice(lot.x, lot.x + lot.width))
-        roofs[window][building.footprint] = False
-        covered = np.zeros(building.footprint.shape, dtype=bool)
-        for rx, ry, rw, rh in building.rooms:
-            if stream.random() >= fall.erosion:
-                covered[ry : ry + rh, rx : rx + rw] = True
-        roofs[window] |= covered & building.footprint
-        free = [(cx + lot.x, cy + lot.y) for cy, cx in np.argwhere((grid[window] == _FLOOR) & ~covered).tolist()]
-        for cx, cy in stream.sample(free, len(free) // 8):
-            grid[cy, cx] = int(Cell.TREE) if stream.random() < 0.5 else int(Cell.BUSH)
+        if index in survivors:
+            _damage(ctx, grid, roofs, lot, index, stream)
+        else:
+            _destroy(ctx, grid, roofs, uppers, lot, index, stream)
     cells, gates = wall
     for gx, gy in gates:
         grid[gy, gx] = _RUBBLE
@@ -1063,7 +1098,7 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]
         wall = _wall(ctx, grid, dry, town, ends)
     _plant(ctx, grid, dry, roofs, stream, plot_mask)
     if ctx.fall is not None:
-        _fall(ctx, grid, roofs, lots, wall)
+        _fall(ctx, grid, roofs, uppers, lots, wall)
     kinds = _roof_cells(ctx, grid.shape, lots)
     if ctx.floor > 0:
         layer = uppers[ctx.floor - 1] if ctx.floor - 1 < len(uppers) else np.zeros_like(grid)
