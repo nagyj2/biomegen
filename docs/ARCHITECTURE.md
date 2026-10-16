@@ -657,8 +657,11 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   only the visible cells (a `DetailSampler` with `origin` and `shape`). The cursor is one cell `(px, py)`; the tile
   cursor follows the tile under it. Moving past the window leaves for local. Zoom steps out.
 - **Floors.** Floor 0 is the ground and entry level: dungeons descend (`lowest_floor … 0`), towers rise (`0 … top`), and
-  settlements rise too: each tier row has a `floors` range, the buildings nearest the plaza are the tallest, every storey
-  has its ground floor's outline with its own rooms, and the stairs stand on a free floor cell of both floors.
+  settlements rise too: each tier row has a `floors` range and the buildings nearest the plaza are the tallest. An upper
+  storey is cut back (`settlement._storey_rects`, `sites.settlement.upper`): an L or T keeps its outline on the first
+  storey or only one wing (a tower on the building), a rectangle loses a share of its length at one end, and the part
+  cut away shows its kind roof; the stairs stand on a free floor cell of both floors. A settlement has one more level
+  than its storeys, the roof level (`geometry.site_roof_floor`), where every building shows as its kind roof.
   `<` / `>` cycle floors inside a site or on its tiles; entering starts at floor 0.
 - **Cache and overlay.** Plans are memoised per world and config in a bounded cache (`sites.cache_size`), read-only.
   Runtime edits compose on top via `Overlay.apply_interior` (copy-on-write), keyed by the site seed and floor.

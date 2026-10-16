@@ -39,6 +39,11 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
 - An upper floor of a settlement or tower is the ground view with the buildings replaced, the current floor laid over
   all the lower ones: the storey of each building that reaches that floor, `ROOF` over each that does not (and over the
   outline of a lower, wider tower floor). Streets, trees, the wall and its gates stay as on the ground floor, undimmed.
+- A settlement's storeys are cut back as they rise (`_storey_rects`, drawn on `site.layout` `cut`, tunable in
+  `sites.settlement.upper`): an L or T keeps its whole outline on the first upper storey (chance `whole`) and then one wing,
+  the large or the small, so a tall building reads as a tower; a rectangle is shortened along its longer side. The cut part
+  shows the roof of the storey below. The floor above the top storey (`geometry.site_roof_floor`) is the roof level: every
+  building as its kind roof, so a roof hidden by a taller neighbour can be seen.
 
 ## Archetypes
 
