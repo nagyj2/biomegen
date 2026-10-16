@@ -141,16 +141,24 @@ def field(
     rect: Rect,
     size: list[int],
     stream: random.Random,
+    condition: Optional[str] = None,
 ) -> None:
-    """Sow a wheat field on the plot nearest the building; a few cells are left bare so the edge is not ruled."""
+    """Sow a field on the plot nearest the building; a few cells are left bare so the edge is not ruled.
+
+    With a ``condition`` (``standing`` or ``ruin``) each row of the field is one variant of ``tables.dress.field``,
+    for the site's kind (full or harvested, or in a ruin harvested or dead); without, every row is full wheat.
+    """
     found = plot(ctx, grid, dry, roofs, rect, size)
     if found is None:
         return
     x0, y0, width, height = found
     for y in range(y0, y0 + height):
+        cell = int(Cell.WHEAT)
+        if condition is not None:
+            cell = variant_cell(ctx.config, "field", pick_variant(ctx.config, "field", condition, ctx.kind, stream))
         for x in range(x0, x0 + width):
             if stream.random() < _SOWN:
-                grid[y, x] = int(Cell.WHEAT)
+                grid[y, x] = cell
 
 
 def clearing(
@@ -202,12 +210,24 @@ def woods(grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, share: float, st
 
 
 def lay_dress(
-    ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, rect: Rect, stream: random.Random
+    ctx: SiteContext,
+    grid: np.ndarray,
+    dry: np.ndarray,
+    roofs: np.ndarray,
+    rect: Rect,
+    stream: random.Random,
+    *,
+    condition: Optional[str] = None,
+    plant: bool = True,
 ) -> None:
-    """Dress a building for its style: ``ctx.dress`` names a row of ``sites.homestead.dress``."""
+    """Dress a building for its style: ``ctx.dress`` names a row of ``sites.homestead.dress``.
+
+    ``condition`` (``standing`` or ``ruin``) picks the field's variants (None: full wheat); ``plant`` False leaves the
+    woods out (a settlement plants its own).
+    """
     settings = ctx.config.get("sites.homestead.dress").get(ctx.dress, {})
     if "field" in settings:
-        field(ctx, grid, dry, roofs, rect, settings["field"], stream)
+        field(ctx, grid, dry, roofs, rect, settings["field"], stream, condition)
     if "clearing" in settings:
         clearing(ctx, grid, dry, roofs, rect, settings["clearing"], int(settings.get("logs", 0)), stream)
     free = yard(ctx, grid, dry, rect)
@@ -216,5 +236,6 @@ def lay_dress(
     for _ in range(int(settings.get("wagons", 0))):
         wagon(grid, free, stream)
     supplies(ctx, grid, yard(ctx, grid, dry, rect), int(settings.get("supplies", 0)), stream)
-    share = float(settings.get("trees", ctx.config.get("sites.homestead.trees")))
-    woods(grid, dry, roofs, share, stream)
+    if plant:
+        share = float(settings.get("trees", ctx.config.get("sites.homestead.trees")))
+        woods(grid, dry, roofs, share, stream)

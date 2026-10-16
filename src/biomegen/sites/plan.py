@@ -25,6 +25,7 @@ from .kinds import family_weights
 from .layout import LAYOUTS, Fall, SiteContext
 from .patch import read_patch
 from .streets import clear_roads
+from .surroundings import settlement_kinds
 
 
 @dataclass(frozen=True)
@@ -136,6 +137,8 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         fall=_fall(config, row, age_years) if poi.kind == "ruin" and "ruin_standing" in row else None,
         dress=str(row.get("dress", "")),
         tier=poi.ruin_of or poi.kind,
+        kinds=tuple(settlement_kinds(world, config, poi)) if row["layout"] == "settlement" else (),
+        style=poi.style,
     )
     built = LAYOUTS[row["layout"]](context)
     if built is None and context.fall is not None:  # no room for the settlement: a single fallen building instead

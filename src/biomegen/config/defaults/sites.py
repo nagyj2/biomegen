@@ -53,6 +53,7 @@ VALUES: Dict[str, Any] = {
         "rings": [0.4, 0.72],  # ring streets, each at this share of the way from the plaza to the outline
         "ring_gap": 0.3,  # chance a ring street leaves out one of its arcs
         "max_lanes": 80,  # most lanes laid into ground too far from a street
+        "kind_reach_rows": 8,  # a specialized building stands within this many rows of a street (its door joins it)
         # A port (a POI tagged ``port``) builds a harbour when open water lies within ``reach_rows`` rows of the
         # plaza: a pier ``pier_rows`` rows long (columns scale with the cell aspect) from the dry shore nearest the
         # plaza, joined to it by a street, with up to ``boats`` boats of ``boat_length`` by ``boat_beam`` rows moored

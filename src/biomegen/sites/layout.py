@@ -67,6 +67,8 @@ class SiteContext:
         fall: Set for a ruin of a settlement tier: the settlement layout then lays the settlement and lets it fall.
         dress: A homestead's dressing (the ``dress`` key of its site row: farm, mill, mine, lodge, fishery, or none).
         tier: The settlement tier a settlement layout draws: the POI kind, or a ruin's ``ruin_of`` (else empty).
+        kinds: The specialized building kinds a settlement is chosen to have, in placing order (``settlement_kinds``).
+        style: A generated hamlet's style (its first building is that style's kind and is always built), else empty.
     """
 
     kind: str
@@ -85,6 +87,8 @@ class SiteContext:
     fall: Optional[Fall] = None
     dress: str = ""
     tier: str = ""
+    kinds: tuple[str, ...] = ()
+    style: str = ""
 
     def weights(self, role: str) -> list[tuple[Cell, float]]:
         """The furniture weights of a room role (empty: the role is left bare)."""

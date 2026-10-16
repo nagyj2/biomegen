@@ -589,7 +589,7 @@ def test_an_upper_floor_shows_the_kind_roof_not_the_plain_one(config: Config) ->
 
 def test_a_house_row_sets_the_height_of_a_settlement_lot(config: Config) -> None:
     # The house kind's `rows` is the lot height range: no roof is taller than its tallest allowed house.
-    tall = _plan(config, "town")
+    tall = _plan(config, "city", pop=12000)
     short_config = load_config(None)
     short_config.data["sites"]["size_jitter"] = 0.0
     short_config.data["sites"]["pop_scale"] = [1.0, 1.0]
@@ -599,7 +599,7 @@ def test_a_house_row_sets_the_height_of_a_settlement_lot(config: Config) -> None
         labels, _count = ndimage.label(plan.outside == HOUSE_ROOF)
         return max(int(box[0].stop - box[0].start) for box in ndimage.find_objects(labels))
 
-    assert tallest(_plan(short_config, "town")) <= 5 < tallest(tall)
+    assert tallest(_plan(short_config, "city", pop=12000)) <= 5 < tallest(tall)
 
 
 def test_a_settlement_plan_is_deterministic(config: Config) -> None:
