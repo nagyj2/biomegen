@@ -20,7 +20,7 @@ import numpy as np
 from ..config.model import Config
 from ..render.fit import tile_priority
 from ..sampling.detail import SCALE_LOCAL, SCALE_MAP, SCALE_SITE, SCALE_ZOOM
-from ..sites import site_at, site_geometry, site_plan
+from ..sites import site_at, site_floor_range, site_geometry, site_plan, site_roof_floor
 from ..world.entities import POI
 from ..world.tile import WaterType
 from ..world.world import World
@@ -172,8 +172,15 @@ def sync_floor(world: World, config: Config, state: ViewState, previous: object)
     if current != previous:
         state.floor = 0
     elif poi is not None:
-        state.floor = clamp(state.floor, poi.lowest_floor, poi.lowest_floor + poi.floor_count - 1)
+        state.floor = clamp(state.floor, *site_floor_range(poi, config))
     return current
+
+
+def floor_label(poi: POI, config: Config, floor: int) -> str:
+    """Name a floor of a site: ``ground``, ``roofs`` (a settlement's level above its top storey) or its number."""
+    if floor == 0:
+        return "ground"
+    return "roofs" if floor == site_roof_floor(poi, config) else str(floor)
 
 
 def cycle_floor(world: World, config: Config, state: ViewState, delta: int) -> None:
@@ -182,15 +189,16 @@ def cycle_floor(world: World, config: Config, state: ViewState, delta: int) -> N
     if poi is None:
         state.notify("no interior here - move onto a structure to cycle floors")
         return
-    if poi.floor_count <= 1:
+    lowest, highest = site_floor_range(poi, config)
+    if highest <= lowest:
         state.notify(f"{poi.name or poi.kind}: single floor")
         return
-    new = clamp(state.floor + delta, poi.lowest_floor, poi.lowest_floor + poi.floor_count - 1)
+    new = clamp(state.floor + delta, lowest, highest)
     if new == state.floor:
         state.notify("no further floor that way")
         return
     state.floor = new
-    state.notify(f"{poi.name or poi.kind}: floor {new} ({'ground' if new == 0 else new})")
+    state.notify(f"{poi.name or poi.kind}: floor {new} ({floor_label(poi, config, new)})")
 
 
 def step_out(state: ViewState) -> None:

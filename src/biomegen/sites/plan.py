@@ -20,7 +20,7 @@ from ..world.tile import Cell
 from ..world.world import World
 from . import battlefield, boat, camp, homestead, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
-from .geometry import SiteGeometry, site_geometry, site_row_for
+from .geometry import SiteGeometry, site_floor_range, site_geometry, site_row_for
 from .kinds import family_weights
 from .layout import LAYOUTS, Fall, SiteBuilding, SiteContext
 from .patch import read_patch
@@ -96,7 +96,8 @@ def _fall(config: Config, row: dict, age_years: Optional[int]) -> Fall:
 
 def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[SitePlan]:
     """Return the plan of ``poi``'s ``floor`` (clamped to its floors), or None if its kind has no site or no room."""
-    floor = max(poi.lowest_floor, min(int(floor), poi.lowest_floor + poi.floor_count - 1))
+    lowest, highest = site_floor_range(poi, config)
+    floor = max(lowest, min(int(floor), highest))
     cache = _cache(world, config)
     key = (
         poi.kind,

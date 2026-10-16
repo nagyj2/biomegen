@@ -607,3 +607,59 @@ def test_a_settlement_plan_is_deterministic(config: Config) -> None:
     clear_cache()
     second = _plan(config, "town")
     assert np.array_equal(first.cells, second.cells) and np.array_equal(first.outside, second.outside)
+
+
+# --- the roof level -----------------------------------------------------------------------------------------------
+
+
+def test_a_settlement_has_a_roof_level_above_its_top_storey(config: Config) -> None:
+    from biomegen.sites import site_floor_range, site_roof_floor
+
+    world = flat_world(16, 12)
+    poi = add_poi(world, "city", 8, 6, pop=12000, floor_count=3)
+    assert (site_floor_range(poi, config), site_roof_floor(poi, config)) == ((0, 3), 3)
+
+
+def test_a_dungeon_and_a_homestead_have_no_roof_level(config: Config) -> None:
+    from biomegen.sites import site_roof_floor
+
+    world = flat_world(16, 12)
+    assert site_roof_floor(add_poi(world, "homestead", 7, 5), config) is None
+    assert site_roof_floor(add_poi(world, "dungeon", 3, 3, floor_count=2, lowest_floor=-1), config) is None
+
+
+def _ground_and_roofs(config: Config, kind: str, count: int, pop: int):
+    """The ground floor and the roof level (one above the top storey) of a settlement with ``count`` storeys."""
+    world = flat_world(16, 12)
+    poi = add_poi(world, kind, 8, 6, pop=pop, floor_count=count)
+    ground, roof = site_plan(poi, 0, config, world), site_plan(poi, count, config, world)
+    assert ground is not None and roof is not None and roof.floor == count
+    return ground, roof
+
+
+def test_the_roof_level_shows_every_building_as_its_kind_roof(config: Config) -> None:
+    # No building is hidden by a taller neighbour or a storey: the roofs are exactly those seen from outside.
+    ground, roof = _ground_and_roofs(config, "city", 3, 12000)
+    assert np.array_equal(roofs(roof.cells), roofs(ground.outside))
+
+
+def test_the_roof_level_keeps_the_kind_of_each_roof(config: Config) -> None:
+    ground, roof = _ground_and_roofs(config, "city", 3, 12000)
+    assert np.array_equal(roof.cells[roofs(roof.cells)], ground.outside[roofs(ground.outside)])
+
+
+def test_the_roof_level_has_no_rooms(config: Config) -> None:
+    ground, roof = _ground_and_roofs(config, "city", 3, 12000)
+    assert not (roof.cells[roofs(ground.outside)] == FLOOR).any()
+
+
+def test_a_village_roof_level_is_its_outside_roofs(config: Config) -> None:
+    ground, roof = _ground_and_roofs(config, "village", 1, 800)
+    assert np.array_equal(roofs(roof.cells), roofs(ground.outside))
+
+
+def test_asking_past_the_roof_level_gives_the_roof_level(config: Config) -> None:
+    world = flat_world(16, 12)
+    poi = add_poi(world, "town", 8, 6, pop=3000, floor_count=2)
+    roof, beyond = site_plan(poi, 2, config, world), site_plan(poi, 9, config, world)
+    assert roof is not None and beyond is not None and beyond.floor == 2 and np.array_equal(roof.cells, beyond.cells)

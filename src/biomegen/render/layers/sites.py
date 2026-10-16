@@ -15,7 +15,7 @@ import math
 import numpy as np
 
 from ...sampling.detail import SCALE_SITE, DetailSampler
-from ...sites import NO_WALL, OUTSIDE_PRIORITY, SiteGeometry, site_plan, site_pois, wall_index
+from ...sites import NO_WALL, OUTSIDE_PRIORITY, SiteGeometry, site_floor_range, site_plan, site_pois, wall_index
 from ...sites.blit import sample_rect
 from ...world.entities import POI
 from ...world.tile import Cell
@@ -101,7 +101,8 @@ def sites_layer(ctx: LayerContext, grid: CellGrid) -> None:
         row0, col0, span_rows, span_cols = _extent_cells(sampler, geometry)
         if row0 >= sampler.rows or col0 >= sampler.cols or row0 + span_rows <= 0 or col0 + span_cols <= 0:
             continue
-        floor = max(poi.lowest_floor, min(int(ctx.floor), poi.lowest_floor + poi.floor_count - 1)) if inside else 0
+        lowest, highest = site_floor_range(poi, ctx.config)
+        floor = max(lowest, min(int(ctx.floor), highest)) if inside else 0
         found = _plan_of(ctx, poi, floor, inside)
         if found is None:
             continue

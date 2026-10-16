@@ -355,3 +355,33 @@ def test_single_floor_structure_cannot_change_floor(site_config: Config, delta: 
     state = ViewState(cx=5, cy=5)
     cycle_floor(world, site_config, state, delta)
     assert (state.floor, "single floor" in state.last_message) == (0, True)
+
+
+def _village_world():
+    from biomegen.world.entities import POI
+
+    world = make_world(16, 12)
+    world.pois.append(POI(kind="village", x=8, y=6, interior_seed=3, pop=500, civilized=True))
+    return world
+
+
+def test_a_village_can_cycle_up_to_its_roofs(site_config: Config) -> None:
+    # A one-storey settlement still has a roof level above its ground: floor 1 shows every building's roof.
+    state = ViewState(cx=8, cy=6)
+    cycle_floor(_village_world(), site_config, state, 1)
+    assert (state.floor, "roofs" in state.last_message) == (1, True)
+
+
+def test_the_roof_level_is_the_last_floor_of_a_settlement(site_config: Config) -> None:
+    world = _village_world()
+    state = ViewState(cx=8, cy=6)
+    cycle_floor(world, site_config, state, 1)
+    cycle_floor(world, site_config, state, 1)
+    assert (state.floor, "no further floor" in state.last_message) == (1, True)
+
+
+def test_a_dungeon_has_no_roof_level(site_config: Config) -> None:
+    from biomegen.explorer.state import floor_label
+
+    world = _dungeon_world()
+    assert floor_label(world.pois[0], site_config, -1) == "-1"

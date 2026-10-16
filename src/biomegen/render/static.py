@@ -13,7 +13,7 @@ from typing import Optional
 from ..config.model import Config
 from ..sampling.detail import SCALE_SITE, centred_detail_sampler
 from ..sampling.sampler import Sampler
-from ..sites import site_at, site_geometry, site_pois, window_sampler
+from ..sites import site_at, site_floor_range, site_geometry, site_pois, window_sampler
 from ..world.overlay import Overlay
 from ..world.world import World
 from .furniture.frame import build_frame
@@ -110,7 +110,8 @@ def render_detail(
         cols, rows = min(area[0], geometry.cols), min(area[1], geometry.rows)
         origin = (_camera(col, cols, geometry.cols), _camera(row, rows, geometry.rows))
         sampler = window_sampler(world, config, geometry, origin, (rows, cols))
-        floor = max(poi.lowest_floor, min(floor, poi.lowest_floor + poi.floor_count - 1))
+        lowest, highest = site_floor_range(poi, config)
+        floor = max(lowest, min(floor, highest))
     else:
         sampler = centred_detail_sampler(world, config, scale, area[0], area[1], centre)
     grid = build_grid(world, config, view, sampler, overlay, ascii_only, color, floor=floor)

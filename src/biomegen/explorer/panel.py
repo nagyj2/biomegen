@@ -18,7 +18,7 @@ from ..sites.kinds import building_at, building_counts, cell_name
 from ..world.entities import POI
 from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
-from .state import MODE_ONE_TO_ONE, ViewState, poi_under_cursor
+from .state import MODE_ONE_TO_ONE, ViewState, floor_label, poi_under_cursor
 
 _LEGEND_INDENT = 9
 
@@ -159,12 +159,14 @@ def build_panel(
     """Return the info panel as a ``height x width`` grid for the current cursor, view and what is on screen."""
     canvas = _Canvas(height, width, panel_color(config, "fg"), panel_color(config, "bg"))
     dim, head = panel_color(config, "dim"), panel_color(config, "head")
+    poi = poi_under_cursor(world, config, state)
     canvas.text(0, 0, "-" * width, dim)
     island = world.island_name or "(unnamed isle)"
+    floor_text = str(state.floor) if poi is None or state.floor == 0 else floor_label(poi, config, state.floor)
     canvas.text(
         1,
         0,
-        f" {island}   seed {world.seed}   view {view_label(state)} / {view_name}   floor {state.floor}",
+        f" {island}   seed {world.seed}   view {view_label(state)} / {view_name}   floor {floor_text}",
         head,
         bold=True,
     )
@@ -183,7 +185,6 @@ def build_panel(
         canvas.text(4, 1, f"{realm.area_km2:,.0f} km2, pop. ~{realm.pop:,}", dim)
     else:
         canvas.text(3, 0, " realm: open water" if tile.is_water else " realm: none (wild land)")
-    poi = poi_under_cursor(world, config, state)
     canvas.text(5, 0, _poi_line(poi))
     buildings = _buildings_line(world, config, state, poi)
     if buildings:

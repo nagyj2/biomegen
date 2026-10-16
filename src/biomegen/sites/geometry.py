@@ -144,3 +144,18 @@ def site_geometry(poi: POI, config: Config) -> Optional[SiteGeometry]:
     if col1 - col0 < _MIN_CELLS or row1 - row0 < _MIN_CELLS:
         return None
     return SiteGeometry(poi.kind, cell_w, cell_h, cam_x, cam_y, tiles_w, tiles_h, extent, box)
+
+
+def site_roof_floor(poi: POI, config: Config) -> Optional[int]:
+    """Return the roof level of a settlement's site (one above its top storey, where every building is seen as the roof
+    of its kind), or None for a site with no roof level."""
+    if config.get(f"tables.sites.{site_row_for(config, poi)}.layout", "") != "settlement":
+        return None
+    return int(poi.lowest_floor) + int(poi.floor_count)
+
+
+def site_floor_range(poi: POI, config: Config) -> tuple[int, int]:
+    """Return the ``(lowest, highest)`` floor a site can show, the roof level included."""
+    roof = site_roof_floor(poi, config)
+    lowest = int(poi.lowest_floor)
+    return lowest, roof if roof is not None else lowest + int(poi.floor_count) - 1
