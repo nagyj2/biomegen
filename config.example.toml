@@ -138,8 +138,8 @@ zoom = " "                # step OUT a zoom level (biome<->zoom, local->zoom)
 local = "z"               # step IN a zoom level (biome->zoom->local). Set to " " only if your
                           # terminal distinguishes Shift+Space (most do not)
 toggle_scale = "f"
-floor_up = "<"             # cycle up a floor when standing on a multi-floor structure (e.g. dungeon)
-floor_down = ">"           # cycle down a floor
+floor_up = ">"             # cycle up a floor when standing on a multi-floor structure (e.g. dungeon)
+floor_down = "<"           # cycle down a floor
 refresh = "r"              # regenerate the world with a fresh random seed (unbound until phase 9)
 cycle_view = "v"          # next view: terrain, elevation, temperature, rainfall
 help = "?"                # show the key help

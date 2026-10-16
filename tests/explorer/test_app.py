@@ -228,7 +228,7 @@ def test_help_key_does_not_act_while_the_help_is_open(config: Config) -> None:
 
 
 def test_floor_keys_change_floor_on_a_structure(config: Config) -> None:
-    assert "floor 1" in _screen(_run(_world(tower=True), config, "<"))
+    assert "floor 1" in _screen(_run(_world(tower=True), config, ">"))
 
 
 def test_end_of_input_quits(config: Config) -> None:

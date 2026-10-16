@@ -45,8 +45,8 @@ _BOUND_ACTIONS = (
     ("toggle_scale", ("toggle_scale",), "f"),
     ("cycle_view", ("cycle_view",), "v"),
     ("help", ("help",), "?"),
-    ("floor_up", ("floor", 1), "<"),
-    ("floor_down", ("floor", -1), ">"),
+    ("floor_up", ("floor", 1), ">"),
+    ("floor_down", ("floor", -1), "<"),
     ("export_view", ("export", "view"), "e"),
     ("export_world", ("export", "world"), "E"),
 )
