@@ -143,6 +143,16 @@ help = "?"                # show the key help
 export_view = "e"
 export_world = "E"
 quit = "q"
+# Chronicle pager (--chronicle on a terminal); arrows, WASD and HJKL scroll, space / Page Down page.
+search = "/"              # ask for text to find; matches are highlighted
+search_next = "n"
+search_prev = "N"
+filter_kind = "v"         # cycle the event-kind filter
+filter_years = "y"        # ask for a year range, e.g. 100-300
+filter_realm = "p"        # ask for a realm name to keep
+filter_clear = "c"        # drop every filter
+top = "g"
+bottom = "G"
 
 [controls]
 fast_step = 8             # tiles moved per Shift+arrow (or capital WASD/HJKL)

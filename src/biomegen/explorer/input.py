@@ -25,6 +25,9 @@ Action = tuple
 
 _ESCAPE = "\x1b"
 _ARROWS = {"A": "up", "B": "down", "C": "right", "D": "left"}
+# Paging keys: the final letter of ESC [ H / ESC [ F, or the number of ESC [ n ~.
+_PAGING_LETTERS = {"H": "home", "F": "end"}
+_PAGING_NUMBERS = {"1": "home", "7": "home", "4": "end", "8": "end", "5": "pageup", "6": "pagedown"}
 # An escape sequence: CSI (ESC [ params letter) or SS3 (ESC O letter); params like "1;2" mark a modifier.
 _SEQUENCE = re.compile(r"\x1b(?:\[([0-9;]*)([A-Za-z~])|O([A-Za-z]))")
 
@@ -51,8 +54,9 @@ _BOUND_ACTIONS = (
 def tokenize(text: str) -> list[str]:
     """Split raw terminal text into key tokens: escape sequences become names, a lone ESC is ``"esc"``.
 
-    A modified arrow (``ESC [ 1 ; 2 A``) becomes ``"shift-up"``; sequences that are not arrows become
-    ``"unknown"``. Anything else is one token per character.
+    A modified arrow (``ESC [ 1 ; 2 A``) becomes ``"shift-up"``; Page Up, Page Down, Home and End become
+    ``"pageup"``, ``"pagedown"``, ``"home"`` and ``"end"``; other sequences become ``"unknown"``. Anything else is one
+    token per character.
     """
     tokens: list[str] = []
     index = 0
@@ -70,7 +74,12 @@ def tokenize(text: str) -> list[str]:
         params, final, ss3 = match.group(1), match.group(2), match.group(3)
         letter = ss3 or final
         name = _ARROWS.get(letter)
-        if name is None:
+        if name is None and final == "~" and params:
+            name = _PAGING_NUMBERS.get(params.split(";")[0])
+            tokens.append(name or "unknown")
+        elif name is None and letter in _PAGING_LETTERS:
+            tokens.append(_PAGING_LETTERS[letter])
+        elif name is None:
             tokens.append("unknown")
         elif params and params.split(";")[-1] in ("2", "5"):  # xterm: 2 = shift, 5 = control
             tokens.append(f"shift-{name}")
@@ -200,7 +209,16 @@ class PosixKeyReader:
         return self._pending.popleft()
 
 
-_WINDOWS_ARROWS = {"H": "up", "P": "down", "K": "left", "M": "right"}
+_WINDOWS_ARROWS = {
+    "H": "up",
+    "P": "down",
+    "K": "left",
+    "M": "right",
+    "I": "pageup",
+    "Q": "pagedown",
+    "G": "home",
+    "O": "end",
+}
 
 
 class WindowsKeyReader:

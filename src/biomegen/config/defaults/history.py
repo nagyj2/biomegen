@@ -91,6 +91,8 @@ VALUES: Dict[str, Any] = {
         "fall": [170, 140, 210],
         "settlement": [232, 222, 190],
         "place": [150, 185, 205],
+        "match": [90, 80, 20],  # background of a search match in the chronicle pager
+        "match_current": [170, 120, 30],  # ... of the match the pager is on
     },
     # A place named in an event ({near}) must be a settlement on the same landmass within this distance.
     "near_km": 250.0,

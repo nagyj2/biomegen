@@ -17,4 +17,14 @@ VALUES: Dict[str, Any] = {
     "help": "?",  # show the key help and legend
     "refresh": "r",  # regenerate the world with a fresh random seed (unbound until phase 9 brings it back)
     "quit": "q",
+    # The chronicle pager (``--chronicle`` on a terminal) also uses help and quit; arrows, WASD and HJKL scroll.
+    "search": "/",  # ask for text to find; matches are highlighted
+    "search_next": "n",  # jump to the next match
+    "search_prev": "N",  # jump to the previous match
+    "filter_kind": "v",  # cycle the event-kind filter (all, founding, secession, ...)
+    "filter_years": "y",  # ask for a year range, e.g. 100-300
+    "filter_realm": "p",  # ask for a realm name to keep
+    "filter_clear": "c",  # drop every filter
+    "top": "g",  # scroll to the first event
+    "bottom": "G",  # scroll to the last event
 }

@@ -7,7 +7,8 @@ Run the CLI application with::
                     [--headless] [--view NAME] [--scale {map,zoom,local,site}] [--at X,Y] [--floor N]
                     [--labels {all,cities,none}]
                     [--color {auto,truecolor,256,none}] [--ascii] [--no-legend] [--save FILE] [--html FILE]
-                    [--chronicle] [--chronicle-format {text,json}] [--start {present,dawn}] [--color-test]
+                    [--chronicle] [--chronicle-format {text,json}] [--kind KINDS] [--from-year Y] [--to-year Y]
+                    [--realm NAME] [--search TEXT] [--no-pager] [--start {present,dawn}] [--color-test]
 
 This launcher wires together the three top-level concerns and nothing else:
     1. parse CLI arguments,
@@ -120,13 +121,46 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--chronicle",
         action="store_true",
-        help="Print the world's chronicle (the seed line goes to stderr) and exit.",
+        help=(
+            "Show the world's chronicle and exit: an interactive pager (scroll, filter, search) on a terminal, "
+            "else printed (the seed line goes to stderr)."
+        ),
     )
     parser.add_argument(
         "--chronicle-format",
         choices=("text", "json"),
         default="text",
         help="Format of --chronicle: readable text, or JSON with the realms and places its ids name.",
+    )
+    parser.add_argument(
+        "--kind",
+        type=_parse_kinds,
+        action=_AppendKinds,
+        default=(),
+        metavar="KINDS",
+        help="Keep chronicle events of these kinds (comma separated or repeated, e.g. war,battle).",
+    )
+    parser.add_argument("--from-year", type=int, default=None, help="Keep chronicle events in this year or later.")
+    parser.add_argument("--to-year", type=int, default=None, help="Keep chronicle events in this year or earlier.")
+    parser.add_argument(
+        "--realm",
+        default="",
+        metavar="NAME",
+        help=(
+            "Keep chronicle events involving a realm, fallen realm, ruler or settlement whose name contains NAME "
+            "(any case)."
+        ),
+    )
+    parser.add_argument(
+        "--search",
+        default="",
+        metavar="TEXT",
+        help="Keep chronicle events whose year, kind or text contains TEXT (any case); the pager highlights it.",
+    )
+    parser.add_argument(
+        "--no-pager",
+        action="store_true",
+        help="Print --chronicle even on a terminal, instead of opening the pager.",
     )
     parser.add_argument(
         "--start",
@@ -136,6 +170,26 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--color-test", action="store_true", help="Show colour and glyph test swatches and exit.")
     return parser
+
+
+class _AppendKinds(argparse.Action):
+    """Collect the kinds of every ``--kind`` use into one tuple."""
+
+    def __call__(self, parser, namespace, values, option_string=None):  # type: ignore[no-untyped-def]
+        setattr(namespace, self.dest, (*getattr(namespace, self.dest), *values))
+
+
+def _parse_kinds(text: str) -> tuple[str, ...]:
+    """Parse ``war,battle`` for ``--kind``, checking each against the event kinds."""
+    from biomegen.world.entities import EVENT_KINDS
+
+    kinds = tuple(part.strip() for part in text.split(",") if part.strip())
+    unknown = [kind for kind in kinds if kind not in EVENT_KINDS]
+    if not kinds or unknown:
+        raise argparse.ArgumentTypeError(
+            f"unknown kind {', '.join(unknown) or repr(text)}; available: {', '.join(EVENT_KINDS)}"
+        )
+    return kinds
 
 
 def _parse_size_km(text: str) -> tuple[float, float]:
@@ -277,6 +331,11 @@ def _apply_overrides(args: argparse.Namespace, config: Config, parser: argparse.
         parser.error("--scale site needs --at X,Y on a point of interest")
     if args.start is not None:
         config.data["history"]["start"] = args.start
+    filtering = args.kind or args.from_year is not None or args.to_year is not None or args.realm or args.search
+    if (filtering or args.no_pager) and not args.chronicle:
+        parser.error("--kind, --from-year, --to-year, --realm, --search and --no-pager need --chronicle")
+    if args.from_year is not None and args.to_year is not None and args.from_year > args.to_year:
+        parser.error(f"--from-year {args.from_year} is after --to-year {args.to_year}")
     if args.size_km is not None:
         config.data["world"]["size_km"] = list(args.size_km)
     if args.lat is not None:
@@ -315,7 +374,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if args.chronicle:
-        _print_chronicle(world, config, args)
+        _show_chronicle(world, config, args)
         return 0
 
     if args.at is not None and not (0 <= args.at[0] < world.width and 0 <= args.at[1] < world.height):
@@ -338,17 +397,41 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     return 0
 
 
-def _print_chronicle(world: Any, config: Config, args: argparse.Namespace) -> None:
-    """Print the chronicle as JSON, or as three-column text (coloured when the terminal or ``--color`` says so)."""
+def _show_chronicle(world: Any, config: Config, args: argparse.Namespace) -> None:
+    """Show the chronicle (filtered by ``--kind`` and the like): in the pager on a terminal, else printed."""
+    from biomegen.world.chronicle import ChronicleFilter
+
+    chronicle_filter = ChronicleFilter(
+        kinds=tuple(dict.fromkeys(args.kind)),
+        year_from=args.from_year,
+        year_to=args.to_year,
+        realm=args.realm,
+        text=args.search,
+    )
+    mode = _detect_color() if args.color == "auto" else args.color
+    interactive = sys.stdout.isatty() and sys.stdin.isatty() and args.chronicle_format == "text" and not args.no_pager
+    if interactive:
+        from biomegen.explorer.chronicle_pager import run_chronicle
+
+        run_chronicle(world, config, mode, chronicle_filter)
+        return
+    _print_chronicle(world, config, args, chronicle_filter, mode)
+
+
+def _print_chronicle(world: Any, config: Config, args: argparse.Namespace, chronicle_filter: Any, mode: str) -> None:
+    """Print the chronicle as JSON, or as three-column text (coloured when ``mode`` is not ``none``)."""
     from biomegen.render.backends.ansi import to_ansi
     from biomegen.render.chronicle import chronicle_document
-    from biomegen.world.chronicle import chronicle_json, chronicle_text
+    from biomegen.world.chronicle import chronicle_json, chronicle_text, filter_events
 
+    events = filter_events(world, chronicle_filter) if chronicle_filter.active else None
     if args.chronicle_format == "json":
-        print(chronicle_json(world))
+        print(chronicle_json(world, events))
         return
-    mode = _detect_color() if args.color == "auto" else args.color
-    print(chronicle_text(world) if mode == "none" else to_ansi(chronicle_document(world, config), mode))
+    if mode == "none":
+        print(chronicle_text(world, events))
+    else:
+        print(to_ansi(chronicle_document(world, config, events), mode))
 
 
 def _print_stats(stats: dict[str, Any]) -> None:

@@ -4,14 +4,17 @@ The event type takes its colour from ``history.colors``. A name in the text is c
 colours as the political map: a realm, its ruler and its settlements in the realm's own colour, a fallen realm in its
 own. A settlement is in the neutral ``settlement`` colour the first time the chronicle names it (and always when no
 realm holds it); a mountain, sea, river or other named land is in the neutral ``place`` colour. The plain text of the
-document equals :func:`biomegen.world.chronicle.chronicle_text`.
+document equals :func:`biomegen.world.chronicle.chronicle_text`. :func:`layout_events` wraps the rows to a width (for
+the scrolling pager) and marks the text a search matches.
 """
 
 from __future__ import annotations
 
+from typing import Optional, Sequence
+
 from ..config.model import Config
 from ..world.chronicle import KIND_WIDTH, chronicle_title
-from ..world.entities import REF_FALLEN, REF_FEATURE, REF_POI, REF_PREDECESSOR, REF_REALM, REF_RULER
+from ..world.entities import REF_FALLEN, REF_FEATURE, REF_POI, REF_PREDECESSOR, REF_REALM, REF_RULER, ChronicleEvent
 from ..world.world import World
 from .grid import RGB, Document, Span
 
@@ -21,8 +24,12 @@ def _palette(config: Config) -> dict[str, RGB]:
     return {name: (int(c[0]), int(c[1]), int(c[2])) for name, c in config.get("history.colors").items()}
 
 
-def chronicle_document(world: World, config: Config) -> Document:
-    """Return the title and every event as rows of styled spans (year, kind, then the text with its names coloured)."""
+def event_rows(world: World, config: Config) -> list[list[Span]]:
+    """Return one row of styled spans per event of ``world.chronicle`` (year, kind, then the text with names coloured).
+
+    Rows follow the chronicle's order, and a settlement is neutral only at its first mention in the whole chronicle, so
+    a filtered view colours a name exactly as the full chronicle does.
+    """
     palette = _palette(config)
     named: set[int] = set()  # settlements the chronicle has already named
 
@@ -43,7 +50,7 @@ def chronicle_document(world: World, config: Config) -> Document:
         realm = world.pois[ref].realm_id
         return palette["settlement"] if first or realm < 0 else world.realms[realm].color
 
-    document: Document = [[Span(chronicle_title(world), bold=True)], []]
+    rows: list[list[Span]] = []
     for event in world.chronicle:
         row = [
             Span(f"{event.year:>5}", palette["year"]),
@@ -59,5 +66,86 @@ def chronicle_document(world: World, config: Config) -> Document:
             pos = end
         if pos < len(event.text):
             row.append(Span(event.text[pos:]))
-        document.append(row)
-    return document
+        rows.append(row)
+    return rows
+
+
+def chronicle_document(world: World, config: Config, events: Optional[Sequence[ChronicleEvent]] = None) -> Document:
+    """Return the title and the events (default: all) as rows of styled spans."""
+    rows = event_rows(world, config)
+    shown = rows if events is None else [rows[event.id] for event in events]
+    return [[Span(chronicle_title(world), bold=True)], [], *shown]
+
+
+def _wrap(cells: list[tuple[str, tuple]], width: int, indent: int) -> list[list[tuple[str, tuple]]]:
+    """Break styled characters into lines of at most ``width`` at spaces; continuation lines start ``indent`` in."""
+    lines: list[list[tuple[str, tuple]]] = []
+    pad = [(" ", (None, None, False))] * indent
+    line = list(cells)
+    first = True
+    while True:
+        limit = width if first else width - indent
+        if len(line) <= limit:
+            lines.append(line if first else pad + line)
+            return lines
+        cut = limit
+        for index in range(limit, 0, -1):  # the last space that still fits, else a hard break
+            if line[index][0] == " ":
+                cut = index
+                break
+        head, line = line[:cut], line[cut:]
+        while line and line[0][0] == " ":
+            line = line[1:]
+        lines.append(head if first else pad + head)
+        first = False
+
+
+def _spans(cells: list[tuple[str, tuple]]) -> list[Span]:
+    """Merge neighbouring characters of one style into spans."""
+    spans: list[Span] = []
+    run: list[str] = []
+    style: Optional[tuple] = None
+    for char, cell_style in cells:
+        if cell_style != style and run:
+            assert style is not None
+            spans.append(Span("".join(run), style[0], style[1], style[2]))
+            run = []
+        style = cell_style
+        run.append(char)
+    if run and style is not None:
+        spans.append(Span("".join(run), style[0], style[1], style[2]))
+    return spans
+
+
+def layout_events(
+    world: World, config: Config, events: Sequence[ChronicleEvent], width: int, query: str = "", current: int = -1
+) -> tuple[Document, list[int], list[int]]:
+    """Wrap ``events`` to ``width`` columns and mark where ``query`` (any case) matches.
+
+    Returns ``(lines, starts, matches)``: the wrapped lines of every event in turn (a continuation line is indented
+    under the text column), the line each event starts on, and the indices into ``events`` of those the query matches.
+    A matching run is drawn in the ``history.colors.match`` background, or ``match_current`` in the event at index
+    ``current``.
+    """
+    rows = event_rows(world, config)
+    palette = _palette(config)
+    needle = query.lower()
+    indent = 5 + 2 + KIND_WIDTH + 2
+    lines: Document = []
+    starts: list[int] = []
+    matches: list[int] = []
+    for position, event in enumerate(events):
+        cells = [(char, (span.fg, span.bg, span.bold)) for span in rows[event.id] for char in span.text]
+        if needle:
+            plain = "".join(char for char, _ in cells).lower()
+            hit = plain.find(needle)
+            if hit >= 0:
+                matches.append(position)
+            while hit >= 0:
+                for index in range(hit, hit + len(needle)):
+                    char, (fg, _bg, bold) = cells[index]
+                    cells[index] = (char, (fg, palette["match_current" if position == current else "match"], bold))
+                hit = plain.find(needle, hit + len(needle))
+        starts.append(len(lines))
+        lines.extend(_spans(line) for line in _wrap(cells, max(width, indent + 1), indent))
+    return lines, starts, matches

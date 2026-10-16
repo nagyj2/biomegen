@@ -56,7 +56,7 @@ src/biomegen/
     overlay.py          Mutable Overlay (runtime edits, composited at read time; a revision counts edits)
     derived.py          derived(): values worked out once per world (road pieces), checked by a source digest
     entities.py         POI / Realm / Relation / River / Lake / GeoFeature / ChronicleEvent / FallenRealm dataclasses
-    chronicle.py        chronicle_text() and chronicle_json(): the history as three-column text or JSON
+    chronicle.py        chronicle_text() and chronicle_json(): the history as three-column text or JSON; ChronicleFilter / filter_events()
   sites/                Lazy, deterministic, cached site plans: what you see zooming into a POI
     geometry.py         Extent, window and plan resolution of a POI's site, in world tiles
     patch.py            The terrain under a site (read through the render sampler) and the road gates
@@ -110,7 +110,7 @@ src/biomegen/
     views.py            View: layer lists per scale family + tint (a ramp or the realm tint), from render.views
     colors.py           Colour maths and per-biome / relief / detail / interior lookup arrays from the tables
     scatter.py          Stable per-cell decoration keyed on tile and sub-cell
-    chronicle.py        chronicle_document(): the history as a coloured year / kind / text document
+    chronicle.py        chronicle_document(): the history as a coloured year / kind / text document; layout_events() wraps it and marks search matches
     static.py           render_static (framed map + legend) and render_detail (zoom/local grid)
     colortest.py        --color-test swatches
     layers/             terrain relief tint water clutter borders roads sites markers names(labels) compass
@@ -412,6 +412,16 @@ it is named (and always when wild), a river, range, sea or other named land in t
 use `history.colors` too. The places a reason names are marked too (`Relation.why_refs`, moved into the event's `refs`).
 `scripts/chronicle.sh` wraps it.
 
+On a terminal `--chronicle` opens the **chronicle pager** (`explorer/chronicle_pager.py`, text format only; `--no-pager` or a pipe
+prints instead). Filters narrow the events (`ChronicleFilter`, `world/chronicle.py`: `--kind` (repeatable, comma lists), `--from-year`,
+`--to-year`, `--realm` (a substring of the name of a realm, fallen realm, old realm, ruler or settlement the event involves: its ids and the names in its text; `event_names`), `--search` (a substring of year,
+kind or text)) and apply to the printed text and JSON as well (the JSON keeps every realm and settlement, so ids resolve). In the pager the
+filters are the start state and `--search` also starts the highlight. Keys follow the explorer's `keys` table: arrows / WASD / HJKL scroll
+(shift or capitals `controls.fast_step` lines), space / Page Down / Page Up page, `g` / `G` ends, `/` search (highlights, jumps), `n` / `N`
+matches (the current match has its own colour, `history.colors.match_current`), `v` cycles the kind, `y` asks a year range, `p` a name (Up / Down pick from the names containing what is typed, Tab completes), `c` clears, `?` help, `q` / Esc quits. `layout_events` wraps each event
+to the width (continuations indented under the text) and marks the match in `history.colors.match`; a name is coloured as in the full
+chronicle even when filtered.
+
 ### Stage 9e — POIs (`pipeline/story/pois.py`, `poi_rules.py`, `pipeline/pois.py`)
 
 Runs after history, so a POI can follow the chronicle and take its realm by grid lookup. One row per kind in
@@ -647,6 +657,8 @@ stopping when a key is waiting. Once that is done an idle explorer uses no CPU.
 - **Testing.** The loop takes an injected key source and output stream, so the tests drive it with a
   scripted keyboard, replay the written escape codes on a tiny virtual screen, and run the real program on a
   pseudo-terminal. The Windows paths cannot be exercised on Linux.
+- **Chronicle pager.** `run_chronicle` is a second, smaller loop over the same reader, writer and key table (see the chronicle
+  section above); its frame is built by `compose_pager_frame` and its state is a `PagerState`.
 - **Not in 4c.** Regenerating the world (`r`) returns in phase 9 with the chronicle panel.
 
 ---

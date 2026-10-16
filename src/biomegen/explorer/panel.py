@@ -182,12 +182,15 @@ _HELP_LINES = (
 )
 
 
-def draw_help(screen: CellGrid, config: Config) -> None:
-    """Draw the key help as a centred box over ``screen`` (in place), clipped to its size."""
+def draw_help(screen: CellGrid, config: Config, help_lines: tuple[str, ...] = _HELP_LINES) -> None:
+    """Draw the key help (``help_lines``, ``{name}`` filled from the ``keys`` table) as a centred box over ``screen``.
+
+    The box is drawn in place and clipped to the screen's size.
+    """
     keys = config.get("keys")
     shown = {name: ("space" if key == " " else key) for name, key in keys.items()}
     shown["step"] = str(config.get("controls.fast_step", 8))
-    lines = [line.format(**shown) for line in _HELP_LINES]
+    lines = [line.format(**shown) for line in help_lines]
     box_w = min(screen.cols, max(len(line) for line in lines) + 4)
     box_h = min(screen.rows, len(lines) + 2)
     top, left = (screen.rows - box_h) // 2, (screen.cols - box_w) // 2

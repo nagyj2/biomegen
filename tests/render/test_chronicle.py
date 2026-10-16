@@ -8,8 +8,8 @@ from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.render.backends.plain import to_plain
-from biomegen.render.chronicle import chronicle_document
-from biomegen.world.chronicle import chronicle_text
+from biomegen.render.chronicle import chronicle_document, layout_events
+from biomegen.world.chronicle import KIND_WIDTH, chronicle_text
 from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, Realm, Ruler
 from biomegen.world.world import World
 
@@ -129,3 +129,62 @@ def test_an_old_realm_that_split_has_its_own_colour(cfg: Config) -> None:
     world.predecessors = [Predecessor(id=0, founded=1, split_year=50, color=(12, 120, 230))]
     world.chronicle[0].refs = [(0, 12, "predecessor", 0)]
     assert _name(world, cfg, "Kingdom of A").fg == (12, 120, 230)
+
+
+def _long() -> World:
+    world = _tiny()
+    text = "Kingdom of A is founded " + "with a very long and winding account " * 3 + "ends."
+    world.chronicle = [ChronicleEvent(0, 100, "founding", [0], text=text, refs=[(0, 12, "realm", 0)])]
+    return world
+
+
+def test_a_document_of_chosen_events_lists_only_them(cfg: Config) -> None:
+    world = _tiny()
+    world.chronicle.append(ChronicleEvent(1, 150, "war", [0], text="A fights."))
+    assert to_plain(chronicle_document(world, cfg, [world.chronicle[1]])).splitlines()[2:] == [
+        "  150  war         A fights."
+    ]
+
+
+def test_layout_wraps_lines_to_the_width(cfg: Config) -> None:
+    lines, _, _ = layout_events(_long(), cfg, _long().chronicle, 50)
+    assert max(sum(len(span.text) for span in line) for line in lines) <= 50
+
+
+def test_layout_indents_continuation_lines_under_the_text(cfg: Config) -> None:
+    lines, _, _ = layout_events(_long(), cfg, _long().chronicle, 50)
+    indent = 5 + 2 + KIND_WIDTH + 2  # year, gap, kind column, gap
+    assert lines[1][0].text[:indent] == " " * indent
+
+
+def test_layout_keeps_every_word(cfg: Config) -> None:
+    world = _long()
+    lines, _, _ = layout_events(world, cfg, world.chronicle, 50)
+    words = " ".join("".join(span.text for span in line) for line in lines).split()
+    assert words == f"  100  founding    {world.chronicle[0].text}".split()
+
+
+def test_layout_marks_where_a_line_starts_per_event(cfg: Config) -> None:
+    world = _long()
+    world.chronicle.append(ChronicleEvent(1, 150, "war", [0], text="A fights."))
+    lines, starts, _ = layout_events(world, cfg, world.chronicle, 50)
+    assert (starts[0], starts[1], len(lines) > 2) == (0, len(lines) - 1, True)
+
+
+def test_a_search_match_has_the_match_background(cfg: Config) -> None:
+    world = _tiny()
+    lines, _, _ = layout_events(world, cfg, world.chronicle, 60, "FOUNDED")
+    marked = [span.text for span in lines[0] if span.bg == tuple(cfg.get("history.colors.match"))]
+    assert marked == ["founded"]
+
+
+def test_a_search_lists_the_matching_events(cfg: Config) -> None:
+    world = _tiny()
+    world.chronicle.append(ChronicleEvent(1, 150, "war", [0], text="A fights."))
+    assert layout_events(world, cfg, world.chronicle, 60, "fights")[2] == [1]
+
+
+def test_no_search_marks_nothing(cfg: Config) -> None:
+    world = _tiny()
+    lines, _, matches = layout_events(world, cfg, world.chronicle, 60)
+    assert (matches, all(span.bg is None for span in lines[0])) == ([], True)

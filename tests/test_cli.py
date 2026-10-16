@@ -355,3 +355,74 @@ def test_the_coloured_chronicle_has_the_plain_chronicles_text(capsys):
 def test_json_chronicle_is_never_coloured(capsys):
     out, _ = _chronicle(capsys, "--chronicle-format", "json", "--color", "truecolor")
     assert "\x1b" not in out
+
+
+def _kinds(out: str) -> set[str]:
+    return {line.split()[1] for line in out.splitlines()[2:] if line.strip()}
+
+
+def test_the_kind_filter_lists_only_those_kinds(capsys):
+    out, _ = _chronicle(capsys, "--color", "none", "--kind", "founding,war")
+    assert _kinds(out) <= {"founding", "war"}
+
+
+def test_kind_may_be_repeated(capsys):
+    out, _ = _chronicle(capsys, "--color", "none", "--kind", "founding", "--kind", "settling")
+    assert _kinds(out) == {"founding", "settling"}
+
+
+def test_the_year_range_limits_the_events(capsys):
+    out, _ = _chronicle(capsys, "--color", "none", "--from-year", "300", "--to-year", "400")
+    years = [int(line.split()[0]) for line in out.splitlines()[2:]]
+    assert years and all(300 <= year <= 400 for year in years)
+
+
+def test_search_keeps_matching_events(capsys):
+    out, _ = _chronicle(capsys, "--color", "none", "--search", "founded")
+    assert all("founded" in line.lower() for line in out.splitlines()[2:])
+
+
+def test_a_filter_that_matches_nothing_says_so(capsys):
+    out, _ = _chronicle(capsys, "--color", "none", "--search", "no such words anywhere")
+    assert out.splitlines()[2:] == ["(no matching events)"]
+
+
+def test_filtered_json_lists_only_the_matching_events(capsys):
+    out, _ = _chronicle(capsys, "--chronicle-format", "json", "--kind", "founding")
+    assert {event["kind"] for event in json.loads(out)["events"]} == {"founding"}
+
+
+def test_an_unknown_kind_is_rejected(capsys):
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--seed", "3", "--chronicle", "--kind", "feast"])
+    assert "unknown kind feast" in capsys.readouterr().err
+
+
+def test_a_reversed_year_range_is_rejected(capsys):
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--seed", "3", "--chronicle", "--from-year", "9", "--to-year", "1"])
+    assert "after --to-year" in capsys.readouterr().err
+
+
+def test_chronicle_filters_need_chronicle(capsys):
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--seed", "3", "--kind", "war"])
+    assert "need --chronicle" in capsys.readouterr().err
+
+
+def test_realm_matches_a_ruler_or_settlement_name_too(capsys):
+    # The ruler's name is in a realm's founding line, not in the realm's own name.
+    from biomegen import cli
+
+    cli.main(["--seed", "3", "--width", "64", "--height", "32", "--headless"])
+    capsys.readouterr()
+    full, _ = _chronicle(capsys, "--color", "none")
+    word = next(w for line in full.splitlines()[2:] for w in line.split()[2:] if w.istitle())
+    narrowed, _ = _chronicle(capsys, "--color", "none", "--realm", word)
+    assert narrowed.splitlines()[2:]

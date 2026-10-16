@@ -9,7 +9,14 @@ import pytest
 
 from biomegen import pipeline
 from biomegen.config import load_config
-from biomegen.world.chronicle import chronicle_data, chronicle_json, chronicle_text
+from biomegen.world.chronicle import (
+    ChronicleFilter,
+    chronicle_data,
+    chronicle_json,
+    chronicle_text,
+    describe_filter,
+    filter_events,
+)
 from biomegen.world.entities import ChronicleEvent, FallenRealm, Realm
 from biomegen.world.world import World
 
@@ -179,3 +186,69 @@ def test_stats_count_rulers_predecessors_origins_and_free_settlements(generated:
     assert stats["rulers"] == len(generated.rulers) and stats["predecessors"] == len(generated.predecessors)
     assert stats["free_settlements"] == sum(1 for p in generated.pois if p.free)
     assert sum(stats["realm_origins"].values()) == len([r for r in generated.realms if r.origin])  # type: ignore[attr-defined]
+
+
+def _ids(world: World, **fields) -> list[int]:
+    return [event.id for event in filter_events(world, ChronicleFilter(**fields))]
+
+
+def test_an_empty_filter_keeps_every_event() -> None:
+    assert _ids(_tiny()) == [0, 1]
+
+
+def test_the_kind_filter_keeps_the_listed_kinds() -> None:
+    assert _ids(_tiny(), kinds=("fall",)) == [1]
+
+
+def test_the_year_range_includes_both_ends() -> None:
+    assert _ids(_tiny(), year_from=90, year_to=100) == [0, 1]
+
+
+def test_the_year_range_drops_events_outside_it() -> None:
+    assert _ids(_tiny(), year_from=91) == [0]
+
+
+def test_the_realm_filter_matches_a_fallen_realm_by_name() -> None:
+    # "old" is in Old Realm, a fallen realm named by event 1 only
+    assert _ids(_tiny(), realm="OLD") == [1]
+
+
+def test_the_realm_filter_matches_a_live_realm_by_name() -> None:
+    assert _ids(_tiny(), realm="kingdom") == [0]
+
+
+def test_the_text_filter_matches_any_case() -> None:
+    assert _ids(_tiny(), text="FALLS") == [1]
+
+
+def test_the_text_filter_matches_the_kind_word() -> None:
+    assert _ids(_tiny(), text="founding") == [0]
+
+
+def test_filters_combine_with_and() -> None:
+    assert _ids(_tiny(), kinds=("fall",), year_from=95) == []
+
+
+def test_text_of_filtered_events_lists_only_them() -> None:
+    world = _tiny()
+    events = filter_events(world, ChronicleFilter(kinds=("fall",)))
+    assert chronicle_text(world, events).splitlines()[2:] == ["   90  fall        Old Realm falls."]
+
+
+def test_text_of_no_events_says_so() -> None:
+    assert chronicle_text(_tiny(), []).splitlines()[2:] == ["(no matching events)"]
+
+
+def test_json_of_filtered_events_keeps_every_entity() -> None:
+    world = _tiny()
+    data = chronicle_data(world, filter_events(world, ChronicleFilter(kinds=("fall",))))
+    assert [len(data["events"]), len(data["realms"]), len(data["fallen_realms"])] == [1, 1, 1]
+
+
+def test_describe_filter_is_empty_without_a_filter() -> None:
+    assert describe_filter(ChronicleFilter()) == ""
+
+
+def test_describe_filter_names_each_part() -> None:
+    text = describe_filter(ChronicleFilter(kinds=("war",), year_from=100, realm="a", text="b"))
+    assert text == "kind war  years 100-  name 'a'  text 'b'"
