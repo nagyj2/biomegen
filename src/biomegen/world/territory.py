@@ -5,8 +5,9 @@ Today's ``World.realm_id`` is the end state. History records the cells that chan
 at a moment, forward or backward from checkpoints, so its cost follows the cells that changed and not the number of
 events. A simulation appends its own changes in the same form (a tick may batch every flip into one record).
 
-Owners are small integers: a realm is its id (``>= 0``), wild land is :data:`WILD`, and a fallen realm is
-:func:`fallen_owner` of its id (``<= -2``), so one ``int16`` grid shows living and fallen realms together.
+Owners are small integers: a realm is its id (``>= 0``), wild land is :data:`WILD`, a fallen realm is
+:func:`fallen_owner` of its id (``-2`` downward) and a predecessor (a realm that ended in a clean split) is
+:func:`predecessor_owner` of its id (``-1000`` downward), so one ``int16`` grid shows them all together.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import numpy as np
 
 WILD = -1  # owner of land no realm holds
 FALLEN_OWNER_BASE = -2  # a fallen realm's owner is this minus its id
+PREDECESSOR_OWNER_BASE = -1000  # a predecessor's owner is this minus its id (so fewer than 998 fallen realms)
 NO_EVENT = -1  # ``TerritoryChange.event_id`` of a change not tied to a chronicle event
 _CHECKPOINT_EVERY = 16  # a cached owner map is kept every this many changes
 
@@ -30,12 +32,27 @@ def fallen_owner(fallen_id: int) -> int:
 
 def is_fallen_owner(owner: int) -> bool:
     """Return whether ``owner`` stands for a fallen realm."""
-    return owner <= FALLEN_OWNER_BASE
+    return PREDECESSOR_OWNER_BASE < owner <= FALLEN_OWNER_BASE
 
 
 def fallen_id_of(owner: int) -> int:
     """Return the fallen realm id an owner value stands for (it must satisfy :func:`is_fallen_owner`)."""
     return FALLEN_OWNER_BASE - owner
+
+
+def predecessor_owner(predecessor_id: int) -> int:
+    """Return the owner value that stands for predecessor ``predecessor_id``."""
+    return PREDECESSOR_OWNER_BASE - predecessor_id
+
+
+def is_predecessor_owner(owner: int) -> bool:
+    """Return whether ``owner`` stands for a predecessor."""
+    return owner <= PREDECESSOR_OWNER_BASE
+
+
+def predecessor_id_of(owner: int) -> int:
+    """Return the predecessor id an owner value stands for (it must satisfy :func:`is_predecessor_owner`)."""
+    return PREDECESSOR_OWNER_BASE - owner
 
 
 @dataclass

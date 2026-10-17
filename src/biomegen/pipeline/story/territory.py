@@ -24,8 +24,8 @@ from scipy import ndimage
 
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import EVENT_KINDS, ChronicleEvent
-from ...world.territory import WILD, TerritoryChange, fallen_id_of, fallen_owner
+from ...world.entities import EVENT_KINDS, NO_LOCATION, ChronicleEvent
+from ...world.territory import WILD, TerritoryChange, fallen_id_of, fallen_owner, predecessor_owner
 from ...world.world import World
 from .ledger import Ledger
 from .places import nearest_settlement
@@ -86,6 +86,7 @@ class _Walker:
         self.state = world.realm_id.astype(np.int16)
         self.plan = Plan()
         self._km: dict[int, np.ndarray] = {}
+        self._seen: dict[tuple[int, str, int, int], int] = {}
         final = np.bincount(world.realm_id[world.realm_id >= 0].ravel(), minlength=len(world.realms))
         self.domains = {
             realm.id: _Domain(fields.seats[realm.id], fields.seat_km, int(final[realm.id]))
@@ -102,10 +103,16 @@ class _Walker:
                 self._peel(step)
             elif step.kind == "founding" and event and event.fallen_ids:
                 self._found(step, fallen_owner(event.fallen_ids[0]))
+            elif step.kind == "founding" and event and event.predecessor_ids:
+                self._found(step, predecessor_owner(event.predecessor_ids[0]))
             elif step.kind == "founding" and event and event.realm_ids:
                 self._found(step, event.realm_ids[0])
             elif step.kind == "fall" and event and event.fallen_ids:
                 self._fall(step, event)
+            elif step.kind == "secession" and event:
+                self._secede(step, event)
+            elif step.kind in ("battle", "peace") and event:
+                self._strip(step, event)
         self._add_events([step for step in planned if step.cells is not None])
         return self.plan
 
@@ -162,13 +169,96 @@ class _Walker:
         step.cells = cells
         self.plan.entries.append((step, TerritoryChange(step.year, 0, "expansion", cells, WILD, owner)))
 
-    def _found(self, step: _Item, owner: int) -> None:
-        """Undo a founding: what the owner holds then was wild land before."""
+    def _hand_back(self, step: _Item, owner: int, earlier: int, kind: str) -> None:
+        """Undo a step that gave ``owner`` all it holds: those cells were ``earlier``'s before."""
         cells = np.flatnonzero(self.state == owner).astype(np.int32)
         if not len(cells):
             return
-        self.state.reshape(-1)[cells] = WILD
-        self.plan.entries.append((step, TerritoryChange(step.year, 0, "founding", cells, WILD, owner)))
+        self.state.reshape(-1)[cells] = earlier
+        self.plan.entries.append((step, TerritoryChange(step.year, 0, kind, cells, earlier, owner)))
+
+    def _found(self, step: _Item, owner: int) -> None:
+        """Undo a founding: what the owner holds then was wild land before."""
+        self._hand_back(step, owner, WILD, "founding")
+
+    def _secede(self, step: _Item, event: ChronicleEvent) -> None:
+        """Undo a secession: an offshoot's land was its parent's, a split's two realms' land was the old realm's."""
+        if event.predecessor_ids:
+            for realm in event.realm_ids:
+                self._hand_back(step, realm, predecessor_owner(event.predecessor_ids[0]), "secession")
+        elif "defection" not in event.tags and len(event.realm_ids) == 2:
+            self._hand_back(step, event.realm_ids[0], event.realm_ids[1], "secession")
+
+    @staticmethod
+    def _sides(event: ChronicleEvent) -> Optional[tuple[int, int]]:
+        """Return the owners ``(winner, loser)`` of a battle or peace, or None when it is not between two powers."""
+        if len(event.realm_ids) == 2 and not event.fallen_ids:
+            return event.realm_ids[0], event.realm_ids[1]
+        if event.realm_ids and event.fallen_ids:
+            realm, fallen = event.realm_ids[0], fallen_owner(event.fallen_ids[0])
+            return (fallen, realm) if "won_by_fallen" in event.tags else (realm, fallen)
+        return None
+
+    def _strip(self, step: _Item, event: ChronicleEvent) -> None:
+        """Undo a strip of land the winner of a battle (or the peace of a war) took from the loser along their front.
+
+        The strip is the winner's cells within ``depth_km`` of the loser's land, nearest the battle (or a random point
+        of the front) first; part of the winner's land that it cuts off from the winner's seat goes with it. It is
+        skipped when the two do not touch then, or the winner would be left under its core.
+        """
+        sides = self._sides(event)
+        if sides is None:
+            return
+        winner, loser = sides
+        settings = self.settings["strips"]
+        key = (step.year, step.kind, winner, loser)
+        count = self._seen.get(key, 0)
+        self._seen[key] = count + 1
+        stream = rng.derive(self.seed, "history", "territory", step.kind, step.year, winner, loser, count)
+        if step.kind == "peace":
+            chance, (low, high) = float(settings["cession_chance"]), settings["cession_share"]
+        elif "decisive" in event.tags:
+            chance, (low, high) = 1.0, settings["decisive_share"]
+        else:
+            chance, (low, high) = float(settings["strip_chance"]), settings["strip_share"]
+        roll, share, spot = stream.random(), stream.uniform(float(low), float(high)), stream.random()
+        mine, theirs = self.state == winner, self.state == loser
+        have = int(np.count_nonzero(mine))
+        domain = self.domains.get(winner)
+        floor = max(math.ceil(float(self.settings["core_share"]) * domain.final), 1) if domain else 1
+        want = min(round(share * have), have - floor)
+        if roll >= chance or want < int(self.settings["min_band_cells"]) or not theirs.any():
+            return
+        gap = ndimage.distance_transform_edt(~theirs, sampling=self.world.scale.sampling)
+        near = mine & (gap <= float(settings["depth_km"]))
+        if domain:
+            near[domain.seat[1], domain.seat[0]] = False
+        candidates = np.flatnonzero(near)
+        if len(candidates) < int(self.settings["min_band_cells"]):
+            return
+        width = self.world.width
+        ax, ay = (
+            event.location
+            if event.location != NO_LOCATION
+            else divmod(int(candidates[int(spot * len(candidates))]), width)[::-1]
+        )
+        km_row, km_col = self.world.scale.sampling
+        score = np.hypot((candidates // width - ay) * km_row, (candidates % width - ax) * km_col)
+        score += gap.reshape(-1)[candidates]
+        chosen = candidates[np.lexsort((candidates, score))[:want]]
+        cells = chosen
+        if domain:
+            kept = mine.copy()
+            kept.reshape(-1)[chosen] = False
+            labels, _ = ndimage.label(kept)
+            seat_label = int(labels[domain.seat[1], domain.seat[0]])
+            stray = np.flatnonzero(kept & (labels != seat_label)) if seat_label else np.empty(0, dtype=chosen.dtype)
+            if len(stray) > 2 * want:
+                return
+            cells = np.concatenate([chosen, stray])
+        cells = np.sort(cells).astype(np.int32)
+        self.state.reshape(-1)[cells] = loser
+        self.plan.entries.append((step, TerritoryChange(step.year, 0, step.kind, cells, loser, winner)))
 
     def _ruin_km(self, fallen_id: int) -> np.ndarray:
         """Return the ``[y, x]`` km from the ruins of fallen realm ``fallen_id`` (computed once)."""

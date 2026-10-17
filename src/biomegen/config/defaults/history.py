@@ -134,5 +134,17 @@ VALUES: Dict[str, Any] = {
         "core_share": 0.3,
         "min_cells": 12,
         "min_band_cells": 3,
+        # A battle or peace may move a strip of the winner's land along the front to the loser (undone in the walk): a
+        # decisive battle always, others with ``strip_chance``, a peace of an older war with ``cession_chance``. A strip
+        # takes a share (a [least, most] draw) of the winner's land: the cells within ``depth_km`` of the loser's,
+        # nearest the battle first.
+        "strips": {
+            "strip_chance": 0.7,
+            "strip_share": [0.01, 0.04],
+            "decisive_share": [0.05, 0.12],
+            "cession_chance": 0.5,
+            "cession_share": [0.03, 0.08],
+            "depth_km": 200.0,
+        },
     },
 }
