@@ -473,7 +473,7 @@ def run(
                     history_loop(
                         world,
                         config,
-                        initial_state(world, config, history_start(world, config, state)),
+                        initial_state(world, config, history_start(world, config, state), (state.cx, state.cy)),
                         reader,
                         writer,
                         size_of,

@@ -79,7 +79,7 @@ def test_next_and_previous_step_between_changes(world: World, cfg: Config) -> No
 def test_stepping_back_from_the_first_change_stays_and_says_so(world: World, cfg: Config) -> None:
     state = initial_state(world, cfg)
     _press(world, cfg, state, "[")
-    assert state.at == state.moments[0] and state.message == "no earlier change"
+    assert state.at == state.moments[0] and state.message == "nothing earlier"
 
 
 def test_the_present_key_goes_to_the_last_change(world: World, cfg: Config) -> None:
@@ -91,16 +91,7 @@ def test_the_present_key_goes_to_the_last_change(world: World, cfg: Config) -> N
 def test_stepping_past_the_last_change_says_so(world: World, cfg: Config) -> None:
     state = initial_state(world, cfg)
     _press(world, cfg, state, "end", "]")
-    assert state.at == state.moments[-1] and state.message == "no later change"
-
-
-def test_the_year_keys_skip_to_another_year(world: World, cfg: Config) -> None:
-    state = initial_state(world, cfg)
-    year = state.at[0]
-    _press(world, cfg, state, "}")
-    assert state.at[0] > year
-    _press(world, cfg, state, "{")
-    assert state.at[0] == year
+    assert state.at == state.moments[-1] and state.message == "nothing later"
 
 
 def test_go_to_a_year_shows_the_map_at_the_end_of_it(world: World, cfg: Config) -> None:
@@ -309,3 +300,67 @@ def test_the_minor_events_are_listed_only_when_shown(world: World, cfg: Config) 
     _press(world, cfg, state, "m")
     shown["minor"] = "\n".join(_text(world, cfg, state))
     assert minor.text[:12] not in shown["major"] and minor.text[:12] in shown["minor"]
+
+
+# --- following one tile (the viewer opened from the explorer) -----------------------------------------------------
+
+
+def _tile_of_a_battle(world: World) -> tuple[int, int]:
+    battle = next(e for e in world.chronicle if e.kind == "battle" and e.location != (-1, -1))
+    return battle.location
+
+
+def test_the_tile_keys_do_nothing_from_the_command_line(world: World, cfg: Config) -> None:
+    state = initial_state(world, cfg)
+    before = state.at
+    _press(world, cfg, state, "}")
+    assert state.at == before and "explorer" in state.message
+
+
+def test_the_tile_moments_include_its_events_and_its_changes(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import tile_moments
+
+    x, y = _tile_of_a_battle(world)
+    moments = tile_moments(world, (x, y))
+    assert {(e.year, e.month) for e in world.events_at(x, y) if e.salience == "major"} <= set(moments)
+    cell = y * world.width + x
+    assert {c.moment for c in world.territory if cell in c.cells.tolist()} <= set(moments)
+
+
+def test_the_tile_key_goes_to_the_tiles_next_event(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import tile_moments
+
+    tile = _tile_of_a_battle(world)
+    own = tile_moments(world, tile)
+    state = initial_state(world, cfg, own[0], tile)
+    _press(world, cfg, state, "}")
+    assert state.at == own[1]
+
+
+def test_the_tile_keys_stop_at_the_ends_of_the_tiles_history(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import tile_moments
+
+    tile = _tile_of_a_battle(world)
+    own = tile_moments(world, tile)
+    state = initial_state(world, cfg, own[-1], tile)
+    _press(world, cfg, state, "}")
+    assert state.at == own[-1] and "at this tile" in state.message
+
+
+def test_the_title_and_hint_name_the_selected_tile(world: World, cfg: Config) -> None:
+    state = initial_state(world, cfg, None, (12, 7))
+    text = _text(world, cfg, state)
+    assert "tile 12,7" in text[0] and "this tile" in text[-1]
+
+
+def test_the_selected_tile_is_reversed_on_the_map(world: World, cfg: Config) -> None:
+    plain = compose_history_frame(world, cfg, initial_state(world, cfg), SIZE)
+    marked = compose_history_frame(world, cfg, initial_state(world, cfg, None, (60, 30)), SIZE)
+    assert (plain.bg[1:25, :70] != marked.bg[1:25, :70]).any()
+
+
+def test_the_help_lists_the_tile_keys_only_with_a_tile(world: World, cfg: Config) -> None:
+    without = compose_history_frame(world, cfg, initial_state(world, cfg), SIZE, help_open=True)
+    within = compose_history_frame(world, cfg, initial_state(world, cfg, None, (12, 7)), SIZE, help_open=True)
+    has = lambda grid: "at the selected tile" in "\n".join("".join(row) for row in grid.glyph)  # noqa: E731
+    assert (has(without), has(within)) == (False, True)

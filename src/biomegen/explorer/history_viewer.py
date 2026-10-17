@@ -53,8 +53,8 @@ _SCROLL_LETTERS = {"w": "up", "s": "down", "k": "up", "j": "down"}
 _BOUND_ACTIONS = (
     ("history_prev", ("step", -1)),
     ("history_next", ("step", 1)),
-    ("history_prev_year", ("year", -1)),
-    ("history_next_year", ("year", 1)),
+    ("history_prev_tile", ("tile", -1)),
+    ("history_next_tile", ("tile", 1)),
     ("history_goto", ("goto",)),
     ("history_present", ("present",)),
     ("filter_salience", ("minor",)),
@@ -63,8 +63,8 @@ _BOUND_ACTIONS = (
 _DEFAULT_KEYS = {
     "history_prev": "[",
     "history_next": "]",
-    "history_prev_year": "{",
-    "history_next_year": "}",
+    "history_prev_tile": "{",
+    "history_next_tile": "}",
     "history_goto": "g",
     "history_present": "\\",
     "filter_salience": "m",
@@ -74,7 +74,6 @@ _HISTORY_HELP = (
     "History keys",
     "",
     "{history_prev} / {history_next}   previous / next event (the map changes where an event moves it)",
-    "{history_prev_year} / {history_next_year}   an earlier / a later year",
     "{history_goto}   go to a year (the map at the end of it)",
     "{history_present}   the present (the map after the last event)",
     "{filter_salience}   show / hide the minor events (towers, roads, small settlements)",
@@ -93,6 +92,8 @@ class HistoryState:
         at: The moment shown: the map after every change at or before ``(year, month)``.
         moments: Every moment it can stop at (every event listed and the present), oldest first.
         minor: Whether minor events are listed (and stopped at) too.
+        tile: The tile the viewer was opened on from the explorer (None from the command line): the tile keys step
+            through the events and changes at it.
         scroll: Index of the first chronicle line shown.
         prompt: The text typed in the open year prompt, or ``None``.
         message: A short note for the status line.
@@ -101,6 +102,7 @@ class HistoryState:
     at: Stop
     moments: list[Stop] = field(default_factory=list)
     minor: bool = False
+    tile: Optional[tuple[int, int]] = None
     scroll: int = 0
     prompt: Optional[str] = None
     message: str = ""
@@ -134,8 +136,26 @@ def _year_end(world: World, config: Config, year: int) -> Stop:
     return year, int(config.get("history.months_per_year"))
 
 
-def initial_state(world: World, config: Config, start: Optional[int | Stop] = None) -> HistoryState:
-    """Return the starting state: at ``start`` (a year, or a ``(year, month)``), else the first change."""
+def tile_moments(world: World, tile: tuple[int, int], minor: bool = False) -> list[Stop]:
+    """Return each distinct ``(year, month)`` of an event at ``tile`` (the minor ones too when ``minor``) or of a
+    territory change that took the tile from one owner to another, oldest first."""
+    x, y = tile
+    cell = y * world.width + x
+    moments = {(e.year, e.month) for e in world.events_at(x, y) if minor or e.salience == "major"}
+    for change in world.territory:
+        at = int(np.searchsorted(change.cells, cell))
+        if at < len(change.cells) and int(change.cells[at]) == cell:
+            moments.add(change.moment)
+    return sorted(moments)
+
+
+def initial_state(
+    world: World, config: Config, start: Optional[int | Stop] = None, tile: Optional[tuple[int, int]] = None
+) -> HistoryState:
+    """Return the starting state: at ``start`` (a year, or a ``(year, month)``), else the first stop.
+
+    ``tile`` is the tile the viewer was opened on from the explorer (the tile keys then step through its history).
+    """
     moments = change_moments(world, config)
     if start is None:
         at = moments[0] if moments else _year_end(world, config, 0)
@@ -143,13 +163,13 @@ def initial_state(world: World, config: Config, start: Optional[int | Stop] = No
         at = _year_end(world, config, start)
     else:
         at = start
-    return HistoryState(at=at, moments=moments)
+    return HistoryState(at=at, moments=moments, tile=tile)
 
 
 def resolve_history_action(token: str, config: Config, prompting: bool = False) -> Action:
     """Translate a key token into a viewer action.
 
-    Actions: ``("step", ±1)``, ``("year", ±1)``, ``("goto",)``, ``("present",)``, ``("first",)``, ``("last",)``,
+    Actions: ``("step", ±1)``, ``("tile", ±1)``, ``("goto",)``, ``("present",)``, ``("first",)``, ``("last",)``,
     ``("scroll", n)``, ``("page", ±1)``, ``("help",)``, ``("quit",)``, ``("resize",)``, ``("none",)``; while the year
     prompt is open also ``("type", char)``, ``("backspace",)``, ``("submit",)`` and ``("cancel",)``.
     """
@@ -256,14 +276,26 @@ def _map_grid(world: World, config: Config, state: HistoryState, area: Size, col
 
     Drawn again only when something changed.
     """
-    key = (area, state.at, state.minor, color, ascii_only)
+    key = (area, state.at, state.minor, state.tile, color, ascii_only)
     if state._map is None or state._map[0] != key:
         sampler = FitSampler(world, config, area[0], area[1])
         view = resolve_view(config, "political")
         grid = build_grid(world, config, view, sampler, None, ascii_only, color, "all", 0, None, state.at)
         _draw_markers(grid, world, config, state, sampler)
+        _mark_tile(grid, state, sampler)
         state._map = (key, grid)
     return state._map[1]
+
+
+def _mark_tile(grid: CellGrid, state: HistoryState, sampler: FitSampler) -> None:
+    """Reverse the cell of the selected tile, so it can be found on the map."""
+    if state.tile is None:
+        return
+    col, row = sampler.cell_coords(*state.tile) or (-1, -1)
+    if 0 <= row < grid.rows and 0 <= col < grid.cols:
+        fg, bg = grid.fg[row, col].copy(), grid.bg[row, col].copy()
+        grid.fg[row, col], grid.bg[row, col] = bg, fg
+        grid.bold[row, col] = True
 
 
 def _draw_markers(grid: CellGrid, world: World, config: Config, state: HistoryState, sampler: FitSampler) -> None:
@@ -341,13 +373,16 @@ def _events_layout(world: World, config: Config, state: HistoryState, width: int
     return state._events[1:]
 
 
-def _help_lines(config: Config) -> tuple[str, ...]:
-    """The help text: the keys, then what the marks on the map and the powers list mean (from the config's glyphs)."""
+def _help_lines(config: Config, tile: bool) -> tuple[str, ...]:
+    """The help text: the keys (the tile keys when a tile is selected), then what the marks on the map and the powers
+    list mean (from the config's glyphs)."""
     glyphs = config.get("history.viewer.glyphs")
     marks = "   ".join(f"{glyph} {kind}" for kind, glyph in glyphs.items())
     years = int(config.get("history.viewer.marker_years"))
     return (
-        *_HISTORY_HELP[:-1],
+        *_HISTORY_HELP[:3],
+        *(("{history_prev_tile} / {history_next_tile}   previous / next event at the selected tile",) if tile else ()),
+        *_HISTORY_HELP[3:-1],
         "",
         "Marks on the map: events that had a place",
         f"  {marks}",
@@ -364,7 +399,9 @@ def _title(world: World, config: Config, state: HistoryState) -> str:
     place = "before the first event" if index < 0 else f"stop {index + 1}/{len(state.moments)}"
     if state.at >= present_moment(world, config):
         place += ", the present"
-    return f"History of {world.island_name or 'the island'}  seed {world.seed}  -  year {year}, month {month} ({place})"
+    where = "" if state.tile is None else f"  tile {state.tile[0]},{state.tile[1]}"
+    island = world.island_name or "the island"
+    return f"History of {island}  seed {world.seed}{where}  -  year {year}, month {month} ({place})"
 
 
 def compose_history_frame(
@@ -406,9 +443,9 @@ def compose_history_frame(
         _put(screen, status_row, 0, f" {status}", fg, bg)
         if state.message:
             _put(screen, status_row, max(0, cols - len(state.message) - 1), state.message, head, bg, bold=True)
-    _put(screen, rows - 1, 0, _hint_line(config, state.prompt is not None), dim, bg)
+    _put(screen, rows - 1, 0, _hint_line(config, state.prompt is not None, state.tile is not None), dim, bg)
     if help_open:
-        draw_help(screen, config, _help_lines(config))
+        draw_help(screen, config, _help_lines(config, state.tile is not None))
     return screen
 
 
@@ -458,7 +495,7 @@ def _draw_events(screen: CellGrid, world: World, config: Config, state: HistoryS
         _put(screen, _HEADER_ROWS, left, "(no events)", dim, bg)
 
 
-def _hint_line(config: Config, prompting: bool) -> str:
+def _hint_line(config: Config, prompting: bool, tile: bool) -> str:
     keys = config.get("keys")
 
     def show(name: str) -> str:
@@ -467,12 +504,54 @@ def _hint_line(config: Config, prompting: bool) -> str:
 
     if prompting:
         return " [Enter] go  [Esc] cancel"
+    here = f"[{show('history_prev_tile')}/{show('history_next_tile')}] this tile  " if tile else ""
     return (
-        f" [{show('history_prev')}/{show('history_next')}] event  "
-        f"[{show('history_prev_year')}/{show('history_next_year')}] year  "
+        f" [{show('history_prev')}/{show('history_next')}] event  {here}"
         f"[{show('history_goto')}] go to year  [{show('history_present')}] present  [{show('filter_salience')}] minor  "
         f"[arrows] scroll  [{show('help')}] help  [{show('quit')}] quit"
     )
+
+
+def _answer_prompt(world: World, config: Config, state: HistoryState, action: Action) -> None:
+    """Apply a key to the open year prompt."""
+    assert state.prompt is not None
+    name = action[0]
+    if name == "type":
+        state.prompt += action[1]
+    elif name == "backspace":
+        state.prompt = state.prompt[:-1]
+    elif name == "cancel":
+        state.prompt = None
+    elif name == "submit":
+        text, state.prompt = state.prompt.strip(), None
+        try:
+            state.at = _year_end(world, config, int(text))
+        except ValueError:
+            state.message = "year: type a whole number"
+
+
+def _travel(world: World, config: Config, state: HistoryState, action: Action) -> None:
+    """Move ``state.at`` along the stops (``step``, ``present``, ``first``, ``last``) or the selected tile's own events
+    (``tile``), or change which events are listed (``minor``)."""
+    name, here, moments = action[0], state.at, state.moments
+    if name == "minor":
+        state.minor = not state.minor
+        state.moments = change_moments(world, config, state.minor)
+        state.message = "showing minor events too" if state.minor else "showing major events only"
+        return
+    if name in ("step", "tile"):
+        if name == "tile" and state.tile is None:
+            state.message = "open the viewer with t in the explorer to follow one tile"
+            return
+        stops = moments if name == "step" else tile_moments(world, state.tile or (0, 0), state.minor)
+        target = bisect_right(stops, here) if action[1] > 0 else bisect_left(stops, here) - 1
+        if 0 <= target < len(stops):
+            state.at = stops[target]
+        else:
+            where = "" if name == "step" else " at this tile"
+            state.message = ("nothing later" if action[1] > 0 else "nothing earlier") + where
+    elif moments:
+        state.at = moments[0] if name == "first" else moments[-1]
 
 
 def apply_history_action(world: World, config: Config, state: HistoryState, action: Action, size: Size) -> None:
@@ -480,50 +559,15 @@ def apply_history_action(world: World, config: Config, state: HistoryState, acti
     name = action[0]
     state.message = ""
     if state.prompt is not None:
-        if name == "type":
-            state.prompt += action[1]
-        elif name == "backspace":
-            state.prompt = state.prompt[:-1]
-        elif name == "cancel":
-            state.prompt = None
-        elif name == "submit":
-            text, state.prompt = state.prompt.strip(), None
-            try:
-                state.at = _year_end(world, config, int(text))
-            except ValueError:
-                state.message = "year: type a whole number"
-        return
-    moments, here = state.moments, state.at
-    body = max(1, size[1] - _HEADER_ROWS - _FOOTER_ROWS)
-    if name == "step":
-        target = bisect_right(moments, here) if action[1] > 0 else bisect_left(moments, here) - 1
-        if 0 <= target < len(moments):
-            state.at = moments[target]
-        else:
-            state.message = "no later change" if action[1] > 0 else "no earlier change"
-    elif name == "year":
-        years = [m[0] for m in moments]
-        target = bisect_right(years, here[0]) if action[1] > 0 else bisect_left(years, here[0]) - 1
-        if 0 <= target < len(moments):
-            state.at = moments[target]
-        else:
-            state.message = "no later year" if action[1] > 0 else "no earlier year"
+        _answer_prompt(world, config, state, action)
+    elif name in ("step", "tile", "minor", "present", "first", "last"):
+        _travel(world, config, state, ("last",) if name == "present" else action)
     elif name == "goto":
         state.prompt = ""
-    elif name == "minor":
-        state.minor = not state.minor
-        state.moments = change_moments(world, config, state.minor)
-        state.message = "showing minor events too" if state.minor else "showing major events only"
-    elif name == "present":
-        state.at = moments[-1] if moments else here
-    elif name == "first":
-        state.at = moments[0] if moments else here
-    elif name == "last":
-        state.at = moments[-1] if moments else here
     elif name == "scroll":
         state.scroll = max(0, state.scroll + action[1])
     elif name == "page":
-        state.scroll = max(0, state.scroll + action[1] * max(1, body - 1))
+        state.scroll = max(0, state.scroll + action[1] * max(1, size[1] - _HEADER_ROWS - _FOOTER_ROWS - 1))
 
 
 def history_loop(

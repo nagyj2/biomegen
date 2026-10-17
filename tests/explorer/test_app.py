@@ -389,3 +389,8 @@ def test_with_no_event_at_the_cursor_the_viewer_opens_at_the_present(config: Con
 
 def test_the_history_start_is_the_latest_event_here(config: Config) -> None:
     assert history_start(_village_with_events(), config, ViewState(cx=20, cy=10)) == (120, 5)
+
+
+def test_the_viewer_opened_from_the_explorer_follows_the_cursors_tile(config: Config) -> None:
+    out = _run(_village_with_events(), config, "t", "q")
+    assert _shown(out, "tile 20,10")

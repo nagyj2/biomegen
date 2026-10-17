@@ -35,8 +35,8 @@ VALUES: Dict[str, Any] = {
     # The history viewer (``--history``) also uses help and quit; arrows, WASD and HJKL scroll its event list.
     "history_prev": "[",  # go to the previous change of the political map
     "history_next": "]",  # go to the next change
-    "history_prev_year": "{",  # go to the last change of an earlier year
-    "history_next_year": "}",  # go to the first change of a later year
+    "history_prev_tile": "{",  # when opened from the explorer: the previous event or change at the selected tile
+    "history_next_tile": "}",  # ... the next one
     "history_goto": "g",  # ask for a year and show the map at the end of it
     "history_present": "\\",  # go to the present (the last change)
 }

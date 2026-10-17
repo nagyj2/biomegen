@@ -287,7 +287,7 @@ shows the political map at moments of the past.
 | `history` | `"t"` | History viewer at the latest event at the cursor |
 | `tick_pause` · `tick_faster` · `tick_slower` | `"p"` · `"+"` · `"-"` | The simulation clock (inactive until a simulation exists) |
 | `history_prev` · `history_next` | `"["` · `"]"` | History viewer: the previous / next change of the map |
-| `history_prev_year` · `history_next_year` | `"{"` · `"}"` | History viewer: an earlier / a later year |
+| `history_prev_tile` · `history_next_tile` | `"{"` · `"}"` | History viewer opened from the explorer: the previous / next event at the selected tile |
 | `history_goto` · `history_present` | `"g"` · `"\\"` | History viewer: go to a year / the present |
 | `help` | `"?"` | Key help |
 | `refresh` | `"r"` | Restart from the seed: the same world made again, with the view, edits and clock reset |
