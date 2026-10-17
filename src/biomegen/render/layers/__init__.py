@@ -19,6 +19,7 @@ from ...sampling.sampler import Sampler
 from ...sampling.terrain import land_mask, river_mask
 from ...util import rng
 from ...world.overlay import Overlay
+from ...world.territory import FALLEN_OWNER_BASE, PREDECESSOR_OWNER_BASE
 from ...world.tile import Biome
 from ...world.world import World
 from ..colors import (
@@ -66,6 +67,7 @@ class LayerContext:
         labels: ``"all"`` draws feature names, ``"none"`` leaves them off.
         floor: The floor of a multi-floor interior to draw (clamped to each POI's own floors).
         seen: Filled by the layers with the biomes and interior cells drawn.
+        moment: A ``(year, month)`` to draw the political map at (``World.owners_at``), or ``None`` for the present.
         color: Whether the output is coloured. Without colour the glyphs must carry the information, so
             sparse biomes show their glyph on every cell and the sea sparkle is off.
     """
@@ -80,6 +82,7 @@ class LayerContext:
     labels: str = "all"
     floor: int = 0
     seen: Seen = field(default_factory=Seen)
+    moment: Optional[tuple[int, int]] = None
 
     @cached_property
     def biome_style(self) -> BiomeStyle:
@@ -134,15 +137,37 @@ class LayerContext:
         return np.where(self.rocky, style.relief_floor[self.relief], style.floor[self.biome])
 
     @cached_property
-    def realm(self) -> np.ndarray:
-        """Realm id per land cell, -1 on wild land and water.
+    def owners(self) -> np.ndarray:
+        """The ``[y, x]`` owner grid being drawn: ``World.realm_id``, or the owners at :attr:`moment`."""
+        return self.world.realm_id if self.moment is None else self.world.owners_at(*self.moment)
 
-        Read where the biome is read (the warped tile at the detail scales), so a border wobbles like a biome edge and
-        zoom and local agree; a land cell whose warped tile holds no realm takes the realm of its own tile.
+    @cached_property
+    def realm(self) -> np.ndarray:
+        """Palette index per land cell, -1 on wild land and water.
+
+        A realm's index is its id; at a past moment a fallen realm's is ``n + id`` and a predecessor's follows the
+        fallen realms (:func:`owner_palette_index`). Read where the biome is read (the warped tile at the detail
+        scales), so a border wobbles like a biome edge and zoom and local agree; a land cell whose warped tile holds no
+        owner takes the owner of its own tile.
         """
-        realm = self.sampler.blended(self.world.realm_id).astype(np.int64)
-        realm = np.where((realm < 0) & self.land, self.sampler.nearest(self.world.realm_id), realm)
-        return np.where(self.land, realm, -1)
+        owners = self.owners
+        codes = self.sampler.blended(owners).astype(np.int64)
+        codes = np.where((codes < 0) & self.land, self.sampler.nearest(owners), codes)
+        return np.where(self.land, owner_palette_index(self.world, codes), -1)
+
+    @cached_property
+    def tops(self) -> np.ndarray:
+        """Independent power per palette index (realms, then fallen realms and predecessors as themselves); -1 is last.
+
+        At a past moment a vassal tie counts only from its conquest.
+        """
+        world = self.world
+        if self.moment is None:
+            tops = [world.top_realm(r.id) for r in world.realms]
+        else:
+            tops = [world.top_realm_at(r.id, *self.moment) for r in world.realms]
+        extra = range(len(world.realms), len(world.realms) + len(world.fallen_realms) + len(world.predecessors))
+        return np.array(tops + list(extra) + [-1])
 
     @cached_property
     def elevation_m(self) -> np.ndarray:
@@ -167,6 +192,18 @@ class LayerContext:
         return np.isin(self.biome, [int(b) for b in biomes])
 
 
+def owner_palette_index(world: World, codes: np.ndarray) -> np.ndarray:
+    """Map owner values to palette indices: a realm is its id, wild land -1, a fallen realm ``n + id`` and a predecessor
+    ``n + fallen realms + id`` (``n`` realms), so one colour table serves every owner."""
+    realms, fallen = len(world.realms), len(world.fallen_realms)
+    index = codes.copy()
+    is_fallen = (codes <= FALLEN_OWNER_BASE) & (codes > PREDECESSOR_OWNER_BASE)
+    is_predecessor = codes <= PREDECESSOR_OWNER_BASE
+    index[is_fallen] = realms + (FALLEN_OWNER_BASE - codes[is_fallen])
+    index[is_predecessor] = realms + fallen + (PREDECESSOR_OWNER_BASE - codes[is_predecessor])
+    return index
+
+
 Layer = Callable[[LayerContext, CellGrid], None]
 
 LAYERS: Registry[Layer] = Registry("render_layer")
@@ -188,12 +225,23 @@ def build_grid(
     labels: str = "all",
     floor: int = 0,
     seen: Optional[Seen] = None,
+    moment: Optional[tuple[int, int]] = None,
 ) -> CellGrid:
     """Draw ``view`` of ``world`` through ``sampler`` and return the finished grid."""
     # resolve first so a typo fails before any work
     layers = [LAYERS.get(name) for name in view.layers_for(sampler.detailed)]
     context = LayerContext(
-        world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen if seen is not None else Seen()
+        world,
+        config,
+        view,
+        sampler,
+        overlay,
+        ascii_only,
+        color,
+        labels,
+        floor,
+        seen if seen is not None else Seen(),
+        moment,
     )
     grid = CellGrid(sampler.rows, sampler.cols)
     for layer in layers:

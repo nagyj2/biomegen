@@ -24,8 +24,8 @@ def borders_layer(ctx: LayerContext, grid: CellGrid) -> None:
         return
     cfg = ctx.config.get("render.borders")
     realm = ctx.realm
-    # Index -1 is wild land, so these tables read -1 as "no realm" through numpy's negative indexing.
-    tops = np.array([world.top_realm(r.id) for r in world.realms] + [-1])
+    # Index -1 is wild land, so this table reads -1 as "no realm" through numpy's negative indexing.
+    tops = ctx.tops
     hard = np.zeros(realm.shape, dtype=bool)
     soft = np.zeros(realm.shape, dtype=bool)
     pairs = (
@@ -41,7 +41,7 @@ def borders_layer(ctx: LayerContext, grid: CellGrid) -> None:
             target[first] |= mask & larger_is_first
             target[second] |= mask & ~larger_is_first
     soft &= ~hard
-    front = ctx.sampler.blended(world.front) & hard
+    front = np.zeros_like(hard) if ctx.moment else ctx.sampler.blended(world.front) & hard  # fronts are today's
     # Each line colour is mixed on its own cells only, from the fill the earlier layers left there.
     fill = grid.bg
     lines = {

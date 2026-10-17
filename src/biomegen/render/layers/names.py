@@ -13,6 +13,7 @@ from ...config.model import Config
 from ...util.geometry import distance_to
 from ...world.derived import derived
 from ...world.entities import GeoFeature
+from ...world.territory import fallen_owner, predecessor_owner
 from ...world.tile import WaterType
 from ...world.world import World
 from ..colors import mix_colors, scale_colors
@@ -111,14 +112,27 @@ def _realm_labels(ctx: LayerContext, placer: _Placer, cfg: dict) -> None:
     """Name the realms in capitals near their centres, largest first, in a lightened shade of their colour."""
     world = ctx.world
     kinds = set(cfg["realm_kinds"])
-    big = [r for r in world.realms if r.short and r.kind in kinds and r.area_km2 >= float(cfg["realm_min_area_km2"])]
+    smallest = float(cfg["realm_min_area_km2"])
+    cell_km2 = world.scale.cell_area_km2
+    # (owner value, text, colour): the realms; at a past moment fallen realms and predecessors are named too.
+    named = [(r.id, r.short, r.color) for r in world.realms if r.short and r.kind in kinds]
+    if ctx.moment is not None:
+        named += [(fallen_owner(f.id), f.name, f.color) for f in world.fallen_realms if f.name]
+        named += [(predecessor_owner(p.id), p.name, p.color) for p in world.predecessors if p.name]
+    stored = {r.id: r.area_km2 for r in world.realms}
+
+    def area(owner: int) -> float:
+        """Today the realm's stored area; at a past moment what the owner held then."""
+        return stored[owner] if ctx.moment is None else float(np.count_nonzero(ctx.owners == owner)) * cell_km2
+
+    big = [(owner, text, color, area(owner)) for owner, text, color in named if area(owner) >= smallest]
     aspect = world.scale.aspect
-    for realm in sorted(big, key=lambda r: (-r.area_km2, r.id)):
-        ys, xs = np.nonzero(world.realm_id == realm.id)
-        text = realm.short.upper()
+    for owner, text, color, _area in sorted(big, key=lambda entry: (-entry[3], entry[0])):
+        ys, xs = np.nonzero(ctx.owners == owner)
+        text = text.upper()
         nearest = np.lexsort((xs, ys, np.hypot(xs - xs.mean(), (ys - ys.mean()) * aspect)))
         starts = [(int(xs[i]) - len(text) // 2, int(ys[i])) for i in nearest[: int(cfg["realm_candidates"])]]
-        colour = mix_colors(realm.color, (255, 255, 255), float(cfg["realm_lighten"]))
+        colour = mix_colors(color, (255, 255, 255), float(cfg["realm_lighten"]))
         placer.place(text, starts, tuple(int(c) for c in colour))
 
 

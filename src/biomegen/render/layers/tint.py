@@ -11,8 +11,10 @@ from . import LAYERS, LayerContext
 
 
 def realm_colors(ctx: LayerContext) -> np.ndarray:
-    """Realm colours as ``uint8 [n + 1, 3]``, indexed by realm id; index -1 (wild) is mid grey."""
-    colors = [realm.color for realm in ctx.world.realms] + [(128, 128, 128)]
+    """Owner colours as ``uint8 [n + 1, 3]``: realms, fallen realms, predecessors by palette index; -1 is grey."""
+    world = ctx.world
+    colors = [r.color for r in world.realms] + [f.color for f in world.fallen_realms]
+    colors += [p.color for p in world.predecessors] + [(128, 128, 128)]
     return np.array(colors, dtype=np.uint8)
 
 

@@ -194,6 +194,24 @@ class World:
             index = self.realms[index].liege
         return index
 
+    def top_realm_at(self, index: int, year: int, month: Optional[int] = None) -> int:
+        """Return the independent power at the top of realm ``index``'s lieges at a moment (end of ``year`` by default).
+
+        A vassal tie counts from the ``conquest`` event that made it (a tie with no such event never does before the
+        present, which :meth:`top_realm` reads), so the vassal tree grows through history.
+        """
+        since: dict[int, ChronicleEvent] = {}
+        for event in self.chronicle:
+            if event.kind == "conquest" and "vassalage" in event.tags and len(event.realm_ids) == 2:
+                since.setdefault(event.realm_ids[0], event)
+        limit = (year, 10**6 if month is None else month)
+        while self.realms[index].liege >= 0:
+            tie = since.get(index)
+            if tie is None or (tie.year, tie.month) > limit:
+                break
+            index = self.realms[index].liege
+        return index
+
     # ------------------------------------------------------------------ history
     def rulers_of(self, realm_id: int) -> list[Ruler]:
         """Return realm ``realm_id``'s rulers, oldest first (their reigns tile its life)."""
