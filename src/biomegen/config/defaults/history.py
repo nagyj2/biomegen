@@ -147,4 +147,13 @@ VALUES: Dict[str, Any] = {
             "depth_km": 200.0,
         },
     },
+    # The history viewer (``--history``, explorer/history_viewer.py): the political map at a moment with the powers and
+    # the chronicle beside it. The map takes ``map_share`` of the width (at least ``min_map_cols`` columns, leaving
+    # ``min_event_cols`` for the events); events at the current moment are drawn on ``current_bg``, later ones dimmed.
+    "viewer": {
+        "map_share": 0.6,
+        "min_map_cols": 40,
+        "min_event_cols": 34,
+        "current_bg": [60, 56, 30],
+    },
 }
