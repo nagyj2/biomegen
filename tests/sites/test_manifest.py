@@ -8,7 +8,8 @@ from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.sites.kinds import tier_centre
-from biomegen.sites.manifest import manifest_buildings, settlement_tier, site_manifest
+from biomegen.sites.manifest import manifest_buildings, site_manifest
+from biomegen.sites.potential import settlement_tier
 from biomegen.world.entities import POI
 from biomegen.world.manifest import SiteManifest
 from biomegen.world.world import World

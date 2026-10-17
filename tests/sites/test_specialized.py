@@ -75,7 +75,6 @@ def test_the_field_of_a_ruin_is_harvested_or_dead_never_full(config: Config) -> 
 def test_a_kind_with_no_room_is_left_out_and_the_plan_still_builds(config: Config) -> None:
     cramped = load_config(None)
     cramped.data["sites"]["size_jitter"] = 0.0
-    cramped.data["sites"]["pop_scale"] = [1.0, 1.0]
     cramped.data["tables"]["buildings"]["farmhouse"]["rows"] = [40, 40]
     plan = _plan(cramped, "village", 800)
     assert roof_cell(cramped, "farmhouse") not in plan.outside and roof_cell(cramped, "chapel") in plan.outside
@@ -101,7 +100,6 @@ def _fresh(config: Config) -> Config:
     """A copy of the test config for editing one building row."""
     other = load_config(None)
     other.data["sites"]["size_jitter"] = 0.0
-    other.data["sites"]["pop_scale"] = [1.0, 1.0]
     return other
 
 

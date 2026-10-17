@@ -18,6 +18,7 @@ from typing import Optional
 from ..config.model import Config
 from ..util import rng
 from ..world.entities import POI
+from .potential import plan_tier, settlement_tier
 
 _MIN_CELLS = 3  # a plan needs room for a wall, a floor cell and a wall
 
@@ -97,28 +98,26 @@ def site_row_name(config: Config, kind: str, variant: str = "") -> str:
 def site_row_for(config: Config, poi: POI) -> str:
     """Return the ``tables.sites`` row that draws ``poi``.
 
-    A ruin that records what it was (``ruin_of``) is drawn from the row of that settlement tier, so it is the
-    settlement's plan with a fall pass over it; every other POI (and a ruin with no origin) uses its kind's row.
+    A settlement, and a ruin that records what it was (``ruin_of``), is drawn from the row of its potential
+    (:func:`~biomegen.sites.potential.plan_tier`), never of the tier it is now, so growth never redraws its plan; every
+    other POI (and a ruin with no origin) uses its kind's row.
     """
-    if poi.kind == "ruin" and poi.ruin_of and config.get(f"tables.sites.{poi.ruin_of}", None) is not None:
-        return poi.ruin_of
+    if settlement_tier(config, poi):
+        tier = plan_tier(config, poi)
+        if config.get(f"tables.sites.{tier}", None) is not None:
+            return tier
     return site_row_name(config, poi.kind, poi.purpose or poi.style)
 
 
 def _scale(poi: POI, config: Config, row: dict) -> float:
-    """Return the extent factor for ``poi``: a seeded jitter, times a population factor for growing settlements.
+    """Return the extent factor for ``poi``: a seeded jitter, times the row's ``ruin_extent_share`` for a ruin.
 
-    A ruin of a settlement tier is also scaled by that tier's ``ruin_extent_share``.
+    The factor never reads the population: a settlement's extent follows its potential (its row), not its size now.
     """
     jitter = float(config.get("sites.size_jitter"))
     factor = 1.0 + jitter * (2.0 * rng.derive(poi.interior_seed, "site.extent").random() - 1.0)
     if poi.kind == "ruin" and poi.ruin_of and "ruin_extent_share" in row:
         factor *= float(row["ruin_extent_share"])
-    if row["grows_with_pop"]:
-        lo, hi = config.get(f"tables.tiers.{poi.ruin_of or poi.kind}.pop")
-        small, large = config.get("sites.pop_scale")
-        share = 0.0 if hi <= lo else min(1.0, max(0.0, (poi.pop - lo) / (hi - lo)))
-        factor *= small + (large - small) * share
     return factor
 
 

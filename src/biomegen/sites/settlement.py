@@ -32,7 +32,7 @@ from .boat import moor_boat
 from .building import Building, Spec, build_building
 from .carve import Point, Rect, nearest_true
 from .dress import Dressing, lay_dress, wear_dress
-from .kinds import kind_row, kind_spec, lot_rows, lot_widths, roof_cell, tier_centre, tier_reserve
+from .kinds import kind_row, kind_spec, lot_rows, lot_widths, roof_cell, tier_centre
 from .layout import SiteBuilding, SiteContext, layout
 from .streets import lay_roads, lay_street
 from .structure import breach
@@ -1051,10 +1051,10 @@ def _fall(
 def _plot(ctx: SiteContext, centre: Point, inner: np.ndarray) -> tuple[int, int, int, int]:
     """Return the centre building's reserved plot ``(x, y, width, height)`` round ``centre``, clipped to ``inner``.
 
-    The plot is the largest footprint of the tier's ``reserve`` kind (the next tier's centre) plus its apron, so a
-    later promotion rebuilds the centre in the same square. It reads the reserve kind only, never the drawn centre.
+    The plot is the largest footprint of the potential tier's centre kind plus its apron, so a promotion up to the
+    potential rebuilds the centre in the same square. It reads that kind only, never the drawn centre.
     """
-    reserve = tier_reserve(ctx.config, ctx.tier)
+    reserve = tier_centre(ctx.config, ctx.potential)
     apron = int(kind_row(ctx.config, reserve)["apron"])
     height = lot_rows(ctx.config, reserve)[1] + 2 * apron
     width = lot_widths(ctx.config, reserve, ctx.aspect)[1] + 2 * round(apron * ctx.aspect)
@@ -1091,7 +1091,7 @@ def _centre(
     unless the shore leaves no room there) that takes the drawn size, else the smallest size; with no spot at all the
     smallest building anywhere (:func:`_ensure_house`). Its front cell is on the forecourt, which the streets reach.
     """
-    kind = tier_centre(ctx.config, ctx.tier)
+    kind = ctx.centre
     stream = rng.derive(ctx.seed, "site.layout", "centre")
     rows_lo, rows_hi = lot_rows(ctx.config, kind)
     narrow, wide = lot_widths(ctx.config, kind, ctx.aspect)

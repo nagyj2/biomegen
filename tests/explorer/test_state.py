@@ -37,7 +37,6 @@ def site_config() -> Config:
     """Defaults with the extent jitter off, so a site covers its nominal tiles."""
     config = load_config(None)
     config.data["sites"]["size_jitter"] = 0.0
-    config.data["sites"]["pop_scale"] = [1.0, 1.0]
     return config
 
 

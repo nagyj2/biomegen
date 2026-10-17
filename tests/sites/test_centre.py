@@ -6,10 +6,10 @@ import numpy as np
 import pytest
 from scipy import ndimage
 
-from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.sites import clear_cache, site_plan
-from biomegen.sites.kinds import lot_rows, lot_widths, roof_cell, tier_reserve
+from biomegen.sites.kinds import lot_rows, lot_widths, roof_cell, tier_centre
+from biomegen.world.manifest import SiteManifest
 from biomegen.world.tile import Cell
 from tests.sites.conftest import add_poi, flat_world
 
@@ -77,26 +77,24 @@ def test_the_centre_rises_to_the_tops_floor(config: Config) -> None:
     assert (top.cells[footprint] == int(Cell.FLOOR)).any()
 
 
-SWAPS = {  # a smaller or equal civic kind drawn in the same plot
-    "hamlet": "chapel",
-    "village": "gathering_point",
-    "town": "chapel",
-    "city": "hall",
-    "capital": "cathedral",
-}
+LADDER = ("hamlet", "village", "town", "city")  # what a settlement whose potential is a city is promoted through
 
 
-@pytest.mark.parametrize("tier", sorted(SWAPS))
-def test_a_centre_kind_swap_changes_nothing_outside_the_plot(config: Config, tier: str) -> None:
-    # The plot is sized by the reserve kind, so drawing another centre in it leaves every other cell as it was.
-    other = load_config(None)
-    other.data["sites"]["size_jitter"] = 0.0
-    other.data["sites"]["pop_scale"] = [1.0, 1.0]
-    other.data["tables"]["tiers"][tier]["reserve"] = tier_reserve(config, tier)  # the capital reserves its own centre
-    other.data["tables"]["tiers"][tier]["centre"] = SWAPS[tier]
-    a, b = _plan(config, tier), _plan(other, tier)
-    changed = (a.cells != b.cells) | (a.outside != b.outside)
-    reserve = tier_reserve(config, tier)
+def _plan_as(config: Config, tier: str, potential: str, floors: int = 1):
+    """The ground floor of a POI whose potential is ``potential``, with the manifest of a settlement of ``tier``."""
+    world = flat_world(20, 14)
+    poi = add_poi(world, tier, 10, 7, pop=TIERS[tier], civilized=True, floor_count=floors, potential=potential)
+    plan = site_plan(poi, 0, config, world, SiteManifest(tier, 1, 1, False))
+    assert plan is not None
+    return plan
+
+
+@pytest.mark.parametrize("tier", LADDER[:-1])
+def test_a_promotion_changes_nothing_outside_the_plot(config: Config, tier: str) -> None:
+    # The plot is sized for the potential's centre, so a promotion (a new centre kind) leaves every other cell alone.
+    before, after = _plan_as(config, tier, "city"), _plan_as(config, "city", "city")
+    changed = (before.cells != after.cells) | (before.outside != after.outside)
+    reserve = tier_centre(config, "city")
     apron = int(config.get(f"tables.buildings.{reserve}.apron"))
     plot_rows = lot_rows(config, reserve)[1] + 2 * apron
     plot_cols = lot_widths(config, reserve, 2.0)[1] + 2 * round(apron * 2.0)
@@ -104,12 +102,7 @@ def test_a_centre_kind_swap_changes_nothing_outside_the_plot(config: Config, tie
     assert changed.any() and row1 - row0 <= plot_rows and col1 - col0 <= plot_cols
 
 
-def test_a_larger_reserve_makes_a_larger_plaza_square(config: Config) -> None:
-    # The forecourt follows the reserve kind: reserving a palace paves more than reserving the town's own hall.
-    wide = load_config(None)
-    wide.data["sites"]["size_jitter"] = 0.0
-    wide.data["sites"]["pop_scale"] = [1.0, 1.0]
-    wide.data["tables"]["tiers"]["village"]["reserve"] = "palace"
-    own = _plan(config, "village")
-    big = _plan(wide, "village")
-    assert (big.cells == int(Cell.PATH)).sum() > (own.cells == int(Cell.PATH)).sum()
+def test_the_centre_follows_the_manifests_tier_not_the_potentials(config: Config) -> None:
+    # A village that could be a city stands with a chapel at its plaza until it is promoted.
+    plan = _plan_as(config, "village", "city")
+    assert roof_cell(config, "chapel") in plan.outside and roof_cell(config, "cathedral") not in plan.outside

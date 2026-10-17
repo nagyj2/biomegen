@@ -10,7 +10,6 @@ from typing import Any, Dict
 
 VALUES: Dict[str, Any] = {
     "size_jitter": 0.25,  # each site's extent is scaled by a seeded factor in [1 - jitter, 1 + jitter]
-    "pop_scale": [0.8, 1.3],  # a growing settlement's extent factor at the tier's smallest and largest population
     "margin_tiles": 0.5,  # terrain kept around the extent in the site window (drawn in the POI view)
     "max_gates": 3,  # road gates cut into a site's edge, one per distinct side the roads arrive from
     "room_rows": [3, 6],  # room height range in rows; the width is this times render.cell_aspect

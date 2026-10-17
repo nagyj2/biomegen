@@ -11,7 +11,6 @@
 #                    than one tile, above 1 spans several tiles
 #   rows_per_tile    plan cells per tile, vertically; columns per tile are this times render.cell_aspect, so a
 #                    tile stays square on a terminal whose cells are taller than wide
-#   grows_with_pop   true when a settlement's extent scales with its population inside the tier's range
 #   plaza_tiles      (optional) radius of a settlement's central plaza in tiles
 #   walled           (optional) true when a settlement has a wall with a gate where each road arrives
 #   specialized      (settlement tiers) [min, max] how many specialized buildings (production kinds of data/buildings.toml) the
@@ -31,7 +30,6 @@ furniture = "home"
 layout = "settlement"
 extent_tiles = [3.5, 2.5]
 rows_per_tile = 24
-grows_with_pop = true
 specialized = [4, 5]
 houses = [8, 30]
 plaza_tiles = 0.25
@@ -45,7 +43,6 @@ furniture = "home"
 layout = "settlement"
 extent_tiles = [2.5, 2.0]
 rows_per_tile = 24
-grows_with_pop = true
 specialized = [3, 4]
 houses = [4, 18]
 plaza_tiles = 0.18
@@ -59,7 +56,6 @@ furniture = "home"
 layout = "settlement"
 extent_tiles = [2.0, 1.5]
 rows_per_tile = 22
-grows_with_pop = true
 specialized = [2, 3]
 houses = [2, 14]
 plaza_tiles = 0.12
@@ -72,7 +68,6 @@ furniture = "home"
 layout = "settlement"
 extent_tiles = [1.5, 1.25]
 rows_per_tile = 20
-grows_with_pop = true
 specialized = [1, 2]
 houses = [1, 6]
 plaza_tiles = 0.08
@@ -85,43 +80,37 @@ furniture = "tower"
 layout = "tower"
 extent_tiles = [0.5, 0.5]
 rows_per_tile = 24
-grows_with_pop = false
 
 [sites.dungeon]
 furniture = "dungeon"
 layout = "dungeon"
 extent_tiles = [1.5, 1.0]
 rows_per_tile = 18
-grows_with_pop = false
 
 [sites.ruin]
 furniture = "ruin"
 layout = "ruin"
 extent_tiles = [1.5, 1.0]
 rows_per_tile = 16
-grows_with_pop = false
 
 [sites.camp]
 furniture = "camp"
 layout = "camp"
 extent_tiles = [0.5, 0.5]
 rows_per_tile = 24
-grows_with_pop = false
 
 [sites.boat]
 furniture = "boat"
 layout = "boat"
 extent_tiles = [0.4, 0.2]
 rows_per_tile = 40
-grows_with_pop = false
 
 # A hamlet is a few houses round a lane, smaller than a village.
 [sites.hamlet]
 furniture = "home"
 layout = "settlement"
-extent_tiles = [1.0, 0.8]
+extent_tiles = [1.05, 0.84]
 rows_per_tile = 20
-grows_with_pop = true
 specialized = [1, 1]
 houses = [1, 2]
 plaza_tiles = 0.05
@@ -136,21 +125,18 @@ furniture = "camp_founding"
 layout = "camp"
 extent_tiles = [0.5, 0.5]
 rows_per_tile = 24
-grows_with_pop = false
 
 [sites.camp_bandit]
 furniture = "camp"
 layout = "camp"
 extent_tiles = [0.5, 0.5]
 rows_per_tile = 24
-grows_with_pop = false
 
 [sites.camp_army]
 furniture = "camp_army"
 layout = "camp"
 extent_tiles = [0.7, 0.6]
 rows_per_tile = 24
-grows_with_pop = false
 
 # A battlefield is an open trampled field, a watchtower a small tower in its own furniture, a shrine one walled room.
 [sites.battlefield]
@@ -158,21 +144,18 @@ furniture = "battlefield"
 layout = "battlefield"
 extent_tiles = [2.6, 1.8]
 rows_per_tile = 16
-grows_with_pop = false
 
 [sites.watchtower]
 furniture = "watchtower"
 layout = "tower"
 extent_tiles = [0.5, 0.5]
 rows_per_tile = 24
-grows_with_pop = false
 
 [sites.shrine]
 furniture = "shrine"
 layout = "shrine"
 extent_tiles = [0.6, 0.5]
 rows_per_tile = 24
-grows_with_pop = false
 
 # A homestead is one house in a yard; its look follows its `style` (POI.style): a row named `homestead_<style>` replaces the
 # plain `homestead` row. `dress` picks the dressing (`sites.homestead.dress`): a farm's hedge and wagon, a mill's water wheel, a
@@ -184,14 +167,12 @@ furniture = "homestead"
 layout = "homestead"
 extent_tiles = [0.7, 0.55]
 rows_per_tile = 24
-grows_with_pop = false
 
 [sites.homestead_farm]
 furniture = "homestead"
 layout = "homestead"
 extent_tiles = [1.2, 0.85]
 rows_per_tile = 24
-grows_with_pop = false
 dress = "farm"
 
 [sites.homestead_mill]
@@ -199,7 +180,6 @@ furniture = "homestead"
 layout = "homestead"
 extent_tiles = [1.6, 0.9]
 rows_per_tile = 24
-grows_with_pop = false
 dress = "mill"
 
 [sites.homestead_mine]
@@ -207,7 +187,6 @@ furniture = "homestead"
 layout = "homestead"
 extent_tiles = [0.8, 0.6]
 rows_per_tile = 24
-grows_with_pop = false
 dress = "mine"
 
 [sites.homestead_lodge]
@@ -215,7 +194,6 @@ furniture = "homestead"
 layout = "homestead"
 extent_tiles = [1.0, 0.75]
 rows_per_tile = 24
-grows_with_pop = false
 dress = "lodge"
 
 [sites.homestead_fishery]
@@ -223,5 +201,4 @@ furniture = "homestead"
 layout = "homestead"
 extent_tiles = [1.6, 0.9]
 rows_per_tile = 24
-grows_with_pop = false
 dress = "fishery"

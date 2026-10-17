@@ -725,18 +725,6 @@ def test_every_tier_names_a_civic_centre_in_tier_order() -> None:
     assert centres == ["gathering_point", "chapel", "hall", "cathedral", "palace"]
 
 
-def test_a_tier_reserves_the_next_tiers_centre_and_the_capital_none() -> None:
-    # The plaza keeps room for the next tier's centre; the capital has no next tier and omits the key.
-    tiers = get_defaults()["tables"]["tiers"]
-    assert {name: row.get("reserve") for name, row in tiers.items()} == {
-        "capital": None,
-        "city": "palace",
-        "town": "cathedral",
-        "village": "hall",
-        "hamlet": "chapel",
-    }
-
-
 def test_every_style_building_is_a_production_kind() -> None:
     tables = get_defaults()["tables"]
     assert {row["building"] for row in tables["poi_styles"].values()} == {
@@ -794,13 +782,6 @@ def test_a_tier_centre_must_be_a_civic_kind() -> None:
     cfg = get_defaults()
     cfg["tables"]["tiers"]["village"]["centre"] = "house"
     with pytest.raises(ConfigError, match=r"tables\.tiers\.village\.centre: 'house' is no civic building kind"):
-        validate(cfg)
-
-
-def test_a_tier_reserve_must_be_a_civic_kind() -> None:
-    cfg = get_defaults()
-    cfg["tables"]["tiers"]["town"]["reserve"] = "mill"
-    with pytest.raises(ConfigError, match=r"tables\.tiers\.town\.reserve: 'mill' is no civic building kind"):
         validate(cfg)
 
 
@@ -939,3 +920,11 @@ def test_settlement_tiers_have_house_ranges() -> None:
         sites[tier]["houses"][0] <= sites[tier]["houses"][1]
         for tier in ("hamlet", "village", "town", "city", "capital")
     )
+
+
+def test_a_tier_row_no_longer_takes_a_reserve() -> None:
+    # The plot at the plaza is sized for the potential's centre, so the old reserve key is an unknown key.
+    cfg = get_defaults()
+    cfg["tables"]["tiers"]["town"]["reserve"] = "cathedral"
+    with pytest.raises(ConfigError, match="reserve"):
+        validate(cfg)

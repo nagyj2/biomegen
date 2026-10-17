@@ -116,11 +116,6 @@ def tier_centre(config: Config, tier: str) -> str:
     return str(config.get(f"tables.tiers.{tier}.centre"))
 
 
-def tier_reserve(config: Config, tier: str) -> str:
-    """Return the civic kind whose plot a ``tier`` plaza keeps: the next tier's centre, else its own."""
-    return str(config.get(f"tables.tiers.{tier}.reserve", tier_centre(config, tier)))
-
-
 def building_counts(buildings: tuple[SiteBuilding, ...]) -> list[tuple[str, int]]:
     """Return ``(kind, how many)`` for the buildings of a plan, in the order each kind first appears."""
     counts: dict[str, int] = {}

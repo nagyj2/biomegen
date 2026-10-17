@@ -28,7 +28,6 @@ def config() -> Config:
     """Defaults with the extent jitter off, so sites have their nominal size."""
     cfg = load_config(None)
     cfg.data["sites"]["size_jitter"] = 0.0
-    cfg.data["sites"]["pop_scale"] = [1.0, 1.0]
     return cfg
 
 

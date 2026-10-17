@@ -592,7 +592,6 @@ def test_a_house_row_sets_the_height_of_a_settlement_lot(config: Config) -> None
     tall = _plan(config, "city", pop=12000)
     short_config = load_config(None)
     short_config.data["sites"]["size_jitter"] = 0.0
-    short_config.data["sites"]["pop_scale"] = [1.0, 1.0]
     short_config.data["tables"]["buildings"]["house"]["rows"] = [5, 5]
 
     def tallest(plan) -> int:

@@ -16,13 +16,8 @@ from ..world.entities import POI
 from ..world.manifest import SiteManifest
 from ..world.world import World
 from .kinds import tier_centre
+from .potential import settlement_tier
 from .surroundings import settlement_kinds, specialized_slots
-
-
-def settlement_tier(config: Config, poi: POI) -> str:
-    """Return the settlement tier ``poi`` is (a ruin: the tier it was), or an empty string when it is no settlement."""
-    tier = poi.ruin_of if poi.kind == "ruin" else poi.kind
-    return tier if tier and config.get(f"tables.sites.{tier}.houses", None) is not None else ""
 
 
 def _pop_share(config: Config, tier: str, pop: int) -> float:

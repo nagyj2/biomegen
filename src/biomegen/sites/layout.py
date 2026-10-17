@@ -13,6 +13,7 @@ from typing import Any, Callable, Optional
 import numpy as np
 
 from ..config.model import Config
+from ..world.manifest import SiteManifest
 from ..world.tile import Cell
 from .patch import SitePatch
 from .streets import StreetRules
@@ -95,7 +96,9 @@ class SiteContext:
         purpose: The POI's purpose (a camp's: founding, bandit or army), which a layout may dress differently.
         fall: Set for a ruin of a settlement tier: the settlement layout then lays the settlement and lets it fall.
         dress: A homestead's dressing (the ``dress`` key of its site row: farm, mill, mine, lodge, fishery, or none).
-        tier: The settlement tier a settlement layout draws: the POI kind, or a ruin's ``ruin_of`` (else empty).
+        potential: The tier a settlement layout draws its plan for (``POI.potential``): extent, plaza and centre plot.
+        centre: The civic kind that stands at the plaza now (the manifest tier's centre); empty for no settlement.
+        manifest: What stands in a settlement's plan (``SiteManifest``); None for a layout that is no settlement.
         kinds: The specialized building kinds a settlement is chosen to have, in placing order (``settlement_kinds``).
         style: A generated hamlet's style (its first building is that style's kind and is always built), else empty.
     """
@@ -115,7 +118,9 @@ class SiteContext:
     purpose: str = ""
     fall: Optional[Fall] = None
     dress: str = ""
-    tier: str = ""
+    potential: str = ""
+    centre: str = ""
+    manifest: Optional[SiteManifest] = None
     kinds: tuple[str, ...] = ()
     style: str = ""
 

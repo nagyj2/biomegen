@@ -14,7 +14,6 @@ from biomegen.world.entities import POI
 def cfg() -> Config:
     config = load_config(None)
     config.data["sites"]["size_jitter"] = 0.0
-    config.data["sites"]["pop_scale"] = [1.0, 1.0]
     return config
 
 
@@ -89,12 +88,20 @@ def test_a_wide_site_covers_neighbouring_tiles(cfg: Config) -> None:
     assert geometry.covers_tile(9, 8) and geometry.covers_tile(11, 8) and not geometry.covers_tile(13, 8)
 
 
-def test_population_grows_a_settlement(cfg: Config) -> None:
+def test_population_does_not_change_a_settlements_extent(cfg: Config) -> None:
+    # The extent follows the potential, so a town that grows draws on the same ground.
     config = load_config(None)
     config.data["sites"]["size_jitter"] = 0.0
     lo, hi = config.get("tables.tiers.town.pop")
-    small = site_geometry(_poi("town", pop=lo), config)
-    large = site_geometry(_poi("town", pop=hi), config)
+    assert site_geometry(_poi("town", pop=lo), config) == site_geometry(_poi("town", pop=hi), config)
+
+
+def test_a_settlements_extent_follows_its_potential(cfg: Config) -> None:
+    config = load_config(None)
+    config.data["sites"]["size_jitter"] = 0.0
+    village, town = _poi("village"), _poi("village")
+    town.potential = "town"
+    small, large = site_geometry(village, config), site_geometry(town, config)
     assert small is not None and large is not None and large.box_cols > small.box_cols
 
 

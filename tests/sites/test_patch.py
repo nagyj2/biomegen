@@ -18,7 +18,6 @@ from tests.render.conftest import make_world
 def cfg() -> Config:
     config = load_config(None)
     config.data["sites"]["size_jitter"] = 0.0
-    config.data["sites"]["pop_scale"] = [1.0, 1.0]
     return config
 
 

@@ -24,6 +24,7 @@ from ..util import rng
 from ..world.entities import POI
 from ..world.tile import BIOME_NAME, RELIEF_NAME, WaterType, biome_from_name
 from ..world.world import World
+from .potential import plan_tier, settlement_tier
 
 _Cache = tuple[Config, dict[tuple, list[str]]]
 _CACHES: "weakref.WeakKeyDictionary[World, dict[int, _Cache]]" = weakref.WeakKeyDictionary()
@@ -101,10 +102,14 @@ def _allocate(scores: dict[str, float], limits: dict[str, int], slots: int) -> l
 def settlement_kinds(world: World, config: Config, poi: POI) -> list[str]:
     """Return the specialized building kinds ``poi`` is chosen to have, in the order they are placed.
 
-    Empty for a POI that is no settlement (a homestead, a wild site); a ruin is chosen as the tier it was, at its peak
-    population. A hamlet's style kind comes first. Pure and memoised per world and config.
+    The list is as long as the slots of the POI's potential (``tables.sites.<potential>.specialized``, the most), never
+    shortened by its population: a settlement that has fewer built stands with a prefix of it (``SiteManifest``). Empty
+    for a POI that is no settlement (a homestead, a wild site). A hamlet's style kind comes first. Pure and memoised per
+    world and config.
     """
-    tier = poi.ruin_of or poi.kind
+    if not settlement_tier(config, poi):
+        return []
+    tier = plan_tier(config, poi)
     if config.get(f"tables.sites.{tier}.specialized", None) is None:
         return []
     per_config = _CACHES.setdefault(world, {})
@@ -112,7 +117,7 @@ def settlement_kinds(world: World, config: Config, poi: POI) -> list[str]:
     if entry is None or entry[0] is not config:  # an id can be reused once its config is gone
         entry = (config, {})
         per_config[id(config)] = entry
-    key = (poi.kind, poi.x, poi.y, poi.interior_seed, poi.pop, poi.ruin_of, poi.style, tuple(poi.tags))
+    key = (poi.x, poi.y, poi.interior_seed, tier, poi.style, tuple(poi.tags))
     if key not in entry[1]:
         entry[1][key] = _choose(world, config, poi, tier)
     return list(entry[1][key])
@@ -126,7 +131,7 @@ def _choose(world: World, config: Config, poi: POI, tier: str) -> list[str]:
     if poi.style and config.get(f"tables.poi_styles.{poi.style}.building", None) is not None:
         style_kind = str(config.get(f"tables.poi_styles.{poi.style}.building"))
         chosen.append(style_kind)
-    slots = specialized_slots(config, tier, poi.pop) - len(chosen)
+    slots = int(config.get(f"tables.sites.{tier}.specialized")[1]) - len(chosen)
     if slots <= 0:
         return chosen
     terms = _terms(world, config, poi)

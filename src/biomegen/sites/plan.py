@@ -16,14 +16,17 @@ import numpy as np
 
 from ..config.model import Config
 from ..world.entities import POI
+from ..world.manifest import SiteManifest
 from ..world.tile import Cell
 from ..world.world import World
 from . import battlefield, boat, camp, homestead, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
 from .geometry import SiteGeometry, site_floor_range, site_geometry, site_roof_floor, site_row_for
-from .kinds import family_weights
+from .kinds import family_weights, tier_centre
 from .layout import LAYOUTS, Fall, SiteBuilding, SiteContext
+from .manifest import site_manifest
 from .patch import read_patch
+from .potential import plan_tier
 from .streets import clear_roads
 from .surroundings import settlement_kinds
 
@@ -94,20 +97,28 @@ def _fall(config: Config, row: dict, age_years: Optional[int]) -> Fall:
     )
 
 
-def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[SitePlan]:
-    """Return the plan of ``poi``'s ``floor`` (clamped to its floors), or None if its kind has no site or no room."""
+def site_plan(
+    poi: POI, floor: int, config: Config, world: World, manifest: Optional[SiteManifest] = None
+) -> Optional[SitePlan]:
+    """Return the plan of ``poi``'s ``floor`` (clamped to its floors), or None if its kind has no site or no room.
+
+    A settlement's plan is drawn for its potential and reads what stands from ``manifest`` (default: the one its tier
+    and population make, :func:`~biomegen.sites.manifest.site_manifest`), never the tier or population itself.
+    """
     lowest, highest = site_floor_range(poi, config)
     floor = max(lowest, min(int(floor), highest))
     cache = _cache(world, config)
+    manifest = site_manifest(config, poi) if manifest is None else manifest
     key = (
         poi.kind,
         poi.purpose,
         poi.style,
         poi.ruin_of,
+        poi.potential,
+        manifest,
         poi.x,
         poi.y,
         poi.interior_seed,
-        poi.pop,
         poi.floor_count,
         poi.lowest_floor,
         tuple(poi.tags),
@@ -125,6 +136,9 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
     age_years = None if poi.fell is None else max(0, world.year - poi.fell)
     # Only a settlement lays its own roof level; any other layout is built on the ground floor and seen from outside.
     roof_view = floor == site_roof_floor(poi, config) and row["layout"] != "settlement"
+    settled = row["layout"] == "settlement" and manifest is not None
+    # A ruin falls as the tier it was (its own row's numbers), on the plan its potential draws.
+    fallen_row = config.get(f"tables.sites.{poi.ruin_of}", row) if poi.kind == "ruin" and poi.ruin_of else row
     context = SiteContext(
         kind=poi.kind,
         seed=int(poi.interior_seed),
@@ -134,15 +148,17 @@ def site_plan(poi: POI, floor: int, config: Config, world: World) -> Optional[Si
         patch=read_patch(poi, geometry, world, config),
         furniture=_furniture(config, row),
         plaza_rows=round(float(row.get("plaza_tiles", 0.0)) * int(row["rows_per_tile"])),
-        walled=bool(row.get("walled", False)),
+        walled=manifest.walled if settled and manifest is not None else bool(row.get("walled", False)),
         config=config,
         tags=tuple(poi.tags),
         age_years=age_years,
         purpose=poi.purpose,
-        fall=_fall(config, row, age_years) if poi.kind == "ruin" and "ruin_standing" in row else None,
+        fall=_fall(config, fallen_row, age_years) if poi.kind == "ruin" and "ruin_standing" in fallen_row else None,
         dress=str(row.get("dress", "")),
-        tier=poi.ruin_of or poi.kind,
-        kinds=tuple(settlement_kinds(world, config, poi)) if row["layout"] == "settlement" else (),
+        potential=plan_tier(config, poi) if settled else "",
+        centre=tier_centre(config, manifest.tier) if settled and manifest is not None else "",
+        manifest=manifest if settled else None,
+        kinds=tuple(settlement_kinds(world, config, poi))[: manifest.specialized] if settled and manifest else (),
         style=poi.style,
     )
     built = LAYOUTS[row["layout"]](context)

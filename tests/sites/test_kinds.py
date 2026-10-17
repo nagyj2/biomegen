@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from biomegen.config import load_config
 from biomegen.sites.cells import OUTSIDE_PRIORITY
-from biomegen.sites.kinds import cell_name, centre_kind, kind_of_cell, kind_row, roof_cell, tier_reserve
+from biomegen.sites.kinds import cell_name, centre_kind, kind_of_cell, kind_row, roof_cell
 from biomegen.world.entities import POI
 from biomegen.world.tile import KIND_ROOF_BASE, KIND_ROOF_SLOTS, Cell
 
@@ -70,16 +70,6 @@ def test_a_homestead_or_a_wild_site_has_no_centre() -> None:
     assert [centre_kind(_CONFIG, _poi(kind)) for kind in ("homestead", "tower", "dungeon", "ruin")] == [None] * 4
 
 
-def test_a_tier_reserves_the_next_tiers_centre_and_the_capital_its_own() -> None:
-    assert [tier_reserve(_CONFIG, tier) for tier in ("hamlet", "village", "town", "city", "capital")] == [
-        "chapel",
-        "hall",
-        "cathedral",
-        "palace",
-        "palace",
-    ]
-
-
 # --- the buildings of a plan ---------------------------------------------------------------------------------------
 
 
@@ -89,7 +79,6 @@ def _town_plan():
 
     config = load_config(None)
     config.data["sites"]["size_jitter"] = 0.0
-    config.data["sites"]["pop_scale"] = [1.0, 1.0]
     world = flat_world(16, 12)
     poi = add_poi(world, "town", 8, 6, pop=3000, civilized=True)
     plan = site_plan(poi, 0, config, world)

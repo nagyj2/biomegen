@@ -74,7 +74,6 @@ _TIER_ROW = {
     "hooks_remnant": "text_list",
     "near_target": "bool",
     "centre": "text",
-    "reserve": "text",
     "potential_land": "unit",
 }
 _SITE_ROW = {
@@ -82,7 +81,6 @@ _SITE_ROW = {
     "furniture": "text",
     "extent_tiles": "pair",
     "rows_per_tile": "count",
-    "grows_with_pop": "bool",
     "plaza_tiles": "positive",
     "walled": "bool",
     "ruin_standing": "unit_pair",
@@ -442,7 +440,6 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
                 "hooks_free",
                 "hooks_remnant",
                 "near_target",
-                "reserve",
                 "potential_land",
             }
         ),
@@ -995,11 +992,11 @@ def _validate_building_keys(where: str, row: Dict[str, Any], errors: List[str]) 
 
 
 def _validate_building_names(tables: Dict[str, Any], kinds: Dict[str, str], errors: List[str]) -> None:
-    """Check that a tier's ``centre`` and ``reserve`` name civic kinds and a style's ``building`` a production kind."""
+    """Check that a tier's ``centre`` names a civic kind and a style's ``building`` a production kind."""
     tiers, styles = tables.get("tiers", {}), tables.get("poi_styles", {})
     for tier in sorted(tiers) if isinstance(tiers, dict) else []:
         tier_row = tiers[tier]
-        for key in ("centre", "reserve"):
+        for key in ("centre",):
             if isinstance(tier_row, dict) and key in tier_row and kinds.get(tier_row[key]) != "civic":
                 errors.append(f"tables.tiers.{tier}.{key}: {tier_row[key]!r} is no civic building kind")
     for style in sorted(styles) if isinstance(styles, dict) else []:

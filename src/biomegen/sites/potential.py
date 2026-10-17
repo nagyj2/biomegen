@@ -31,19 +31,31 @@ def _rank(config: Config, tier: str) -> int:
     return int(config.get(f"tables.tiers.{tier}.rank"))
 
 
+def settlement_tier(config: Config, poi: POI) -> str:
+    """Return the settlement tier ``poi`` is (a ruin: the tier it was), or an empty string when it is no settlement.
+
+    A homestead is no settlement yet, whatever it may grow into.
+    """
+    tier = poi.ruin_of if poi.kind == "ruin" else poi.kind
+    return tier if tier and config.get(f"tables.tiers.{tier}", None) is not None else ""
+
+
 def potential_floor(config: Config, poi: POI) -> str:
     """Return the tier ``poi`` is at least, or an empty string for a POI that has no settlement plan.
 
     A settlement is its own tier, a ruin the tier it was (``ruin_of``) and a homestead whose style grows the tier it
     grows into; every other POI (towers, camps, a homestead that never grows) has none.
     """
-    if poi.kind == "ruin":
-        tier = poi.ruin_of
-    elif poi.kind == "homestead":
+    if poi.kind == "homestead":
         tier = str(config.get(f"tables.poi_styles.{poi.style}.grows_into", "")) if poi.style else ""
-    else:
-        tier = poi.kind
-    return tier if tier and config.get(f"tables.tiers.{tier}", None) is not None else ""
+        return tier if tier and config.get(f"tables.tiers.{tier}", None) is not None else ""
+    return settlement_tier(config, poi)
+
+
+def plan_tier(config: Config, poi: POI) -> str:
+    """Return the tier a settlement's plan is drawn for: its stored potential, else (a POI made by hand, with no pass
+    run over it) the least it can be, :func:`potential_floor`. Empty for a POI with no settlement plan."""
+    return poi.potential or potential_floor(config, poi)
 
 
 def land_capacity(world: World, config: Config, poi: POI) -> float:
