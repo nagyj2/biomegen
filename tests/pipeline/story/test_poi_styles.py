@@ -326,9 +326,10 @@ def test_the_generated_world_gains_hamlets_and_homesteads() -> None:
 
 
 def test_the_styles_pass_leaves_every_earlier_poi_where_it_was() -> None:
-    # The pass runs last and only appends, so the POIs of a world without styles are a prefix of the one with them.
+    # The pass only appends, so the POIs of a world without styles are a prefix of the one with them (event ids differ:
+    # the annals date the hamlets and homesteads too).
     plain, styled = _without_styles(42), _generate(42)
-    keys = lambda world: [(p.kind, p.x, p.y, p.realm_id, p.event_ids) for p in world.pois]  # noqa: E731
+    keys = lambda world: [(p.kind, p.x, p.y, p.realm_id) for p in world.pois]  # noqa: E731
     assert keys(styled)[: len(plain.pois)] == keys(plain)
 
 

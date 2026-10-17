@@ -36,11 +36,11 @@ from ..world.world import World
 from . import naming
 from .civilization import diplomacy, realms, roads, settlements
 from .physical import biomes, climate, geography, hydrology, terrain
-from .story import history
+from .story import annals, history
 from .story import pois as poi_stage
 
 #: Stages a dawn start skips: everything people do, up to and including the history that records it.
-DAWN_SKIPPED = frozenset({"settlements", "roads", "realms", "diplomacy", "history", "spurs"})
+DAWN_SKIPPED = frozenset({"settlements", "roads", "realms", "diplomacy", "history", "spurs", "annals"})
 
 
 def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = None) -> World:
@@ -100,6 +100,7 @@ def generate(config: Config, seed: int, timings: Optional[Dict[str, float]] = No
         ("history", history.run),
         ("pois", poi_stage.run),
         ("spurs", roads.spurs),
+        ("annals", annals.run),
         ("naming", naming.run),
     ):
         if not (dawn and name in DAWN_SKIPPED):

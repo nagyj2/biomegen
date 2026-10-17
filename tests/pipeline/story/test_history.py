@@ -34,7 +34,7 @@ def test_the_present_is_the_span(world: World, cfg: Config) -> None:
 
 def test_events_are_sorted_by_year_then_kind(world: World) -> None:
     # Within a year the kinds follow EVENT_KINDS, so a founding precedes everything else of its year.
-    keys = [(event.year, EVENT_KINDS.index(event.kind)) for event in world.chronicle]
+    keys = [(event.year, EVENT_KINDS.index(event.kind)) for event in world.chronicle if event.salience == "major"]
     assert keys == sorted(keys)
 
 
@@ -63,7 +63,8 @@ def test_the_oldest_realm_is_founded_in_the_first_year(world: World, cfg: Config
 
 
 def test_no_event_comes_before_the_first_year(world: World, cfg: Config) -> None:
-    assert min(event.year for event in world.chronicle) >= cfg.get("history.first_founding_year")
+    major = [event.year for event in world.chronicle if event.salience == "major"]  # a minor one may be year 0
+    assert min(major) >= cfg.get("history.first_founding_year")
 
 
 def _beginnings(world: World) -> dict[int, object]:
@@ -144,7 +145,7 @@ def test_a_conquest_names_the_vassal_then_its_liege(world: World) -> None:
 
 
 def test_settling_events_are_for_the_configured_kinds_only(world: World, cfg: Config) -> None:
-    kinds = {world.pois[e.poi_ids[0]].kind for e in world.chronicle if e.kind == "settling"}
+    kinds = {world.pois[e.poi_ids[0]].kind for e in world.chronicle if e.kind == "settling" and e.salience == "major"}
     assert kinds <= set(cfg.get("history.settle_kinds"))
 
 

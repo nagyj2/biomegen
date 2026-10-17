@@ -332,6 +332,7 @@ def test_the_stages_run_in_the_documented_order(cfg):
         "history",
         "pois",
         "spurs",
+        "annals",
         "naming",
     ]
 

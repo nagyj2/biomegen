@@ -133,6 +133,20 @@ def _secession_tokens(
         _offshoot_tokens(world, event, realms[0], realms[1], tokens, where)
 
 
+def _name_the_place(world: World, event: ChronicleEvent, tokens: dict[str, object], where: Where) -> bool:
+    """Fill the tokens of an event that names one place and nothing else, and return whether it was one: a tower
+    raised or a dungeon delved (``{place}``), or a settlement no realm holds (``{town}``)."""
+    if event.kind == "creation":
+        tokens["place"] = world.pois[event.poi_ids[0]].name
+        where["place"] = (REF_POI, event.poi_ids[0])
+    elif event.kind == "settling" and "free" in event.tags:
+        tokens["town"] = world.pois[event.poi_ids[0]].name
+        where["town"] = (REF_POI, event.poi_ids[0])
+    else:
+        return False
+    return True
+
+
 def _tokens(
     world: World, config: Config, event: ChronicleEvent, relations: dict[tuple[int, int], Relation]
 ) -> tuple[dict[str, object], Where]:
@@ -149,10 +163,9 @@ def _tokens(
     if fallen is not None:
         tokens.update(fallen=fallen.name, founded=fallen.founded)
         where["fallen"] = (REF_FALLEN, fallen.id)
-    if event.kind == "settling" and "free" in event.tags:  # a settlement no realm holds
-        tokens["town"] = world.pois[event.poi_ids[0]].name
-        where["town"] = (REF_POI, event.poi_ids[0])
-    elif event.predecessor_ids or (event.kind == "secession" and len(realms) == 2):
+    if _name_the_place(world, event, tokens, where):
+        return tokens, where
+    if event.predecessor_ids or (event.kind == "secession" and len(realms) == 2):
         _secession_tokens(world, event, realms, tokens, where)
     elif event.kind == "succession" and realms:
         realm = realms[0]

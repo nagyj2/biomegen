@@ -2,8 +2,9 @@
 # template per event (seeded) and the naming stage fills its tokens once every realm, place and fallen realm has a
 # name. Override one row with e.g. `[tables.chronicle.war]` + `templates = [...]` in a user config.
 #
-# chronicle, one row per kind of event text (founding, founding_fallen, settling, expansion, expansion_fallen, conquest,
-# succession, war, war_ended, war_fallen, rivalry, treaty_alliance, treaty_trade, battle, peace, fall, fall_conquered):
+# chronicle, one row per kind of event text (founding, founding_fallen, settling, expansion, expansion_fallen,
+# creation_tower, creation_dungeon, conquest, succession, war, war_ended, war_fallen, rivalry, treaty_alliance,
+# treaty_trade, battle, peace, fall, fall_conquered):
 #   templates       sentences to pick from; they never name a nearby place
 #   templates_near  optional; sentences that name a nearby settlement with {near}. An event draws from these as well
 #                   only when a settlement of the same landmass lies within `history.near_km`; each must contain {near}
@@ -13,6 +14,8 @@
 #   settling          {realm} {short} {town}                      the realm and the city it settled
 #   expansion         {realm} {short} {ruler} {seat}              a realm annexing a wide stretch of wild land
 #   expansion_fallen  {fallen}                                    a fallen realm doing the same
+#   creation_tower    {place}                                     a tower raised (minor event)
+#   creation_dungeon  {place}                                     a dungeon delved (minor event)
 #   founding_predecessor  {predecessor}                           a realm that later ended in a clean split (see below)
 #   settling_free     {town}                                      a city or town no realm holds
 #   settling_remnant  {town} {fallen}                             a free settlement founded in the life of a fallen realm
@@ -235,4 +238,26 @@ templates_near = [
 templates = [
   "{fallen} spreads over the wild lands about it.",
   "{fallen} claims a wide stretch of open land.",
+]
+
+# A tower or dungeon made (a minor event, kept in the annals: the viewer shows minor events on request). {place} is its name.
+
+[chronicle.creation_tower]
+templates = [
+  "{place} is raised on the heights.",
+  "Builders raise {place}.",
+  "{place} is built, and its keep looks out over the land.",
+]
+templates_near = [
+  "{place} is raised on the heights above {near}.",
+]
+
+[chronicle.creation_dungeon]
+templates = [
+  "{place} is delved into the earth.",
+  "Diggers break open the depths of {place}.",
+  "{place} is dug deep under the hills.",
+]
+templates_near = [
+  "{place} is delved beneath the lands near {near}.",
 ]

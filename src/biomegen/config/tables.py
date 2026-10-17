@@ -377,6 +377,8 @@ _CHRONICLE_TOKENS = {
     "settling": frozenset({"realm", "short", "town"}),
     "expansion": frozenset({"realm", "short", "ruler", "seat"}),
     "expansion_fallen": frozenset({"fallen"}),
+    "creation_tower": frozenset({"place"}),
+    "creation_dungeon": frozenset({"place"}),
     "founding_predecessor": frozenset({"predecessor"}),
     "settling_free": frozenset({"town"}),
     "settling_remnant": frozenset({"town", "fallen"}),

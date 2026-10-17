@@ -20,6 +20,7 @@ VALUES: Dict[str, Any] = {
         "secession",
         "settling",
         "expansion",
+        "creation",
         "conquest",
         "succession",
         "war",
@@ -85,6 +86,7 @@ VALUES: Dict[str, Any] = {
         "secession": [210, 170, 90],
         "settling": [150, 200, 160],
         "expansion": [170, 215, 120],
+        "creation": [150, 170, 200],
         "conquest": [230, 150, 90],
         "succession": [200, 180, 120],
         "war": [235, 90, 90],
@@ -185,4 +187,7 @@ VALUES: Dict[str, Any] = {
         "tower": "creation",
         "dungeon": "creation",
     },
+    # Annals (pipeline/story/annals.py): the minor events the history leaves out. A tower or dungeon placed by location
+    # stood before the history began (year 0) with chance ``ancient_share``, else it was made in a year drawn over it.
+    "annals": {"ancient_share": 0.5},
 }

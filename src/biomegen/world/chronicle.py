@@ -178,6 +178,7 @@ def chronicle_data(world: World, events: Optional[Sequence[ChronicleEvent]] = No
     With ``events`` only those are listed; the entities stay whole so every id still resolves.
     """
     shown = world.chronicle if events is None else events
+    named_places = {i for event in world.chronicle for i in event.poi_ids}  # a tower or dungeon an event is about
     return {
         "island": world.island_name,
         "seed": world.seed,
@@ -251,7 +252,7 @@ def chronicle_data(world: World, events: Optional[Sequence[ChronicleEvent]] = No
             }
             for p in world.predecessors
         ],
-        "settlements": [
+        "settlements": [  # every settlement, and any other place an event names (its kind says which)
             {
                 "id": i,
                 "name": p.name,
@@ -261,7 +262,7 @@ def chronicle_data(world: World, events: Optional[Sequence[ChronicleEvent]] = No
                 "founded": p.founded,
             }
             for i, p in enumerate(world.pois)
-            if p.civilized
+            if p.civilized or i in named_places
         ],
     }
 

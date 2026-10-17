@@ -8,6 +8,7 @@ from typing import Optional
 from ...config.model import Config
 from ...util import rng
 from ...world.entities import EVENT_KINDS, NO_LOCATION, ChronicleEvent
+from ...world.world import World
 
 
 class Ledger:
@@ -89,3 +90,28 @@ class Ledger:
                     placed.month = month
                 start = index + 1
         return events
+
+
+def merge_events(world: World, events: Sequence[ChronicleEvent]) -> None:
+    """Merge ``events`` (each with its ``year`` and ``month`` set) into the finished chronicle.
+
+    The chronicle stays ordered by ``(year, month)``, an existing event keeping its place before a new one of the same
+    month; every event is renumbered and the ids the world keeps (``POI.event_ids`` and ``TerritoryChange.event_id``)
+    follow. The new events' ``poi_ids`` are not linked back here: the caller appends each new id to its POIs.
+    """
+    old = world.chronicle
+    order = sorted(
+        [(e.year, e.month, 0, i) for i, e in enumerate(old)] + [(e.year, e.month, 1, i) for i, e in enumerate(events)]
+    )
+    merged = [old[i] if which == 0 else events[i] for _, _, which, i in order]
+    remap: dict[int, int] = {}
+    for new_id, ((_, _, which, i), event) in enumerate(zip(order, merged, strict=True)):
+        if which == 0:
+            remap[old[i].id] = new_id
+        event.id = new_id
+    world.chronicle = merged
+    for poi in world.pois:
+        poi.event_ids = [remap[i] for i in poi.event_ids]
+    for change in world.territory:
+        if change.event_id in remap:
+            change.event_id = remap[change.event_id]

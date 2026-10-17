@@ -37,9 +37,9 @@ def test_every_free_city_and_town_has_a_free_settling_event(world: World, cfg: C
     assert free and all(len(_settling(world, i)) == 1 for i in free)
 
 
-def test_a_free_village_has_no_settling_event(world: World, cfg: Config) -> None:
+def test_a_free_village_has_no_major_settling_event(world: World, cfg: Config) -> None:
     villages = [i for i, p in enumerate(world.pois) if p.free and p.kind not in cfg.get("history.settle_kinds")]
-    assert villages and not any(_settling(world, i) for i in villages)
+    assert villages and not any(e.salience == "major" for i in villages for e in _settling(world, i))
 
 
 def test_a_free_settling_event_belongs_to_no_realm(world: World) -> None:

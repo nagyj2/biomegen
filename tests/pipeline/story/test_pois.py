@@ -322,8 +322,13 @@ def hideouts(request: pytest.FixtureRequest) -> World:
     return pipeline.generate(config, request.param)
 
 
+def _made_by_history(world: World, poi: POI) -> bool:
+    """Whether a chronicle event other than its own creation made the POI."""
+    return any(world.chronicle[i].kind != "creation" for i in poi.event_ids)
+
+
 def _made_by_events(world: World, kind: str) -> list[POI]:
-    return [p for p in world.pois if p.kind == kind and p.event_ids]
+    return [p for p in world.pois if p.kind == kind and _made_by_history(world, p)]
 
 
 def test_a_fall_can_leave_a_tower_and_a_conquest_a_dungeon(hideouts: World) -> None:
@@ -359,7 +364,7 @@ def test_most_towers_and_dungeons_stand_in_bandit_country(cfg: Config) -> None:
     # Across the seeds the wild-favouring score puts them on wild land far more often than land is wild.
     seeds = (42, 7, 1337, 9999)
     worlds = [pipeline.generate(cfg, seed) for seed in seeds]
-    hideouts = [p for w in worlds for p in w.pois if p.kind in ("tower", "dungeon") and not p.event_ids]
+    hideouts = [p for w in worlds for p in w.pois if p.kind in ("tower", "dungeon") and not _made_by_history(w, p)]
     wild_share = sum(int(((w.realm_id < 0) & (w.water_type == 0)).sum()) for w in worlds) / sum(
         int((w.water_type == 0).sum()) for w in worlds
     )
