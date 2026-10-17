@@ -118,7 +118,8 @@ road_meander_scale = 5.0        # tiles across a meander feature
 # road clutter (road_clutter, road_clutter_local), bridge_glyphs and the detail colours (detail_colors) are also
 # tunable. See src/biomegen/config/defaults/render.py.
 default_view = "onetoone"       # "fit" | "onetoone"
-status_height = 12
+status_height = 15
+panel_events = 3                # events the panel lists: the latest at the cursor, then its realm's latest
 
 [render.cache]
 chunk_cols = 32                 # the explorer draws terrain once, in chunks of this many cells across

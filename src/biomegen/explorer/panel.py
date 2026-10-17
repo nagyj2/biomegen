@@ -15,9 +15,10 @@ from ..render.layers import Seen
 from ..sampling.detail import SCALE_MAP, SCALE_SITE
 from ..sites import site_plan
 from ..sites.kinds import building_at, building_counts, cell_name
-from ..world.entities import POI
+from ..world.entities import POI, Realm
 from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
+from .events import ChronicleReader, EventReader, event_line
 from .state import MODE_ONE_TO_ONE, ViewState, floor_label, poi_under_cursor
 
 _LEGEND_INDENT = 9
@@ -94,6 +95,26 @@ def _buildings_line(world: World, config: Config, state: ViewState, poi: Optiona
     return f"{line}   under cursor: {label(here)}" if here is not None else line
 
 
+def _hook_line(poi: Optional[POI]) -> str:
+    """The story text of the point of interest under the cursor, or an empty string."""
+    return f" {poi.hook}" if poi is not None and poi.hook else ""
+
+
+def _event_lines(
+    events: EventReader, config: Config, state: ViewState, realm: Optional[Realm], dim: RGB
+) -> list[tuple[str, RGB]]:
+    """List up to ``render.panel_events`` events: the latest at the cursor's tile (they stay while the cursor does),
+    then the latest of the realm that holds it (dimmed) to fill the rest."""
+    limit = int(config.get("render.panel_events"))
+    here = events.at(state.cx, state.cy)[-limit:] if limit else []
+    lines = [(event_line(event), panel_color(config, "fg")) for event in here]
+    if realm is not None and len(lines) < limit:
+        shown = {event.id for event in here}
+        rest = [e for e in events.of_realm(realm.id) if e.id not in shown][-(limit - len(lines)) :]
+        lines += [(event_line(event), dim) for event in rest]
+    return lines
+
+
 def controls_line(config: Config) -> str:
     """The one-line key summary, built from the ``keys`` table so rebinding shows up."""
     keys = config.get("keys")
@@ -156,8 +177,12 @@ def build_panel(
     width: int,
     height: int,
     ascii_only: bool = False,
+    events: Optional[EventReader] = None,
 ) -> CellGrid:
-    """Return the info panel as a ``height x width`` grid for the current cursor, view and what is on screen."""
+    """Return the info panel as a ``height x width`` grid for the current cursor, view and what is on screen.
+
+    ``events`` is where the panel reads history from (default: the world's chronicle).
+    """
     canvas = _Canvas(height, width, panel_color(config, "fg"), panel_color(config, "bg"))
     dim, head = panel_color(config, "dim"), panel_color(config, "head")
     poi = poi_under_cursor(world, config, state)
@@ -187,10 +212,11 @@ def build_panel(
     else:
         canvas.text(3, 0, " realm: open water" if tile.is_water else " realm: none (wild land)")
     canvas.text(5, 0, _poi_line(poi))
-    buildings = _buildings_line(world, config, state, poi)
-    if buildings:
-        canvas.text(6, 0, buildings)
-    first = 7 if buildings else 6
+    info = [(line, canvas.fg) for line in (_buildings_line(world, config, state, poi), _hook_line(poi)) if line]
+    info += _event_lines(events or ChronicleReader(world), config, state, realm, dim)
+    for offset, (line, color) in enumerate(info):
+        canvas.text(6 + offset, 0, line, color)
+    first = 6 + len(info)
     last = height - 1
     if config.get("render.show_legend", True) and first < last:
         _legend(canvas, config, seen, first, last, ascii_only)

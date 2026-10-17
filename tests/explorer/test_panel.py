@@ -203,3 +203,70 @@ def test_the_panel_lists_no_buildings_outside_a_site(config: Config) -> None:
     world = flat_world(16, 12)
     add_poi(world, "town", 8, 6, pop=3000, civilized=True)
     assert "buildings:" not in "\n".join(_panel(world, config, state=ViewState(cx=8, cy=6), width=140))
+
+
+# --- the story: a POI's hook and the events at the cursor ---------------------------------------------------------
+
+
+def _storied_world():
+    """A 6x3 world held by realm 0, with a village at (2, 1) whose hook is told, and four events."""
+    from biomegen.world.entities import ChronicleEvent
+
+    world = make_world(6, 3, Biome.GRASS)
+    world.realms.append(Realm(id=0, kind="major", name="Kingdom of Aldor", short="Aldor"))
+    world.realm_id[:] = 0
+    world.pois.append(POI(kind="village", x=2, y=1, interior_seed=1, name="Dunmere", hook="A mill burned here once."))
+    world.poi_index[1, 2] = 0
+    world.chronicle = [
+        ChronicleEvent(0, 100, "founding", [0], text="Aldor is founded."),
+        ChronicleEvent(1, 120, "settling", [0], [0], text="Dunmere is settled.", location=(2, 1)),
+        ChronicleEvent(2, 150, "war", [0], text="Aldor goes to war."),
+        ChronicleEvent(3, 180, "battle", [0], text="A battle at Dunmere.", location=(2, 1)),
+    ]
+    return world
+
+
+def test_the_panel_tells_the_hook_of_the_poi_under_the_cursor(config: Config) -> None:
+    assert any("A mill burned here once." in line for line in _panel(_storied_world(), config))
+
+
+def test_the_panel_lists_the_events_at_the_cursor(config: Config) -> None:
+    lines = "\n".join(_panel(_storied_world(), config))
+    assert "Dunmere is settled." in lines and "A battle at Dunmere." in lines
+
+
+def test_realm_events_fill_the_rest_when_few_are_at_the_cursor(config: Config) -> None:
+    world = _storied_world()
+    lines = "\n".join(_panel(world, config, state=ViewState(cx=4, cy=2)))  # no POI here: only the realm's events
+    assert "Aldor goes to war." in lines and "A battle at Dunmere." in lines
+
+
+def test_the_panel_lists_no_more_events_than_panel_events(config: Config) -> None:
+    config = load_config(None)
+    config.data["render"]["panel_events"] = 1
+    lines = "\n".join(_panel(_storied_world(), config))
+    assert "A battle at Dunmere." in lines and "Dunmere is settled." not in lines
+
+
+def test_the_panel_reads_events_through_the_reader_it_is_given(config: Config) -> None:
+    from biomegen.world.entities import ChronicleEvent
+
+    class Fake:
+        def at(self, x, y):
+            return [ChronicleEvent(0, 777, "war", text="Only the reader knows.")]
+
+        def of_realm(self, realm_id):
+            return []
+
+        def until(self, year):
+            return []
+
+    world = _storied_world()
+    state = ViewState(cx=2, cy=1)
+    lines = _lines(build_panel(world, config, state, "terrain", Seen(), 100, 12, events=Fake()))
+    assert any("Only the reader knows." in line for line in lines) and "A battle at Dunmere." not in "\n".join(lines)
+
+
+def test_a_world_with_no_events_has_no_event_rows(config: Config) -> None:
+    world = make_world(6, 3)
+    assert not any(line.strip().startswith(tuple("0123456789")) for line in _panel(world, config)[6:])

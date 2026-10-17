@@ -119,7 +119,7 @@ def test_frame_is_the_size_of_the_terminal(config: Config) -> None:
 def test_the_panel_sits_under_the_map(config: Config) -> None:
     # The island line is the second row of the 12-row panel at the bottom of a 40-row screen.
     screen = _frame(_world(), config).screen
-    assert "Testland" in "".join(screen.glyph[40 - 12 + 1])
+    assert "Testland" in "".join(screen.glyph[40 - 15 + 1])
 
 
 def test_cursor_cell_is_drawn_in_reverse_video(config: Config) -> None:

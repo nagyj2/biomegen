@@ -236,7 +236,8 @@ what suits them) are in `buildings.toml`; dressings (the wheat field with full, 
 | `blend_strength` | `0.85` | Biome boundary bleed at detail scales (0 = crisp grid) |
 | `blend_scale` | `2.5` | Feature size (tiles) of the boundary-blend warp |
 | `default_view` | `"fit"` | Starting biome-map view: `"fit"` · `"onetoone"` |
-| `status_height` | `12` | Terminal rows reserved for the info panel |
+| `status_height` | `15` | Terminal rows reserved for the info panel |
+| `panel_events` | `3` | Events the panel lists: the latest at the cursor, then its realm's latest |
 | `views.*` | — | Layer lists per view (`layers` for the map, `detail_layers` for zoom and local) and its tint ramp |
 | `ramps.*` | — | Colour ramps for the elevation, temperature and rainfall views (the political view tints by realm) |
 | `markers.*` | — | Per-POI display character |
