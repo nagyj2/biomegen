@@ -25,6 +25,7 @@ one (echoed). `-h` as the first argument shows the script's usage; later `-h` re
 - `scripts/run.sh [args]`: launch the app.
 - `scripts/stats.sh [args]`: headless stats dump, including the fingerprint.
 - `scripts/chronicle.sh [args]`: print the chronicle (`--chronicle-format json`).
+- `scripts/history.sh [YEAR] [args]`: the history viewer (political map through time, `--history`); opens at the end of YEAR.
 - `scripts/fingerprint.sh [--seed S]`: world fingerprints (default seeds 42, 7, 1337, 11, 15; 11 and 15 hold a defection and an
   offshoot, since a proof needs fixed worlds); the before/after proof for refactors.
 - `scripts/export.sh [args]`: headless SVG/PNG export to `build/export`.

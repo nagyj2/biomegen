@@ -57,6 +57,7 @@ src/biomegen/
     derived.py          derived(): values worked out once per world (road pieces), checked by a source digest
     entities.py         POI / Realm / Relation / River / Lake / GeoFeature / ChronicleEvent / FallenRealm dataclasses
     chronicle.py        chronicle_text() and chronicle_json(): the history as three-column text or JSON; ChronicleFilter / filter_events()
+    territory.py        TerritoryChange deltas and OwnerTimeline: the owner map at any moment, owner ids (wild, fallen, predecessor)
   sites/                Lazy, deterministic, cached site plans: what you see zooming into a POI
     geometry.py         Extent, window and plan resolution of a POI's site, in world tiles
     patch.py            The terrain under a site (read through the render sampler) and the road gates
@@ -91,6 +92,8 @@ src/biomegen/
       founding.py       The founding and settling events a secession step may add or change
       conflicts.py      Wars, peace, pacts, battles and falls played through time with faction strengths
       ledger.py         Ledger: collects the events, then sorts and numbers them
+      territory.py      The territory planner: walks the ledger back from today's map (expansions, foundings, falls, strips, secessions)
+      territory_fields.py  Seat cells and km from the seat, computed once per world for the planner
       places.py         nearest_settlement() and nearest_feature(): the locality rule for a place named in text
       poi_rules.py      poi_for_event(): the pure event-to-POI rule table (what an event makes)
       poi_styles.py     style_score() / style_count(): the pure scorer of the homestead and hamlet styles; place_styles(), the last POI pass
@@ -126,7 +129,11 @@ src/biomegen/
     writer.py           ANSI diff writer: alternate screen, writes only changed runs of cells
     panel.py            Info panel (tile, realm, POI, legend, controls) and the ? help overlay
     exports.py          e / E: SVG (and PNG) of the screen's map or the whole world
-    app.py              compose_frame (map + cursor + panel) and the event-driven loop
+    app.py              compose_frame (map + cursor + panel) and the event-driven loop; restart and the history key
+    chronicle_pager.py  --chronicle on a terminal: scroll, filter and search the chronicle
+    history_viewer.py   --history and t: the political map at a moment, the powers then and the chronicle beside it
+    events.py           EventReader: where the panel reads history from
+    ticks.py            TickSource, NoTicks and Clock: the time seam (speed, pause) a simulation plugs into
 tests/                  pytest suite mirroring src/: golden-world hash, RNG determinism, config, overlay, renderer, explorer …
 config.example.toml     Sparse-overlay example (every key with its default value)
 ```
@@ -159,7 +166,7 @@ Immutable once generation completes. Per-tile data stored as parallel 2-D numpy 
 | `flow_accum` | float64 | km², wetness-weighted catchment | hydrology |
 
 Sparse entity lists: `pois`, `realms` (`Realm`), `relations` (`Relation`), `rivers`, `lakes`, `features` (`GeoFeature`),
-`island_name`. History: `year` (the present; 0 for a dawn start), `chronicle` (`ChronicleEvent`, sorted, `id` is the
+`island_name`. History: `year` (the present; 0 for a dawn start), `territory` (`TerritoryChange` deltas), `chronicle` (`ChronicleEvent`, sorted, `id` is the
 index) and `fallen_realms` (`FallenRealm`), read through `events_until(year)`, `events_at(x, y)` and `events_of(realm_id)`.
 `Realm.founded` and `POI.founded` are chronicle years; a `POI` also holds `fell`, `event_ids` (the events that made or mark
 it), `hook` / `hook_refs`, `bandit_strength`, `purpose` (a camp's), `style` (a homestead's or a generated hamlet's, a
@@ -426,6 +433,34 @@ filters are the start state and `--search` also starts the highlight. Keys follo
 matches (the current match has its own colour, `history.colors.match_current`), `v` cycles the kind, `y` asks a year range, `p` a name (Up / Down pick from the names containing what is typed, Tab completes; each suggestion is tagged at the right edge with what it is, in the neutral `history.colors.type_*`), `c` clears, `?` help, `q` / Esc quits. `layout_events` wraps each event
 to the width (continuations indented under the text) and marks the match in `history.colors.match`; a name is coloured as in the full
 chronicle even when filtered.
+
+#### Territory (`pipeline/story/territory.py`, `territory_fields.py`, `world/territory.py`)
+
+History moves no cell: `World.realm_id` is today's map. Who held which land earlier is recorded as `TerritoryChange` deltas
+(`World.territory`, oldest first: year, month, kind, sorted flat cell indices, from and to owner, event id) found by **walking
+back** from the present, so the present map and the fingerprint never move. Owners are realm ids, `WILD` (-1), a fallen realm
+(`fallen_owner`, -2 downward) or a predecessor (`predecessor_owner`, -1000 downward); `World.owners_at(year, month)` replays the
+changes forward or backward from checkpoints (`OwnerTimeline`) and `World.top_realm_at` counts a vassal tie from its conquest.
+
+- The planner runs after every other event is in the ledger and before it is numbered. It walks the events newest to oldest and
+  undoes each: a realm's **expansions** (new `expansion` events, `history.territory.expansions` per realm kind, each a
+  `expansion_share` of its area, the cells farthest from its seat first, never under `core_share` of it) and its **founding**
+  (what is left was wild); a fallen realm's land (chosen at its fall: the wild cells nearest its ruins plus its conqueror's,
+  split between fallen realms alive together by distance to their ruins); a **battle** or the **peace** of an older war moves a
+  strip of the winner's land along the front to the loser (`strips`); a **secession** hands an offshoot's land to its parent and
+  a split's to its predecessor. A conquest only recolours (a vassal tie).
+- Terrain never changes, so the fields it reads are computed once (`TerritoryFields`: seat cell and km from the seat of every
+  held cell). Draws are `history` / `territory` sub-streams keyed on the realm, fallen realm or battle.
+- Events and changes carry a `month` (1 to `history.months_per_year`); a year's months are drawn sorted in event order, so
+  causality within a year holds. A simulation can place several events a year and append its own changes in the same form.
+
+#### The history viewer (`explorer/history_viewer.py`)
+
+`--history [YEAR]` (also `t` in the explorer) is view only: the political map at a moment (`build_grid(..., moment=)`, drawing
+fallen realms and predecessors in their colours, vassals tinted as their overlord only after their conquest, today's war fronts
+omitted), the powers then with their areas, and the chronicle beside it scrolled to the moment's events (highlighted; later
+events dimmed), with the recent events of the map marked by kind (`history.viewer.glyphs`). `[` `]` step between the moments the map
+changes (`change_moments`: territory changes and conquests), `{` `}` between years, `g` asks a year, `\` goes to the present.
 
 ### Stage 9e — POIs (`pipeline/story/pois.py`, `poi_rules.py`, `pipeline/pois.py`)
 
@@ -703,7 +738,18 @@ stopping when a key is waiting. Once that is done an idle explorer uses no CPU.
   pseudo-terminal. The Windows paths cannot be exercised on Linux.
 - **Chronicle pager.** `run_chronicle` is a second, smaller loop over the same reader, writer and key table (see the chronicle
   section above); its frame is built by `compose_pager_frame` and its state is a `PagerState`.
-- **Not in 4c.** Regenerating the world (`r`) returns in phase 9 with the chronicle panel.
+- **Panel history.** The panel lists the latest events at the cursor's tile and then its realm's (`render.panel_events`) and the
+  hook of the point of interest, reading them through `explorer/events.py` (`EventReader`; `ChronicleReader` is the generated
+  chronicle) so a later simulation's ledger can join the one reader.
+- **History viewer.** `t` opens `explorer/history_viewer.py` on the explorer's own reader and writer, at the latest event at the
+  cursor (the present when there is none), and quitting it returns to the same explorer state. `--history [YEAR]`
+  (`scripts/history.sh`) runs it alone. See the territory section below.
+- **Time seam.** `explorer/ticks.py`: `run(ticks=...)` takes a `TickSource` (default `NoTicks`: nothing ticks, so the loop blocks on
+  keys as always). While a source is `active` the loop polls it between keys (`controls.tick_poll_seconds`) and runs the ticks
+  due at the `Clock`'s speed (`p` pauses, `+` / `-` step `controls.tick_speeds`); without a source those keys only say so.
+- **Restart.** `r` makes the same world again from its seed (`pipeline.generate(config, world.master_seed)`, or the injected
+  `regenerate`) and resets the view, overlay, render cache and clock; the tick source's `reset(world)` lets a simulation
+  forget its state.
 
 ---
 

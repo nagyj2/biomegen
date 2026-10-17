@@ -108,6 +108,15 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   event's `id` is its index. Anything added later (a simulation) has `year >= World.year`, so appending keeps the order. An id
   shifts whenever an event is added, swapped or a kind is switched off, so nothing seeded may be keyed on it: POI draws use
   `poi_rules.event_key` (the event's content).
+- **Territory** (`story/territory.py`; `docs/ARCHITECTURE.md`, "Territory"). The present map `realm_id` is the end state and never
+  moves: the planner walks the ledger newest to oldest and undoes each step, recording `world.territory` deltas (the owner map at
+  any moment is `World.owners_at`). It runs after every other event is in the ledger and before `Ledger.finish`, because it adds
+  the `expansion` events; the walk's order is the ledger's `(year, kind order, creation index)` key, which planned events
+  reproduce by being added in the order assumed. Every change must be taken from cells its `from_owner` holds then (the walk
+  guarantees it; `tests/pipeline/story/test_territory.py` checks it on whole worlds). A realm keeps `core_share` of its area, a
+  strip never orphans part of the winner (strays go with it) and fallen realms alive together split land by distance to their
+  ruins. Draws are `history` / `territory` streams keyed on realm, fallen realm or battle, never an event id. Terrain never
+  changes, so per-world fields are computed once (`territory_fields.py`).
 - **Token resolution.** The stage stores a raw template and the ids it needs; `naming/chronicle.py` fills the tokens last,
   once every name exists. A template may use only its row's tokens (`config/tables.py`); a new token is a schema entry,
   a value in `naming/chronicle.py` and a test that no `{` is left in any text.

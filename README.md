@@ -57,6 +57,7 @@ uv run biomegen --noise-backend value                  # use value noise (cheape
 uv run biomegen --seed 1 --headless                    # generate + print stats, no terminal needed
 uv run biomegen --seed 1 --chronicle                    # the world's history, one dated line per event
 uv run biomegen --seed 1 --chronicle --chronicle-format json   # the same as JSON, with the realms and places it names
+uv run biomegen --seed 1 --history 400                  # the history viewer: the political map at the end of year 400 (a terminal)
 uv run biomegen --seed 1 --start dawn --view terrain    # a young world at year 0: land only, nothing settled
 uv run biomegen --seed 1 --view terrain --color none    # static map with legend, no UI
 uv run biomegen --seed 1 --scale zoom --at 60,30        # a magnified part of the world (zoom or local)
@@ -87,6 +88,9 @@ tile coordinate — and an info panel under the map shows the tile, region, poin
 | `z` | Step **in** one scale: biome→zoom→local |
 | `f` | Toggle fit-to-screen ↔ 1:1 panning (map only) |
 | `v` | Next view: terrain, elevation, temperature, rainfall |
+| `t` | History viewer, opened at the latest event at the cursor (`q` returns here) |
+| `r` | Restart from the seed (the same world, with the view reset) |
+| `p` · `+` · `-` | Pause · speed up · slow down the simulation clock (nothing ticks yet) |
 | `?` | Show the key help |
 | `<` / `>` | Cycle floors up / down when standing on a multi-floor structure (e.g. a dungeon) |
 | `e` / `E` | Export current view / whole island to `export.dir` (SVG always, PNG if Pillow present) |
@@ -257,6 +261,22 @@ produces byte-identical SVG. The whole-island export (`E`) renders every world t
 view export (`e`) captures the on-screen map (without the cursor) at its current scale and camera,
 including any open POI interior. `--save FILE` writes the same images without the UI.
 
+
+#### `[history]`
+The derived history (`--chronicle`) and the territory under it. The history viewer (`--history [YEAR]`, `t` in the explorer)
+shows the political map at moments of the past.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `months_per_year` | `12` | Events and territory changes carry a month 1 to this |
+| `territory.expansions` | `{major [1,2], city_state [0,1], tribal [0,1], fallen [0,1]}` | Large annexations of wild land per realm |
+| `territory.expansion_share` | `[0.15, 0.3]` | Share of a realm's present area one annexation takes |
+| `territory.core_share` | `0.3` | Least share of its present area a realm holds when founded |
+| `territory.fallen_area_km2` | `[50000, 300000]` | The land a fallen realm held when it fell |
+| `territory.strips` | see `config/defaults/history.py` | Land a battle or peace moves along a front |
+| `viewer.map_share` | `0.6` | Share of the width the viewer's map takes |
+| `viewer.marker_years` | `30` | Events this many years back are marked (faded) on the viewer's map |
+
 #### `[keys]`
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -264,6 +284,11 @@ including any open POI interior. `--save FILE` writes the same images without th
 | `local` | `"z"` | Step into the deeper scale |
 | `toggle_scale` | `"f"` | Toggle fit-to-screen ↔ 1:1 |
 | `cycle_view` | `"v"` | Next view |
+| `history` | `"t"` | History viewer at the latest event at the cursor |
+| `tick_pause` · `tick_faster` · `tick_slower` | `"p"` · `"+"` · `"-"` | The simulation clock (inactive until a simulation exists) |
+| `history_prev` · `history_next` | `"["` · `"]"` | History viewer: the previous / next change of the map |
+| `history_prev_year` · `history_next_year` | `"{"` · `"}"` | History viewer: an earlier / a later year |
+| `history_goto` · `history_present` | `"g"` · `"\\"` | History viewer: go to a year / the present |
 | `help` | `"?"` | Key help |
 | `refresh` | `"r"` | Restart from the seed: the same world made again, with the view, edits and clock reset |
 | `export_view` | `"e"` | Export current view |
@@ -274,6 +299,8 @@ including any open POI interior. `--save FILE` writes the same images without th
 | Key | Default | Description |
 |-----|---------|-------------|
 | `fast_step` | `8` | Tiles moved per Shift+arrow (capital WASD/HJKL) |
+| `tick_speeds` | `[0.25 … 8]` | The clock speeds the faster and slower keys step through |
+| `tick_poll_seconds` | `0.02` | How often the loop checks the keyboard while a simulation ticks |
 
 #### `[tables]`
 Per-name attribute tables loaded from `src/biomegen/data/*.toml`: `tables.biomes` and `tables.relief`

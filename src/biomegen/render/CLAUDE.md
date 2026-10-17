@@ -21,6 +21,11 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   instead of replacing the fill with a ramp; the `borders` layer then lightens the line between realms and reddens war
   fronts. Both read realms through `ctx.realm`, which uses the sampler's warped tile like the biome blend, so a border is the
   same line at the zoom and local scales. A view's `tint` is a `render.ramps` entry or `"realm"` (`View.ramp`, `View.political`).
+- **Political map at a moment.** `build_grid(..., moment=(year, month))` reads the owner grid at that moment (`World.owners_at`,
+  `ctx.owners`) instead of `realm_id`. `ctx.realm` is then a *palette index*: a realm is its id, a fallen realm `n + id` and a
+  predecessor after those (`owner_palette_index`); `realm_colors` and `ctx.tops` (the independent power per index, a vassal tie
+  counting from its conquest, `World.top_realm_at`) follow it. War fronts are today's, so they are not drawn at a moment. The
+  render cache is for the present only; a moment is drawn fresh (the history viewer caches its own last frame).
 - **Political labels and legend.** In the political view the `labels` layer names the big realms (`render.labels.realm_*`)
   instead of landmasses and ranges; the legend appends REALMS (each independent realm, vassals nested, with ruler, seat, area,
   population, settlements) and DIPLOMACY (wars first, with front length and claimed town). Other views' legends have neither.

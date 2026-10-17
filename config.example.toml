@@ -61,6 +61,9 @@ span_years = 1200                # the present year of a "present" world (event 
 battles_per_100km_front = 0.1    # battles fought along a war's border, per 100 km of it
 fallen_realms_per_million_km2 = 1.0   # vanished realms whose ruins lie on wild land
 near_km = 250.0                  # a place named in an event is a settlement at most this far away
+months_per_year = 12             # events and territory changes carry a month 1 to this
+# Territory (who held which land, found by walking back from today's map): see history.territory in
+# src/biomegen/config/defaults/history.py (expansions, expansion_share, core_share, fallen_area_km2, strips).
 
 [settlements]
 density = 1.0                    # multiplies every tier's settlement count (tiers: data/tiers.toml)
