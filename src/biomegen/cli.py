@@ -128,6 +128,18 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--history",
+        nargs="?",
+        type=int,
+        const=-1,
+        default=None,
+        metavar="YEAR",
+        help=(
+            "Open the history viewer and exit: the political map at a moment of the past, the powers then and the "
+            "chronicle beside it. It opens at the map at the end of YEAR (the first change when no year is given)."
+        ),
+    )
+    parser.add_argument(
         "--chronicle-format",
         choices=("text", "json"),
         default="text",
@@ -372,7 +384,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     _apply_overrides(args, config, parser)
 
     seed = resolve_seed(args.seed, config)
-    print(f"biomegen: seed={seed}", file=sys.stderr if args.chronicle else sys.stdout)
+    print(f"biomegen: seed={seed}", file=sys.stderr if args.chronicle or args.history is not None else sys.stdout)
 
     # Generate the world (the same pipeline feeds both the UI and the headless dump).
     from biomegen import pipeline
@@ -385,6 +397,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     if args.chronicle:
         _show_chronicle(world, config, args)
+        return 0
+
+    if args.history is not None:
+        _show_history(world, config, args, parser)
         return 0
 
     if args.at is not None and not (0 <= args.at[0] < world.width and 0 <= args.at[1] < world.height):
@@ -405,6 +421,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     mode = _detect_color() if args.color == "auto" else args.color
     app.run(world, config, mode, args.ascii)
     return 0
+
+
+def _show_history(world: Any, config: Config, args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Open the history viewer (``--history [YEAR]``); it needs a terminal."""
+    if not sys.stdout.isatty() or not sys.stdin.isatty():
+        parser.error("--history needs a terminal; use --chronicle for a printed history")
+    from biomegen.explorer.history_viewer import run_history
+
+    mode = _detect_color() if args.color == "auto" else args.color
+    run_history(world, config, mode, None if args.history < 0 else args.history, args.ascii)
 
 
 def _show_chronicle(world: Any, config: Config, args: argparse.Namespace) -> None:

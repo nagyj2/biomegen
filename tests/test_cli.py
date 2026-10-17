@@ -426,3 +426,70 @@ def test_realm_matches_a_ruler_or_settlement_name_too(capsys):
     word = next(w for line in full.splitlines()[2:] for w in line.split()[2:] if w.istitle())
     narrowed, _ = _chronicle(capsys, "--color", "none", "--realm", word)
     assert narrowed.splitlines()[2:]
+
+
+def test_history_flag_takes_an_optional_year():
+    from biomegen import cli
+
+    parser = cli._build_parser()
+    assert (parser.parse_args([]).history, parser.parse_args(["--history"]).history) == (None, -1)
+    assert parser.parse_args(["--history", "400"]).history == 400
+
+
+def test_history_needs_a_terminal(capsys):
+    from biomegen import cli
+
+    with pytest.raises(SystemExit):
+        cli.main(["--seed", "3", "--width", "64", "--height", "32", "--history"])
+    assert "--history needs a terminal" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX pseudo-terminal")
+def test_history_viewer_runs_in_a_pseudo_terminal(tmp_path):
+    # Start the viewer on a pty at a year, wait for its title, press q, expect a clean exit.
+    import fcntl
+    import os
+    import pty
+    import select
+    import struct
+    import termios
+    import time
+
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+    env = {**os.environ, "COLORTERM": "truecolor", "TERM": "xterm-256color"}
+    env.pop("NO_COLOR", None)
+    process = subprocess.Popen(
+        [sys.executable, "-m", "biomegen", "--seed", "3", "--history", "300"],
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        env=env,
+        cwd=tmp_path,
+    )
+    os.close(slave)
+    seen = b""
+    sent_quit = False
+    deadline = time.monotonic() + 90
+    try:
+        while time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.5)
+            if ready:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                seen += chunk
+            if not sent_quit and b"History of" in seen and b"year 300" in seen:
+                os.write(master, b"q")
+                sent_quit = True
+            if process.poll() is not None and not ready:
+                break
+        code = process.wait(timeout=10)
+    finally:
+        if process.poll() is None:
+            process.kill()
+        os.close(master)
+    assert sent_quit and code == 0
