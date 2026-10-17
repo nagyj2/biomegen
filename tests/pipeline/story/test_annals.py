@@ -177,3 +177,33 @@ def test_road_events_name_their_places(world: World) -> None:
 def test_the_road_links_keep_their_events_through_the_merges(world: World) -> None:
     for link in world.road_links:
         assert world.chronicle[link.event_id].id == link.event_id
+
+
+# --- the land comes first ---------------------------------------------------------------------------------------
+
+
+def test_a_settlement_is_founded_no_sooner_than_its_land_was_taken_from_the_wild(world: World) -> None:
+    from biomegen.world.territory import wild_since
+
+    since = wild_since(world.territory, world.height, world.width)
+    seats = {r.seat_poi for r in world.realms}
+    defected = {i for e in world.chronicle if "defection" in e.tags for i in e.poi_ids}  # settled for another realm
+    for index, poi in enumerate(world.pois):
+        if poi.civilized and poi.realm_id >= 0 and index not in seats | defected:
+            assert poi.founded >= since[poi.y, poi.x], (poi.kind, index)
+
+
+def test_a_settling_event_is_dated_by_the_founding_of_its_settlement(world: World) -> None:
+    for event in world.chronicle:
+        if event.kind == "settling" and event.realm_ids and len(event.poi_ids) == 1:
+            poi = world.pois[event.poi_ids[0]]
+            assert event.year == poi.founded or poi.realm_id != event.realm_ids[0]
+
+
+def test_a_hamlet_or_homestead_is_founded_no_sooner_than_its_land(world: World) -> None:
+    from biomegen.world.territory import wild_since
+
+    since = wild_since(world.territory, world.height, world.width)
+    for poi in world.pois:
+        if poi.realm_id >= 0 and poi.kind in ("hamlet", "homestead") and poi.founded > 0:
+            assert poi.founded >= since[poi.y, poi.x]

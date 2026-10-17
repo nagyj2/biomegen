@@ -7,7 +7,8 @@ stands) without filling the default listing:
 - a **tower** raised or a **dungeon** delved: one that came of a fall is dated by it; one placed by location is either
   ancient (year 0, with chance ``history.annals.ancient_share``: it stood before the history began) or made in a year
   drawn over the history, and then gets that year as its ``founded``;
-- the **founding of a village or hamlet** (the settlements the history does not give a ``settling`` event).
+- the **founding of a village or hamlet** (the settlements the history does not give a ``settling`` event); a hamlet or
+  homestead on land a realm annexed is founded no sooner than the land came in (as the history does for a settlement).
 
 The roads laid between them (``World.road_links``) each get a minor ``road`` event too, once both ends exist.
 
@@ -22,6 +23,7 @@ from ...config.model import Config
 from ...util import rng
 from ...world.entities import POI, ChronicleEvent, RoadLink
 from ...world.lifespans import poi_appears
+from ...world.territory import wild_since
 from ...world.world import World
 from .ledger import Ledger, merge_events
 from .places import nearest_settlement
@@ -125,6 +127,10 @@ def run(world: World, config: Config, seed: int) -> None:
     first = int(config.get("history.first_founding_year"))
     ancient = float(config.get("history.annals.ancient_share"))
     settle_kinds = set(config.get("history.settle_kinds"))
+    since = wild_since(world.territory, world.height, world.width)
+    for poi in world.pois:  # a hamlet or homestead on annexed land is founded no sooner than the land was taken in
+        if poi.realm_id >= 0 and poi.kind in ("hamlet", "homestead") and poi.founded > 0:
+            poi.founded = max(poi.founded, int(since[poi.y, poi.x]))
     for index, poi in enumerate(world.pois):
         if poi.kind in ("tower", "dungeon"):
             _creation(world, config, seed, ledger, index, first, ancient)

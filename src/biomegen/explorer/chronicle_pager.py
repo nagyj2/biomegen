@@ -19,7 +19,7 @@ from typing import Callable, Optional, TextIO
 
 from ..config.model import Config
 from ..render.chronicle import layout_events
-from ..render.grid import RGB, CellGrid, Document
+from ..render.grid import RGB, CellGrid, Document, Span
 from ..world.chronicle import (
     ENTITY_LABELS,
     ChronicleFilter,
@@ -201,6 +201,13 @@ def _layout(world: World, config: Config, state: PagerState, width: int) -> _Lay
     if state.layout is None or state.layout.key != key:
         events = filter_events(world, state.chronicle_filter)
         lines, starts, matches = layout_events(world, config, events, width, state.query, state.current)
+        lines.append(
+            [
+                Span(f"{world.year:>5}", panel_color(config, "dim")),
+                Span("  "),
+                Span("the present", panel_color(config, "dim")),
+            ]
+        )
         state.layout = _Layout(key, events, lines, starts, matches)
     return state.layout
 
@@ -279,8 +286,8 @@ def compose_pager_frame(
         for span in line:
             _put(screen, _HEADER_ROWS + offset, col, span.text, span.fg or fg, span.bg or bg, span.bold)
             col += len(span.text)
-    if not layout.lines:
-        _put(screen, _HEADER_ROWS, 1, "(no events match)", dim, bg)
+    if not layout.events:
+        _put(screen, _HEADER_ROWS + 1, 1, "(no events match)", dim, bg)  # under the present, the only line
     status_row = rows - _FOOTER_ROWS
     if state.prompt is not None:
         label = _PROMPT_LABELS[state.prompt.kind]

@@ -147,9 +147,10 @@ def _year_end(world: World, config: Config, year: int) -> Stop:
     return year, int(config.get("history.months_per_year"))
 
 
-def tile_moments(world: World, tile: tuple[int, int], minor: bool = False) -> list[Stop]:
+def tile_moments(world: World, config: Config, tile: tuple[int, int], minor: bool = False) -> list[Stop]:
     """Return each distinct ``(year, month)`` of an event at ``tile`` (the minor ones too when ``minor``) or of a
-    territory change that took the tile from one owner to another, oldest first."""
+    territory change that took the tile from one owner to another, oldest first, and the present at the end (always
+    reachable, even when nothing more happens at the tile)."""
     x, y = tile
     cell = y * world.width + x
     moments = {(e.year, e.month) for e in world.events_at(x, y) if minor or e.salience == "major"}
@@ -157,6 +158,7 @@ def tile_moments(world: World, tile: tuple[int, int], minor: bool = False) -> li
         at = int(np.searchsorted(change.cells, cell))
         if at < len(change.cells) and int(change.cells[at]) == cell:
             moments.add(change.moment)
+    moments.add(present_moment(world, config))
     return sorted(moments)
 
 
@@ -649,7 +651,7 @@ def _travel(world: World, config: Config, state: HistoryState, action: Action) -
         if name == "tile" and state.tile is None:
             state.message = "open the viewer with t in the explorer to follow one tile"
             return
-        stops = moments if name == "step" else tile_moments(world, state.tile or (0, 0), state.minor)
+        stops = moments if name == "step" else tile_moments(world, config, state.tile or (0, 0), state.minor)
         target = bisect_right(stops, here) if action[1] > 0 else bisect_left(stops, here) - 1
         if 0 <= target < len(stops):
             state.at = stops[target]

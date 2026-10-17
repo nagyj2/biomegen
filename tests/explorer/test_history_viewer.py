@@ -321,7 +321,7 @@ def test_the_tile_moments_include_its_events_and_its_changes(world: World, cfg: 
     from biomegen.explorer.history_viewer import tile_moments
 
     x, y = _tile_of_a_battle(world)
-    moments = tile_moments(world, (x, y))
+    moments = tile_moments(world, cfg, (x, y))
     assert {(e.year, e.month) for e in world.events_at(x, y) if e.salience == "major"} <= set(moments)
     cell = y * world.width + x
     assert {c.moment for c in world.territory if cell in c.cells.tolist()} <= set(moments)
@@ -331,7 +331,7 @@ def test_the_tile_key_goes_to_the_tiles_next_event(world: World, cfg: Config) ->
     from biomegen.explorer.history_viewer import tile_moments
 
     tile = _tile_of_a_battle(world)
-    own = tile_moments(world, tile)
+    own = tile_moments(world, cfg, tile)
     state = initial_state(world, cfg, own[0], tile)
     _press(world, cfg, state, "}")
     assert state.at == own[1]
@@ -341,7 +341,7 @@ def test_the_tile_keys_stop_at_the_ends_of_the_tiles_history(world: World, cfg: 
     from biomegen.explorer.history_viewer import tile_moments
 
     tile = _tile_of_a_battle(world)
-    own = tile_moments(world, tile)
+    own = tile_moments(world, cfg, tile)
     state = initial_state(world, cfg, own[-1], tile)
     _press(world, cfg, state, "}")
     assert state.at == own[-1] and "at this tile" in state.message
@@ -451,3 +451,24 @@ def test_the_hints_follow_the_focus(world: World, cfg: Config) -> None:
     state = _at_present(world, cfg)
     _press(world, cfg, state, "\t")
     assert "choose a power" in _text(world, cfg, state)[-1]
+
+
+def test_the_tile_key_reaches_the_present_when_nothing_more_happens_at_the_tile(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import tile_moments
+
+    tile = _tile_of_a_battle(world)
+    own = tile_moments(world, cfg, tile)
+    state = initial_state(world, cfg, own[0], tile)
+    for _ in range(len(own) + 1):
+        _press(world, cfg, state, "}")
+    assert state.at == (world.year, cfg.get("history.months_per_year"))
+
+
+def test_the_tile_key_goes_back_from_the_present_to_the_tiles_last_event(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import tile_moments
+
+    tile = _tile_of_a_battle(world)
+    own = tile_moments(world, cfg, tile)
+    state = initial_state(world, cfg, own[-1], tile)
+    _press(world, cfg, state, "{")
+    assert state.at == own[-2]

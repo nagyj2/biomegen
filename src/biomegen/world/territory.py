@@ -167,3 +167,16 @@ class OwnerTimeline:
         kept = grid.copy()
         kept.flags.writeable = False
         return kept
+
+
+def wild_since(changes: Sequence[TerritoryChange], height: int, width: int) -> np.ndarray:
+    """Return an ``int32 [height, width]`` grid: the year each cell was last taken from the wild (0 where never).
+
+    ``changes`` run oldest first. A cell a realm holds today was settled no sooner than this, whoever held it between:
+    a transfer between realms does not count, since what stood on the land stood already.
+    """
+    since = np.zeros(height * width, dtype=np.int32)
+    for change in changes:
+        if change.from_owner == WILD:
+            since[change.cells] = change.year
+    return since.reshape(height, width)

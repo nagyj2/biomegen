@@ -68,6 +68,19 @@ class Ledger:
         """How many events have been recorded (the creation index of the next one)."""
         return len(self._pending)
 
+    def events_of(self, kind: str, poi_index: int) -> list[ChronicleEvent]:
+        """Return the recorded events of ``kind`` about exactly the POI ``poi_index``, in creation order."""
+        found = [(key, event) for key, event in self.ordered() if event.kind == kind and event.poi_ids == [poi_index]]
+        return [event for _, event in sorted(found, key=lambda item: item[0][2])]
+
+    def reschedule(self, event: ChronicleEvent, year: int) -> None:
+        """Move a recorded event to ``year`` (it keeps its kind and creation order within the new year)."""
+        for position, (_, kind, creation, recorded) in enumerate(self._pending):
+            if recorded is event:
+                self._pending[position] = (year, kind, creation, event)
+                event.year = year
+                return
+
     def ordered(self) -> list[tuple[tuple[int, int, int], ChronicleEvent]]:
         """Return each recorded event with its sort key ``(year, kind order, creation index)``, in sorted order."""
         return [(item[:3], item[3]) for item in sorted(self._pending, key=lambda item: item[:3])]

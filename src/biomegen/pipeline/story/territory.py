@@ -66,6 +66,10 @@ class Plan:
 
     entries: list[tuple[_Item, TerritoryChange]] = field(default_factory=list)
 
+    def forward(self) -> list[TerritoryChange]:
+        """Return the changes oldest first (their months are not set until :meth:`resolve`)."""
+        return [change for _, change in reversed(self.entries)]
+
     def resolve(self) -> list[TerritoryChange]:
         """Return the changes oldest first, each with its event's month and id (the ledger must be finished)."""
         changes = []

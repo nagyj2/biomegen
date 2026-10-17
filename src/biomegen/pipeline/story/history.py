@@ -38,6 +38,7 @@ import numpy as np
 from ...config.model import Config
 from ...util import rng
 from ...world.entities import NO_LOCATION, POI, FallenRealm, Predecessor, Realm
+from ...world.territory import wild_since
 from ...world.tile import WaterType
 from ...world.world import World
 from ..civilization.diplomacy import faction_color, neutral_colors
@@ -193,14 +194,12 @@ def _realm_events(
     span: int,
     ledger: Ledger,
     held_back: Collection[int],
-    defecting: Collection[int] = (),
 ) -> None:
-    """Add the founding (realms and fallen realms), settling and conquest events.
+    """Add the founding (realms and fallen realms), free-settlement and conquest events.
 
     A realm in ``held_back`` has no founding yet: it came of a clean split (:func:`_split_events` adds the
     secession), or it may have left an older realm (the conflicts timeline adds a ``secession`` event, or the founding
-    if the check fails). A settlement in ``defecting`` may have left an older realm: the timeline settles it (for the
-    realm it left if it did, else for its holder).
+    if the check fails). The settling of the settlements realms hold waits for the territory (:func:`_settling_events`).
     """
     settle_kinds = set(config.get("history.settle_kinds"))
     for realm in world.realms:
@@ -218,7 +217,6 @@ def _realm_events(
             near_poi=nearest_settlement(world, config, *fallen.location),
             tags=("fallen",),
         )
-    seats = {realm.seat_poi for realm in world.realms}
     for index, poi in enumerate(world.pois):
         if poi.free and poi.kind in settle_kinds and _remnant_of(world, config, poi) < 0:
             ledger.add(
@@ -231,8 +229,6 @@ def _realm_events(
                 location=(poi.x, poi.y),
                 tags=(poi.kind, "free"),
             )
-        if poi.civilized and poi.kind in settle_kinds and poi.realm_id >= 0 and index not in seats | set(defecting):
-            add_settling(world, config, seed, ledger, index, poi.realm_id)
     for realm in world.realms:
         if realm.liege >= 0:
             _conquest_events(world, config, seed, span, ledger, realm, world.realms[realm.liege])
@@ -292,6 +288,32 @@ def _conquest_events(
     ledger.add(year, "conquest", "conquest", (realm.id,), seed, realm_ids=[realm.id, liege.id], tags=("vassalage",))
 
 
+def _settling_events(
+    world: World, config: Config, seed: int, ledger: Ledger, since: np.ndarray, defecting: Collection[int]
+) -> None:
+    """Date the settlements realms hold no sooner than their land was taken from the wild, and add their events.
+
+    A realm grows from a core by annexing wild land (the territory record), so a settlement on the land it annexes
+    cannot be the realm's before then: its ``founded`` is moved to the year the land came in when that is later. A
+    seat is dated by its realm. A settlement in ``defecting`` was settled by the timeline: its event is moved too,
+    unless it did defect (its ``secession`` fixes its years). The kinds in ``history.settle_kinds`` get their
+    ``settling`` event.
+    """
+    settle_kinds = set(config.get("history.settle_kinds"))
+    seats = {realm.seat_poi for realm in world.realms}
+    defected = {i for _, event in ledger.ordered() if "defection" in event.tags for i in event.poi_ids}
+    for index, poi in enumerate(world.pois):
+        if not poi.civilized or poi.realm_id < 0 or index in seats or index in defected:
+            continue
+        poi.founded = max(poi.founded, int(since[poi.y, poi.x]))
+        if index not in defecting:
+            if poi.kind in settle_kinds:
+                add_settling(world, config, seed, ledger, index, poi.realm_id)
+            continue
+        for event in ledger.events_of("settling", index):  # the timeline settled it: move that event to the new year
+            ledger.reschedule(event, max(event.year, poi.founded))
+
+
 def _remnants(world: World, config: Config, seed: int, ledger: Ledger) -> dict[int, int]:
     """Date every free settlement that is a remnant of a fallen realm inside that realm's life, and return them.
 
@@ -340,11 +362,13 @@ def run(world: World, config: Config, seed: int) -> None:
     if ledger.enabled("secession"):
         offshoots = secession.plan_offshoots(world, config, seed, came_of_split)
     defections = secession.plan_defections(world, config, seed) if ledger.enabled("secession") else {}
-    _realm_events(world, config, seed, span, ledger, came_of_split | set(offshoots), set(defections))
+    _realm_events(world, config, seed, span, ledger, came_of_split | set(offshoots))
     _split_events(world, config, seed, ledger)
     conflicts.derive(world, config, seed, span, ledger, styles, offshoots, len(splits), defections)
     remnants = _remnants(world, config, seed, ledger)
     territory_plan = territory.plan(world, config, seed, ledger)
+    since = wild_since(territory_plan.forward(), world.height, world.width)
+    _settling_events(world, config, seed, ledger, since, set(defections))
     world.chronicle = ledger.finish(seed)
     world.territory = territory_plan.resolve()
     for event in world.chronicle:  # a settlement is marked by the event that founded or settled it

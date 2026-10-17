@@ -173,16 +173,25 @@ def test_a_page_scrolls_a_screen_less_one_line(cfg: Config) -> None:
     assert state.scroll == 8
 
 
-def test_the_end_shows_the_last_event_on_the_last_row(cfg: Config) -> None:
+def test_the_end_shows_the_present_under_the_last_event(cfg: Config) -> None:
+    # The listing closes with the present, which the end key always reaches: the last event is the row above it.
     state = PagerState()
     _press(_world(), cfg, state, "end")
-    assert _screen(_world(), cfg, state)[9].split()[:2] == ["390", "peace"]
+    screen = _screen(_world(), cfg, state)
+    assert screen[9].split()[:2] == ["500", "the"] and screen[8].split()[:2] == ["390", "peace"]
 
 
 def test_scrolling_past_the_end_is_clamped(cfg: Config) -> None:
     state = PagerState()
     _press(_world(), cfg, state, "end", "down", "J")
-    assert state.scroll == EVENT_COUNT - 9
+    assert state.scroll == EVENT_COUNT + 1 - 9
+
+
+def test_the_present_is_shown_even_when_a_filter_hides_every_event(cfg: Config) -> None:
+    state = PagerState(chronicle_filter=ChronicleFilter(year_from=900))
+    screen = _screen(_world(), cfg, state)
+    assert any(line.split()[:2] == ["500", "the"] for line in screen)
+    assert any("no events match" in line for line in screen)
 
 
 def test_the_kind_key_cycles_through_the_kinds_and_back_to_all(cfg: Config) -> None:
@@ -295,7 +304,7 @@ def test_clear_drops_filters_and_search(cfg: Config) -> None:
 
 def test_no_matching_events_shows_a_note(cfg: Config) -> None:
     state = PagerState(chronicle_filter=ChronicleFilter(text="unicorn"))
-    assert "(no events match)" in _screen(_world(), cfg, state)[1]
+    assert "(no events match)" in _screen(_world(), cfg, state)[2]
 
 
 def test_the_help_overlay_lists_the_keys(cfg: Config) -> None:
