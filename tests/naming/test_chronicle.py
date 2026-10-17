@@ -375,3 +375,26 @@ def test_a_predecessor_name_differs_from_its_childrens(cfg: Config) -> None:
     world = _with_predecessor()
     chronicle.name_predecessors(world, cfg, 3)
     assert world.predecessors[0].name not in {r.name for r in world.realms}
+
+
+def test_an_expansion_names_the_realm_its_ruler_and_seat(cfg: Config) -> None:
+    event = ChronicleEvent(0, 120, "expansion", [0], template="{short} under {ruler} spreads from {seat}.")
+    assert _render(_small_world(), event, cfg) == "Aldor under King Bran spreads from Aldburg."
+
+
+def test_a_fallen_realms_expansion_names_the_fallen_realm(cfg: Config) -> None:
+    world = _small_world()
+    event = ChronicleEvent(0, 150, "expansion", fallen_ids=[0], template="{fallen} spreads over the wild.")
+    world.chronicle = [event]
+    chronicle.describe_events(world, cfg, 1)
+    assert "{" not in event.text and world.fallen_realms[0].name in event.text
+
+
+def test_every_expansion_row_resolves_all_its_tokens(cfg: Config) -> None:
+    # Each wording of the two expansion rows (near ones too) leaves no {token} behind.
+    for row, kwargs in (("expansion", {"realm_ids": [0]}), ("expansion_fallen", {"fallen_ids": [0]})):
+        pool = cfg.get(f"tables.chronicle.{row}")
+        for template in list(pool["templates"]) + list(pool.get("templates_near", [])):
+            world = _small_world()
+            event = ChronicleEvent(0, 150, "expansion", template=template, near_poi=1, **kwargs)
+            assert "{" not in _render(world, event, cfg), template

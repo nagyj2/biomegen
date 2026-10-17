@@ -164,7 +164,7 @@ def _tokens(
             tokens[token], ref = _ruler(world, realm, year)
             if ref:
                 where[token] = ref
-    elif event.kind in ("founding", "settling", "conquest") and realms:
+    elif event.kind in ("founding", "settling", "conquest", "expansion") and realms:
         realm = realms[0]
         seat = world.pois[realm.seat_poi].name if realm.seat_poi >= 0 else realm.short
         tokens.update(realm=realm.name, short=realm.short, seat=seat)
