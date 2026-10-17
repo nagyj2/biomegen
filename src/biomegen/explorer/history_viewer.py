@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+import textwrap
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 from typing import Callable, Optional, TextIO
@@ -30,6 +31,7 @@ from ..render.layers import build_grid
 from ..render.views import resolve_view
 from ..world.chronicle import ChronicleFilter, filter_events
 from ..world.entities import NO_LOCATION, ChronicleEvent
+from ..world.powers import power_profile
 from ..world.territory import (
     WILD,
     TerritoryChange,
@@ -56,6 +58,7 @@ _BOUND_ACTIONS = (
     ("history_prev_tile", ("tile", -1)),
     ("history_next_tile", ("tile", 1)),
     ("history_goto", ("goto",)),
+    ("history_focus", ("focus",)),
     ("history_present", ("present",)),
     ("filter_salience", ("minor",)),
     ("help", ("help",)),
@@ -66,6 +69,7 @@ _DEFAULT_KEYS = {
     "history_prev_tile": "{",
     "history_next_tile": "}",
     "history_goto": "g",
+    "history_focus": "\t",
     "history_present": "\\",
     "filter_salience": "m",
     "help": "?",
@@ -76,6 +80,7 @@ _HISTORY_HELP = (
     "{history_prev} / {history_next}   previous / next event (the map changes where an event moves it)",
     "{history_goto}   go to a year (the map at the end of it)",
     "{history_present}   the present (the map after the last event)",
+    "{history_focus}   switch to the powers list and back (examine a power at this moment)",
     "{filter_salience}   show / hide the minor events (towers, roads, small settlements)",
     "Home / End   the first event / the present",
     "arrows / WASD / HJKL   scroll the chronicle (shift or capitals: {step})",
@@ -94,6 +99,9 @@ class HistoryState:
         minor: Whether minor events are listed (and stopped at) too.
         tile: The tile the viewer was opened on from the explorer (None from the command line): the tile keys step
             through the events and changes at it.
+        focus: ``"time"`` (the stop keys and the chronicle) or ``"powers"`` (the powers list and a power's profile).
+        selected: The power being examined (a territory owner), kept as the stops change.
+        highlight: Whether the selected power is being shown on the map (until the next key).
         scroll: Index of the first chronicle line shown.
         prompt: The text typed in the open year prompt, or ``None``.
         message: A short note for the status line.
@@ -103,6 +111,9 @@ class HistoryState:
     moments: list[Stop] = field(default_factory=list)
     minor: bool = False
     tile: Optional[tuple[int, int]] = None
+    focus: str = "time"
+    selected: Optional[int] = None
+    highlight: bool = False
     scroll: int = 0
     prompt: Optional[str] = None
     message: str = ""
@@ -276,13 +287,15 @@ def _map_grid(world: World, config: Config, state: HistoryState, area: Size, col
 
     Drawn again only when something changed.
     """
-    key = (area, state.at, state.minor, state.tile, color, ascii_only)
+    shown = state.selected if state.highlight else None
+    key = (area, state.at, state.minor, state.tile, shown, color, ascii_only)
     if state._map is None or state._map[0] != key:
         sampler = FitSampler(world, config, area[0], area[1])
         view = resolve_view(config, "political")
         grid = build_grid(world, config, view, sampler, None, ascii_only, color, "all", 0, None, state.at)
         _draw_markers(grid, world, config, state, sampler)
         _mark_tile(grid, state, sampler)
+        _show_power(grid, world, state, sampler)
         state._map = (key, grid)
     return state._map[1]
 
@@ -296,6 +309,17 @@ def _mark_tile(grid: CellGrid, state: HistoryState, sampler: FitSampler) -> None
         fg, bg = grid.fg[row, col].copy(), grid.bg[row, col].copy()
         grid.fg[row, col], grid.bg[row, col] = bg, fg
         grid.bold[row, col] = True
+
+
+def _show_power(grid: CellGrid, world: World, state: HistoryState, sampler: FitSampler) -> None:
+    """While the highlight is on, brighten the selected power's land on the map and dim everything else."""
+    if not state.highlight or state.selected is None:
+        return
+    owners = sampler.nearest(world.owners_at(*state.at))
+    mine = owners == state.selected
+    grid.bg[mine] = mix_colors(grid.bg[mine], (255, 255, 255), 0.45)
+    grid.bg[~mine] = mix_colors(grid.bg[~mine], (0, 0, 0), 0.55)
+    grid.fg[~mine] = mix_colors(grid.fg[~mine], (0, 0, 0), 0.55)
 
 
 def _draw_markers(grid: CellGrid, world: World, config: Config, state: HistoryState, sampler: FitSampler) -> None:
@@ -341,13 +365,20 @@ def _powers(world: World, state: HistoryState) -> list[tuple[int, int]]:
 def _draw_powers(
     screen: CellGrid, world: World, config: Config, state: HistoryState, top: int, bottom: int, width: int
 ) -> None:
-    """List the powers at the moment under the map: a swatch, the name (a vassal names its overlord) and the area."""
+    """List the powers at the moment under the map: a swatch, the name (a vassal names its overlord) and the area.
+
+    The selected power is marked with ``>`` (reversed while the list has the focus) and kept in view.
+    """
     fg, bg, dim = panel_color(config, "fg"), panel_color(config, "bg"), panel_color(config, "dim")
     km2 = world.scale.cell_area_km2
     entries = _powers(world, state)
-    _put(screen, top, 1, f"powers: {len(entries)}", dim, bg)
+    heading = f"powers: {len(entries)}" + ("  (Tab: back to time)" if state.focus == "powers" else "  (Tab: examine)")
+    _put(screen, top, 1, heading, dim, bg)
     room = max(0, bottom - top - 1)
-    shown = entries[: room if len(entries) <= room else max(0, room - 1)]
+    owners = [owner for owner, _ in entries]
+    at = owners.index(state.selected) if state.selected in owners else -1
+    first = max(0, at - room + 2) if at >= room - 1 and len(entries) > room else 0
+    shown = entries[first : first + (room if len(entries) - first <= room else max(0, room - 1))]
     for offset, (owner, cells) in enumerate(shown):
         name, color = owner_label(world, owner)
         if owner >= 0:
@@ -355,12 +386,76 @@ def _draw_powers(
             if lord != owner:
                 name += f" (vassal of {world.realms[lord].short})"
         row = top + 1 + offset
-        _put(screen, row, 1, "  ", fg, color)
+        picked = owner == state.selected
+        row_fg, row_bg = (bg, fg) if picked and state.focus == "powers" else (fg, bg)
+        if picked:
+            screen.glyph[row, 0:width] = " "
+            screen.bg[row, 0:width] = row_bg
+        _put(screen, row, 0, ">" if picked else " ", row_fg, row_bg, bold=picked)
+        _put(screen, row, 1, "  ", row_fg, color)
         area = f"{cells * km2:,.0f} km2"
-        _put(screen, row, 4, name[: max(0, width - len(area) - 6)], fg, bg)
-        _put(screen, row, max(4, width - len(area) - 1), area, dim, bg)
-    if len(entries) > len(shown) and room:
-        _put(screen, top + room, 1, f"... and {len(entries) - len(shown)} more", dim, bg)
+        _put(screen, row, 4, name[: max(0, width - len(area) - 6)], row_fg, row_bg)
+        _put(screen, row, max(4, width - len(area) - 1), area, dim if not picked else row_fg, row_bg)
+    if first + len(shown) < len(entries) and room:
+        _put(screen, top + room, 1, f"... and {len(entries) - first - len(shown)} more", dim, bg)
+
+
+def _profile_lines(world: World, config: Config, state: HistoryState) -> list[tuple[str, Optional[RGB], bool]]:
+    """The selected power's profile at the moment as ``(text, colour, bold)`` lines (colour None: the panel's)."""
+    if state.selected is None:
+        return [("no power selected", None, False)]
+    profile = power_profile(world, config, state.selected, state.at)
+    lines: list[tuple[str, Optional[RGB], bool]] = [(f"{profile.name}  ({profile.kind})", profile.color, True)]
+    if not profile.exists:
+        began = (
+            f"; it begins in {profile.founded}" if profile.founded is not None and profile.founded > state.at[0] else ""
+        )
+        return [*lines, (f"does not exist at this moment{began}", None, False)]
+    if profile.ruler:
+        lines.append((f"ruler: {profile.ruler} (since {profile.ruler_since}), a {profile.style} rule", None, False))
+    if profile.capital:
+        lines.append((f"seat: {profile.capital}", None, False))
+    lines.append((f"land: {profile.area_km2:,.0f} km2, {profile.share:.1%} of the claimed land", None, False))
+    if profile.settlements:
+        counts = ", ".join(
+            f"{count} {label.lower()}" + ("s" if count > 1 else "") for label, count in profile.settlements
+        )
+        lines.append((f"settlements: {counts}", None, False))
+        per = profile.people / (profile.area_km2 / 1000.0) if profile.area_km2 else 0.0
+        lines.append((f"people: ~{profile.people:,} in them; prosperity {per:.1f} per 1,000 km2", None, False))
+    lines.append((f"strength: {profile.strength:.2f} (size against the mean, times the ruler's style)", None, False))
+    if profile.liege:
+        lines.append((f"bows to {profile.liege}", None, False))
+    if profile.vassals:
+        lines.append((f"vassals: {', '.join(profile.vassals)}", None, False))
+    labels = {"war": "at war with", "rivalry": "rival of", "alliance": "allied with", "trade": "trading with"}
+    for kind, other, since in profile.ties:
+        lines.append((f"{labels.get(kind, kind)} {other} since {since}", None, False))
+    if not profile.ties and profile.owner >= 0:
+        lines.append(("no wars, rivalries or pacts at this moment", None, False))
+    return lines
+
+
+def _draw_profile(screen: CellGrid, world: World, config: Config, state: HistoryState, left: int, body: int) -> None:
+    """Draw the selected power's profile in the right column, wrapped to its width."""
+    fg, bg = panel_color(config, "fg"), panel_color(config, "bg")
+    width = screen.cols - left - 1
+    row = _HEADER_ROWS
+    for text, colour, bold in _profile_lines(world, config, state):
+        for piece in textwrap.wrap(text, max(10, width)) or [""]:
+            if row >= _HEADER_ROWS + body:
+                return
+            _put(screen, row, left, piece, colour if colour is not None else fg, bg, bold)
+            row += 1
+
+
+def _select(world: World, state: HistoryState, step: int) -> None:
+    """Move the selection ``step`` places down the powers list (up when negative), starting at the largest."""
+    owners = [owner for owner, _ in _powers(world, state)]
+    if not owners:
+        return
+    at = owners.index(state.selected) if state.selected in owners else (-1 if step > 0 else len(owners))
+    state.selected = owners[max(0, min(len(owners) - 1, at + step))]
 
 
 def _events_layout(world: World, config: Config, state: HistoryState, width: int):
@@ -387,8 +482,9 @@ def _help_lines(config: Config, tile: bool) -> tuple[str, ...]:
         "Marks on the map: events that had a place",
         f"  {marks}",
         f"  bold: this moment's events; faded: those of the last {years} years",
-        "Powers list: the colour swatch is the power's colour on the map;",
-        "  (vassal of X) means it had bowed to X by then",
+        "Powers list: the swatch is the power's colour on the map; (vassal of X): it had bowed to X by then.",
+        "  {history_focus}: examine a power; up / down choose one; Space shows it on the map while it is pressed",
+        "  (a terminal sends no key release, so the highlight ends at the next key)",
         _HISTORY_HELP[-1],
     )
 
@@ -433,7 +529,10 @@ def compose_history_frame(
     _draw_powers(screen, world, config, state, _HEADER_ROWS + grid.rows + 1, rows - _FOOTER_ROWS, map_cols)
     screen.glyph[_HEADER_ROWS : rows - _FOOTER_ROWS, map_cols] = "|"
     screen.fg[_HEADER_ROWS : rows - _FOOTER_ROWS, map_cols] = dim
-    _draw_events(screen, world, config, state, event_col, body)
+    if state.focus == "powers":
+        _draw_profile(screen, world, config, state, event_col, body)
+    else:
+        _draw_events(screen, world, config, state, event_col, body)
     index = stop_index(state.moments, state.at)
     status = moment_summary(world, config, state.moments[index]) if index >= 0 else "no change yet"
     status_row = rows - _FOOTER_ROWS
@@ -443,7 +542,9 @@ def compose_history_frame(
         _put(screen, status_row, 0, f" {status}", fg, bg)
         if state.message:
             _put(screen, status_row, max(0, cols - len(state.message) - 1), state.message, head, bg, bold=True)
-    _put(screen, rows - 1, 0, _hint_line(config, state.prompt is not None, state.tile is not None), dim, bg)
+    _put(
+        screen, rows - 1, 0, _hint_line(config, state.prompt is not None, state.tile is not None, state.focus), dim, bg
+    )
     if help_open:
         draw_help(screen, config, _help_lines(config, state.tile is not None))
     return screen
@@ -495,20 +596,25 @@ def _draw_events(screen: CellGrid, world: World, config: Config, state: HistoryS
         _put(screen, _HEADER_ROWS, left, "(no events)", dim, bg)
 
 
-def _hint_line(config: Config, prompting: bool, tile: bool) -> str:
+def _hint_line(config: Config, prompting: bool, tile: bool, focus: str = "time") -> str:
     keys = config.get("keys")
 
     def show(name: str) -> str:
         key = keys.get(name, _DEFAULT_KEYS.get(name, "q"))
-        return "space" if key == " " else key
+        return {" ": "space", "\t": "Tab"}.get(key, key)
 
     if prompting:
         return " [Enter] go  [Esc] cancel"
     here = f"[{show('history_prev_tile')}/{show('history_next_tile')}] this tile  " if tile else ""
+    if focus == "powers":
+        return (
+            f" [up/down] choose a power  [Space] show it on the map  [{show('history_focus')}] back to time  "
+            f"[{show('history_prev')}/{show('history_next')}] event  {here}[{show('help')}] help  [{show('quit')}] quit"
+        )
     return (
         f" [{show('history_prev')}/{show('history_next')}] event  {here}"
         f"[{show('history_goto')}] go to year  [{show('history_present')}] present  [{show('filter_salience')}] minor  "
-        f"[arrows] scroll  [{show('help')}] help  [{show('quit')}] quit"
+        f"[{show('history_focus')}] powers  [arrows] scroll  [{show('help')}] help  [{show('quit')}] quit"
     )
 
 
@@ -554,19 +660,36 @@ def _travel(world: World, config: Config, state: HistoryState, action: Action) -
         state.at = moments[0] if name == "first" else moments[-1]
 
 
+def _examine(world: World, state: HistoryState, action: Action) -> None:
+    """Apply a key while the powers list has the focus: up and down choose a power, Space shows it on the map."""
+    if action[0] == "scroll":
+        _select(world, state, 1 if action[1] > 0 else -1)
+    else:
+        state.highlight = state.selected is not None
+
+
 def apply_history_action(world: World, config: Config, state: HistoryState, action: Action, size: Size) -> None:
     """Apply ``action`` to ``state``; ``help``, ``resize`` and ``quit`` are the loop's, not handled here."""
     name = action[0]
     state.message = ""
+    state.highlight = False  # the highlight lasts as long as its key repeats: any other key ends it
     if state.prompt is not None:
         _answer_prompt(world, config, state, action)
     elif name in ("step", "tile", "minor", "present", "first", "last"):
         _travel(world, config, state, ("last",) if name == "present" else action)
     elif name == "goto":
         state.prompt = ""
+    elif name == "focus":
+        state.focus = "time" if state.focus == "powers" else "powers"
+        if state.focus == "powers" and state.selected is None:
+            _select(world, state, 1)
+    elif state.focus == "powers" and name in ("scroll", "page"):
+        _examine(world, state, action)
     elif name == "scroll":
         state.scroll = max(0, state.scroll + action[1])
     elif name == "page":
+        state.scroll = max(0, state.scroll + action[1] * max(1, size[1] - _HEADER_ROWS - _FOOTER_ROWS - 1))
+
         state.scroll = max(0, state.scroll + action[1] * max(1, size[1] - _HEADER_ROWS - _FOOTER_ROWS - 1))
 
 

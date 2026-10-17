@@ -364,3 +364,90 @@ def test_the_help_lists_the_tile_keys_only_with_a_tile(world: World, cfg: Config
     within = compose_history_frame(world, cfg, initial_state(world, cfg, None, (12, 7)), SIZE, help_open=True)
     has = lambda grid: "at the selected tile" in "\n".join("".join(row) for row in grid.glyph)  # noqa: E731
     assert (has(without), has(within)) == (False, True)
+
+
+# --- examining the powers ------------------------------------------------------------------------------------------
+
+
+def _at_present(world: World, cfg: Config) -> HistoryState:
+    state = initial_state(world, cfg)
+    _press(world, cfg, state, "\\")
+    return state
+
+
+def test_tab_switches_to_the_powers_and_selects_the_largest(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import _powers
+
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t")
+    assert state.focus == "powers" and state.selected == _powers(world, state)[0][0]
+
+
+def test_tab_again_goes_back_to_time_and_keeps_the_selection(world: World, cfg: Config) -> None:
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t", "\t")
+    assert state.focus == "time" and state.selected is not None
+
+
+def test_down_and_up_choose_another_power(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import _powers
+
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t", "down")
+    second = _powers(world, state)[1][0]
+    assert state.selected == second
+    _press(world, cfg, state, "up")
+    assert state.selected == _powers(world, state)[0][0]
+
+
+def test_the_profile_of_the_selected_power_replaces_the_chronicle(world: World, cfg: Config) -> None:
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t")
+    text = "\n".join(_text(world, cfg, state))
+    name = world.realms[state.selected].short if state.selected >= 0 else ""
+    assert "land:" in text and "strength:" in text and name in text
+
+
+def test_the_selected_power_is_marked_in_the_list(world: World, cfg: Config) -> None:
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t")
+    assert any(line.startswith(">") for line in _text(world, cfg, state))
+
+
+def test_space_shows_the_power_on_the_map_until_the_next_key(world: World, cfg: Config) -> None:
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t")
+    plain = compose_history_frame(world, cfg, state, SIZE).bg[1:25, :70].copy()
+    _press(world, cfg, state, " ")
+    shown = compose_history_frame(world, cfg, state, SIZE).bg[1:25, :70].copy()
+    _press(world, cfg, state, "down")
+    cleared = compose_history_frame(world, cfg, state, SIZE).bg[1:25, :70].copy()
+    assert state.highlight is False and (plain != shown).any() and not (shown == cleared).all()
+
+
+def test_space_in_the_time_focus_still_pages_the_chronicle(world: World, cfg: Config) -> None:
+    state = initial_state(world, cfg)
+    _press(world, cfg, state, " ")
+    assert not state.highlight and state.scroll > 0
+
+
+def test_the_selection_follows_the_power_across_the_stops(world: World, cfg: Config) -> None:
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t")
+    chosen = state.selected
+    _press(world, cfg, state, "[", "[")
+    assert state.selected == chosen
+
+
+def test_a_power_that_does_not_yet_exist_says_so(world: World, cfg: Config) -> None:
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t")
+    state.selected = max(r.id for r in world.realms if r.founded > 100)
+    state.at = (5, 1)
+    assert "does not exist" in "\n".join(_text(world, cfg, state))
+
+
+def test_the_hints_follow_the_focus(world: World, cfg: Config) -> None:
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t")
+    assert "choose a power" in _text(world, cfg, state)[-1]

@@ -38,5 +38,6 @@ VALUES: Dict[str, Any] = {
     "history_prev_tile": "{",  # when opened from the explorer: the previous event or change at the selected tile
     "history_next_tile": "}",  # ... the next one
     "history_goto": "g",  # ask for a year and show the map at the end of it
+    "history_focus": "\t",  # switch between time and the powers list (Space there shows the power on the map)
     "history_present": "\\",  # go to the present (the last change)
 }
