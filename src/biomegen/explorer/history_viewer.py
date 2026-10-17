@@ -247,31 +247,73 @@ def owner_label(world: World, owner: int) -> tuple[str, RGB]:
     return "wild land", (128, 128, 128)
 
 
-def _words_for(world: World, change: TerritoryChange) -> str:
-    """One short phrase for a change: ``expansion: Phya +46 cells`` or ``battle: Aldor takes 12 cells from Wend``."""
-    gained, lost = owner_label(world, change.to_owner)[0], owner_label(world, change.from_owner)[0]
+Seg = tuple[str, Optional[RGB]]  # a piece of text and its colour (None: the panel's own)
+
+
+def _segments_for(world: World, change: TerritoryChange) -> list[Seg]:
+    """One short phrase for a change, its powers in their colours: ``expansion: Phya +46 cells`` or
+    ``battle: Aldor takes 12 cells from Wend``."""
+    (gained, gain_color), (lost, loss_color) = (
+        owner_label(world, change.to_owner),
+        owner_label(world, change.from_owner),
+    )
     cells = len(change.cells)
     if change.from_owner == WILD:
-        return f"{change.kind}: {gained} +{cells} cells"
+        return [(f"{change.kind}: ", None), (gained, gain_color), (f" +{cells} cells", None)]
     if change.to_owner == WILD:
-        return f"{change.kind}: {lost} -{cells} cells to the wild"
-    return f"{change.kind}: {gained} takes {cells} cells from {lost}"
+        return [(f"{change.kind}: ", None), (lost, loss_color), (f" -{cells} cells to the wild", None)]
+    return [
+        (f"{change.kind}: ", None),
+        (gained, gain_color),
+        (f" takes {cells} cells from ", None),
+        (lost, loss_color),
+    ]
+
+
+def moment_segments(world: World, config: Config, moment: Stop) -> list[Seg]:
+    """Describe what the map does at stop ``moment`` in coloured pieces: the territory changes of its event, one phrase
+    each, and its conquest."""
+    phrases = [_segments_for(world, c) for c in world.territory if c.key == moment]
+    for event in world.chronicle:
+        if _event_stop(event) == moment and event.kind == "conquest" and "vassalage" in event.tags:
+            lord, vassal = world.realms[event.realm_ids[1]], world.realms[event.realm_ids[0]]
+            phrases.append(
+                [("conquest: ", None), (lord.short, lord.color), (" takes ", None), (vassal.short, vassal.color)]
+            )
+    if moment == START:
+        phrases.append([("the start: before any event", None)])
+    if moment == present_moment(world, config):
+        phrases.append([("the present", None)])
+    if not phrases:
+        return [("the map does not change here", None)]
+    return [seg for index, phrase in enumerate(phrases) for seg in ([("; ", None)] if index else []) + phrase]
 
 
 def moment_summary(world: World, config: Config, moment: Stop) -> str:
-    """Describe what the map does at stop ``moment``: the territory changes of its event, one phrase each, and its
-    conquest."""
-    parts = [_words_for(world, c) for c in world.territory if c.key == moment]
-    for event in world.chronicle:
-        if _event_stop(event) == moment and event.kind == "conquest" and "vassalage" in event.tags:
-            parts.append(
-                f"conquest: {world.realms[event.realm_ids[1]].short} takes {world.realms[event.realm_ids[0]].short}"
-            )
-    if moment == START:
-        parts.append("the start: before any event")
-    if moment == present_moment(world, config):
-        parts.append("the present")
-    return "; ".join(parts) if parts else "the map does not change here"
+    """Describe what the map does at stop ``moment`` as plain text (see :func:`moment_segments`)."""
+    return "".join(text for text, _ in moment_segments(world, config, moment))
+
+
+def _fit_segments(segments: list[Seg], width: int) -> list[Seg]:
+    """``segments`` cut to ``width`` cells in all, ending in ``...`` when something was cut."""
+    if sum(len(text) for text, _ in segments) <= width:
+        return segments
+    kept: list[Seg] = []
+    room = max(0, width - 3)
+    for text, color in segments:
+        if room <= 0:
+            break
+        kept.append((text[:room], color))
+        room -= len(text)
+    return [*kept, ("...", None)] if width >= 3 else kept
+
+
+def _put_segments(grid: CellGrid, row: int, col: int, segments: list[Seg], fg: RGB, bg: RGB, bold: bool = False) -> int:
+    """Write coloured pieces of text one after the other from ``col`` and return the column after the last."""
+    for text, color in segments:
+        _put(grid, row, col, text, color if color is not None else fg, bg, bold and color is None)
+        col += len(text)
+    return col
 
 
 def _put(grid: CellGrid, row: int, col: int, text: str, fg: RGB, bg: RGB, bold: bool = False) -> None:
@@ -392,11 +434,12 @@ def _draw_powers(
     first = max(0, at - room + 2) if at >= room - 1 and len(entries) > room else 0
     shown = entries[first : first + (room if len(entries) - first <= room else max(0, room - 1))]
     for offset, (owner, cells) in enumerate(shown):
-        name, color = owner_label(world, owner)
+        label, color = owner_label(world, owner)
+        name: list[Seg] = [(label, color)]
         if owner >= 0:
             lord = world.top_realm_at(owner, *state.at)
             if lord != owner:
-                name += f" (vassal of {world.realms[lord].short})"
+                name += [(" (vassal of ", None), (world.realms[lord].short, world.realms[lord].color), (")", None)]
         row = top + 1 + offset
         picked = owner == state.selected
         row_fg, row_bg = (bg, fg) if picked and state.focus == "powers" else (fg, bg)
@@ -406,7 +449,9 @@ def _draw_powers(
         _put(screen, row, 0, ">" if picked else " ", row_fg, row_bg, bold=picked)
         _put(screen, row, 1, "  ", row_fg, color)
         area = f"{cells * km2:,.0f} km2"
-        _put(screen, row, 4, name[: max(0, width - len(area) - 6)], row_fg, row_bg)
+        reversed_row = picked and state.focus == "powers"  # a reversed row keeps one colour so it stays readable
+        shown_name = [(text, None if reversed_row else paint) for text, paint in name]
+        _put_segments(screen, row, 4, _fit_segments(shown_name, max(0, width - len(area) - 6)), row_fg, row_bg)
         _put(screen, row, max(4, width - len(area) - 1), area, dim if not picked else row_fg, row_bg)
     if first + len(shown) < len(entries) and room:
         _put(screen, top + room, 1, f"... and {len(entries) - first - len(shown)} more", dim, bg)
@@ -423,42 +468,38 @@ _LABEL_WIDTH = 13  # the value column: every label fits in front of it
 _VASSAL_SLOTS = 3  # rows kept for the vassals before the relations list begins
 
 
-def _fit(text: str, width: int) -> str:
-    """``text`` cut to ``width`` cells (with ``...``), so a row never wraps and shifts the ones below it."""
-    return text if len(text) <= width else text[: max(0, width - 3)] + "..."
-
-
-def _profile_rows(
-    world: World, config: Config, state: HistoryState, width: int
-) -> list[tuple[str, Optional[RGB], bool]]:
-    """The selected power's profile at the stop as ``(text, colour, bold)`` rows (colour None: the panel's).
+def _profile_rows(world: World, config: Config, state: HistoryState, width: int) -> list[list[Seg]]:
+    """The selected power's profile at the stop as rows of coloured pieces of text (colour None: the panel's).
 
     The layout is the same for every power, so one can be compared with the next by flicking between them: each
     fact has its own row with a ``-`` where the power has none; the settlements have a row per tier; the vassals have a
     heading and a few reserved rows (``+N more`` after them); and the relations, the one list left to grow, come last
-    under a heading that never moves. Every row is one line long.
+    under a heading that never moves. Every row is one line long. A ruler, a seat, a liege, a vassal or a power in a
+    relation is in the colour of its realm.
     """
     if state.selected is None:
-        return [("no power selected", None, False)]
+        return [[("no power selected", None)]]
     profile = power_profile(world, config, state.selected, state.at)
     year = state.at[0]
 
-    def row(label: str, value: object = None) -> tuple[str, Optional[RGB], bool]:
+    def row(label: str, value: object = None, color: Optional[RGB] = None, tail: str = "") -> list[Seg]:
         shown = _NONE if value is None or value == "" else str(value)
-        return _fit(f"{label:<{_LABEL_WIDTH}}{shown}", width), None, False
+        pieces: list[Seg] = [(f"{label:<{_LABEL_WIDTH}}", None), (shown, color if shown != _NONE else None)]
+        return _fit_segments([*pieces, (tail, None)] if tail else pieces, width)
 
     if not profile.exists:
         status = f"not yet: begins in year {profile.founded}" if (profile.founded or 0) > year else "gone"
     else:
         status = f"standing since year {profile.founded}" if profile.founded is not None else "standing"
     here, real = profile.exists, profile.exists and profile.owner >= 0  # a fallen or old realm has no ruler or ties
+    own = profile.color
     rows = [
-        (_fit(f"{profile.name}  ({profile.kind})", width), profile.color, True),
+        _fit_segments([(f"{profile.name}  ({profile.kind})", profile.color)], width),
         row("status:", status),
-        row("ruler:", profile.ruler if real else None),
+        row("ruler:", profile.ruler if real else None, own),
         row("rule:", profile.style if real else None),
         row("reigning:", _years(year, profile.ruler_since).removeprefix("for ") if real and profile.ruler else None),
-        row("seat:", profile.capital if real else None),
+        row("seat:", profile.capital if real else None, own),
         row("land:", f"{profile.area_km2:,.0f} km2" if here else None),
         row("share:", f"{profile.share:.1%} of the claimed land" if here else None),
         row("people:", f"~{profile.people:,} (~{profile.settled:,} in places)" if here and profile.people else None),
@@ -467,7 +508,7 @@ def _profile_rows(
             f"{profile.people / (profile.area_km2 / 1000.0):.1f} per 1,000 km2" if here and profile.people else None,
         ),
         row("strength:", f"{profile.strength:.2f}" if here and profile.strength else None),
-        row("bows to:", profile.liege if real else None),
+        row("bows to:", profile.liege if real else None, profile.liege_color),
         row("places:", f"{sum(count for _, count in profile.settlements)}" if here and profile.settlements else None),
     ]
     held = dict(profile.settlements)
@@ -475,23 +516,30 @@ def _profile_rows(
     for label in (*tiers, "Homestead"):
         count = held.get(label)
         rows.append(row(f"  {label}:", count if here and count else None))
-    vassals = profile.vassals if real else []
+    vassals = list(zip(profile.vassals, profile.vassal_colors, strict=False)) if real else []
     rows.append(row("vassals:", len(vassals) or None))
-    shown = vassals[:_VASSAL_SLOTS] if len(vassals) <= _VASSAL_SLOTS else [*vassals[: _VASSAL_SLOTS - 1], ""]
+    shown = vassals[:_VASSAL_SLOTS] if len(vassals) <= _VASSAL_SLOTS else vassals[: _VASSAL_SLOTS - 1]
     for slot in range(_VASSAL_SLOTS):
-        if slot < len(shown) and shown[slot]:
-            rows.append(row("", shown[slot]))
-        elif slot < len(shown):
+        if slot < len(shown):
+            rows.append(row("", shown[slot][0], shown[slot][1]))
+        elif slot == len(shown) and len(vassals) > _VASSAL_SLOTS:
             rows.append(row("", f"+{len(vassals) - _VASSAL_SLOTS + 1} more"))
         else:
             rows.append(row("", _NONE if slot == 0 and not vassals else None))
-    ties = profile.ties if real else []
+    ties = list(zip(profile.ties, profile.tie_colors, strict=False)) if real else []
     rows.append(row("relations:", len(ties) or None))
     labels = {"war": "at war with", "rivalry": "rival of", "alliance": "allied with", "trade": "trading with"}
-    rows += [
-        row("", f"{labels.get(kind, kind)} {other}, {_years(year, since).removeprefix('for ')}")
-        for kind, other, since in ties
-    ]
+    for (kind, other, since), color in ties:
+        rows.append(
+            _fit_segments(
+                [
+                    (f"{'':<{_LABEL_WIDTH}}{labels.get(kind, kind)} ", None),
+                    (other, color),
+                    (f", {_years(year, since).removeprefix('for ')}", None),
+                ],
+                width,
+            )
+        )
     return rows
 
 
@@ -499,8 +547,10 @@ def _draw_profile(screen: CellGrid, world: World, config: Config, state: History
     """Draw the selected power's profile in the right column, one fixed row per fact (see :func:`_profile_rows`)."""
     fg, bg = panel_color(config, "fg"), panel_color(config, "bg")
     width = screen.cols - left - 1
-    for offset, (text, colour, bold) in enumerate(_profile_rows(world, config, state, width)[:body]):
-        _put(screen, _HEADER_ROWS + offset, left, text, colour if colour is not None else fg, bg, bold)
+    for offset, segments in enumerate(_profile_rows(world, config, state, width)[:body]):
+        _put_segments(screen, _HEADER_ROWS + offset, left, segments, fg, bg)
+        if offset == 0:
+            screen.bold[_HEADER_ROWS, left : left + width] = True
 
 
 def _select(world: World, state: HistoryState, step: int) -> None:
@@ -589,12 +639,12 @@ def compose_history_frame(
     else:
         _draw_events(screen, world, config, state, event_col, body)
     index = stop_index(state.moments, state.at)
-    status = moment_summary(world, config, state.moments[index]) if index >= 0 else "no change yet"
+    status = moment_segments(world, config, state.moments[index]) if index >= 0 else [("no change yet", None)]
     status_row = rows - _FOOTER_ROWS
     if state.prompt is not None:
         _put(screen, status_row, 0, f" year: {state.prompt}_", head, bg, bold=True)
     else:
-        _put(screen, status_row, 0, f" {status}", fg, bg)
+        _put_segments(screen, status_row, 0, [(" ", None), *status], fg, bg)
         if state.message:
             _put(screen, status_row, max(0, cols - len(state.message) - 1), state.message, head, bg, bold=True)
     _put(

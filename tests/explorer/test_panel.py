@@ -270,3 +270,43 @@ def test_the_panel_reads_events_through_the_reader_it_is_given(config: Config) -
 def test_a_world_with_no_events_has_no_event_rows(config: Config) -> None:
     world = make_world(6, 3)
     assert not any(line.strip().startswith(tuple("0123456789")) for line in _panel(world, config)[6:])
+
+
+# --- names in their realm's colour --------------------------------------------------------------------------------
+
+
+def _coloured_world():
+    world = _storied_world()
+    world.realms[0].color = (200, 40, 40)
+    world.realms[0].ruler = "Queen Mara"
+    world.pois[0].civilized, world.pois[0].realm_id = True, 0
+    return world
+
+
+def _cell_color(grid, text: str):
+    """The foreground colour at the first cell of ``text`` in the panel, found in its rendered rows."""
+    for row, line in enumerate(_lines(grid)):
+        column = line.find(text)
+        if column >= 0:
+            return tuple(int(v) for v in grid.fg[row, column])
+    raise AssertionError(text)
+
+
+def test_the_realm_and_its_ruler_are_in_the_realms_colour(config: Config) -> None:
+    world = _coloured_world()
+    world.realms[0].name = "Kingdom of Aldor"
+    grid = build_panel(world, config, ViewState(cx=2, cy=1), "terrain", Seen(), 100, 12)
+    assert _cell_color(grid, "Kingdom of Aldor") == (200, 40, 40) and _cell_color(grid, "Queen Mara") == (200, 40, 40)
+
+
+def test_the_poi_under_the_cursor_is_in_its_realms_colour(config: Config) -> None:
+    world = _coloured_world()
+    grid = build_panel(world, config, ViewState(cx=2, cy=1), "terrain", Seen(), 100, 12)
+    assert _cell_color(grid, "Dunmere (village") == (200, 40, 40)
+
+
+def test_a_name_in_an_event_line_is_in_its_realms_colour(config: Config) -> None:
+    world = _coloured_world()
+    world.chronicle[1].refs = [(0, 7, "poi", 0)]  # "Dunmere is settled."
+    grid = build_panel(world, config, ViewState(cx=2, cy=1), "terrain", Seen(), 100, 12)
+    assert _cell_color(grid, "Dunmere is settled") == (200, 40, 40)

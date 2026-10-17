@@ -66,8 +66,11 @@ class PowerProfile:
     settled: int = 0
     strength: float = 0.0
     liege: str = ""
+    liege_color: Optional[RGB] = None
     vassals: list[str] = field(default_factory=list)
+    vassal_colors: list[RGB] = field(default_factory=list)
     ties: list[tuple[str, str, int]] = field(default_factory=list)
+    tie_colors: list[RGB] = field(default_factory=list)
 
 
 def owner_name(world: World, owner: int) -> tuple[str, RGB]:
@@ -88,10 +91,11 @@ def _key(event: ChronicleEvent) -> tuple[int, int, int]:
     return event.year, event.month, event.id
 
 
-def _ties(world: World, owner: int, moment: Stop) -> list[tuple[str, str, int]]:
-    """The wars, rivalries, alliances and trade pacts a realm was in at ``moment``, with the year each began."""
+def _ties_with_colors(world: World, owner: int, moment: Stop) -> list[tuple[str, str, int, RGB]]:
+    """The wars, rivalries, alliances and trade pacts a realm was in at ``moment``: kind, the other power, the year each
+    began and the other's colour."""
     now = at_end(moment)
-    ties: list[tuple[str, str, int]] = []
+    ties: list[tuple[str, str, int, RGB]] = []
     for attacker, defender in wars_at(world, moment):
         if owner in (attacker, defender):
             other = defender if owner == attacker else attacker
@@ -100,16 +104,21 @@ def _ties(world: World, owner: int, moment: Stop) -> list[tuple[str, str, int]]:
                 for e in world.chronicle
                 if e.kind == "war" and e.realm_ids[:2] == [attacker, defender] and _key(e) <= now
             )
-            ties.append(("war", owner_name(world, other)[0], begun))
+            ties.append(("war", owner_name(world, other)[0], begun, owner_name(world, other)[1]))
     for event in world.chronicle:
         if _key(event) > now or event.fallen_ids or owner not in event.realm_ids:
             continue
         others = [r for r in event.realm_ids if r != owner]
         if event.kind == "rivalry" and others:
-            ties.append(("rivalry", owner_name(world, others[0])[0], event.year))
+            ties.append(("rivalry", owner_name(world, others[0])[0], event.year, owner_name(world, others[0])[1]))
         elif event.kind == "treaty" and others and event.tags:
-            ties.append((event.tags[0], owner_name(world, others[0])[0], event.year))
+            ties.append((event.tags[0], owner_name(world, others[0])[0], event.year, owner_name(world, others[0])[1]))
     return ties
+
+
+def _ties(world: World, owner: int, moment: Stop) -> list[tuple[str, str, int]]:
+    """The ties of :func:`_ties_with_colors` without the colours."""
+    return [(kind, name, year) for kind, name, year, _ in _ties_with_colors(world, owner, moment)]
 
 
 def _life(
@@ -179,8 +188,9 @@ def power_profile(world: World, config: Config, owner: int, moment: Stop) -> Pow
         multiplier = float(config.get(f"{style_row}.strength_mul", 1.0)) if style_row else 1.0
         capital = world.pois[realm.seat_poi].name if realm.seat_poi >= 0 else ""
         lord = world.top_realm_at(owner, *moment)
+        ties = _ties_with_colors(world, owner, moment) if exists else []
         vassals = [
-            owner_name(world, r.id)[0]
+            owner_name(world, r.id)
             for r in world.realms
             if r.id != owner and r.id != lord and world.top_realm_at(r.id, *moment) == owner
         ]
@@ -190,8 +200,11 @@ def power_profile(world: World, config: Config, owner: int, moment: Stop) -> Pow
             "style": str(config.get(f"{style_row}.label")) if style_row else "",
             "capital": capital,
             "liege": owner_name(world, lord)[0] if lord != owner else "",
-            "vassals": vassals,
-            "ties": _ties(world, owner, moment) if exists else [],
+            "liege_color": owner_name(world, lord)[1] if lord != owner else None,
+            "vassals": [name for name, _ in vassals],
+            "vassal_colors": [color for _, color in vassals],
+            "ties": [t[:3] for t in ties],
+            "tie_colors": [t[3] for t in ties],
             "strength": (cells / mean) * multiplier if cells else 0.0,
         }
     elif is_fallen_owner(owner):

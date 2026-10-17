@@ -24,55 +24,71 @@ def _palette(config: Config) -> dict[str, RGB]:
     return {name: (int(c[0]), int(c[1]), int(c[2])) for name, c in config.get("history.colors").items()}
 
 
-def event_rows(world: World, config: Config) -> list[list[Span]]:
-    """Return one row of styled spans per event of ``world.chronicle`` (year, kind, then the text with names coloured).
+def name_color(world: World, config: Config, kind: str, ref: int, palette: Optional[dict[str, RGB]] = None) -> RGB:
+    """Return the colour of a name in a text: a realm, its ruler and every place it holds in the realm's colour (a
+    fallen or old realm in its own), a bandit tower or dungeon in the ``hideout`` colour, and the places no realm holds
+    and the named land (rivers, ranges, seas) in the neutral ``settlement`` and ``place`` colours."""
+    palette = palette if palette is not None else _palette(config)
+    if kind == REF_REALM:
+        return world.realms[ref].color
+    if kind == REF_RULER:  # a ruler is coloured as their realm
+        return world.realms[world.rulers[ref].realm_id].color
+    if kind == REF_FALLEN:
+        return world.fallen_realms[ref].color
+    if kind == REF_PREDECESSOR:
+        return world.predecessors[ref].color
+    if kind == REF_FEATURE:
+        return palette["place"]
+    assert kind == REF_POI
+    poi = world.place(ref)
+    if config.get(f"tables.pois.{poi.kind}.bandit_strength", 0):  # a bandit tower or dungeon is its own colour
+        return palette["hideout"]
+    return world.realms[poi.realm_id].color if poi.civilized and poi.realm_id >= 0 else palette["settlement"]
 
-    Rows follow the chronicle's order, and a settlement is neutral only at its first mention in the whole chronicle, so
-    a filtered view colours a name exactly as the full chronicle does.
+
+def colored_text(
+    world: World,
+    config: Config,
+    text: str,
+    refs: Sequence[tuple[int, int, str, int]],
+    palette: Optional[dict[str, RGB]] = None,
+) -> list[Span]:
+    """Return ``text`` as spans, each name of ``refs`` (start, end, kind, id) bold in its colour (``name_color``)."""
+    palette = palette if palette is not None else _palette(config)
+    spans: list[Span] = []
+    pos = 0
+    for start, end, kind, ref in sorted(refs):
+        if start > pos:
+            spans.append(Span(text[pos:start]))
+        spans.append(Span(text[start:end], name_color(world, config, kind, ref, palette), bold=True))
+        pos = end
+    if pos < len(text):
+        spans.append(Span(text[pos:]))
+    return spans
+
+
+def event_row(
+    world: World, config: Config, event: ChronicleEvent, palette: Optional[dict[str, RGB]] = None
+) -> list[Span]:
+    """Return one event as styled spans: its year, its kind, then its text with every name in its colour."""
+    palette = palette if palette is not None else _palette(config)
+    return [
+        Span(f"{event.year:>5}", palette["year"]),
+        Span("  "),
+        Span(f"{event.kind:<{KIND_WIDTH}}", palette[event.kind], bold=True),
+        Span("  "),
+        *colored_text(world, config, event.text, event.refs, palette),
+    ]
+
+
+def event_rows(world: World, config: Config) -> list[list[Span]]:
+    """Return one row of styled spans per event of ``world.chronicle`` (see :func:`event_row`).
+
+    Rows follow the chronicle's order. A name is in the colour of its realm wherever it appears, so a filtered view
+    colours a name exactly as the full chronicle does.
     """
     palette = _palette(config)
-    named: set[int] = set()  # settlements the chronicle has already named
-
-    def name_color(kind: str, ref: int) -> RGB:
-        if kind == REF_REALM:
-            return world.realms[ref].color
-        if kind == REF_RULER:  # a ruler is coloured as their realm
-            return world.realms[world.rulers[ref].realm_id].color
-        if kind == REF_FALLEN:
-            return world.fallen_realms[ref].color
-        if kind == REF_PREDECESSOR:
-            return world.predecessors[ref].color
-        if kind == REF_FEATURE:
-            return palette["place"]
-        assert kind == REF_POI
-        poi = world.place(ref)
-        if config.get(f"tables.pois.{poi.kind}.bandit_strength", 0):  # a bandit tower or dungeon is its own colour
-            return palette["hideout"]
-        if not poi.civilized:  # a ruin, battlefield or other wild place belongs to no realm
-            return palette["settlement"]
-        first = ref not in named
-        named.add(ref)
-        realm = poi.realm_id
-        return palette["settlement"] if first or realm < 0 else world.realms[realm].color
-
-    rows: list[list[Span]] = []
-    for event in world.chronicle:
-        row = [
-            Span(f"{event.year:>5}", palette["year"]),
-            Span("  "),
-            Span(f"{event.kind:<{KIND_WIDTH}}", palette[event.kind], bold=True),
-            Span("  "),
-        ]
-        pos = 0
-        for start, end, kind, ref in sorted(event.refs):
-            if start > pos:
-                row.append(Span(event.text[pos:start]))
-            row.append(Span(event.text[start:end], name_color(kind, ref), bold=True))
-            pos = end
-        if pos < len(event.text):
-            row.append(Span(event.text[pos:]))
-        rows.append(row)
-    return rows
+    return [event_row(world, config, event, palette) for event in world.chronicle]
 
 
 def chronicle_document(world: World, config: Config, events: Optional[Sequence[ChronicleEvent]] = None) -> Document:

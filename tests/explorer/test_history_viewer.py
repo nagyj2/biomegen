@@ -597,7 +597,7 @@ def _profile_labels(world: World, cfg: Config, owner: int, at) -> list[str]:
 
     state = initial_state(world, cfg)
     state.selected, state.at = owner, at
-    return [text[:13].strip() for text, _colour, _bold in _profile_rows(world, cfg, state, 46)]
+    return ["".join(text for text, _ in row)[:13].strip() for row in _profile_rows(world, cfg, state, 46)]
 
 
 def test_every_power_has_its_rows_in_the_same_places(world: World, cfg: Config) -> None:
@@ -619,7 +619,7 @@ def test_a_missing_fact_shows_a_dash(world: World, cfg: Config) -> None:
 
     state = initial_state(world, cfg)
     state.selected, state.at = max(world.realms, key=lambda r: r.founded).id, (0, 0, -1)
-    rows = [text for text, _c, _b in _profile_rows(world, cfg, state, 46)]
+    rows = ["".join(text for text, _ in row) for row in _profile_rows(world, cfg, state, 46)]
     assert any(text.startswith("ruler:") and text.endswith("-") for text in rows)
 
 
@@ -643,3 +643,48 @@ def test_a_realm_exists_in_the_year_of_its_split_before_the_split_month(world: W
         split = next(e for e in world.chronicle if e.kind == "secession" and e.predecessor_ids == [predecessor.id])
         before = (split.year, split.month, split.id - 1)
         assert power_profile(world, cfg, -1000 - predecessor.id, before).exists
+
+
+# --- names in their realm's colour ----------------------------------------------------------------------------------
+
+
+def _colors(world: World, cfg: Config, owner: int, at) -> dict[str, tuple]:
+    """Each coloured piece of text of a profile, by its text."""
+    from biomegen.explorer.history_viewer import _profile_rows
+
+    state = initial_state(world, cfg)
+    state.selected, state.at = owner, at
+    return {text: color for row in _profile_rows(world, cfg, state, 80) for text, color in row if color is not None}
+
+
+def test_the_ruler_and_the_seat_are_in_the_realms_colour(world: World, cfg: Config) -> None:
+    realm = max(world.realms, key=lambda r: int((world.realm_id == r.id).sum()))
+    colors = _colors(world, cfg, realm.id, present_stop(world, cfg))
+    assert colors[world.pois[realm.seat_poi].name] == realm.color
+    assert realm.color in colors.values()
+
+
+def test_a_liege_and_its_vassals_are_in_their_own_colours(world: World, cfg: Config) -> None:
+    present = present_stop(world, cfg)
+    vassal = next(r for r in world.realms if r.liege >= 0)
+    lord = world.realms[world.top_realm(vassal.id)]
+    assert _colors(world, cfg, vassal.id, present)[lord.short] == lord.color
+    assert _colors(world, cfg, lord.id, present)[vassal.short] == vassal.color
+
+
+def test_the_powers_in_a_relation_are_in_their_colours(world: World, cfg: Config) -> None:
+    present = present_stop(world, cfg)
+    realm = next(
+        r for r in world.realms if r.id in {i for e in world.chronicle if e.kind == "rivalry" for i in e.realm_ids}
+    )
+    colors = _colors(world, cfg, realm.id, present)
+    assert {r.color for r in world.realms if r.short in colors and colors[r.short] == r.color}
+
+
+def test_the_status_line_colours_the_powers_it_names(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import moment_segments
+
+    change = next(c for c in world.territory if c.kind == "expansion")
+    colors = {color for text, color in moment_segments(world, cfg, change.key) if color is not None}
+    realm = world.realms[change.to_owner] if change.to_owner >= 0 else None
+    assert colors and (realm is None or realm.color in colors)

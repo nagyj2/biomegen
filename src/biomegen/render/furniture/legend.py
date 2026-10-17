@@ -42,6 +42,41 @@ class _Text:
         for line in textwrap.wrap(text, max(20, self.width - indent), subsequent_indent="   "):
             self.lines.append([Span(" " * indent + line, fg or self.text_fg)])
 
+    def colored_para(self, pieces: list[Piece], fg: Optional[RGB] = None, indent: int = 2) -> None:
+        """Like :meth:`para` for pieces of text, a piece with a colour (a realm, a ruler, a place) drawn bold in it."""
+        for line in _colored_lines(pieces, max(20, self.width - indent)):
+            self.lines.append(
+                [Span(" " * indent)]
+                + [Span(text, color or fg or self.text_fg, None, color is not None) for text, color in line]
+            )
+
+
+Piece = tuple[str, Optional[RGB]]  # a piece of text and its colour (None: the section's own)
+
+
+def _colored_lines(pieces: list[Piece], width: int, indent_next: str = "   ") -> list[list[Piece]]:
+    """Wrap coloured pieces of text to ``width`` like :func:`textwrap.wrap`, keeping each character's colour.
+
+    Continuation lines start with ``indent_next`` (uncoloured).
+    """
+    text = "".join(piece for piece, _ in pieces)
+    colors = [color for piece, color in pieces for _ in piece]
+    lines: list[list[Piece]] = []
+    pos = 0
+    for number, line in enumerate(textwrap.wrap(text, width, subsequent_indent=indent_next)):
+        body = line if number == 0 else line[len(indent_next) :]
+        while pos < len(text) and text[pos].isspace() and not text.startswith(body, pos):
+            pos += 1  # the whitespace the wrap dropped at a break
+        grouped: list[Piece] = []
+        for char, color in zip(text[pos : pos + len(body)], colors[pos : pos + len(body)], strict=False):
+            if grouped and grouped[-1][1] == color:
+                grouped[-1] = (grouped[-1][0] + char, color)
+            else:
+                grouped.append((char, color))
+        pos += len(body)
+        lines.append(([(indent_next, None)] if number and indent_next else []) + grouped)
+    return lines
+
 
 def _degrees(ascii_only: bool) -> str:
     return "" if ascii_only else "°"
@@ -205,19 +240,32 @@ def _realms(text: _Text, world: World, config: Config, ascii_only: bool) -> None
         label = config.get(f"tables.realm_kinds.{realm.kind}.label")
         tag = f"vassal {label}" if realm.liege >= 0 else label
         seat_poi = world.pois[realm.seat_poi] if realm.seat_poi >= 0 else None
-        seat = (
-            f"from {seat_poi.name} ({_position(world, seat_poi.x, seat_poi.y, ascii_only)})"
-            if seat_poi
-            else "with no fixed seat"
-        )
         count = members[realm.id]
         text.lines.append(
             [Span(pad), Span(swatch, realm.color, None, True), Span(f" {realm.name}", realm.color, None, True)]
             + [Span(f"  [{tag}]", text.dim_fg)]
         )
-        text.para(
-            f"Ruled by {realm.ruler} {seat}. {_area(realm.area_km2, ascii_only)}, pop. ~{_population(realm.pop)}, "
-            f"{count} settlement{'' if count == 1 else 's'}.{_origin(world, realm)}",
+        where: list[Piece] = (
+            [
+                ("from ", None),
+                (seat_poi.name, realm.color),
+                (f" ({_position(world, seat_poi.x, seat_poi.y, ascii_only)})", None),
+            ]
+            if seat_poi
+            else [("with no fixed seat", None)]
+        )
+        text.colored_para(
+            [
+                ("Ruled by ", None),
+                (realm.ruler, realm.color),
+                (" ", None),
+                *where,
+                (
+                    f". {_area(realm.area_km2, ascii_only)}, pop. ~{_population(realm.pop)}, "
+                    f"{count} settlement{'' if count == 1 else 's'}.{_origin(world, realm)}",
+                    None,
+                ),
+            ],
             text.dim_fg,
             len(pad) + 2,
         )
@@ -249,24 +297,39 @@ def _diplomacy(text: _Text, world: World, config: Config, ascii_only: bool) -> N
         if relation.kind == "war":
             attacker = realms[relation.attacker]
             defender = b if relation.attacker == relation.a else a
-            body = f"{attacker.name} vs {defender.name} over {relation.why}; front {relation.border_km:,.0f} km."
+            body: list[Piece] = [
+                (attacker.name, attacker.color),
+                (" vs ", None),
+                (defender.name, defender.color),
+                (f" over {relation.why}; front {relation.border_km:,.0f} km.", None),
+            ]
             if relation.claim_poi >= 0:
-                body += f" {attacker.short} claims {world.pois[relation.claim_poi].name}."
+                claimed = world.pois[relation.claim_poi]
+                holder = world.realms[claimed.realm_id].color if claimed.realm_id >= 0 else None
+                body += [
+                    (" ", None),
+                    (attacker.short, attacker.color),
+                    (" claims ", None),
+                    (claimed.name, holder),
+                    (".", None),
+                ]
         else:
-            body = f"{a.name} & {b.name} - {relation.why}"
+            tail = f" - {relation.why}"
             if sea:
-                body += " (by sea)." if relation.kind == "trade" else " (across the sea)."
+                tail += " (by sea)." if relation.kind == "trade" else " (across the sea)."
             elif relation.kind == "trade":
-                body += "."
+                tail += "."
             else:
-                body += f"; shared border {relation.border_km:,.0f} km."
-        for index, line in enumerate(textwrap.wrap(body, max(20, text.width - width - 3))):
+                tail += f"; shared border {relation.border_km:,.0f} km."
+            body = [(a.name, a.color), (" & ", None), (b.name, b.color), (tail, None)]
+        for index, line in enumerate(_colored_lines(body, max(20, text.width - width - 3), indent_next="")):
             tag = style["tag"].ljust(width) if index == 0 else " " * width
             text.lines.append(
                 [
                     Span("  "),
                     Span(tag, tag_fg if index == 0 else None, None, index == 0),
-                    Span(" " + line, text.text_fg),
+                    Span(" "),
+                    *[Span(piece, color or text.text_fg, None, color is not None) for piece, color in line],
                 ]
             )
 

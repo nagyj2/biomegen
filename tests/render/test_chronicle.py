@@ -85,11 +85,11 @@ def _with_settlement(realm_id: int) -> World:
     return world
 
 
-def test_a_settlement_is_neutral_the_first_time_it_is_named(cfg: Config) -> None:
-    assert _name(_with_settlement(0), cfg, "Wendham").fg == tuple(cfg.get("history.colors.settlement"))
+def test_a_settlement_is_its_realms_colour_from_its_first_mention(cfg: Config) -> None:
+    assert _name(_with_settlement(0), cfg, "Wendham").fg == (200, 20, 20)
 
 
-def test_a_settlement_is_its_realms_colour_afterwards(cfg: Config) -> None:
+def test_a_settlement_is_its_realms_colour_every_time(cfg: Config) -> None:
     assert _name(_with_settlement(0), cfg, "Wendham", row=3).fg == (200, 20, 20)
 
 

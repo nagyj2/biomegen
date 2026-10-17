@@ -419,8 +419,8 @@ settlement on the same landmass within `history.near_km`); naming renders `text`
 every name in it). The ledger sorts events by `(year, kind order, creation order)` and numbers them.
 `--chronicle [--chronicle-format json]` prints them as three columns (year, event type, text), coloured by `--color` or
 the terminal (`render/chronicle.py`): a realm, its ruler and its settlements are in the realm's map colour (`Realm.color`),
-a fallen realm in its own (`FallenRealm.color`), the old realm of a split in its own (`Predecessor.color`); a settlement is in the neutral `history.colors.settlement` the first time
-it is named (and always when wild), a river, range, sea or other named land in the neutral `place`; the kinds and the year
+a fallen realm in its own (`FallenRealm.color`), the old realm of a split in its own (`Predecessor.color`); a settlement is in its realm's colour from its first mention (the neutral `history.colors.settlement` only when no realm holds it), a bandit tower or dungeon in `hideout`,
+a river, range, sea or other named land in the neutral `place`; the kinds and the year
 use `history.colors` too. The places a reason names are marked too (`Relation.why_refs`, moved into the event's `refs`).
 `scripts/chronicle.sh` wraps it.
 

@@ -9,16 +9,17 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from ..config.model import Config
+from ..render.chronicle import colored_text, event_row, name_color
 from ..render.colors import biome_style, interior_style
-from ..render.grid import RGB, CellGrid
+from ..render.grid import RGB, CellGrid, Span
 from ..render.layers import Seen
 from ..sampling.detail import SCALE_MAP, SCALE_SITE
 from ..sites import site_plan
 from ..sites.kinds import building_at, building_counts, cell_name
-from ..world.entities import POI, Realm
+from ..world.entities import POI, REF_POI, Realm
 from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
-from .events import ChronicleReader, EventReader, event_line
+from .events import ChronicleReader, EventReader
 from .state import MODE_ONE_TO_ONE, ViewState, floor_label, poi_under_cursor
 
 _LEGEND_INDENT = 9
@@ -40,6 +41,12 @@ class _Canvas:
         self.grid = CellGrid(rows, cols, bg=bg, fg=fg)
         self.fg = fg
 
+    def spans(self, row: int, col: int, spans: list[Span], fg: Optional[RGB] = None) -> None:
+        """Draw styled spans one after the other; a span with no colour takes ``fg`` (default: the panel's text)."""
+        for span in spans:
+            self.text(row, col, span.text, span.fg if span.fg is not None else fg, span.bold)
+            col += len(span.text)
+
     def text(self, row: int, col: int, text: str, fg: Optional[RGB] = None, bold: bool = False) -> None:
         if not 0 <= row < self.grid.rows or col >= self.grid.cols:
             return
@@ -57,20 +64,6 @@ def view_label(state: ViewState) -> str:
     if state.scale != SCALE_MAP:
         return state.scale.upper()
     return "1:1" if state.mode == MODE_ONE_TO_ONE else "FIT"
-
-
-def _poi_line(poi: Optional[POI]) -> str:
-    """The panel's POI line: name, kind, the style of a homestead or generated hamlet, and for settlements the
-    population and tags."""
-    if poi is None:
-        return " POI: -"
-    detail = [poi.kind]
-    if poi.style:
-        detail.append(poi.style)
-    if poi.pop:
-        detail.append(f"pop {poi.pop:,}")
-    detail.extend(poi.tags)
-    return f" POI: {poi.name or poi.kind} ({', '.join(detail)})"
 
 
 def _buildings_line(world: World, config: Config, state: ViewState, poi: Optional[POI]) -> str:
@@ -95,23 +88,43 @@ def _buildings_line(world: World, config: Config, state: ViewState, poi: Optiona
     return f"{line}   under cursor: {label(here)}" if here is not None else line
 
 
-def _hook_line(poi: Optional[POI]) -> str:
-    """The story text of the point of interest under the cursor, or an empty string."""
-    return f" {poi.hook}" if poi is not None and poi.hook else ""
+def _poi_spans(world: World, config: Config, poi: Optional[POI]) -> list[Span]:
+    """The panel's POI line: name (in its realm's colour), kind, the style of a homestead or generated hamlet, and for
+    settlements the population and tags."""
+    if poi is None:
+        return [Span(" POI: -")]
+    detail = [poi.kind]
+    if poi.style:
+        detail.append(poi.style)
+    if poi.pop:
+        detail.append(f"pop {poi.pop:,}")
+    detail.extend(poi.tags)
+    index = next((i for i, other in enumerate(world.pois) if other is poi), -1)
+    name = poi.name or poi.kind
+    color = name_color(world, config, REF_POI, index) if index >= 0 else None
+    return [Span(" POI: "), Span(name, color, bold=color is not None), Span(f" ({', '.join(detail)})")]
 
 
-def _event_lines(
-    events: EventReader, config: Config, state: ViewState, realm: Optional[Realm], dim: RGB
-) -> list[tuple[str, RGB]]:
-    """List up to ``render.panel_events`` events: the latest at the cursor's tile (they stay while the cursor does),
-    then the latest of the realm that holds it (dimmed) to fill the rest."""
+def _hook_spans(world: World, config: Config, poi: Optional[POI]) -> list[Span]:
+    """The story text of the point of interest under the cursor, its names coloured, or no spans at all."""
+    if poi is None or not poi.hook:
+        return []
+    return [Span(" "), *colored_text(world, config, poi.hook, poi.hook_refs)]
+
+
+def _event_spans(
+    world: World, events: EventReader, config: Config, state: ViewState, realm: Optional[Realm]
+) -> list[tuple[list[Span], bool]]:
+    """List up to ``render.panel_events`` events as ``(spans, at the cursor)``: the latest at the cursor's tile (they
+    stay while the cursor does), then the latest of the realm that holds it (plain text dimmed) to fill the rest. Every
+    name is in its realm's colour."""
     limit = int(config.get("render.panel_events"))
     here = events.at(state.cx, state.cy)[-limit:] if limit else []
-    lines = [(event_line(event), panel_color(config, "fg")) for event in here]
+    lines = [(event_row(world, config, event), True) for event in here]
     if realm is not None and len(lines) < limit:
         shown = {event.id for event in here}
         rest = [e for e in events.of_realm(realm.id) if e.id not in shown][-(limit - len(lines)) :]
-        lines += [(event_line(event), dim) for event in rest]
+        lines += [(event_row(world, config, event), False) for event in rest]
     return lines
 
 
@@ -207,15 +220,34 @@ def build_panel(
     realm = world.realm_at(state.cx, state.cy)
     if realm is not None:
         kind = config.get(f"tables.realm_kinds.{realm.kind}.label")
-        canvas.text(3, 0, f" {realm.name or f'realm #{realm.id}'}  ({kind}, ruled by {realm.ruler or 'no one'})")
+        ruler = realm.ruler or "no one"
+        canvas.spans(
+            3,
+            0,
+            [
+                Span(" "),
+                Span(realm.name or f"realm #{realm.id}", realm.color, bold=True),
+                Span(f"  ({kind}, ruled by "),
+                Span(ruler, realm.color if realm.ruler else None, bold=bool(realm.ruler)),
+                Span(")"),
+            ],
+        )
         canvas.text(4, 1, f"{realm.area_km2:,.0f} km2, pop. ~{realm.pop:,}", dim)
     else:
         canvas.text(3, 0, " realm: open water" if tile.is_water else " realm: none (wild land)")
-    canvas.text(5, 0, _poi_line(poi))
-    info = [(line, canvas.fg) for line in (_buildings_line(world, config, state, poi), _hook_line(poi)) if line]
-    info += _event_lines(events or ChronicleReader(world), config, state, realm, dim)
-    for offset, (line, color) in enumerate(info):
-        canvas.text(6 + offset, 0, line, color)
+    canvas.spans(5, 0, _poi_spans(world, config, poi))
+    info: list[tuple[list[Span], RGB]] = [
+        ([Span(line)], canvas.fg) for line in [_buildings_line(world, config, state, poi)] if line
+    ]
+    hook = _hook_spans(world, config, poi)
+    if hook:
+        info.append((hook, canvas.fg))
+    info += [
+        (spans, canvas.fg if at_cursor else dim)
+        for spans, at_cursor in _event_spans(world, events or ChronicleReader(world), config, state, realm)
+    ]
+    for offset, (spans, default) in enumerate(info):
+        canvas.spans(6 + offset, 0, spans, default)
     first = 6 + len(info)
     last = height - 1
     if config.get("render.show_legend", True) and first < last:

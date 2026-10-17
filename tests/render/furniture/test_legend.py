@@ -254,3 +254,33 @@ def test_a_free_hamlet_is_not_counted_among_the_free_settlements(config) -> None
 
     free = POI(kind="hamlet", x=6, y=6, interior_seed=9, civilized=True, name="Tiny", realm_id=-1, pop=30)
     assert "holding 1 free settlement." in _political_text_with(config, free)
+
+
+def _colour_of(document, text: str):
+    """The colour of the first span whose text contains ``text`` (None when it has the section's own colour)."""
+    return next(span.fg for line in document for span in line if text in span.text)
+
+
+def test_the_ruler_and_the_seat_of_a_realm_are_in_its_colour(config) -> None:
+    document = build_legend(_political_world(), config, POLITICAL, 100)
+    assert _colour_of(document, "Queen Mara") == (200, 40, 40) and _colour_of(document, "Aldoria") == (200, 40, 40)
+
+
+def test_a_war_names_its_realms_in_their_colours(config) -> None:
+    document = build_legend(_political_world(), config, POLITICAL, 100)
+    war = [span for line in document for span in line if span.text.startswith(("Duchy of Brek", "Kingdom of Aldor"))]
+    assert {span.fg for span in war} >= {(40, 40, 200), (200, 40, 40)}
+
+
+def test_the_town_a_war_claims_is_in_the_colour_of_its_holder(config) -> None:
+    document = build_legend(_political_world(), config, POLITICAL, 100)
+    assert _colour_of(document, "Aldoria") == (200, 40, 40)
+
+
+def test_wrapped_legend_lines_keep_every_colour() -> None:
+    from biomegen.render.furniture.legend import _colored_lines
+
+    pieces = [("one two ", None), ("three four five", (1, 2, 3)), (" six seven", None)]
+    lines = _colored_lines(pieces, 12)
+    assert "".join(text for line in lines for text, _ in line).split() == "one two three four five six seven".split()
+    assert {color for line in lines for _, color in line} == {None, (1, 2, 3)}
