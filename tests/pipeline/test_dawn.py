@@ -134,7 +134,7 @@ def test_start_flag_overrides_the_config(capsys: pytest.CaptureFixture[str]) -> 
 
 def test_chronicle_of_a_dawn_world_is_just_the_title(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["--seed", "3", "--width", "64", "--height", "32", "--start", "dawn", "--chronicle"]) == 0
-    assert capsys.readouterr().out.strip().endswith("(year 0)")
+    assert capsys.readouterr().out.strip().endswith(", year 0)")
 
 
 def test_a_dawn_world_exports_to_svg(dawn: World, config: Config, tmp_path: Path) -> None:

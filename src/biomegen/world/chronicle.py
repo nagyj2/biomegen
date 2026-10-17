@@ -156,7 +156,7 @@ def describe_filter(chronicle_filter: ChronicleFilter) -> str:
 
 def chronicle_title(world: World) -> str:
     """Return the title line of the text output."""
-    return f"The Chronicle of {world.island_name or 'the island'} (year {world.year})"
+    return f"The Chronicle of {world.island_name or 'the island'} (seed {world.seed}, year {world.year})"
 
 
 def chronicle_text(world: World, events: Optional[Sequence[ChronicleEvent]] = None) -> str:

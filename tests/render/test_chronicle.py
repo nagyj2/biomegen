@@ -206,3 +206,21 @@ def test_an_and_expression_marks_nothing_in_an_event_that_lacks_a_term(cfg: Conf
     world = _tiny()
     lines, _, _ = layout_events(world, cfg, world.chronicle, 60, "founded&nothing")
     assert all(span.bg is None for span in lines[0])
+
+
+def test_a_bandit_dungeon_is_never_coloured_as_the_realm_that_holds_it(config) -> None:
+    # Named first and named again, it keeps the hideout colour (a settlement would turn to its realm's colour).
+    from biomegen.render.chronicle import event_rows
+
+    world = World(4, 4, 9)
+    world.realms = [Realm(id=0, kind="major", name="Kingdom of A", color=(10, 20, 200))]
+    world.pois = [POI(kind="dungeon", x=1, y=1, interior_seed=1, name="Aakha Catacombs", realm_id=0)]
+    world.chronicle = [
+        ChronicleEvent(0, 10, "creation", poi_ids=[0], text="Aakha Catacombs is delved.", refs=[(0, 15, "poi", 0)]),
+        ChronicleEvent(
+            1, 24, "road", poi_ids=[0], text="A track is cut from Aakha Catacombs.", refs=[(20, 35, "poi", 0)]
+        ),
+    ]
+    hideout = tuple(int(c) for c in config.get("history.colors.hideout"))
+    named = [span.fg for row in event_rows(world, config) for span in row if span.text == "Aakha Catacombs"]
+    assert named == [hideout, hideout]

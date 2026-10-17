@@ -45,9 +45,14 @@ def event_rows(world: World, config: Config) -> list[list[Span]]:
         if kind == REF_FEATURE:
             return palette["place"]
         assert kind == REF_POI
+        poi = world.pois[ref]
+        if config.get(f"tables.pois.{poi.kind}.bandit_strength", 0):  # a bandit tower or dungeon is its own colour
+            return palette["hideout"]
+        if not poi.civilized:  # a ruin, battlefield or other wild place belongs to no realm
+            return palette["settlement"]
         first = ref not in named
         named.add(ref)
-        realm = world.pois[ref].realm_id
+        realm = poi.realm_id
         return palette["settlement"] if first or realm < 0 else world.realms[realm].color
 
     rows: list[list[Span]] = []

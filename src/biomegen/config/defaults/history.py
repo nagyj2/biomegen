@@ -77,9 +77,10 @@ VALUES: Dict[str, Any] = {
     "fallen_neighbours": 3,
     "fall_strength": 0.3,
     "fall_delay_years": [2, 25],
-    # Colours of the coloured text output: the year column, each event kind, and two neutral colours for names that
-    # belong to no faction: ``settlement`` (a settlement's first mention, and any wild one) and ``place`` (mountains,
-    # seas, rivers and other named land). A faction's name, ruler and settlements are in its own map colour.
+    # Colours of the coloured text output: the year column, each event kind, and neutral colours for names that
+    # belong to no faction: ``settlement`` (a settlement's first mention, and any wild place), ``hideout`` (a bandit
+    # tower or dungeon) and ``place`` (mountains, seas, rivers and other named land). A faction's name, ruler and
+    # settlements are in its own map colour.
     # [r, g, b] or "#rrggbb".
     "colors": {
         "year": [150, 150, 160],
@@ -98,6 +99,7 @@ VALUES: Dict[str, Any] = {
         "peace": [140, 220, 220],
         "fall": [170, 140, 210],
         "settlement": [232, 222, 190],
+        "hideout": [196, 120, 104],  # a bandit tower or dungeon
         "place": [150, 185, 205],
         "match": [90, 80, 20],  # background of a search match in the chronicle pager
         "type_realm": [196, 176, 128],  # neutral tags of the name kinds in the chronicle pager's name suggestions
@@ -160,8 +162,6 @@ VALUES: Dict[str, Any] = {
         "min_map_cols": 40,
         "min_event_cols": 34,
         "current_bg": [60, 56, 30],
-        # Besides every territory change, these event kinds are stops of the viewer (they change what the map shows).
-        "stop_kinds": ["conquest", "fall", "war", "peace"],
         # Events with a place are marked on the map: those of the current moment in full colour, those of the
         # ``marker_years`` years before it faded by ``marker_fade``. Each kind has a glyph (ASCII).
         "marker_years": 30,
@@ -176,6 +176,7 @@ VALUES: Dict[str, Any] = {
             "battle": "x",
             "peace": "=",
             "fall": "+",
+            "creation": "^",  # a tower or dungeon made (a minor event, marked only while minor events are shown)
         },
     },
     # When a point of interest appears on the map of the past (world/lifespans.py): the kind of the event that made it

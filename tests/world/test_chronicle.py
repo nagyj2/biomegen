@@ -43,7 +43,7 @@ def _tiny() -> World:
 
 
 def test_text_has_a_title_with_the_present() -> None:
-    assert chronicle_text(_tiny()).splitlines()[0] == "The Chronicle of Testisle (year 500)"
+    assert chronicle_text(_tiny()).splitlines()[0] == "The Chronicle of Testisle (seed 9, year 500)"
 
 
 def test_text_lists_one_line_per_event() -> None:
@@ -67,7 +67,7 @@ def test_json_events_list_the_spans_of_their_names() -> None:
 
 def test_text_of_a_world_without_events_is_just_the_title() -> None:
     world = World(4, 4, 9)
-    assert chronicle_text(world).strip() == "The Chronicle of the island (year 0)"
+    assert chronicle_text(world).strip() == "The Chronicle of the island (seed 9, year 0)"
 
 
 def test_an_event_without_a_cell_has_a_null_location() -> None:

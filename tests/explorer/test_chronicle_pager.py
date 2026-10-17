@@ -141,7 +141,7 @@ def test_unreadable_year_ranges_are_rejected(text: str) -> None:
 def test_the_first_frame_shows_the_title_and_the_first_events(cfg: Config) -> None:
     screen = _screen(_world(), cfg, PagerState())
     assert [screen[0], screen[1].split(), screen[9].split()] == [
-        "The Chronicle of Testisle (year 500)",
+        "The Chronicle of Testisle (seed 9, year 500)",
         ["100", "war", "Event", "0", "happens."],
         ["180", "war", "Event", "8", "happens."],
     ]
@@ -331,7 +331,7 @@ def _run(cfg: Config, *tokens: str, chronicle_filter: ChronicleFilter | None = N
 
 def test_the_loop_draws_then_quits_on_q(cfg: Config) -> None:
     out = _run(cfg)
-    assert out.frames[-1][0].rstrip() == "The Chronicle of Testisle (year 500)"
+    assert out.frames[-1][0].rstrip() == "The Chronicle of Testisle (seed 9, year 500)"
 
 
 def test_the_loop_scrolls_with_the_keys(cfg: Config) -> None:

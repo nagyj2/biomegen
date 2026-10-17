@@ -259,8 +259,53 @@ def test_every_fall_war_and_peace_is_a_stop(world: World, cfg: Config) -> None:
     assert stops and stops <= moments
 
 
-def test_the_status_line_describes_a_fall(world: World, cfg: Config) -> None:
-    fall = next(e for e in world.chronicle if e.kind == "fall")
-    state = initial_state(world, cfg, (fall.year, fall.month))
-    state.at = (fall.year, fall.month)
-    assert moment_summary(world, cfg, (fall.year, fall.month)).count("fall:") >= 1
+def test_the_status_line_describes_a_fall_that_hands_over_land(world: World, cfg: Config) -> None:
+    change = next(c for c in world.territory if c.kind == "fall")
+    assert "fall:" in moment_summary(world, cfg, change.moment)
+
+
+def test_every_listed_event_is_a_stop(world: World, cfg: Config) -> None:
+    moments = set(change_moments(world, cfg))
+    assert {(e.year, e.month) for e in world.chronicle if e.salience == "major"} <= moments
+
+
+def test_the_last_stop_is_the_present_even_when_the_last_event_changes_nothing(world: World, cfg: Config) -> None:
+    moments = change_moments(world, cfg)
+    assert moments[-1] == (world.year, cfg.get("history.months_per_year"))
+    assert moments[-1] >= max((e.year, e.month) for e in world.chronicle if e.salience == "major")
+
+
+def test_stepping_forward_always_reaches_the_present(world: World, cfg: Config) -> None:
+    state = initial_state(world, cfg)
+    for _ in range(len(state.moments) + 2):
+        _press(world, cfg, state, "]")
+    assert state.at == state.moments[-1] and "the present" in _text(world, cfg, state)[0]
+
+
+def test_the_present_key_goes_to_the_present_stop(world: World, cfg: Config) -> None:
+    state = initial_state(world, cfg)
+    _press(world, cfg, state, "\\")
+    assert state.at == (world.year, cfg.get("history.months_per_year"))
+
+
+def test_the_minor_key_adds_the_minor_events_as_stops(world: World, cfg: Config) -> None:
+    state = initial_state(world, cfg)
+    before = len(state.moments)
+    _press(world, cfg, state, "m")
+    assert state.minor and len(state.moments) > before
+
+
+def test_the_minor_key_twice_goes_back_to_the_major_events(world: World, cfg: Config) -> None:
+    state = initial_state(world, cfg)
+    before = list(state.moments)
+    _press(world, cfg, state, "m", "m")
+    assert not state.minor and state.moments == before
+
+
+def test_the_minor_events_are_listed_only_when_shown(world: World, cfg: Config) -> None:
+    minor = next(e for e in world.chronicle if e.salience == "minor")
+    state = initial_state(world, cfg, (minor.year, minor.month))
+    shown = {"major": "\n".join(_text(world, cfg, state))}
+    _press(world, cfg, state, "m")
+    shown["minor"] = "\n".join(_text(world, cfg, state))
+    assert minor.text[:12] not in shown["major"] and minor.text[:12] in shown["minor"]

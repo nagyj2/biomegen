@@ -57,6 +57,7 @@ _BOUND_ACTIONS = (
     ("history_next_year", ("year", 1)),
     ("history_goto", ("goto",)),
     ("history_present", ("present",)),
+    ("filter_salience", ("minor",)),
     ("help", ("help",)),
 )
 _DEFAULT_KEYS = {
@@ -66,16 +67,18 @@ _DEFAULT_KEYS = {
     "history_next_year": "}",
     "history_goto": "g",
     "history_present": "\\",
+    "filter_salience": "m",
     "help": "?",
 }
 _HISTORY_HELP = (
     "History keys",
     "",
-    "{history_prev} / {history_next}   previous / next change of the map",
+    "{history_prev} / {history_next}   previous / next event (the map changes where an event moves it)",
     "{history_prev_year} / {history_next_year}   an earlier / a later year",
     "{history_goto}   go to a year (the map at the end of it)",
-    "{history_present}   the present",
-    "Home / End   the first / the last change",
+    "{history_present}   the present (the map after the last event)",
+    "{filter_salience}   show / hide the minor events (towers, roads, small settlements)",
+    "Home / End   the first event / the present",
     "arrows / WASD / HJKL   scroll the chronicle (shift or capitals: {step})",
     "space / Page Down / Page Up   scroll a page",
     "{help}   this help      {quit} or Esc   quit",
@@ -88,7 +91,8 @@ class HistoryState:
 
     Attributes:
         at: The moment shown: the map after every change at or before ``(year, month)``.
-        moments: Every moment the political map changes, oldest first.
+        moments: Every moment it can stop at (every event listed and the present), oldest first.
+        minor: Whether minor events are listed (and stopped at) too.
         scroll: Index of the first chronicle line shown.
         prompt: The text typed in the open year prompt, or ``None``.
         message: A short note for the status line.
@@ -96,29 +100,28 @@ class HistoryState:
 
     at: Stop
     moments: list[Stop] = field(default_factory=list)
+    minor: bool = False
     scroll: int = 0
     prompt: Optional[str] = None
     message: str = ""
     _synced: Optional[tuple] = field(default=None, repr=False)  # (width, current stop): when the scroll last followed
     _map: Optional[tuple[tuple, CellGrid]] = field(default=None, repr=False)  # the last map drawn, with its key
-    _events: Optional[tuple[int, list[ChronicleEvent], Document, list[int]]] = field(default=None, repr=False)
-
-
-def _stop_event(config: Config, event: ChronicleEvent) -> bool:
-    """Whether ``event`` is a stop of the viewer: a conquest (a vassal tie), fall, war or peace (``stop_kinds``)."""
-    return event.kind in config.get("history.viewer.stop_kinds") and not (
-        event.kind == "conquest" and "vassalage" not in event.tags
+    _events: Optional[tuple[tuple[int, bool], list[ChronicleEvent], Document, list[int]]] = field(
+        default=None, repr=False
     )
 
 
-def change_moments(world: World, config: Config) -> list[Stop]:
-    """Return each distinct ``(year, month)`` at which the political map changes, oldest first.
+def present_moment(world: World, config: Config) -> Stop:
+    """The moment of the present map: the end of the world's last year."""
+    return world.year, int(config.get("history.months_per_year"))
 
-    That is every territory change and every stop event (``history.viewer.stop_kinds``: a conquest recolours land
-    without moving a cell, a fall removes a realm, a war or a peace opens or closes a front).
-    """
-    moments = set(world.territory_moments())
-    moments |= {(e.year, e.month) for e in world.chronicle if _stop_event(config, e)}
+
+def change_moments(world: World, config: Config, minor: bool = False) -> list[Stop]:
+    """Return each distinct ``(year, month)`` the viewer can stop at, oldest first: that of every event listed (the
+    major ones, and the minor too when ``minor``), of every territory change, and the present at the end."""
+    events = world.chronicle if minor else [e for e in world.chronicle if e.salience == "major"]
+    moments = {(e.year, e.month) for e in events} | set(world.territory_moments())
+    moments.add(present_moment(world, config))
     return sorted(moments)
 
 
@@ -214,18 +217,16 @@ def _words_for(world: World, change: TerritoryChange) -> str:
 
 
 def moment_summary(world: World, config: Config, moment: Stop) -> str:
-    """Describe what changed at ``moment``: its territory changes, then its fall, war, peace and conquest events."""
+    """Describe what the map does at ``moment``: its territory changes and conquests, one phrase each."""
     parts = [_words_for(world, c) for c in world.territory if c.moment == moment]
     for event in world.chronicle:
-        if (event.year, event.month) != moment or not _stop_event(config, event):
-            continue
-        if event.kind == "conquest":
+        if (event.year, event.month) == moment and event.kind == "conquest" and "vassalage" in event.tags:
             parts.append(
                 f"conquest: {world.realms[event.realm_ids[1]].short} takes {world.realms[event.realm_ids[0]].short}"
             )
-        else:
-            parts.append(f"{event.kind}: {event.text}")
-    return "; ".join(parts)
+    if moment == present_moment(world, config):
+        parts.append("the present")
+    return "; ".join(parts) if parts else "the map does not change here"
 
 
 def _put(grid: CellGrid, row: int, col: int, text: str, fg: RGB, bg: RGB, bold: bool = False) -> None:
@@ -255,7 +256,7 @@ def _map_grid(world: World, config: Config, state: HistoryState, area: Size, col
 
     Drawn again only when something changed.
     """
-    key = (area, state.at, color, ascii_only)
+    key = (area, state.at, state.minor, color, ascii_only)
     if state._map is None or state._map[0] != key:
         sampler = FitSampler(world, config, area[0], area[1])
         view = resolve_view(config, "political")
@@ -276,6 +277,8 @@ def _draw_markers(grid: CellGrid, world: World, config: Config, state: HistorySt
     for event in world.chronicle:  # oldest first, so a newer marker is drawn over an older one
         moment = (event.year, event.month)
         if event.kind not in glyphs or event.location == NO_LOCATION or moment > state.at or event.year < oldest:
+            continue
+        if event.salience == "minor" and not state.minor:
             continue
         col, row = sampler.cell_coords(*event.location) or (-1, -1)
         if not (0 <= row < grid.rows and 0 <= col < grid.cols):
@@ -329,11 +332,12 @@ def _draw_powers(
 
 
 def _events_layout(world: World, config: Config, state: HistoryState, width: int):
-    """Return ``(events, lines, starts)`` of the major events wrapped to ``width`` (cached per width)."""
-    if state._events is None or state._events[0] != width:
-        events = filter_events(world, ChronicleFilter())
+    """Return ``(events, lines, starts)`` of the listed events (the major ones, and the minor too when shown) wrapped to
+    ``width`` (cached per width and listing)."""
+    if state._events is None or state._events[0] != (width, state.minor):
+        events = filter_events(world, ChronicleFilter(salience="all" if state.minor else "major"))
         lines, starts, _ = layout_events(world, config, events, width)
-        state._events = (width, events, lines, starts)
+        state._events = ((width, state.minor), events, lines, starts)
     return state._events[1:]
 
 
@@ -354,12 +358,12 @@ def _help_lines(config: Config) -> tuple[str, ...]:
     )
 
 
-def _title(world: World, state: HistoryState) -> str:
+def _title(world: World, config: Config, state: HistoryState) -> str:
     year, month = state.at
     index = stop_index(state.moments, state.at)
-    place = "before the first change" if index < 0 else f"change {index + 1}/{len(state.moments)}"
-    if state.moments and index == len(state.moments) - 1 and year >= state.moments[-1][0]:
-        place += ", the present map"
+    place = "before the first event" if index < 0 else f"stop {index + 1}/{len(state.moments)}"
+    if state.at >= present_moment(world, config):
+        place += ", the present"
     return f"History of {world.island_name or 'the island'}  seed {world.seed}  -  year {year}, month {month} ({place})"
 
 
@@ -386,7 +390,7 @@ def compose_history_frame(
         return screen
     map_cols, event_col = _geometry(config, cols)
     body = rows - _HEADER_ROWS - _FOOTER_ROWS
-    _put(screen, 0, 0, _title(world, state), head, bg, bold=True)
+    _put(screen, 0, 0, _title(world, config, state), head, bg, bold=True)
     grid = _map_grid(world, config, state, (map_cols, max(1, body - _POWER_ROWS)), color, ascii_only)
     _paste(screen, grid, _HEADER_ROWS, 0)
     _draw_powers(screen, world, config, state, _HEADER_ROWS + grid.rows + 1, rows - _FOOTER_ROWS, map_cols)
@@ -416,7 +420,7 @@ def _draw_events(screen: CellGrid, world: World, config: Config, state: HistoryS
     index = stop_index(state.moments, state.at)
     current = state.moments[index] if index >= 0 else None
     moments = [(e.year, e.month) for e in events]
-    key = (width, current)
+    key = (width, current, state.minor)
     if state._synced != key and events:
         first = bisect_left(moments, current) if current is not None else 0
         first = min(first, len(events) - 1)
@@ -464,9 +468,10 @@ def _hint_line(config: Config, prompting: bool) -> str:
     if prompting:
         return " [Enter] go  [Esc] cancel"
     return (
-        f" [{show('history_prev')}/{show('history_next')}] change  "
-        f"[{show('history_prev_year')}/{show('history_next_year')}] year  [{show('history_goto')}] go to year  "
-        f"[{show('history_present')}] present  [arrows] scroll  [{show('help')}] help  [{show('quit')}] quit"
+        f" [{show('history_prev')}/{show('history_next')}] event  "
+        f"[{show('history_prev_year')}/{show('history_next_year')}] year  "
+        f"[{show('history_goto')}] go to year  [{show('history_present')}] present  [{show('filter_salience')}] minor  "
+        f"[arrows] scroll  [{show('help')}] help  [{show('quit')}] quit"
     )
 
 
@@ -505,6 +510,10 @@ def apply_history_action(world: World, config: Config, state: HistoryState, acti
             state.message = "no later year" if action[1] > 0 else "no earlier year"
     elif name == "goto":
         state.prompt = ""
+    elif name == "minor":
+        state.minor = not state.minor
+        state.moments = change_moments(world, config, state.minor)
+        state.message = "showing minor events too" if state.minor else "showing major events only"
     elif name == "present":
         state.at = moments[-1] if moments else here
     elif name == "first":
