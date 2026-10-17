@@ -45,6 +45,9 @@ _BOUND_ACTIONS = (
     ("toggle_scale", ("toggle_scale",), "f"),
     ("cycle_view", ("cycle_view",), "v"),
     ("history", ("history",), "t"),
+    ("tick_pause", ("pause",), "p"),
+    ("tick_faster", ("speed", 1), "+"),
+    ("tick_slower", ("speed", -1), "-"),
     ("help", ("help",), "?"),
     ("floor_up", ("floor", 1), ">"),
     ("floor_down", ("floor", -1), "<"),
@@ -97,6 +100,8 @@ def resolve_action(token: str, config: Config) -> Action:
     step = int(config.get("controls.fast_step", 8))
     if token == "resize":
         return ("resize",)
+    if token == "tick":
+        return ("tick",)  # ticks ran while no key was waiting: only a redraw is due
     if token in _STEPS:
         dx, dy = _STEPS[token]
         return ("move", dx, dy)

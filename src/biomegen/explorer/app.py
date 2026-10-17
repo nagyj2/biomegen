@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+import time
 from dataclasses import dataclass
 from typing import Callable, Optional, TextIO
 
@@ -47,6 +48,7 @@ from .state import (
     sync_floor,
     toggle_mode,
 )
+from .ticks import Clock, NoTicks, TickSource, next_token
 from .writer import DiffWriter
 
 Size = tuple[int, int]  # (columns, rows)
@@ -306,6 +308,28 @@ def _export(world: World, config: Config, state: ViewState, overlay: Overlay, fr
     state.notify(f"exported {names}{suffix}")
 
 
+def _view_action(world: World, config: Config, state: ViewState, name: str) -> None:
+    """Apply a zoom, local, fit-toggle or view-cycle key to the view state and say what changed."""
+    if name == "zoom":
+        step_out(state)
+        state.notify(f"scale: {state.scale}")
+    elif name == "local":
+        step_in(world, config, state)
+        state.notify(f"scale: {state.scale}")
+    elif name == "toggle_scale":
+        toggle_mode(state)
+    else:
+        state.view_index = (state.view_index + 1) % len(view_names(config))
+        state.notify(f"view: {view_names(config)[state.view_index]}")
+
+
+def _clock_message(source: TickSource, clock: Clock, name: str, action: Action) -> str:
+    """Apply a pause or speed key to the clock and return what to tell the user (nothing ticks without a source)."""
+    if not source.active:
+        return "no simulation is running"
+    return clock.toggle_pause() if name == "pause" else clock.step(action[1])
+
+
 def history_start(world: World, config: Config, state: ViewState) -> Stop:
     """Return the moment the history viewer opens at: the latest event at the cursor, else the present."""
     events = world.events_at(state.cx, state.cy)
@@ -341,6 +365,9 @@ def run(
     reader: Optional[KeyReader] = None,
     out: Optional[TextIO] = None,
     get_size: Optional[Callable[[], Size]] = None,
+    ticks: Optional[TickSource] = None,
+    now: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> None:
     """Run the explorer until the user quits.
 
@@ -352,6 +379,10 @@ def run(
         reader: The key source (default: the platform reader on stdin); tests pass a scripted one.
         out: The output stream (default: stdout).
         get_size: Returns ``(columns, rows)``; default is the terminal size.
+        ticks: What advances while the explorer is open (a simulation); nothing ticks by default, so the loop blocks
+            on keys. While it is active the loop polls it between keys.
+        now: The clock the tick source is asked about (seconds); tests pass a fake one.
+        sleep: How the loop waits between polls of an active tick source; tests pass a fake one.
     """
     reader = reader if reader is not None else make_reader()
     writer = DiffWriter(out if out is not None else sys.stdout, color_mode)
@@ -364,6 +395,9 @@ def run(
     tracking: object = None
     help_open = False
     queued: Optional[Action] = None  # an action read while draining moves, handled after the frame they lead to
+    source: TickSource = ticks if ticks is not None else NoTicks()
+    clock = Clock.from_config(config)
+    poll_seconds = float(config.get("controls.tick_poll_seconds"))
     with reader:
         writer.enter()
         try:
@@ -388,7 +422,8 @@ def run(
                     for _ in work:
                         if reader.pending():
                             break
-                action = queued if queued is not None else resolve_action(reader.read_key(), config)
+                token = next_token(reader, source, clock, poll_seconds, now, sleep) if queued is None else ""
+                action = queued if queued is not None else resolve_action(token, config)
                 queued = None
                 if help_open and action[0] != "resize":
                     help_open = False  # any key closes the help and does nothing else
@@ -402,17 +437,8 @@ def run(
                 elif name == "pan":
                     pan_view(world, config, state, action[1], action[2])
                     queued = _drain_moves(world, config, state, reader)
-                elif name == "zoom":
-                    step_out(state)
-                    state.notify(f"scale: {state.scale}")
-                elif name == "local":
-                    step_in(world, config, state)
-                    state.notify(f"scale: {state.scale}")
-                elif name == "toggle_scale":
-                    toggle_mode(state)
-                elif name == "cycle_view":
-                    state.view_index = (state.view_index + 1) % len(view_names(config))
-                    state.notify(f"view: {view_names(config)[state.view_index]}")
+                elif name in ("zoom", "local", "toggle_scale", "cycle_view"):
+                    _view_action(world, config, state, name)
                 elif name == "floor":
                     cycle_floor(world, config, state, action[1])
                 elif name == "history":
@@ -429,6 +455,8 @@ def run(
                     writer.invalidate()  # the viewer drew the whole screen
                 elif name == "export":
                     _export(world, config, state, overlay, frame, action[1])
+                elif name in ("pause", "speed"):
+                    state.notify(_clock_message(source, clock, name, action))
                 elif name == "help":
                     help_open = True
                 elif name == "resize":
