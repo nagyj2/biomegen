@@ -80,6 +80,7 @@ class POI:
     bandit_strength: int = 0  # bandits it holds (a wild tower, dungeon or ruin); data only until a simulation reads it
     purpose: str = ""  # a camp's purpose (founding, bandit, army); empty for every other kind
     style: str = ""  # a homestead's or generated hamlet's style (a tables.poi_styles row); empty for every other kind
+    potential: str = ""  # the largest settlement tier its site could grow into (sites.potential); empty: no plan
     connect: bool = True  # whether the roads stage may link it (from its kind's row; a shrine variant may differ)
     tags: Tuple[str, ...] = ()  # site traits, e.g. "port", "river"
     extra: dict = field(default_factory=dict)  # kind-specific data (e.g. boat cargo type)

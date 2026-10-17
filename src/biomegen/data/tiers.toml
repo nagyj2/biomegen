@@ -27,6 +27,9 @@
 #                 centre in the same square. Absent means the tier's own `centre` (the capital has no next tier)
 #   near_target   (optional, default true) false for a tier too small to count as a settlement of note: other places' texts never
 #                 name it as the settlement nearby and the legend leaves it out of a realm's settlement count (the hamlet)
+#   potential_land (optional, 0 to 1) the habitable share of the land round a site (sites.potential.radius_km) it takes for the site
+#                 to be able to grow into this tier (sites/potential.py). A tier without it is never anyone's potential beyond
+#                 its own site (the capital, the hamlet)
 
 [tiers.capital]
 label = "Capital"
@@ -54,6 +57,7 @@ bg = [60, 40, 30]
 pop = [9000, 40000]
 floors = [2, 3]
 spacing_km = 420.0
+potential_land = 0.55
 land_per_settlement_km2 = 800000.0
 backbone = true
 free_fg = [150, 200, 205]
@@ -71,6 +75,7 @@ fg = [250, 240, 220]
 pop = [1500, 8000]
 floors = [1, 2]
 spacing_km = 300.0
+potential_land = 0.40
 land_per_settlement_km2 = 480000.0
 backbone = true
 free_fg = [150, 200, 205]
@@ -88,6 +93,7 @@ fg = [245, 235, 215]
 pop = [80, 1200]
 floors = [1, 1]
 spacing_km = 230.0
+potential_land = 0.20
 land_per_settlement_km2 = 300000.0
 backbone = false
 free_fg = [150, 200, 205]

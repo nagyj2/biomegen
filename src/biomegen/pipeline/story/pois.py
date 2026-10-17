@@ -32,6 +32,7 @@ from __future__ import annotations
 import numpy as np
 
 from ...config.model import Config
+from ...sites.potential import assign_potentials
 from ...util import geometry as geo
 from ...util import rng
 from ...world.entities import ChronicleEvent
@@ -335,3 +336,4 @@ def run(world: World, config: Config, seed: int) -> None:
     if not dawn:
         poi_styles.place_styles(world, config, seed)
         realms.recount_population(world, config, seed)
+    assign_potentials(world, config)  # last, so the room round each site sees every POI

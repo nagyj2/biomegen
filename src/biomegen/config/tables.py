@@ -75,6 +75,7 @@ _TIER_ROW = {
     "near_target": "bool",
     "centre": "text",
     "reserve": "text",
+    "potential_land": "unit",
 }
 _SITE_ROW = {
     "layout": "text",
@@ -441,6 +442,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
                 "hooks_remnant",
                 "near_target",
                 "reserve",
+                "potential_land",
             }
         ),
     ),

@@ -918,3 +918,16 @@ def test_a_dress_row_needs_variants_or_wear() -> None:
     cfg["tables"]["dress"]["pier"] = {}
     with pytest.raises(ConfigError, match=r"tables\.dress\.pier: needs variants or wear"):
         validate(cfg)
+
+
+def test_a_tiers_potential_land_is_a_share_of_the_land() -> None:
+    cfg = get_defaults()
+    cfg["tables"]["tiers"]["town"]["potential_land"] = 1.5
+    with pytest.raises(ConfigError, match="potential_land"):
+        validate(cfg)
+
+
+def test_a_tier_may_have_no_potential_land() -> None:
+    # The capital and the hamlet have none: a site can only be them by being them.
+    tiers = get_defaults()["tables"]["tiers"]
+    assert {name for name, row in tiers.items() if "potential_land" not in row} == {"capital", "hamlet"}

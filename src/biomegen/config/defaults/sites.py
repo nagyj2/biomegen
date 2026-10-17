@@ -33,6 +33,11 @@ VALUES: Dict[str, Any] = {
         "radius_km": {"fertility": 60.0, "forest": 60.0, "roughness": 150.0, "fresh_water": 60.0, "coast": 60.0},
         "saturate": {"fertility": 0.6, "forest": 0.5, "roughness": 0.25, "fresh_water": 0.04, "coast": 0.08},
     },
+    # The largest tier a site could grow into (sites/potential.py, stored as ``POI.potential``): the tiers whose
+    # ``potential_land`` the habitable share of the land within ``radius_km`` reaches, and whose ``spacing_km`` times
+    # ``room_share`` is no more than the distance to the nearest other settlement of note. A settlement is never given
+    # less than the tier it already is.
+    "potential": {"radius_km": 150.0, "room_share": 1.0},
     # A building that survives is damaged by how far the ruin has worn (its erosion over ``ruin_erosion``): at full wear
     # it has ``breaches`` per room, ``crack`` of its floor cracked into rubble, ``strip`` of its furniture gone and
     # ``roof`` of its rooms unroofed.
