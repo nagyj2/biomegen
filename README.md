@@ -265,7 +265,7 @@ including any open POI interior. `--save FILE` writes the same images without th
 | `toggle_scale` | `"f"` | Toggle fit-to-screen ↔ 1:1 |
 | `cycle_view` | `"v"` | Next view |
 | `help` | `"?"` | Key help |
-| `refresh` | `"r"` | Regenerate the world (unbound until phase 9) |
+| `refresh` | `"r"` | Restart from the seed: the same world made again, with the view, edits and clock reset |
 | `export_view` | `"e"` | Export current view |
 | `export_world` | `"E"` | Export whole island |
 | `quit` | `"q"` | Quit |

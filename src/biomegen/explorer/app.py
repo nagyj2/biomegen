@@ -323,6 +323,26 @@ def _view_action(world: World, config: Config, state: ViewState, name: str) -> N
         state.notify(f"view: {view_names(config)[state.view_index]}")
 
 
+def _restart(
+    world: World,
+    config: Config,
+    source: TickSource,
+    clock: Clock,
+    regenerate: Optional[Callable[[], World]],
+) -> tuple[World, Overlay, RenderCache, ViewState]:
+    """Start again from the world's seed: the same world made anew, with no overlay edits, a fresh view and cache, the
+    clock at normal speed and the tick source told to forget its state."""
+    from biomegen import pipeline  # the explorer sits above the pipeline in the layering
+
+    fresh = regenerate() if regenerate is not None else pipeline.generate(config, world.master_seed)
+    source.reset(fresh)
+    clock.reset()
+    state = ViewState(mode=config.get("render.default_view", MODE_FIT))
+    state.cx, state.cy = initial_cursor(fresh, config)
+    state.notify(f"restarted from seed {fresh.master_seed}")
+    return fresh, Overlay(), RenderCache(config), state
+
+
 def _clock_message(source: TickSource, clock: Clock, name: str, action: Action) -> str:
     """Apply a pause or speed key to the clock and return what to tell the user (nothing ticks without a source)."""
     if not source.active:
@@ -368,6 +388,7 @@ def run(
     ticks: Optional[TickSource] = None,
     now: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    regenerate: Optional[Callable[[], World]] = None,
 ) -> None:
     """Run the explorer until the user quits.
 
@@ -383,6 +404,7 @@ def run(
             on keys. While it is active the loop polls it between keys.
         now: The clock the tick source is asked about (seconds); tests pass a fake one.
         sleep: How the loop waits between polls of an active tick source; tests pass a fake one.
+        regenerate: Makes the world again for the restart key (default: generate it again from the world's own seed).
     """
     reader = reader if reader is not None else make_reader()
     writer = DiffWriter(out if out is not None else sys.stdout, color_mode)
@@ -431,12 +453,18 @@ def run(
                 name = action[0]
                 if name == "quit":
                     break
-                if name == "move":
-                    move_cursor(world, config, state, action[1], action[2])
+                if name in ("move", "pan"):
+                    (move_cursor if name == "move" else pan_view)(world, config, state, action[1], action[2])
                     queued = _drain_moves(world, config, state, reader)
-                elif name == "pan":
-                    pan_view(world, config, state, action[1], action[2])
-                    queued = _drain_moves(world, config, state, reader)
+                elif name == "restart":
+                    state.notify(f"restarting from seed {world.master_seed}...")
+                    writer.draw(
+                        compose_frame(
+                            world, config, state, overlay, size_of(), color_mode != "none", ascii_only, False, cache
+                        ).screen
+                    )
+                    world, overlay, cache, state = _restart(world, config, source, clock, regenerate)
+                    tracking = None
                 elif name in ("zoom", "local", "toggle_scale", "cycle_view"):
                     _view_action(world, config, state, name)
                 elif name == "floor":

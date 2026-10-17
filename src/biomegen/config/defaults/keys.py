@@ -19,7 +19,7 @@ VALUES: Dict[str, Any] = {
     "tick_faster": "+",  # run the clock faster
     "tick_slower": "-",  # run the clock slower
     "help": "?",  # show the key help and legend
-    "refresh": "r",  # regenerate the world with a fresh random seed (unbound until phase 9 brings it back)
+    "refresh": "r",  # restart from the seed: the same world made again, with the view, edits and clock reset
     "quit": "q",
     # The chronicle pager (``--chronicle`` on a terminal) also uses help and quit; arrows, WASD and HJKL scroll.
     "search": "/",  # ask for text to find; matches are highlighted

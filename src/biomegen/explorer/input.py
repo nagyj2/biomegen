@@ -45,6 +45,7 @@ _BOUND_ACTIONS = (
     ("toggle_scale", ("toggle_scale",), "f"),
     ("cycle_view", ("cycle_view",), "v"),
     ("history", ("history",), "t"),
+    ("refresh", ("restart",), "r"),
     ("tick_pause", ("pause",), "p"),
     ("tick_faster", ("speed", 1), "+"),
     ("tick_slower", ("speed", -1), "-"),

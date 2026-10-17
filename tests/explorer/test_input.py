@@ -67,12 +67,17 @@ def test_tokenize_splits_keys_and_names_escape_sequences(text: str, tokens: list
         ("eof", ("quit",)),
         ("resize", ("resize",)),
         ("x", ("none",)),
-        ("r", ("none",)),
+        ("r", ("restart",)),
+        ("t", ("history",)),
+        ("p", ("pause",)),
+        ("+", ("speed", 1)),
+        ("-", ("speed", -1)),
+        ("tick", ("tick",)),
         ("unknown", ("none",)),
     ],
 )
 def test_default_keys_resolve_to_actions(config: Config, token: str, action: tuple) -> None:
-    # `r` is deliberately unbound in 4c: regenerate returns in phase 9.
+    # `r` restarts from the seed, `t` opens the history viewer and `p`, `+` and `-` drive the simulation clock.
     assert resolve_action(token, config) == action
 
 

@@ -240,6 +240,7 @@ _HELP_LINES = (
     "{toggle_scale}   fit-to-screen <-> 1:1 (map only)",
     "{cycle_view}   next view (terrain, political, elevation, temperature, rainfall)",
     "{history}   history viewer, opened at the latest event at the cursor",
+    "{refresh}   restart from the seed (the same world, view and edits reset)",
     "{floor_up} / {floor_down}   floor up / down on a structure",
     "{export_view} / {export_world}   export the view / the whole world",
     "{help}   this help      {quit} or Esc   quit",

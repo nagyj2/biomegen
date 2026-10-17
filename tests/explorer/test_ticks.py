@@ -27,6 +27,7 @@ class FakeSource:
 
     def __init__(self) -> None:
         self.ran = 0
+        self.resets = 0
         self._next = 1.0
 
     def due(self, now: float, speed: float) -> int:
@@ -39,6 +40,9 @@ class FakeSource:
     def tick(self, count: int) -> bool:
         self.ran += count
         return True
+
+    def reset(self, world) -> None:
+        self.resets += 1
 
 
 class Waiting(ScriptedKeys):
@@ -158,3 +162,68 @@ def test_the_pause_key_holds_an_active_source(cfg: Config) -> None:
     source = FakeSource()
     out = _run(cfg, Waiting(0, "p", "q"), source)
     assert source.ran == 0 and any("paused" in "\n".join(frame) for frame in out.frames)
+
+
+# --- restart from the seed ----------------------------------------------------------------------------------------
+
+
+def _other_world():
+    world = _village_world()
+    world.island_name = "Reborn"
+    world.master_seed = 77
+    return world
+
+
+def test_the_restart_key_makes_the_world_again(cfg: Config) -> None:
+    out = RecordingOut(40, 100)
+    fake = FakeTime()
+    run(
+        _village_world(),
+        cfg,
+        "none",
+        reader=ScriptedKeys("r", "q"),
+        out=out,
+        get_size=lambda: (100, 40),
+        now=fake.now,
+        sleep=fake.sleep,
+        regenerate=_other_world,
+    )
+    last = "\n".join(out.frames[-1])
+    assert "Reborn" in last and "restarted from seed 77" in last
+
+
+def test_a_restart_puts_the_cursor_back_where_it_started(cfg: Config) -> None:
+    out = RecordingOut(40, 100)
+    run(
+        _village_world(),
+        cfg,
+        "none",
+        reader=ScriptedKeys("right", "right", "r", "q"),
+        out=out,
+        get_size=lambda: (100, 40),
+        regenerate=_village_world,
+    )
+    assert "cursor (20,10)" in "\n".join(out.frames[-1])
+
+
+def test_a_restart_resets_the_tick_source_and_the_clock(cfg: Config) -> None:
+    source = FakeSource()
+    _run(cfg, Waiting(0, "p", "r", "q"), source)
+    assert source.resets == 1
+
+
+def test_the_clock_reset_is_normal_speed_and_running() -> None:
+    clock = Clock(index=5, paused=True)
+    clock.reset()
+    assert (clock.speed, clock.paused) == (1.0, False)
+
+
+def test_the_default_restart_makes_the_same_world_from_its_seed() -> None:
+    from biomegen import pipeline
+    from biomegen.explorer.app import _restart
+
+    config = load_config(None)
+    config.data["world"]["width"], config.data["world"]["height"] = 64, 32
+    world = pipeline.generate(config, 3)
+    fresh, _overlay, _cache, state = _restart(world, config, NoTicks(), Clock(), None)
+    assert fresh.fingerprint() == world.fingerprint() and "restarted from seed 3" in state.last_message

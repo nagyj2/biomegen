@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Callable, Protocol
 
 from ..config.model import Config
+from ..world.world import World
 from .input import KeyReader
 
 
@@ -29,6 +30,10 @@ class TickSource(Protocol):
         """Run ``count`` ticks; return whether anything changed (the loop redraws after any ticks either way)."""
         ...
 
+    def reset(self, world: World) -> None:
+        """Forget the simulation's state and begin again on ``world`` (the explorer restarted from the seed)."""
+        ...
+
 
 class NoTicks:
     """The default source: it never ticks, so the loop waits on keys alone."""
@@ -40,6 +45,9 @@ class NoTicks:
 
     def tick(self, count: int) -> bool:
         return False
+
+    def reset(self, world: World) -> None:
+        return None
 
 
 @dataclass
@@ -64,6 +72,11 @@ class Clock:
     @property
     def speed(self) -> float:
         return self.speeds[self.index]
+
+    def reset(self) -> None:
+        """Back to normal speed, running."""
+        self.index = min(range(len(self.speeds)), key=lambda i: abs(self.speeds[i] - 1.0))
+        self.paused = False
 
     def toggle_pause(self) -> str:
         self.paused = not self.paused
