@@ -21,6 +21,7 @@ from ...util import rng
 from ...world.overlay import Overlay
 from ...world.territory import FALLEN_OWNER_BASE, PREDECESSOR_OWNER_BASE
 from ...world.tile import Biome
+from ...world.wars import wars_at
 from ...world.world import World
 from ..colors import (
     BiomeStyle,
@@ -168,6 +169,21 @@ class LayerContext:
             tops = [world.top_realm_at(r.id, *self.moment) for r in world.realms]
         extra = range(len(world.realms), len(world.realms) + len(world.fallen_realms) + len(world.predecessors))
         return np.array(tops + list(extra) + [-1])
+
+    @cached_property
+    def at_war(self) -> np.ndarray:
+        """``bool [n, n]`` over the palette indices (-1 is last): which two independent powers are at war at the moment.
+
+        Empty for the present, whose war fronts are ``World.front``.
+        """
+        tops = self.tops
+        matrix = np.zeros((len(tops), len(tops)), dtype=bool)
+        if self.moment is not None:
+            for attacker, defender in wars_at(self.world, self.moment):
+                first, second = int(tops[attacker]), int(tops[defender])
+                if first != second:
+                    matrix[first, second] = matrix[second, first] = True
+        return matrix
 
     @cached_property
     def elevation_m(self) -> np.ndarray:

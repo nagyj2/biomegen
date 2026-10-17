@@ -15,9 +15,9 @@ def borders_layer(ctx: LayerContext, grid: CellGrid) -> None:
 
     Only the cell of the pair with the larger realm id is marked (wild land counts as -1), so a border is one cell
     wide at every scale. Realms are read through :attr:`LayerContext.realm`, warped like the biome blend, so the line
-    wobbles identically at the zoom and local scales. A border between a vassal and its own overlord is fainter; where
-    ``World.front`` marks a war the line is red. Cells on the grid's edge are compared only with the neighbours inside
-    it.
+    wobbles identically at the zoom and local scales. A border between a vassal and its own overlord is fainter; where a
+    war is on (``World.front`` today, the wars of the moment at a past moment) the line is red. Cells on the grid's edge
+    are compared only with the neighbours inside it.
     """
     world = ctx.world
     if not world.realms:
@@ -28,6 +28,7 @@ def borders_layer(ctx: LayerContext, grid: CellGrid) -> None:
     tops = ctx.tops
     hard = np.zeros(realm.shape, dtype=bool)
     soft = np.zeros(realm.shape, dtype=bool)
+    war = np.zeros(realm.shape, dtype=bool)  # at a past moment: borders between powers then at war
     pairs = (
         ((slice(None), slice(None, -1)), (slice(None), slice(1, None))),
         ((slice(None, -1), slice(None)), (slice(1, None), slice(None))),
@@ -37,11 +38,12 @@ def borders_layer(ctx: LayerContext, grid: CellGrid) -> None:
         differ = ctx.land[first] & ctx.land[second] & (a != b)
         same_top = (tops[a] == tops[b]) & (a >= 0) & (b >= 0)
         larger_is_first = a > b
-        for mask, target in ((differ & ~same_top, hard), (differ & same_top, soft)):
+        fighting = differ & ~same_top & ctx.at_war[tops[a], tops[b]]
+        for mask, target in ((differ & ~same_top, hard), (differ & same_top, soft), (fighting, war)):
             target[first] |= mask & larger_is_first
             target[second] |= mask & ~larger_is_first
     soft &= ~hard
-    front = np.zeros_like(hard) if ctx.moment else ctx.sampler.blended(world.front) & hard  # fronts are today's
+    front = (war if ctx.moment is not None else ctx.sampler.blended(world.front)) & hard
     # Each line colour is mixed on its own cells only, from the fill the earlier layers left there.
     fill = grid.bg
     lines = {

@@ -90,3 +90,35 @@ def test_a_vassal_with_no_conquest_event_is_independent_in_the_past() -> None:
     world = _world()
     world.realms[1].liege = 0
     assert world.top_realm_at(1, 300) == 1
+
+
+# --- war fronts at a moment ---------------------------------------------------------------------------------------
+
+
+def _war_world(config) -> World:
+    """Realm 0 (columns 0-2) and realm 1 (columns 3-5) at war from year 100 to a peace in year 120."""
+    world = make_world(6, 2, Biome.GRASS)
+    world.realms = [Realm(id=0, kind="major", color=RED), Realm(id=1, kind="major", color=BLUE)]
+    world.realm_id[:, :3], world.realm_id[:, 3:] = 0, 1
+    world.chronicle = [
+        ChronicleEvent(0, 100, "war", [0, 1], tags=("ended",), month=1),
+        ChronicleEvent(1, 120, "peace", [1, 0], month=1),
+    ]
+    world.territory = [TerritoryChange(50, 1, "founding", _cells(0, 1, 2, 3, 4, 5), WILD, 0)]
+    return world
+
+
+def _line(world: World, config, moment) -> list[int]:
+    """The fill of the border cell (row 0, column 3) at ``moment``."""
+    return _draw(world, config, moment).bg[0, 3].astype(int).tolist()
+
+
+def test_a_border_at_war_is_reddened_at_that_moment(config) -> None:
+    world = _war_world(config)
+    during, before = _line(world, config, (110, 1)), _line(world, config, (90, 1))
+    assert during[0] > before[0] and during[2] < before[2]
+
+
+def test_a_border_after_the_peace_is_a_plain_border_again(config) -> None:
+    world = _war_world(config)
+    assert _line(world, config, (130, 1)) == _line(world, config, (90, 1))
