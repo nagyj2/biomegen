@@ -456,11 +456,33 @@ changes forward or backward from checkpoints (`OwnerTimeline`) and `World.top_re
 
 #### The history viewer (`explorer/history_viewer.py`)
 
-`--history [YEAR]` (also `t` in the explorer) is view only: the political map at a moment (`build_grid(..., moment=)`, drawing
-fallen realms and predecessors in their colours, vassals tinted as their overlord only after their conquest, today's war fronts
-omitted), the powers then with their areas, and the chronicle beside it scrolled to the moment's events (highlighted; later
-events dimmed), with the recent events of the map marked by kind (`history.viewer.glyphs`). `[` `]` step between the moments the map
-changes (`change_moments`: territory changes and conquests), `{` `}` between years, `g` asks a year, `\` goes to the present.
+`--history [YEAR]` (also `t` in the explorer, which opens it on the cursor's tile) is view only. The map is the political map
+at a moment (`build_grid(..., moment=)`): fallen realms and predecessors in their colours, a vassal tinted as its overlord only
+after its conquest, the war fronts of the wars then (`world/wars.py`, read from the war, peace and conquest events), only the
+points of interest that stood then (`world/lifespans.py`: a settlement from its founding, a ruin from its fall, a battlefield
+from its battle, a watchtower from its war until it is dismantled, a tower bandits took as a watchtower until they did), and only
+the roads laid by then (`World.road_links`). The chronicle sits beside it, scrolled to the moment's events (highlighted; later
+ones dimmed), with recent events marked on the map by kind (`history.viewer.glyphs`).
+
+- **Stops.** `[` `]` step through every listed event and territory change, and the present is always the last stop
+  (`change_moments`); `m` also lists the minor events (towers, roads, small settlements) and stops at them. From the explorer,
+  `{` `}` step through the events and changes at the selected tile, ending at the present; `g` asks a year; `\` is the present.
+- **Powers.** Tab moves to the powers list (up / down choose one, kept across the stops): the right pane then shows that power's
+  profile at the moment (`world/powers.py`: ruler and style, seat, land, settlements, people, strength, liege and vassals, wars,
+  rivalries and pacts), and Space shows its land on the map until the next key (a terminal sends no key release).
+
+#### Annals and the life of places (`pipeline/story/annals.py`)
+
+The history records what moves realms; the annals (after the pois and spurs) add **minor** events (`salience = "minor"`, hidden
+by default) for what stands on the land: a tower raised or a dungeon delved (one that came of a fall is dated by it; one placed by
+location is ancient, year 0, with chance `history.annals.ancient_share`, else made in a drawn year), the founding of villages and
+hamlets, every road laid (`World.road_links`, dated after both ends stand), and a watchtower's life. A **watchtower** is raised
+when its war is declared, behind the front that war had then (`pois._border_at_war`); at the peace it is dismantled (kept only in
+`World.vanished`, so today's map has no trace of it), or abandoned (`watchtower.abandon_chance`), and an abandoned one is taken by
+bandits `occupy_years` later and is a bandit `tower` from then on. The new events are merged into the finished chronicle
+(`ledger.merge_events`, renumbering every id the world keeps: `POI.event_ids`, `RoadLink.event_id`, `TerritoryChange.event_id`).
+A settlement is also dated no sooner than its land was taken from the wild (`territory.wild_since`), and every conquest is won in a
+war (`history._conquest_events`: the war, a decisive battle on the shared border, then the conquest).
 
 ### Stage 9e — POIs (`pipeline/story/pois.py`, `poi_rules.py`, `pipeline/pois.py`)
 

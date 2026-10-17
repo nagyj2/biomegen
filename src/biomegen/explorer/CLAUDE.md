@@ -20,4 +20,5 @@ key tables and the terminal.
 - **Restart (`r`)** makes the same world again from its seed and resets view, overlay, cache, clock and the tick source
   (`TickSource.reset`); anything new that holds runtime state must reset there too.
 - **Frame budget** stays 33 ms (`scripts/bench_render.sh`; judge by its pan sweep).
-- `chronicle_pager.py` and `history_viewer.py` keep everything outside their `run_*` function pure.
+- `chronicle_pager.py` and `history_viewer.py` keep everything outside their `run_*` function pure. Both end at the present: the viewer
+  always has a present stop (every event is a stop, so stepping is event to event), the pager closes its listing with a present line.
