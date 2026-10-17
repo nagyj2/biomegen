@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Optional
 
 from ...config.model import Config
 from ...util import rng
@@ -37,10 +38,10 @@ class Ledger:
         near_poi: int = -1,
         tags: Sequence[str] = (),
         salience: str = "major",
-    ) -> None:
-        """Record an event of ``kind`` worded by chronicle row ``row``; skipped when its kind is switched off."""
+    ) -> Optional[ChronicleEvent]:
+        """Record an event of ``kind`` worded by chronicle row ``row``; None (nothing recorded) when its kind is off."""
         if kind not in self._enabled:
-            return
+            return None
         stream = rng.derive(seed, "history", "text", kind, *stream_labels)
         rows = self._config.get(f"tables.chronicle.{row}")
         pool = list(rows["templates"]) + (list(rows.get("templates_near", [])) if near_poi >= 0 else [])
@@ -59,6 +60,16 @@ class Ledger:
             salience=salience,
         )
         self._pending.append((year, EVENT_KINDS.index(kind), len(self._pending), event))
+        return event
+
+    @property
+    def size(self) -> int:
+        """How many events have been recorded (the creation index of the next one)."""
+        return len(self._pending)
+
+    def ordered(self) -> list[tuple[tuple[int, int, int], ChronicleEvent]]:
+        """Return each recorded event with its sort key ``(year, kind order, creation index)``, in sorted order."""
+        return [(item[:3], item[3]) for item in sorted(self._pending, key=lambda item: item[:3])]
 
     def finish(self, seed: int) -> list[ChronicleEvent]:
         """Return the events oldest first with ``id`` set to their index and a ``month`` each.

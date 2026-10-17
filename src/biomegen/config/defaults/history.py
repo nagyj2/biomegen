@@ -119,4 +119,17 @@ VALUES: Dict[str, Any] = {
         "prosperity_ratio": 2.0,  # the breakaway's people per km2 over its parent's: the prosperity term is full
         "weak_strength": 0.5,  # a parent's strength (against the mean) at or below which the strength term is full
     },
+    # Territory (pipeline/story/territory.py): who held which land is recorded as changes of ownership, found by walking
+    # back from today's partition, so the present map never moves. A realm grew by a few large annexations of wild land
+    # (``expansion`` events): ``expansions`` per realm kind is the [fewest, most], each taking ``expansion_share``
+    # [least, most] of the realm's present area, the cells farthest from its seat first. A realm keeps at least
+    # ``core_share`` of its present area when it is founded, and one smaller than ``min_cells`` never expands or loses
+    # a band under ``min_band_cells`` cells.
+    "territory": {
+        "expansions": {"major": [1, 2], "city_state": [0, 1], "tribal": [0, 1]},
+        "expansion_share": [0.15, 0.3],
+        "core_share": 0.3,
+        "min_cells": 12,
+        "min_band_cells": 3,
+    },
 }

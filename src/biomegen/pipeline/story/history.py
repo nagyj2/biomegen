@@ -43,7 +43,7 @@ from ...world.world import World
 from ..civilization.diplomacy import faction_color, neutral_colors
 from ..civilization.settlements import habitability
 from ..pois import pick_blue_noise
-from . import conflicts, rulers, secession
+from . import conflicts, rulers, secession, territory
 from .founding import add_founding, add_settling
 from .ledger import Ledger
 from .places import nearest_settlement
@@ -295,7 +295,9 @@ def run(world: World, config: Config, seed: int) -> None:
     _split_events(world, config, seed, ledger)
     conflicts.derive(world, config, seed, span, ledger, styles, offshoots, len(splits), defections)
     remnants = _remnants(world, config, seed, ledger)
+    territory_plan = territory.plan(world, config, seed, ledger)
     world.chronicle = ledger.finish(seed)
+    world.territory = territory_plan.resolve()
     for event in world.chronicle:  # a settlement is marked by the event that founded or settled it
         if event.kind in ("founding", "secession", "settling"):
             for index in event.poi_ids:
