@@ -79,10 +79,10 @@ _HISTORY_HELP = (
     "",
     "{history_prev} / {history_next}   previous / next event (the map changes where an event moves it)",
     "{history_goto}   go to a year (the map at the end of it)",
-    "{history_present}   the present (the map after the last event)",
+    "{history_present}   the present (the map after the last event); Home: the start, before any event",
     "{history_focus}   switch to the powers list and back (examine a power at this moment)",
     "{filter_salience}   show / hide the minor events (towers, roads, small settlements)",
-    "Home / End   the first event / the present",
+    "Home / End   the start (before any event) / the present",
     "arrows / WASD / HJKL   scroll the chronicle (shift or capitals: {step})",
     "space / Page Down / Page Up   scroll a page",
     "{help}   this help      {quit} or Esc   quit",
@@ -124,6 +124,9 @@ class HistoryState:
     )
 
 
+START: Stop = (0, 0)  # before any event: year 0, month 0 (events are in months 1 and up)
+
+
 def present_moment(world: World, config: Config) -> Stop:
     """The moment of the present map: the end of the world's last year."""
     return world.year, int(config.get("history.months_per_year"))
@@ -131,10 +134,11 @@ def present_moment(world: World, config: Config) -> Stop:
 
 def change_moments(world: World, config: Config, minor: bool = False) -> list[Stop]:
     """Return each distinct ``(year, month)`` the viewer can stop at, oldest first: that of every event listed (the
-    major ones, and the minor too when ``minor``), of every territory change, and the present at the end."""
+    major ones, and the minor too when ``minor``), of every territory change, the start (before any event) first and the
+    present last."""
     events = world.chronicle if minor else [e for e in world.chronicle if e.salience == "major"]
     moments = {(e.year, e.month) for e in events} | set(world.territory_moments())
-    moments.add(present_moment(world, config))
+    moments |= {START, present_moment(world, config)}
     return sorted(moments)
 
 
@@ -149,8 +153,8 @@ def _year_end(world: World, config: Config, year: int) -> Stop:
 
 def tile_moments(world: World, config: Config, tile: tuple[int, int], minor: bool = False) -> list[Stop]:
     """Return each distinct ``(year, month)`` of an event at ``tile`` (the minor ones too when ``minor``) or of a
-    territory change that took the tile from one owner to another, oldest first, and the present at the end (always
-    reachable, even when nothing more happens at the tile)."""
+    territory change that took the tile from one owner to another, oldest first, between the start and the present
+    (both always reachable, even when nothing happens at the tile)."""
     x, y = tile
     cell = y * world.width + x
     moments = {(e.year, e.month) for e in world.events_at(x, y) if minor or e.salience == "major"}
@@ -158,7 +162,7 @@ def tile_moments(world: World, config: Config, tile: tuple[int, int], minor: boo
         at = int(np.searchsorted(change.cells, cell))
         if at < len(change.cells) and int(change.cells[at]) == cell:
             moments.add(change.moment)
-    moments.add(present_moment(world, config))
+    moments |= {START, present_moment(world, config)}
     return sorted(moments)
 
 
@@ -257,6 +261,8 @@ def moment_summary(world: World, config: Config, moment: Stop) -> str:
             parts.append(
                 f"conquest: {world.realms[event.realm_ids[1]].short} takes {world.realms[event.realm_ids[0]].short}"
             )
+    if moment == START:
+        parts.append("the start: before any event")
     if moment == present_moment(world, config):
         parts.append("the present")
     return "; ".join(parts) if parts else "the map does not change here"
@@ -402,6 +408,12 @@ def _draw_powers(
         _put(screen, top + room, 1, f"... and {len(entries) - first - len(shown)} more", dim, bg)
 
 
+def _years(now: int, since: Optional[int]) -> str:
+    """How long ago ``since`` was from year ``now``: ``for 40 years`` (the viewed year minus the start year)."""
+    gap = max(0, now - (now if since is None else since))
+    return "for less than a year" if gap == 0 else f"for {gap} year" + ("s" if gap > 1 else "")
+
+
 def _profile_lines(world: World, config: Config, state: HistoryState) -> list[tuple[str, Optional[RGB], bool]]:
     """The selected power's profile at the moment as ``(text, colour, bold)`` lines (colour None: the panel's)."""
     if state.selected is None:
@@ -414,7 +426,13 @@ def _profile_lines(world: World, config: Config, state: HistoryState) -> list[tu
         )
         return [*lines, (f"does not exist at this moment{began}", None, False)]
     if profile.ruler:
-        lines.append((f"ruler: {profile.ruler} (since {profile.ruler_since}), a {profile.style} rule", None, False))
+        lines.append(
+            (
+                f"ruler: {profile.ruler} ({_years(state.at[0], profile.ruler_since)}), a {profile.style} rule",
+                None,
+                False,
+            )
+        )
     if profile.capital:
         lines.append((f"seat: {profile.capital}", None, False))
     lines.append((f"land: {profile.area_km2:,.0f} km2, {profile.share:.1%} of the claimed land", None, False))
@@ -432,7 +450,7 @@ def _profile_lines(world: World, config: Config, state: HistoryState) -> list[tu
         lines.append((f"vassals: {', '.join(profile.vassals)}", None, False))
     labels = {"war": "at war with", "rivalry": "rival of", "alliance": "allied with", "trade": "trading with"}
     for kind, other, since in profile.ties:
-        lines.append((f"{labels.get(kind, kind)} {other} since {since}", None, False))
+        lines.append((f"{labels.get(kind, kind)} {other} {_years(state.at[0], since)}", None, False))
     if not profile.ties and profile.owner >= 0:
         lines.append(("no wars, rivalries or pacts at this moment", None, False))
     return lines
@@ -485,8 +503,7 @@ def _help_lines(config: Config, tile: bool) -> tuple[str, ...]:
         f"  {marks}",
         f"  bold: this moment's events; faded: those of the last {years} years",
         "Powers list: the swatch is the power's colour on the map; (vassal of X): it had bowed to X by then.",
-        "  {history_focus}: examine a power; up / down choose one; Space shows it on the map while it is pressed",
-        "  (a terminal sends no key release, so the highlight ends at the next key)",
+        "  {history_focus}: examine a power; up / down choose; Space shows its land on the map, Space again hides it",
         _HISTORY_HELP[-1],
     )
 
@@ -495,6 +512,8 @@ def _title(world: World, config: Config, state: HistoryState) -> str:
     year, month = state.at
     index = stop_index(state.moments, state.at)
     place = "before the first event" if index < 0 else f"stop {index + 1}/{len(state.moments)}"
+    if state.at == START:
+        place += ", the start"
     if state.at >= present_moment(world, config):
         place += ", the present"
     where = "" if state.tile is None else f"  tile {state.tile[0]},{state.tile[1]}"
@@ -610,7 +629,7 @@ def _hint_line(config: Config, prompting: bool, tile: bool, focus: str = "time")
     here = f"[{show('history_prev_tile')}/{show('history_next_tile')}] this tile  " if tile else ""
     if focus == "powers":
         return (
-            f" [up/down] choose a power  [Space] show it on the map  [{show('history_focus')}] back to time  "
+            f" [up/down] choose a power  [Space] show / hide it on the map  [{show('history_focus')}] back to time  "
             f"[{show('history_prev')}/{show('history_next')}] event  {here}[{show('help')}] help  [{show('quit')}] quit"
         )
     return (
@@ -667,14 +686,13 @@ def _examine(world: World, state: HistoryState, action: Action) -> None:
     if action[0] == "scroll":
         _select(world, state, 1 if action[1] > 0 else -1)
     else:
-        state.highlight = state.selected is not None
+        state.highlight = state.selected is not None and not state.highlight  # Space shows, Space again hides
 
 
 def apply_history_action(world: World, config: Config, state: HistoryState, action: Action, size: Size) -> None:
     """Apply ``action`` to ``state``; ``help``, ``resize`` and ``quit`` are the loop's, not handled here."""
     name = action[0]
     state.message = ""
-    state.highlight = False  # the highlight lasts as long as its key repeats: any other key ends it
     if state.prompt is not None:
         _answer_prompt(world, config, state, action)
     elif name in ("step", "tile", "minor", "present", "first", "last"):
@@ -683,6 +701,7 @@ def apply_history_action(world: World, config: Config, state: HistoryState, acti
         state.prompt = ""
     elif name == "focus":
         state.focus = "time" if state.focus == "powers" else "powers"
+        state.highlight = False
         if state.focus == "powers" and state.selected is None:
             _select(world, state, 1)
     elif state.focus == "powers" and name in ("scroll", "page"):

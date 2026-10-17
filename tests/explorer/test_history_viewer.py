@@ -414,15 +414,23 @@ def test_the_selected_power_is_marked_in_the_list(world: World, cfg: Config) -> 
     assert any(line.startswith(">") for line in _text(world, cfg, state))
 
 
-def test_space_shows_the_power_on_the_map_until_the_next_key(world: World, cfg: Config) -> None:
+def test_space_shows_the_power_on_the_map_and_space_again_hides_it(world: World, cfg: Config) -> None:
     state = _at_present(world, cfg)
     _press(world, cfg, state, "\t")
-    plain = compose_history_frame(world, cfg, state, SIZE).bg[1:25, :70].copy()
+    plain = compose_history_frame(world, cfg, state, SIZE).bg[1:12, :70].copy()
     _press(world, cfg, state, " ")
-    shown = compose_history_frame(world, cfg, state, SIZE).bg[1:25, :70].copy()
-    _press(world, cfg, state, "down")
-    cleared = compose_history_frame(world, cfg, state, SIZE).bg[1:25, :70].copy()
-    assert state.highlight is False and (plain != shown).any() and not (shown == cleared).all()
+    shown = compose_history_frame(world, cfg, state, SIZE).bg[1:12, :70].copy()
+    _press(world, cfg, state, "down")  # the highlight stays on as the selection moves
+    assert state.highlight is True and (plain != shown).any()
+    _press(world, cfg, state, " ")
+    hidden = compose_history_frame(world, cfg, state, SIZE).bg[1:12, :70].copy()
+    assert state.highlight is False and (hidden == plain).all()
+
+
+def test_leaving_the_powers_list_hides_the_highlight(world: World, cfg: Config) -> None:
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t", " ", "\t")
+    assert state.focus == "time" and state.highlight is False
 
 
 def test_space_in_the_time_focus_still_pages_the_chronicle(world: World, cfg: Config) -> None:
@@ -472,3 +480,57 @@ def test_the_tile_key_goes_back_from_the_present_to_the_tiles_last_event(world: 
     state = initial_state(world, cfg, own[-1], tile)
     _press(world, cfg, state, "{")
     assert state.at == own[-2]
+
+
+# --- the start and the years in the profile -----------------------------------------------------------------------
+
+
+def test_the_viewer_opens_at_the_start_before_any_event(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import START
+
+    state = initial_state(world, cfg)
+    assert state.at == START == state.moments[0] and "the start" in _text(world, cfg, state)[0]
+
+
+def test_the_start_is_before_every_event_and_change(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import START
+
+    assert START < min((e.year, e.month) for e in world.chronicle)
+    assert all(c.moment > START for c in world.territory)
+
+
+def test_the_home_key_goes_to_the_start_and_stepping_back_stays_there(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import START
+
+    state = initial_state(world, cfg)
+    _press(world, cfg, state, "end", "home", "[")
+    assert state.at == START and state.message == "nothing earlier"
+
+
+def test_the_map_at_the_start_has_no_realm_land(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import START
+
+    assert (world.owners_at(*START) < 0).all()
+
+
+def test_the_tile_keys_reach_the_start_too(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import START, tile_moments
+
+    assert tile_moments(world, cfg, (60, 30))[0] == START
+
+
+def test_the_profile_gives_years_not_dates(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import _years
+
+    assert (_years(300, 260), _years(300, 299), _years(300, 300)) == (
+        "for 40 years",
+        "for 1 year",
+        "for less than a year",
+    )
+
+
+def test_the_powers_panel_shows_how_long_a_ruler_has_ruled(world: World, cfg: Config) -> None:
+    state = _at_present(world, cfg)
+    _press(world, cfg, state, "\t")
+    text = "\n".join(_text(world, cfg, state))
+    assert "ruler:" in text and "since" not in text and ("for " in text)
