@@ -931,3 +931,11 @@ def test_a_tier_may_have_no_potential_land() -> None:
     # The capital and the hamlet have none: a site can only be them by being them.
     tiers = get_defaults()["tables"]["tiers"]
     assert {name for name, row in tiers.items() if "potential_land" not in row} == {"capital", "hamlet"}
+
+
+def test_settlement_tiers_have_house_ranges() -> None:
+    sites = get_defaults()["tables"]["sites"]
+    assert all(
+        sites[tier]["houses"][0] <= sites[tier]["houses"][1]
+        for tier in ("hamlet", "village", "town", "city", "capital")
+    )

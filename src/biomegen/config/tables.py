@@ -90,6 +90,7 @@ _SITE_ROW = {
     "ruin_extent_share": "positive",
     "dress": "text",
     "specialized": "range",
+    "houses": "range",
 }
 
 BUILDING_FUNCTIONS = ("housing", "production", "civic")
@@ -456,7 +457,16 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "sites": (
         _SITE_ROW,
         frozenset(
-            {"plaza_tiles", "walled", "ruin_standing", "ruin_wall_fall", "ruin_extent_share", "dress", "specialized"}
+            {
+                "plaza_tiles",
+                "walled",
+                "ruin_standing",
+                "ruin_wall_fall",
+                "ruin_extent_share",
+                "dress",
+                "specialized",
+                "houses",
+            }
         ),
     ),
     "pois": (_POI_ROW, _POI_OPTIONAL),

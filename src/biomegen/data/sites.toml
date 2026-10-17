@@ -16,6 +16,8 @@
 #   walled           (optional) true when a settlement has a wall with a gate where each road arrives
 #   specialized      (settlement tiers) [min, max] how many specialized buildings (production kinds of data/buildings.toml) the
 #                    settlement is chosen to have
+#   houses           (settlement tiers) [min, max] how many house lots a settlement of the tier has built, at the tier's smallest
+#                    and largest population (`sites.manifest.site_manifest`; the plan reads the count, never the population)
 #   ruin_standing    [young, old] share of a ruined settlement's buildings that survive (damaged; the rest are destroyed), just fallen and once old
 #                    (`sites.ruin_erosion_years`); the centre building always survives
 #   ruin_wall_fall   [young, old] share of a ruined settlement's wall that has fallen; its gates are always breached
@@ -31,6 +33,7 @@ extent_tiles = [3.5, 2.5]
 rows_per_tile = 24
 grows_with_pop = true
 specialized = [4, 5]
+houses = [8, 30]
 plaza_tiles = 0.25
 walled = true
 ruin_standing = [0.85, 0.4]
@@ -44,6 +47,7 @@ extent_tiles = [2.5, 2.0]
 rows_per_tile = 24
 grows_with_pop = true
 specialized = [3, 4]
+houses = [4, 18]
 plaza_tiles = 0.18
 walled = true
 ruin_standing = [0.85, 0.4]
@@ -57,6 +61,7 @@ extent_tiles = [2.0, 1.5]
 rows_per_tile = 22
 grows_with_pop = true
 specialized = [2, 3]
+houses = [2, 14]
 plaza_tiles = 0.12
 ruin_standing = [0.85, 0.4]
 ruin_wall_fall = [0.3, 0.7]
@@ -69,6 +74,7 @@ extent_tiles = [1.5, 1.25]
 rows_per_tile = 20
 grows_with_pop = true
 specialized = [1, 2]
+houses = [1, 6]
 plaza_tiles = 0.08
 ruin_standing = [0.85, 0.4]
 ruin_wall_fall = [0.3, 0.7]
@@ -117,6 +123,7 @@ extent_tiles = [1.0, 0.8]
 rows_per_tile = 20
 grows_with_pop = true
 specialized = [1, 1]
+houses = [1, 2]
 plaza_tiles = 0.05
 ruin_standing = [0.85, 0.4]
 ruin_wall_fall = [0.3, 0.7]

@@ -76,7 +76,7 @@ def _score(suits: dict[str, float], terms: dict[str, float]) -> float:
     return sum(float(w) * terms[term] for term, w in suits.items()) / total if total > 0.0 else 0.0
 
 
-def _slots(config: Config, tier: str, pop: int) -> int:
+def specialized_slots(config: Config, tier: str, pop: int) -> int:
     """Return how many specialized buildings a settlement of ``tier`` and ``pop`` has: its slot range, by population."""
     low, high = (int(v) for v in config.get(f"tables.sites.{tier}.specialized"))
     pop_low, pop_high = (int(v) for v in config.get(f"tables.tiers.{tier}.pop"))
@@ -126,7 +126,7 @@ def _choose(world: World, config: Config, poi: POI, tier: str) -> list[str]:
     if poi.style and config.get(f"tables.poi_styles.{poi.style}.building", None) is not None:
         style_kind = str(config.get(f"tables.poi_styles.{poi.style}.building"))
         chosen.append(style_kind)
-    slots = _slots(config, tier, poi.pop) - len(chosen)
+    slots = specialized_slots(config, tier, poi.pop) - len(chosen)
     if slots <= 0:
         return chosen
     terms = _terms(world, config, poi)
