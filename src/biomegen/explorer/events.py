@@ -1,15 +1,16 @@
 """The one place the explorer's panel reads events from.
 
-Today that is the generated chronicle; a later simulation's ledger joins it here (one composite reader), so the panel
-never reads ``World.chronicle`` itself. A reader answers three questions: what happened at a tile, to a realm, and up
-to a year.
+Today that is the generated chronicle; a later simulation's events join it through the composite reader
+(:class:`~biomegen.world.ledger.EventLog`), so the panel never reads ``World.chronicle`` itself. A reader answers three
+questions: what happened at a tile, to a realm, and up to a year.
 """
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Optional, Protocol
 
 from ..world.entities import ChronicleEvent
+from ..world.ledger import EventLog
 from ..world.world import World
 
 
@@ -30,19 +31,20 @@ class EventReader(Protocol):
 
 
 class ChronicleReader:
-    """The generated chronicle of a world."""
+    """The events of a world, read through its :class:`~biomegen.world.ledger.EventLog` (the generated chronicle, and a
+    simulation's events once it appends any)."""
 
-    def __init__(self, world: World) -> None:
-        self._world = world
+    def __init__(self, world: World, log: Optional[EventLog] = None) -> None:
+        self._log = EventLog(world) if log is None else log
 
     def at(self, x: int, y: int) -> list[ChronicleEvent]:
-        return self._world.events_at(x, y)
+        return self._log.at(x, y)
 
     def of_realm(self, realm_id: int) -> list[ChronicleEvent]:
-        return self._world.events_of(realm_id)
+        return self._log.of_realm(realm_id)
 
     def until(self, year: int) -> list[ChronicleEvent]:
-        return self._world.events_until(year)
+        return self._log.until(year)
 
 
 def event_line(event: ChronicleEvent) -> str:
