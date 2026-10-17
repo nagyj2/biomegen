@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import shutil
 import sys
-import textwrap
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field
 from typing import Callable, Optional, TextIO
@@ -33,8 +32,10 @@ from ..world.chronicle import ChronicleFilter, filter_events
 from ..world.entities import NO_LOCATION, ChronicleEvent
 from ..world.powers import power_profile
 from ..world.territory import (
+    LAST,
     WILD,
     TerritoryChange,
+    at_end,
     fallen_id_of,
     is_fallen_owner,
     is_predecessor_owner,
@@ -46,7 +47,7 @@ from .panel import draw_help, panel_color
 from .writer import DiffWriter
 
 Size = tuple[int, int]  # (columns, rows)
-Stop = tuple[int, int]  # (year, month)
+Stop = tuple[int, int, int]  # (year, month, chronicle event id): a place in time down to one event
 
 _HEADER_ROWS = 1
 _FOOTER_ROWS = 2
@@ -124,62 +125,66 @@ class HistoryState:
     )
 
 
-START: Stop = (0, 0)  # before any event: year 0, month 0 (events are in months 1 and up)
+START: Stop = (0, 0, -1)  # before any event: year 0, month 0 (events are in months 1 and up)
 
 
 def present_moment(world: World, config: Config) -> Stop:
-    """The moment of the present map: the end of the world's last year."""
-    return world.year, int(config.get("history.months_per_year"))
+    """The moment of the present map: after the last event of the world's last year."""
+    return world.year, int(config.get("history.months_per_year")), LAST
+
+
+def _event_stop(event: ChronicleEvent) -> Stop:
+    return event.year, event.month, event.id
 
 
 def change_moments(world: World, config: Config, minor: bool = False) -> list[Stop]:
-    """Return each distinct ``(year, month)`` the viewer can stop at, oldest first: that of every event listed (the
-    major ones, and the minor too when ``minor``), of every territory change, the start (before any event) first and the
-    present last."""
+    """Return every stop of the viewer, oldest first: one for each listed event (the major ones, and the minor too when
+    ``minor``) and for each territory change, so two events of one month are two stops; the start (before any event)
+    first and the present last."""
     events = world.chronicle if minor else [e for e in world.chronicle if e.salience == "major"]
-    moments = {(e.year, e.month) for e in events} | set(world.territory_moments())
+    moments = {_event_stop(e) for e in events} | set(world.territory_keys())
     moments |= {START, present_moment(world, config)}
     return sorted(moments)
 
 
 def stop_index(moments: list[Stop], at: Stop) -> int:
-    """Return the index of the last moment at or before ``at`` (-1 before the first)."""
+    """Return the index of the last stop at or before ``at`` (-1 before the first)."""
     return bisect_right(moments, at) - 1
 
 
 def _year_end(world: World, config: Config, year: int) -> Stop:
-    return year, int(config.get("history.months_per_year"))
+    return year, int(config.get("history.months_per_year")), LAST
 
 
 def tile_moments(world: World, config: Config, tile: tuple[int, int], minor: bool = False) -> list[Stop]:
-    """Return each distinct ``(year, month)`` of an event at ``tile`` (the minor ones too when ``minor``) or of a
-    territory change that took the tile from one owner to another, oldest first, between the start and the present
-    (both always reachable, even when nothing happens at the tile)."""
+    """Return a stop for each event at ``tile`` (the minor ones too when ``minor``) and each territory change that took
+    the tile from one owner to another, oldest first, between the start and the present (both always reachable, even
+    when nothing happens at the tile)."""
     x, y = tile
     cell = y * world.width + x
-    moments = {(e.year, e.month) for e in world.events_at(x, y) if minor or e.salience == "major"}
+    moments = {_event_stop(e) for e in world.events_at(x, y) if minor or e.salience == "major"}
     for change in world.territory:
         at = int(np.searchsorted(change.cells, cell))
         if at < len(change.cells) and int(change.cells[at]) == cell:
-            moments.add(change.moment)
+            moments.add(change.key)
     moments |= {START, present_moment(world, config)}
     return sorted(moments)
 
 
 def initial_state(
-    world: World, config: Config, start: Optional[int | Stop] = None, tile: Optional[tuple[int, int]] = None
+    world: World, config: Config, start: Optional[int | tuple[int, ...]] = None, tile: Optional[tuple[int, int]] = None
 ) -> HistoryState:
-    """Return the starting state: at ``start`` (a year, or a ``(year, month)``), else the first stop.
+    """Return the starting state: at ``start`` (a year, or a ``(year, month[, event id])``), else the start.
 
     ``tile`` is the tile the viewer was opened on from the explorer (the tile keys then step through its history).
     """
     moments = change_moments(world, config)
     if start is None:
-        at = moments[0] if moments else _year_end(world, config, 0)
+        at = moments[0]
     elif isinstance(start, int):
         at = _year_end(world, config, start)
     else:
-        at = start
+        at = at_end(start)
     return HistoryState(at=at, moments=moments, tile=tile)
 
 
@@ -254,10 +259,11 @@ def _words_for(world: World, change: TerritoryChange) -> str:
 
 
 def moment_summary(world: World, config: Config, moment: Stop) -> str:
-    """Describe what the map does at ``moment``: its territory changes and conquests, one phrase each."""
-    parts = [_words_for(world, c) for c in world.territory if c.moment == moment]
+    """Describe what the map does at stop ``moment``: the territory changes of its event, one phrase each, and its
+    conquest."""
+    parts = [_words_for(world, c) for c in world.territory if c.key == moment]
     for event in world.chronicle:
-        if (event.year, event.month) == moment and event.kind == "conquest" and "vassalage" in event.tags:
+        if _event_stop(event) == moment and event.kind == "conquest" and "vassalage" in event.tags:
             parts.append(
                 f"conquest: {world.realms[event.realm_ids[1]].short} takes {world.realms[event.realm_ids[0]].short}"
             )
@@ -335,11 +341,9 @@ def _draw_markers(grid: CellGrid, world: World, config: Config, state: HistorySt
     ``marker_years`` years faded (glyphs from ``history.viewer.glyphs``, colours from ``history.colors``)."""
     settings = config.get("history.viewer")
     glyphs, palette = settings["glyphs"], config.get("history.colors")
-    index = stop_index(state.moments, state.at)
-    current = state.moments[index] if index >= 0 else None
     oldest = state.at[0] - int(settings["marker_years"])
     for event in world.chronicle:  # oldest first, so a newer marker is drawn over an older one
-        moment = (event.year, event.month)
+        moment = _event_stop(event)
         if event.kind not in glyphs or event.location == NO_LOCATION or moment > state.at or event.year < oldest:
             continue
         if event.salience == "minor" and not state.minor:
@@ -349,7 +353,7 @@ def _draw_markers(grid: CellGrid, world: World, config: Config, state: HistorySt
             continue
         red, green, blue = palette[event.kind]
         colour: RGB = (int(red), int(green), int(blue))
-        now = moment == current
+        now = moment == state.at
         grid.glyph[row, col] = glyphs[event.kind]
         grid.fg[row, col] = colour if now else mix_colors(colour, grid.bg[row, col], float(settings["marker_fade"]))
         grid.bold[row, col] = now
@@ -414,59 +418,89 @@ def _years(now: int, since: Optional[int]) -> str:
     return "for less than a year" if gap == 0 else f"for {gap} year" + ("s" if gap > 1 else "")
 
 
-def _profile_lines(world: World, config: Config, state: HistoryState) -> list[tuple[str, Optional[RGB], bool]]:
-    """The selected power's profile at the moment as ``(text, colour, bold)`` lines (colour None: the panel's)."""
+_NONE = "-"  # what a row shows when it has no data, so every row is always there
+_LABEL_WIDTH = 13  # the value column: every label fits in front of it
+_VASSAL_SLOTS = 3  # rows kept for the vassals before the relations list begins
+
+
+def _fit(text: str, width: int) -> str:
+    """``text`` cut to ``width`` cells (with ``...``), so a row never wraps and shifts the ones below it."""
+    return text if len(text) <= width else text[: max(0, width - 3)] + "..."
+
+
+def _profile_rows(
+    world: World, config: Config, state: HistoryState, width: int
+) -> list[tuple[str, Optional[RGB], bool]]:
+    """The selected power's profile at the stop as ``(text, colour, bold)`` rows (colour None: the panel's).
+
+    The layout is the same for every power, so one can be compared with the next by flicking between them: each
+    fact has its own row with a ``-`` where the power has none; the settlements have a row per tier; the vassals have a
+    heading and a few reserved rows (``+N more`` after them); and the relations, the one list left to grow, come last
+    under a heading that never moves. Every row is one line long.
+    """
     if state.selected is None:
         return [("no power selected", None, False)]
     profile = power_profile(world, config, state.selected, state.at)
-    lines: list[tuple[str, Optional[RGB], bool]] = [(f"{profile.name}  ({profile.kind})", profile.color, True)]
+    year = state.at[0]
+
+    def row(label: str, value: object = None) -> tuple[str, Optional[RGB], bool]:
+        shown = _NONE if value is None or value == "" else str(value)
+        return _fit(f"{label:<{_LABEL_WIDTH}}{shown}", width), None, False
+
     if not profile.exists:
-        began = (
-            f"; it begins in {profile.founded}" if profile.founded is not None and profile.founded > state.at[0] else ""
-        )
-        return [*lines, (f"does not exist at this moment{began}", None, False)]
-    if profile.ruler:
-        lines.append(
-            (
-                f"ruler: {profile.ruler} ({_years(state.at[0], profile.ruler_since)}), a {profile.style} rule",
-                None,
-                False,
-            )
-        )
-    if profile.capital:
-        lines.append((f"seat: {profile.capital}", None, False))
-    lines.append((f"land: {profile.area_km2:,.0f} km2, {profile.share:.1%} of the claimed land", None, False))
-    if profile.settlements:
-        counts = ", ".join(
-            f"{count} {label.lower()}" + ("s" if count > 1 else "") for label, count in profile.settlements
-        )
-        lines.append((f"settlements: {counts}", None, False))
-        per = profile.people / (profile.area_km2 / 1000.0) if profile.area_km2 else 0.0
-        lines.append((f"people: ~{profile.people:,} in them; prosperity {per:.1f} per 1,000 km2", None, False))
-    lines.append((f"strength: {profile.strength:.2f} (size against the mean, times the ruler's style)", None, False))
-    if profile.liege:
-        lines.append((f"bows to {profile.liege}", None, False))
-    if profile.vassals:
-        lines.append((f"vassals: {', '.join(profile.vassals)}", None, False))
+        status = f"not yet: begins in year {profile.founded}" if (profile.founded or 0) > year else "gone"
+    else:
+        status = f"standing since year {profile.founded}" if profile.founded is not None else "standing"
+    here, real = profile.exists, profile.exists and profile.owner >= 0  # a fallen or old realm has no ruler or ties
+    rows = [
+        (_fit(f"{profile.name}  ({profile.kind})", width), profile.color, True),
+        row("status:", status),
+        row("ruler:", profile.ruler if real else None),
+        row("rule:", profile.style if real else None),
+        row("reigning:", _years(year, profile.ruler_since).removeprefix("for ") if real and profile.ruler else None),
+        row("seat:", profile.capital if real else None),
+        row("land:", f"{profile.area_km2:,.0f} km2" if here else None),
+        row("share:", f"{profile.share:.1%} of the claimed land" if here else None),
+        row("people:", f"~{profile.people:,} (~{profile.settled:,} in places)" if here and profile.people else None),
+        row(
+            "density:",
+            f"{profile.people / (profile.area_km2 / 1000.0):.1f} per 1,000 km2" if here and profile.people else None,
+        ),
+        row("strength:", f"{profile.strength:.2f}" if here and profile.strength else None),
+        row("bows to:", profile.liege if real else None),
+        row("places:", f"{sum(count for _, count in profile.settlements)}" if here and profile.settlements else None),
+    ]
+    held = dict(profile.settlements)
+    tiers = [str(r["label"]) for r in sorted(config.get("tables.tiers").values(), key=lambda r: int(r["rank"]))]
+    for label in (*tiers, "Homestead"):
+        count = held.get(label)
+        rows.append(row(f"  {label}:", count if here and count else None))
+    vassals = profile.vassals if real else []
+    rows.append(row("vassals:", len(vassals) or None))
+    shown = vassals[:_VASSAL_SLOTS] if len(vassals) <= _VASSAL_SLOTS else [*vassals[: _VASSAL_SLOTS - 1], ""]
+    for slot in range(_VASSAL_SLOTS):
+        if slot < len(shown) and shown[slot]:
+            rows.append(row("", shown[slot]))
+        elif slot < len(shown):
+            rows.append(row("", f"+{len(vassals) - _VASSAL_SLOTS + 1} more"))
+        else:
+            rows.append(row("", _NONE if slot == 0 and not vassals else None))
+    ties = profile.ties if real else []
+    rows.append(row("relations:", len(ties) or None))
     labels = {"war": "at war with", "rivalry": "rival of", "alliance": "allied with", "trade": "trading with"}
-    for kind, other, since in profile.ties:
-        lines.append((f"{labels.get(kind, kind)} {other} {_years(state.at[0], since)}", None, False))
-    if not profile.ties and profile.owner >= 0:
-        lines.append(("no wars, rivalries or pacts at this moment", None, False))
-    return lines
+    rows += [
+        row("", f"{labels.get(kind, kind)} {other}, {_years(year, since).removeprefix('for ')}")
+        for kind, other, since in ties
+    ]
+    return rows
 
 
 def _draw_profile(screen: CellGrid, world: World, config: Config, state: HistoryState, left: int, body: int) -> None:
-    """Draw the selected power's profile in the right column, wrapped to its width."""
+    """Draw the selected power's profile in the right column, one fixed row per fact (see :func:`_profile_rows`)."""
     fg, bg = panel_color(config, "fg"), panel_color(config, "bg")
     width = screen.cols - left - 1
-    row = _HEADER_ROWS
-    for text, colour, bold in _profile_lines(world, config, state):
-        for piece in textwrap.wrap(text, max(10, width)) or [""]:
-            if row >= _HEADER_ROWS + body:
-                return
-            _put(screen, row, left, piece, colour if colour is not None else fg, bg, bold)
-            row += 1
+    for offset, (text, colour, bold) in enumerate(_profile_rows(world, config, state, width)[:body]):
+        _put(screen, _HEADER_ROWS + offset, left, text, colour if colour is not None else fg, bg, bold)
 
 
 def _select(world: World, state: HistoryState, step: int) -> None:
@@ -509,7 +543,7 @@ def _help_lines(config: Config, tile: bool) -> tuple[str, ...]:
 
 
 def _title(world: World, config: Config, state: HistoryState) -> str:
-    year, month = state.at
+    year, month = state.at[:2]
     index = stop_index(state.moments, state.at)
     place = "before the first event" if index < 0 else f"stop {index + 1}/{len(state.moments)}"
     if state.at == START:
@@ -572,17 +606,14 @@ def compose_history_frame(
 
 
 def _draw_events(screen: CellGrid, world: World, config: Config, state: HistoryState, left: int, body: int) -> None:
-    """Draw the chronicle in the right column: events at the current moment highlighted, later ones dimmed."""
+    """Draw the chronicle in the right column: the event the viewer is at highlighted, later ones dimmed."""
     fg, bg, dim = panel_color(config, "fg"), panel_color(config, "bg"), panel_color(config, "dim")
     width = screen.cols - left - 1
     events, lines, starts = _events_layout(world, config, state, width)
-    index = stop_index(state.moments, state.at)
-    current = state.moments[index] if index >= 0 else None
-    moments = [(e.year, e.month) for e in events]
-    key = (width, current, state.minor)
+    moments = [_event_stop(e) for e in events]
+    key = (width, state.at, state.minor)
     if state._synced != key and events:
-        first = bisect_left(moments, current) if current is not None else 0
-        first = min(first, len(events) - 1)
+        first = min(bisect_left(moments, state.at), len(events) - 1)
         state.scroll = max(0, starts[first] - body // 3)
         state._synced = key
     state.scroll = max(0, min(state.scroll, len(lines) - body))
@@ -596,7 +627,7 @@ def _draw_events(screen: CellGrid, world: World, config: Config, state: HistoryS
         number = state.scroll + offset
         moment = moments[int(owner_of_line[number])]
         row = _HEADER_ROWS + offset
-        is_current = current is not None and moment == current
+        is_current = moment == state.at  # the one event the viewer is at
         future = moment > state.at
         line_bg = highlight if is_current else bg
         if is_current:

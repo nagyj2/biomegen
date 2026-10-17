@@ -162,6 +162,27 @@ def _tribe_seeds(world: World, config: Config, seed: int, solid: np.ndarray, own
     return seeds
 
 
+def population(
+    world: World, config: Config, stream: random.Random, kind: str, mine: np.ndarray, area_km2: float
+) -> int:
+    """Return a realm's people: those in its settlements and homesteads, a share of them again living outside them
+    (``outside_share``) and some living off the land (``rural_per_km2`` over the realm's area). Both terms are drawn
+    per realm, so each has its own jitter, and a realm's total follows its places instead of its area."""
+    row = config.get(f"tables.realm_kinds.{kind}")
+    settled = sum(p.pop for p in world.pois if (p.civilized or p.kind == "homestead") and mine[p.y, p.x])
+    share = stream.uniform(*(float(v) for v in row["outside_share"]))
+    rural = stream.uniform(*(float(v) for v in row["rural_per_km2"]))
+    return settled + int(settled * share) + int(area_km2 * rural)
+
+
+def recount_population(world: World, config: Config, seed: int) -> None:
+    """Set every realm's people again from its settlements, hamlets and homesteads (placed after the realms)."""
+    stream = rng.derive(seed, "realms", "population", "recount")
+    for realm in world.realms:
+        mine = world.realm_id == realm.id
+        realm.pop = population(world, config, stream, realm.kind, mine, realm.area_km2)
+
+
 def _describe(
     world: World, config: Config, stream: random.Random, seed_index: int, seed: _Seed, owner: np.ndarray
 ) -> Realm:
@@ -171,14 +192,13 @@ def _describe(
     biomes = np.bincount(world.biome[mine].astype(np.int64), minlength=1)
     relief_cells = int((world.relief[mine] != int(Relief.NONE)).sum())
     area_km2 = cells * world.scale.cell_area_km2
-    members = sum(p.pop for p in world.pois if p.civilized and mine[p.y, p.x])
-    lo, hi = (float(v) for v in config.get(f"tables.realm_kinds.{seed.kind}.rural_per_km2"))
+    people = population(world, config, stream, seed.kind, mine, area_km2)
     return Realm(
         id=seed_index,
         kind=seed.kind,
         seat_poi=seed.seat_poi,
         area_km2=area_km2,
-        pop=members + int(area_km2 * stream.uniform(lo, hi)),
+        pop=people,
         dominant_biome=int(np.argmax(biomes)),
         highland=relief_cells > cells // 2 if cells else False,
     )

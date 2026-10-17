@@ -19,6 +19,9 @@ from biomegen.explorer.history_viewer import (
     run_history,
     stop_index,
 )
+from biomegen.explorer.history_viewer import (
+    present_moment as present_stop,
+)
 from biomegen.world.world import World
 from tests.explorer.replay import RecordingOut
 from tests.explorer.test_app import ScriptedKeys
@@ -53,8 +56,8 @@ def test_the_moments_are_distinct_and_ordered(world: World, cfg: Config) -> None
 
 def test_the_moments_include_every_territory_change_and_conquest(world: World, cfg: Config) -> None:
     moments = set(change_moments(world, cfg))
-    assert {c.moment for c in world.territory} <= moments
-    assert {(e.year, e.month) for e in world.chronicle if e.kind == "conquest"} <= moments
+    assert {c.key for c in world.territory} <= moments
+    assert {(e.year, e.month, e.id) for e in world.chronicle if e.kind == "conquest"} <= moments
 
 
 def test_the_viewer_opens_at_the_first_change(world: World, cfg: Config) -> None:
@@ -63,11 +66,11 @@ def test_the_viewer_opens_at_the_first_change(world: World, cfg: Config) -> None
 
 
 def test_a_start_year_opens_at_the_end_of_that_year(world: World, cfg: Config) -> None:
-    assert initial_state(world, cfg, 500).at == (500, cfg.get("history.months_per_year"))
+    assert initial_state(world, cfg, 500).at[:2] == (500, cfg.get("history.months_per_year"))
 
 
 def test_a_start_moment_is_kept(world: World, cfg: Config) -> None:
-    assert initial_state(world, cfg, (300, 4)).at == (300, 4)
+    assert initial_state(world, cfg, (300, 4)).at[:2] == (300, 4)
 
 
 def test_next_and_previous_step_between_changes(world: World, cfg: Config) -> None:
@@ -97,7 +100,7 @@ def test_stepping_past_the_last_change_says_so(world: World, cfg: Config) -> Non
 def test_go_to_a_year_shows_the_map_at_the_end_of_it(world: World, cfg: Config) -> None:
     state = initial_state(world, cfg)
     _press(world, cfg, state, "g", "7", "0", "0", "\r")
-    assert state.at == (700, cfg.get("history.months_per_year")) and state.prompt is None
+    assert state.at[:2] == (700, cfg.get("history.months_per_year")) and state.prompt is None
 
 
 def test_an_unreadable_year_is_refused(world: World, cfg: Config) -> None:
@@ -138,7 +141,7 @@ def test_the_present_map_shows_the_largest_realm_in_the_powers_list(world: World
 
 def test_events_of_the_current_moment_are_highlighted(world: World, cfg: Config) -> None:
     state = initial_state(world, cfg)
-    state.at = next(m for m in state.moments if any((e.year, e.month) == m for e in world.chronicle))
+    state.at = next(m for m in state.moments if any((e.year, e.month, e.id) == m for e in world.chronicle))
     grid = compose_history_frame(world, cfg, state, SIZE)
     highlight = np.array(cfg.get("history.viewer.current_bg"), dtype=np.uint8)
     assert (grid.bg[:, 80] == highlight).all(axis=1).any()
@@ -146,7 +149,7 @@ def test_events_of_the_current_moment_are_highlighted(world: World, cfg: Config)
 
 def test_the_status_line_describes_the_change(world: World, cfg: Config) -> None:
     state = initial_state(world, cfg)
-    state.at = next(c.moment for c in world.territory if c.kind == "expansion")
+    state.at = next(c.key for c in world.territory if c.kind == "expansion")
     status = _text(world, cfg, state)[SIZE[1] - 2]
     assert status.strip().startswith(moment_summary(world, cfg, state.at)[:30])
 
@@ -195,7 +198,7 @@ def _marked(world: World, cfg: Config, at: tuple[int, int]):
     ]
     marked.territory = []
     state = initial_state(marked, cfg, at)
-    state.moments = [(300, 6)]
+    state.moments = [(300, 6, 1)]
     return marked, state, compose_history_frame(marked, cfg, state, SIZE)
 
 
@@ -211,7 +214,7 @@ def _cell(world: World, cfg: Config, tile: tuple[int, int]) -> tuple[int, int]:
 
 
 def test_an_event_of_the_current_moment_is_marked_in_bold(world: World, cfg: Config) -> None:
-    _, _, frame = _marked(world, cfg, (300, 6))
+    _, _, frame = _marked(world, cfg, (300, 6, 1))  # at the battle itself
     row, col = _cell(world, cfg, (60, 20))
     assert frame.glyph[row, col] == "x" and bool(frame.bold[row, col])
 
@@ -246,24 +249,24 @@ def test_the_help_explains_the_map_marks(world: World, cfg: Config) -> None:
 
 def test_every_fall_war_and_peace_is_a_stop(world: World, cfg: Config) -> None:
     moments = set(change_moments(world, cfg))
-    stops = {(e.year, e.month) for e in world.chronicle if e.kind in ("fall", "war", "peace")}
+    stops = {(e.year, e.month, e.id) for e in world.chronicle if e.kind in ("fall", "war", "peace")}
     assert stops and stops <= moments
 
 
 def test_the_status_line_describes_a_fall_that_hands_over_land(world: World, cfg: Config) -> None:
     change = next(c for c in world.territory if c.kind == "fall")
-    assert "fall:" in moment_summary(world, cfg, change.moment)
+    assert "fall:" in moment_summary(world, cfg, change.key)
 
 
 def test_every_listed_event_is_a_stop(world: World, cfg: Config) -> None:
     moments = set(change_moments(world, cfg))
-    assert {(e.year, e.month) for e in world.chronicle if e.salience == "major"} <= moments
+    assert {(e.year, e.month, e.id) for e in world.chronicle if e.salience == "major"} <= moments
 
 
 def test_the_last_stop_is_the_present_even_when_the_last_event_changes_nothing(world: World, cfg: Config) -> None:
     moments = change_moments(world, cfg)
-    assert moments[-1] == (world.year, cfg.get("history.months_per_year"))
-    assert moments[-1] >= max((e.year, e.month) for e in world.chronicle if e.salience == "major")
+    assert moments[-1][:2] == (world.year, cfg.get("history.months_per_year"))
+    assert moments[-1] >= max((e.year, e.month, e.id) for e in world.chronicle if e.salience == "major")
 
 
 def test_stepping_forward_always_reaches_the_present(world: World, cfg: Config) -> None:
@@ -276,7 +279,7 @@ def test_stepping_forward_always_reaches_the_present(world: World, cfg: Config) 
 def test_the_present_key_goes_to_the_present_stop(world: World, cfg: Config) -> None:
     state = initial_state(world, cfg)
     _press(world, cfg, state, "\\")
-    assert state.at == (world.year, cfg.get("history.months_per_year"))
+    assert state.at[:2] == (world.year, cfg.get("history.months_per_year"))
 
 
 def test_the_minor_key_adds_the_minor_events_as_stops(world: World, cfg: Config) -> None:
@@ -322,9 +325,9 @@ def test_the_tile_moments_include_its_events_and_its_changes(world: World, cfg: 
 
     x, y = _tile_of_a_battle(world)
     moments = tile_moments(world, cfg, (x, y))
-    assert {(e.year, e.month) for e in world.events_at(x, y) if e.salience == "major"} <= set(moments)
+    assert {(e.year, e.month, e.id) for e in world.events_at(x, y) if e.salience == "major"} <= set(moments)
     cell = y * world.width + x
-    assert {c.moment for c in world.territory if cell in c.cells.tolist()} <= set(moments)
+    assert {c.key for c in world.territory if cell in c.cells.tolist()} <= set(moments)
 
 
 def test_the_tile_key_goes_to_the_tiles_next_event(world: World, cfg: Config) -> None:
@@ -452,7 +455,7 @@ def test_a_power_that_does_not_yet_exist_says_so(world: World, cfg: Config) -> N
     _press(world, cfg, state, "\t")
     state.selected = max(r.id for r in world.realms if r.founded > 100)
     state.at = (5, 1)
-    assert "does not exist" in "\n".join(_text(world, cfg, state))
+    assert "not yet: begins in year" in "\n".join(_text(world, cfg, state))
 
 
 def test_the_hints_follow_the_focus(world: World, cfg: Config) -> None:
@@ -469,7 +472,7 @@ def test_the_tile_key_reaches_the_present_when_nothing_more_happens_at_the_tile(
     state = initial_state(world, cfg, own[0], tile)
     for _ in range(len(own) + 1):
         _press(world, cfg, state, "}")
-    assert state.at == (world.year, cfg.get("history.months_per_year"))
+    assert state.at[:2] == (world.year, cfg.get("history.months_per_year"))
 
 
 def test_the_tile_key_goes_back_from_the_present_to_the_tiles_last_event(world: World, cfg: Config) -> None:
@@ -533,4 +536,110 @@ def test_the_powers_panel_shows_how_long_a_ruler_has_ruled(world: World, cfg: Co
     state = _at_present(world, cfg)
     _press(world, cfg, state, "\t")
     text = "\n".join(_text(world, cfg, state))
-    assert "ruler:" in text and "since" not in text and ("for " in text)
+    assert "ruler:" in text and "reigning:" in text and " years" in text
+
+
+# --- one stop per event, a fixed profile layout ---------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def crowded(cfg: Config) -> World:
+    """Seed 42 with two listed events of one year moved into one month (ones that change no land)."""
+    made = pipeline.generate(cfg, 42)
+    changing = {c.event_id for c in made.territory}
+    major = [e for e in made.chronicle if e.salience == "major" and e.id not in changing]
+    first, second = next(
+        (a, b) for a, b in zip(major, major[1:], strict=False) if a.year == b.year and b.id == a.id + 1
+    )
+    second.month = first.month
+    return made
+
+
+def _same_month_pair(world: World):
+    """Two listed events of one year and month, next to each other in the chronicle."""
+    major = [e for e in world.chronicle if e.salience == "major"]
+    return next((a, b) for a, b in zip(major, major[1:], strict=False) if (a.year, a.month) == (b.year, b.month))
+
+
+def test_two_events_of_one_month_are_two_stops(crowded: World, cfg: Config) -> None:
+    first, second = _same_month_pair(crowded)
+    moments = change_moments(crowded, cfg)
+    assert (first.year, first.month, first.id) in moments and (second.year, second.month, second.id) in moments
+
+
+def test_stepping_goes_from_one_event_to_the_next_even_in_one_month(crowded: World, cfg: Config) -> None:
+    first, second = _same_month_pair(crowded)
+    state = initial_state(crowded, cfg, (first.year, first.month, first.id))
+    _press(crowded, cfg, state, "]")
+    assert state.at == (second.year, second.month, second.id)
+
+
+def _highlighted_text(world: World, cfg: Config, state: HistoryState) -> str:
+    """The text of the chronicle rows drawn on the highlight background."""
+    grid = compose_history_frame(world, cfg, state, SIZE)
+    highlight = np.array(cfg.get("history.viewer.current_bg"), dtype=np.uint8)
+    rows = np.flatnonzero((grid.bg[:, 80:100] == highlight).all(axis=2).any(axis=1))
+    return " ".join("".join(grid.glyph[row, 74:]).strip() for row in rows)
+
+
+def test_only_the_selected_event_is_highlighted(crowded: World, cfg: Config) -> None:
+    first, second = _same_month_pair(crowded)
+    state = initial_state(crowded, cfg, (first.year, first.month, first.id))
+    one = _highlighted_text(crowded, cfg, state)
+    state.at = (second.year, second.month, second.id)
+    two = _highlighted_text(crowded, cfg, state)
+    assert first.text.split()[0] in one and second.text.split()[0] in two
+    assert first.text not in two.replace("\n", " ") and second.text not in one.replace("\n", " ")
+
+
+def _profile_labels(world: World, cfg: Config, owner: int, at) -> list[str]:
+    from biomegen.explorer.history_viewer import _profile_rows
+
+    state = initial_state(world, cfg)
+    state.selected, state.at = owner, at
+    return [text[:13].strip() for text, _colour, _bold in _profile_rows(world, cfg, state, 46)]
+
+
+def test_every_power_has_its_rows_in_the_same_places(world: World, cfg: Config) -> None:
+    present = present_stop(world, cfg)
+    layouts = {tuple(_profile_labels(world, cfg, owner, present)[1:24]) for owner in [r.id for r in world.realms]}
+    assert len(layouts) == 1
+
+
+def test_a_power_that_does_not_exist_keeps_the_layout_with_placeholders(world: World, cfg: Config) -> None:
+    present = present_stop(world, cfg)
+    realm = max(world.realms, key=lambda r: r.founded)
+    alive = _profile_labels(world, cfg, realm.id, present)
+    absent = _profile_labels(world, cfg, realm.id, (0, 0, -1))
+    assert alive[1:24] == absent[1:24]
+
+
+def test_a_missing_fact_shows_a_dash(world: World, cfg: Config) -> None:
+    from biomegen.explorer.history_viewer import _profile_rows
+
+    state = initial_state(world, cfg)
+    state.selected, state.at = max(world.realms, key=lambda r: r.founded).id, (0, 0, -1)
+    rows = [text for text, _c, _b in _profile_rows(world, cfg, state, 46)]
+    assert any(text.startswith("ruler:") and text.endswith("-") for text in rows)
+
+
+def test_the_relations_list_starts_under_a_fixed_heading(world: World, cfg: Config) -> None:
+    present = present_stop(world, cfg)
+    rows = {owner: _profile_labels(world, cfg, owner, present) for owner in [r.id for r in world.realms]}
+    assert len({labels.index("relations:") for labels in rows.values()}) == 1
+
+
+def test_the_vassal_rows_are_reserved(world: World, cfg: Config) -> None:
+    present = present_stop(world, cfg)
+    heads = {_profile_labels(world, cfg, r.id, present).index("vassals:") for r in world.realms}
+    heads2 = {_profile_labels(world, cfg, r.id, present).index("relations:") for r in world.realms}
+    assert len(heads) == 1 and len(heads2) == 1 and next(iter(heads2)) - next(iter(heads)) == 4
+
+
+def test_a_realm_exists_in_the_year_of_its_split_before_the_split_month(world: World, cfg: Config) -> None:
+    from biomegen.world.powers import power_profile
+
+    for predecessor in world.predecessors:
+        split = next(e for e in world.chronicle if e.kind == "secession" and e.predecessor_ids == [predecessor.id])
+        before = (split.year, split.month, split.id - 1)
+        assert power_profile(world, cfg, -1000 - predecessor.id, before).exists

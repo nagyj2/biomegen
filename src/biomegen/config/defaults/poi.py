@@ -21,6 +21,8 @@ VALUES: Dict[str, Any] = {
     "forest_radius_km": 90.0,
     # How long before the present a generated homestead or hamlet was founded: [min, max] years, drawn per POI.
     "style_founded_years": {"homestead": [5, 200], "hamlet": [20, 400]},
+    # The people of a generated homestead (one household): [min, max], drawn per POI.
+    "homestead_people": [3, 12],
     # Minimum fraction of a land structure's (max) footprint that must be dry land for an anchor to
     # be eligible. Keeps a coastal structure substantial (most of it on land) while still allowing
     # shoreline sites - the terrain-aware interior builder forms the structure around whatever water

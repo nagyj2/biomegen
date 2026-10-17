@@ -31,7 +31,7 @@ from .entities import (
     RoadLink,
     Ruler,
 )
-from .territory import OwnerTimeline, TerritoryChange
+from .territory import LAST, OwnerTimeline, TerritoryChange
 from .tile import Biome, Relief, TileView, WaterType
 
 
@@ -214,7 +214,7 @@ class World:
             index = self.realms[index].liege
         return index
 
-    def top_realm_at(self, index: int, year: int, month: Optional[int] = None) -> int:
+    def top_realm_at(self, index: int, year: int, month: Optional[int] = None, event_id: Optional[int] = None) -> int:
         """Return the independent power at the top of realm ``index``'s lieges at a moment (end of ``year`` by default).
 
         A vassal tie counts from the ``conquest`` event that made it (a tie with no such event never does before the
@@ -224,10 +224,10 @@ class World:
         for event in self.chronicle:
             if event.kind == "conquest" and "vassalage" in event.tags and len(event.realm_ids) == 2:
                 since.setdefault(event.realm_ids[0], event)
-        limit = (year, 10**6 if month is None else month)
+        limit = (year, 10**6 if month is None else month, LAST if event_id is None else event_id)
         while self.realms[index].liege >= 0:
             tie = since.get(index)
-            if tie is None or (tie.year, tie.month) > limit:
+            if tie is None or (tie.year, tie.month, tie.id) > limit:
                 break
             index = self.realms[index].liege
         return index
@@ -257,20 +257,25 @@ class World:
         """Return the events that name realm ``realm_id``, oldest first."""
         return [event for event in self.chronicle if realm_id in event.realm_ids]
 
-    def owners_at(self, year: int, month: Optional[int] = None) -> np.ndarray:
+    def owners_at(self, year: int, month: Optional[int] = None, event: Optional[int] = None) -> np.ndarray:
         """Return the read-only ``[y, x]`` owner grid after every territory change at or before the moment.
 
-        With no ``month`` the moment is the end of ``year``. Owners are realm ids, ``WILD`` or a fallen realm's
-        ``fallen_owner`` (see :mod:`biomegen.world.territory`); at or after the last change it equals ``realm_id``.
+        With no ``month`` the moment is the end of ``year``, with no ``event`` the end of ``month``, else just after
+        that chronicle event. Owners are realm ids, ``WILD`` or a fallen realm's ``fallen_owner`` (see
+        :mod:`biomegen.world.territory`); at or after the last change it equals ``realm_id``.
         """
         timeline = self._owner_timeline
         if timeline is None or timeline.size != len(self.territory):
             timeline = self._owner_timeline = OwnerTimeline(self.realm_id, self.territory)
-        return timeline.owners_at(year, month)
+        return timeline.owners_at(year, month, event)
 
     def territory_moments(self) -> list[tuple[int, int]]:
         """Return each distinct ``(year, month)`` at which land changed hands, oldest first."""
         return sorted({change.moment for change in self.territory})
+
+    def territory_keys(self) -> list[tuple[int, int, int]]:
+        """Return each distinct ``(year, month, event id)`` at which land changed hands, oldest first."""
+        return sorted({change.key for change in self.territory})
 
     # ------------------------------------------------------------------ reproducibility
     def fingerprint(self) -> str:

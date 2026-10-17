@@ -241,6 +241,7 @@ _REALM_KIND_ROW = {
     "label": "text",
     "strength": "span",
     "rural_per_km2": "span",
+    "outside_share": "span",
     "vassal_chance": "unit",
 }
 _REALM_FORM_ROW = {

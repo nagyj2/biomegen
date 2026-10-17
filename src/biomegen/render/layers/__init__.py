@@ -69,7 +69,7 @@ class LayerContext:
         labels: ``"all"`` draws feature names, ``"none"`` leaves them off.
         floor: The floor of a multi-floor interior to draw (clamped to each POI's own floors).
         seen: Filled by the layers with the biomes and interior cells drawn.
-        moment: A ``(year, month)`` to draw the political map at (``World.owners_at``), or ``None`` for the present.
+        moment: A ``(year, month[, event id])`` to draw the map at (``World.owners_at``); ``None`` is the present.
         color: Whether the output is coloured. Without colour the glyphs must carry the information, so
             sparse biomes show their glyph on every cell and the sea sparkle is off.
     """
@@ -84,7 +84,7 @@ class LayerContext:
     labels: str = "all"
     floor: int = 0
     seen: Seen = field(default_factory=Seen)
-    moment: Optional[tuple[int, int]] = None
+    moment: Optional[tuple[int, ...]] = None
 
     @cached_property
     def biome_style(self) -> BiomeStyle:
@@ -278,7 +278,7 @@ def build_grid(
     labels: str = "all",
     floor: int = 0,
     seen: Optional[Seen] = None,
-    moment: Optional[tuple[int, int]] = None,
+    moment: Optional[tuple[int, ...]] = None,
 ) -> CellGrid:
     """Draw ``view`` of ``world`` through ``sampler`` and return the finished grid."""
     # resolve first so a typo fails before any work

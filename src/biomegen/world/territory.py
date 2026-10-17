@@ -22,6 +22,7 @@ WILD = -1  # owner of land no realm holds
 FALLEN_OWNER_BASE = -2  # a fallen realm's owner is this minus its id
 PREDECESSOR_OWNER_BASE = -1000  # a predecessor's owner is this minus its id (so fewer than 998 fallen realms)
 NO_EVENT = -1  # ``TerritoryChange.event_id`` of a change not tied to a chronicle event
+LAST = 10**9  # an event number after every real one: "the end of the month"
 _CHECKPOINT_EVERY = 16  # a cached owner map is kept every this many changes
 
 
@@ -82,6 +83,11 @@ class TerritoryChange:
         """The ``(year, month)`` of the change."""
         return self.year, self.month
 
+    @property
+    def key(self) -> tuple[int, int, int]:
+        """The change's place in time down to its event: ``(year, month, event id)`` (no event: sorts first)."""
+        return self.year, self.month, self.event_id
+
 
 @dataclass
 class OwnerTimeline:
@@ -94,12 +100,12 @@ class OwnerTimeline:
 
     present: np.ndarray
     changes: Sequence[TerritoryChange]
-    _keys: list[tuple[int, int]] = field(init=False, repr=False)
+    _keys: list[tuple[int, int, int]] = field(init=False, repr=False)
     _cache: dict[int, np.ndarray] = field(init=False, repr=False)
     _latest: Optional[tuple[int, np.ndarray]] = field(init=False, repr=False, default=None)
 
     def __post_init__(self) -> None:
-        self._keys = [change.moment for change in self.changes]
+        self._keys = [change.key for change in self.changes]
         if self._keys != sorted(self._keys):
             raise ValueError("territory changes must be ordered by (year, month)")
         last = np.ascontiguousarray(self.present, dtype=np.int16).copy()
@@ -113,23 +119,24 @@ class OwnerTimeline:
 
     def moments(self) -> list[tuple[int, int]]:
         """Return each distinct ``(year, month)`` at which land changed hands, oldest first."""
-        return sorted(set(self._keys))
+        return sorted({key[:2] for key in self._keys})
 
     def changes_at(self, year: int, month: Optional[int] = None) -> list[TerritoryChange]:
         """Return the changes of ``year`` (of that month only when ``month`` is given), in order."""
         return [c for c in self.changes if c.year == year and (month is None or c.month == month)]
 
-    def index_at(self, year: int, month: Optional[int] = None) -> int:
+    def index_at(self, year: int, month: Optional[int] = None, event: Optional[int] = None) -> int:
         """Return the index of the last change at or before the moment (-1 before the first).
 
-        With no ``month`` the moment is the end of ``year``.
+        With no ``month`` the moment is the end of ``year``; with no ``event`` the end of ``month``; with one it is just
+        after that chronicle event (earlier events of the same month count, later ones do not).
         """
-        key = (year, 10**6 if month is None else month)
+        key = (year, 10**6 if month is None else month, LAST if event is None else event)
         return bisect_right(self._keys, key) - 1
 
-    def owners_at(self, year: int, month: Optional[int] = None) -> np.ndarray:
+    def owners_at(self, year: int, month: Optional[int] = None, event: Optional[int] = None) -> np.ndarray:
         """Return the read-only owner grid after every change at or before the moment (end of ``year`` by default)."""
-        return self._state(self.index_at(year, month))
+        return self._state(self.index_at(year, month, event))
 
     def _state(self, index: int) -> np.ndarray:
         """Return the owner grid after change ``index`` (-1: before all), replayed from the nearest cached grid."""
@@ -180,3 +187,12 @@ def wild_since(changes: Sequence[TerritoryChange], height: int, width: int) -> n
         if change.from_owner == WILD:
             since[change.cells] = change.year
     return since.reshape(height, width)
+
+
+Key = tuple[int, int, int]  # (year, month, chronicle event id): a place in time down to one event
+
+
+def at_end(moment: tuple[int, ...]) -> Key:
+    """Return ``moment`` as a full key: ``(year, month)`` means the end of that month (after every event in it), a
+    three-part moment is already an event's place."""
+    return (moment[0], moment[1], LAST) if len(moment) < 3 else (moment[0], moment[1], moment[2])

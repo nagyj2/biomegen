@@ -13,12 +13,13 @@ from typing import Any, Optional
 import numpy as np
 
 from ..config.model import Config
-from .lifespans import poi_appears
-from .territory import WILD, fallen_id_of, is_fallen_owner, is_predecessor_owner, predecessor_id_of
+from .entities import ChronicleEvent
+from .lifespans import place_key
+from .territory import WILD, at_end, fallen_id_of, is_fallen_owner, is_predecessor_owner, predecessor_id_of
 from .wars import wars_at
 from .world import World
 
-Stop = tuple[int, int]  # (year, month)
+Stop = tuple[int, ...]  # (year, month) or (year, month, chronicle event id)
 RGB = tuple[int, int, int]
 
 
@@ -39,7 +40,8 @@ class PowerProfile:
         area_km2: Their area.
         share: Their share of all the land held by anyone then.
         settlements: Settlements it holds then, by tier label, largest tier first.
-        people: The people in those settlements.
+        people: Their people and those living outside them (its settled people times the realm's own ratio).
+        settled: The people in its settlements and homesteads alone.
         strength: Its size over the mean size of the powers holding land then, times its ruler's style multiplier.
         liege: The power it had bowed to by then, "" when independent.
         vassals: The powers that had bowed to it.
@@ -61,6 +63,7 @@ class PowerProfile:
     share: float = 0.0
     settlements: list[tuple[str, int]] = field(default_factory=list)
     people: int = 0
+    settled: int = 0
     strength: float = 0.0
     liege: str = ""
     vassals: list[str] = field(default_factory=list)
@@ -81,8 +84,13 @@ def owner_name(world: World, owner: int) -> tuple[str, RGB]:
     return "wild land", (128, 128, 128)
 
 
+def _key(event: ChronicleEvent) -> tuple[int, int, int]:
+    return event.year, event.month, event.id
+
+
 def _ties(world: World, owner: int, moment: Stop) -> list[tuple[str, str, int]]:
     """The wars, rivalries, alliances and trade pacts a realm was in at ``moment``, with the year each began."""
+    now = at_end(moment)
     ties: list[tuple[str, str, int]] = []
     for attacker, defender in wars_at(world, moment):
         if owner in (attacker, defender):
@@ -90,11 +98,11 @@ def _ties(world: World, owner: int, moment: Stop) -> list[tuple[str, str, int]]:
             begun = next(
                 e.year
                 for e in world.chronicle
-                if e.kind == "war" and e.realm_ids[:2] == [attacker, defender] and (e.year, e.month) <= moment
+                if e.kind == "war" and e.realm_ids[:2] == [attacker, defender] and _key(e) <= now
             )
             ties.append(("war", owner_name(world, other)[0], begun))
     for event in world.chronicle:
-        if (event.year, event.month) > moment or event.fallen_ids or owner not in event.realm_ids:
+        if _key(event) > now or event.fallen_ids or owner not in event.realm_ids:
             continue
         others = [r for r in event.realm_ids if r != owner]
         if event.kind == "rivalry" and others:
@@ -102,6 +110,50 @@ def _ties(world: World, owner: int, moment: Stop) -> list[tuple[str, str, int]]:
         elif event.kind == "treaty" and others and event.tags:
             ties.append((event.tags[0], owner_name(world, others[0])[0], event.year))
     return ties
+
+
+def _life(
+    world: World, opening: str, closing: str, **ids: int
+) -> tuple[Optional[tuple[int, int, int]], Optional[tuple[int, int, int]]]:
+    """Return the places in time of the ``opening`` and ``closing`` chronicle events naming a fallen realm or
+    predecessor (``fallen_ids=`` or ``predecessor_ids=``), or ``None`` for one with no such event."""
+    ((field_name, wanted),) = ids.items()
+
+    def key(kind: str) -> Optional[tuple[int, int, int]]:
+        event = next((e for e in world.chronicle if e.kind == kind and wanted in getattr(e, field_name)), None)
+        return _key(event) if event is not None else None
+
+    return key(opening), key(closing)
+
+
+def _within(
+    moment: Stop,
+    began: Optional[tuple[int, int, int]],
+    ended: Optional[tuple[int, int, int]],
+    first_year: int,
+    last_year: int,
+) -> bool:
+    """Whether ``moment`` is from the opening event up to (not including) the closing one; the years stand in for an
+    event the chronicle does not hold (a kind switched off)."""
+    start = began if began is not None else (first_year, 1, -1)
+    end = ended if ended is not None else (last_year, 1, -1)
+    return start <= at_end(moment) < end
+
+
+def _outside_ratio(world: World, owner: int) -> float:
+    """Return how many people a power has for each one in its settlements: its realm's stored population over the
+    people in the places it holds today (so each realm keeps its own jitter), or the mean of the realms for a power
+    that is not a realm today (a fallen or old realm)."""
+    ratios = []
+    for realm in world.realms:
+        settled = sum(
+            p.pop for p in world.pois if (p.civilized or p.kind == "homestead") and world.realm_id[p.y, p.x] == realm.id
+        )
+        if settled:
+            ratios.append(realm.pop / settled)
+            if realm.id == owner:
+                return ratios[-1]
+    return sum(ratios) / len(ratios) if ratios else 1.0
 
 
 def power_profile(world: World, config: Config, owner: int, moment: Stop) -> PowerProfile:
@@ -121,7 +173,7 @@ def power_profile(world: World, config: Config, owner: int, moment: Stop) -> Pow
         kind = str(config.get(f"tables.realm_kinds.{realm.kind}.label"))
         first = next((e for e in world.chronicle if e.kind in ("founding", "secession") and owner in e.realm_ids), None)
         founded = first.year if first is not None else realm.founded
-        exists = (founded, 1) <= moment
+        exists = (_key(first) if first is not None else (founded, 1, -1)) <= at_end(moment)
         reign = world.ruler_at(owner, moment[0]) if exists else None
         style_row = f"tables.ruling_styles.{reign.style}" if reign is not None and reign.style else ""
         multiplier = float(config.get(f"{style_row}.strength_mul", 1.0)) if style_row else 1.0
@@ -144,26 +196,35 @@ def power_profile(world: World, config: Config, owner: int, moment: Stop) -> Pow
         }
     elif is_fallen_owner(owner):
         fallen = world.fallen_realms[fallen_id_of(owner)]
-        kind, founded, exists = "fallen realm", fallen.founded, fallen.founded <= moment[0] < fallen.fell
+        began, ended = _life(world, "founding", "fall", fallen_ids=fallen.id)
+        kind, founded, exists = (
+            "fallen realm",
+            fallen.founded,
+            _within(moment, began, ended, fallen.founded, fallen.fell),
+        )
         extra = {"strength": cells / mean if cells else 0.0}
     else:
         predecessor = world.predecessors[predecessor_id_of(owner)]
         kind, founded = "old realm", predecessor.founded
-        exists = predecessor.founded <= moment[0] < predecessor.split_year
+        began, ended = _life(world, "founding", "secession", predecessor_ids=predecessor.id)
+        exists = _within(moment, began, ended, predecessor.founded, predecessor.split_year)
         extra = {"strength": cells / mean if cells else 0.0}
+    now = at_end(moment)
     settlements: dict[str, int] = {}
-    people = 0
-    for index, poi in enumerate(world.pois):
-        if not poi.civilized or not mine[poi.y, poi.x]:
+    settled = 0
+    for poi in world.pois:
+        if not (poi.civilized or poi.kind == "homestead") or not mine[poi.y, poi.x]:
             continue
-        appears = poi_appears(world, config, index)
-        if appears is not None and appears > moment:
+        appears = place_key(world, config, poi)
+        if appears is not None and appears > now:
             continue
-        label = str(config.get(f"tables.tiers.{poi.kind}.label", poi.kind))
+        label = str(config.get(f"tables.tiers.{poi.kind}.label", "Homestead" if poi.kind == "homestead" else poi.kind))
         settlements[label] = settlements.get(label, 0) + 1
-        people += poi.pop
+        settled += poi.pop
     rank = {str(row["label"]): int(row["rank"]) for row in config.get("tables.tiers").values()}
     ordered = sorted(settlements.items(), key=lambda item: (rank.get(item[0], 99), item[0]))
+    outside = _outside_ratio(world, owner)
+    people = int(settled * outside) if settled else 0
     return PowerProfile(
         owner=owner,
         name=name,
@@ -176,5 +237,6 @@ def power_profile(world: World, config: Config, owner: int, moment: Stop) -> Pow
         share=cells / land if land else 0.0,
         settlements=ordered,
         people=people,
+        settled=settled,
         **extra,
     )

@@ -115,3 +115,23 @@ def test_a_world_replays_its_territory_and_sees_later_changes() -> None:
     first = int(world.owners_at(100)[0, 3])
     world.territory = _changes()
     assert (first, int(world.owners_at(100)[0, 0])) == (WILD, fallen_owner(0))
+
+
+def test_two_changes_of_one_month_are_told_apart_by_their_event() -> None:
+    # The map just after the first of two events of one month has the first change and not the second.
+    one = TerritoryChange(100, 5, "expansion", _cells((3, 0)), WILD, 0, event_id=10)
+    two = TerritoryChange(100, 5, "expansion", _cells((4, 0)), WILD, 1, event_id=11)
+    present = np.zeros((HEIGHT, WIDTH), dtype=np.int16)
+    present[0, 3], present[0, 4] = 0, 1
+    timeline = OwnerTimeline(present, [one, two])
+    between = timeline.owners_at(100, 5, 10)
+    assert (int(between[0, 3]), int(between[0, 4])) == (0, WILD)
+    assert (timeline.owners_at(100, 5) == present).all()
+
+
+def test_the_start_before_every_event_has_no_change() -> None:
+    changes = _changes()
+    for index, change in enumerate(changes):
+        change.event_id = index
+    timeline = OwnerTimeline(_present(), changes)
+    assert np.array_equal(timeline.owners_at(0, 0, -1), timeline.owners_at(1, 1, -1))

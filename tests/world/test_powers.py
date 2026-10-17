@@ -27,7 +27,16 @@ def _world() -> World:
     a fallen realm held column 6-7 until 300. Realm 0 has two rulers; the two realms are at war from 350 to 380."""
     world = World(8, 2, 1)
     world.realms = [
-        Realm(id=0, kind="major", name="Kingdom of Aldor", short="Aldor", seat_poi=0, founded=100, color=(200, 0, 0)),
+        Realm(
+            id=0,
+            kind="major",
+            name="Kingdom of Aldor",
+            short="Aldor",
+            seat_poi=0,
+            founded=100,
+            color=(200, 0, 0),
+            pop=53000,
+        ),
         Realm(id=1, kind="city_state", name="Wend", short="Wend", founded=150, liege=0, color=(0, 0, 200)),
     ]
     world.realm_id[:, :4], world.realm_id[:, 4:6] = 0, 1

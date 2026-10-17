@@ -238,6 +238,7 @@ def _commit(world: World, config: Config, seed: int, style: str, kind: str, x: i
         style=style,
         connect=bool(row.get("connect", False)),
         founded=founded,
+        pop=stream.randint(*(int(v) for v in config.get("poi.homestead_people"))),
         tags=settlement_tags(reach, x, y),
     )
 

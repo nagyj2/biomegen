@@ -112,7 +112,13 @@ def test_a_seat_is_as_old_as_its_realm(world: World) -> None:
 
 
 def test_a_settlement_is_never_older_than_its_realm(world: World) -> None:
-    pairs = [(p.founded, world.realms[p.realm_id].founded) for p in world.pois if p.civilized and p.realm_id >= 0]
+    # An offshoot's seat stood under its parent before the break, so it may be older (as the seat test above allows).
+    seats = {r.seat_poi for r in world.realms if r.origin}
+    pairs = [
+        (p.founded, world.realms[p.realm_id].founded)
+        for i, p in enumerate(world.pois)
+        if p.civilized and p.realm_id >= 0 and i not in seats
+    ]
     assert pairs and all(own >= realm for own, realm in pairs)
 
 

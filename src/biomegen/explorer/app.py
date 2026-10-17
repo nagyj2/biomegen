@@ -28,7 +28,7 @@ from ..sites import SiteGeometry, site_geometry, window_sampler
 from ..world.overlay import Overlay
 from ..world.world import World
 from .exports import export_screen, export_world
-from .history_viewer import Stop, history_loop, initial_state
+from .history_viewer import Stop, history_loop, initial_state, present_moment
 from .input import Action, KeyReader, make_reader, resolve_action
 from .panel import build_panel, draw_help, panel_color
 from .prefetch import idle_work
@@ -355,8 +355,8 @@ def history_start(world: World, config: Config, state: ViewState) -> Stop:
     events = world.events_at(state.cx, state.cy)
     if events:
         latest = max(events, key=lambda event: (event.year, event.month, event.id))
-        return latest.year, latest.month
-    return world.year, int(config.get("history.months_per_year"))
+        return latest.year, latest.month, latest.id
+    return present_moment(world, config)
 
 
 def _drain_moves(world: World, config: Config, state: ViewState, reader: KeyReader) -> Optional[Action]:

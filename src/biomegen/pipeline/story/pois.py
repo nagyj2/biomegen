@@ -38,6 +38,7 @@ from ...world.entities import ChronicleEvent
 from ...world.wars import war_end
 from ...world.world import World
 from .. import pois
+from ..civilization import realms
 from ..civilization.settlements import habitability
 from . import poi_styles
 from .poi_rules import PoiPlan, event_key, poi_for_event
@@ -333,3 +334,4 @@ def run(world: World, config: Config, seed: int) -> None:
     pois.place_by_location(world, config, seed, ("both",) if dawn else ("location", "both"))
     if not dawn:
         poi_styles.place_styles(world, config, seed)
+        realms.recount_population(world, config, seed)
