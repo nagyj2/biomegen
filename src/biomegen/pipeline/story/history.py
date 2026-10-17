@@ -37,7 +37,7 @@ import numpy as np
 
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import NO_LOCATION, POI, FallenRealm, Predecessor
+from ...world.entities import NO_LOCATION, POI, FallenRealm, Predecessor, Realm
 from ...world.tile import WaterType
 from ...world.world import World
 from ..civilization.diplomacy import faction_color, neutral_colors
@@ -202,7 +202,6 @@ def _realm_events(
     if the check fails). A settlement in ``defecting`` may have left an older realm: the timeline settles it (for the
     realm it left if it did, else for its holder).
     """
-    gap = int(config.get("history.min_gap_years"))
     settle_kinds = set(config.get("history.settle_kinds"))
     for realm in world.realms:
         if realm.id not in held_back:
@@ -235,12 +234,62 @@ def _realm_events(
         if poi.civilized and poi.kind in settle_kinds and poi.realm_id >= 0 and index not in seats | set(defecting):
             add_settling(world, config, seed, ledger, index, poi.realm_id)
     for realm in world.realms:
-        if realm.liege < 0:
-            continue
-        liege = world.realms[realm.liege]
-        first = min(max(realm.founded, liege.founded) + gap, span)
-        year = min(first + int(rng.derive(seed, "history", "conquest", realm.id).random() * (span - first + 1)), span)
-        ledger.add(year, "conquest", "conquest", (realm.id,), seed, realm_ids=[realm.id, liege.id], tags=("vassalage",))
+        if realm.liege >= 0:
+            _conquest_events(world, config, seed, span, ledger, realm, world.realms[realm.liege])
+
+
+def _shared_border(world: World, a: int, b: int) -> np.ndarray:
+    """Return the sorted flat indices of the cells of realms ``a`` and ``b`` that touch the other's (4-neighbours)."""
+    mine, theirs = world.realm_id == a, world.realm_id == b
+    near = np.zeros_like(mine)
+    for first, second in ((mine, theirs), (theirs, mine)):
+        touching = np.zeros_like(first)
+        touching[:, :-1] |= second[:, 1:]
+        touching[:, 1:] |= second[:, :-1]
+        touching[:-1, :] |= second[1:, :]
+        touching[1:, :] |= second[:-1, :]
+        near |= first & touching
+    return np.flatnonzero(near)
+
+
+def _conquest_events(
+    world: World, config: Config, seed: int, span: int, ledger: Ledger, realm: Realm, liege: Realm
+) -> None:
+    """Add the conquest of ``realm`` by its overlord, preceded by the war that wins it.
+
+    The conquest year is drawn as before (after both realms exist plus ``history.min_gap_years``) but no sooner than the
+    war's shortest length after that; the war (``war_ended`` wording, the overlord attacking, tagged ``conquest``) opens
+    ``history.conquest_war_years`` earlier, and when the two share a border the overlord wins one decisive battle on it
+    in between, so a realm is never taken in peacetime.
+    """
+    gap = int(config.get("history.min_gap_years"))
+    low, high = (int(v) for v in config.get("history.conquest_war_years"))
+    stream = rng.derive(seed, "history", "conquest", realm.id)
+    roll_year, roll_length, roll_battle, roll_place = (stream.random() for _ in range(4))
+    first = min(max(realm.founded, liege.founded) + gap, span)
+    earliest = min(first + low, span)
+    year = min(earliest + int(roll_year * (span - earliest + 1)), span)
+    length = max(1, min(low + int(roll_length * (high - low + 1)), year - first))
+    started = year - length
+    ledger.add(
+        started, "war", "war_ended", ("conquest", realm.id), seed, realm_ids=[liege.id, realm.id], tags=("conquest",)
+    )
+    cells = _shared_border(world, liege.id, realm.id).tolist()
+    if cells and length >= 2:
+        battle_year = started + int(roll_battle * (length - 1))  # in the war, before the conquest year
+        y, x = divmod(cells[int(roll_place * len(cells))], world.width)
+        ledger.add(
+            battle_year,
+            "battle",
+            "battle",
+            ("conquest", realm.id),
+            seed,
+            realm_ids=[liege.id, realm.id],
+            location=(x, y),
+            near_poi=nearest_settlement(world, config, x, y),
+            tags=("decisive", "conquest"),
+        )
+    ledger.add(year, "conquest", "conquest", (realm.id,), seed, realm_ids=[realm.id, liege.id], tags=("vassalage",))
 
 
 def _remnants(world: World, config: Config, seed: int, ledger: Ledger) -> dict[int, int]:

@@ -122,7 +122,7 @@ def _near_free_cell(world: World, config: Config, kind: str, event: ChronicleEve
     A candidate is eligible land (the row's biomes, elevation and footprint), within the row's ``offset_km`` of the
     event, at least ``event_spacing_km`` (else ``min_spacing_km``) from every POI and ``kind_spacing_km`` from every
     other POI of its kind.
-    The nearest wins; ties go to the first in row-major order.
+    The nearest wins; ties go to the first in row-major order. The site of a fallen realm is never a candidate.
     """
     row = config.get(f"tables.pois.{kind}")
     x, y = event.location
@@ -134,6 +134,8 @@ def _near_free_cell(world: World, config: Config, kind: str, event: ChronicleEve
     mask = pois.eligible_mask(world, row, pois.max_footprint(config, kind), float(config.get("poi.min_footprint_land")))
     mask &= km <= float(row["offset_km"])
     mask &= _clear_of_pois(world, config, row)
+    for fallen in world.fallen_realms:  # a fallen realm's site is for its ruin, which is placed after these kinds
+        mask[fallen.location[1], fallen.location[0]] = False
     same = np.zeros(mask.shape, dtype=bool)
     for poi in world.pois:
         same[poi.y, poi.x] |= poi.kind == kind

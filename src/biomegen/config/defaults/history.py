@@ -45,6 +45,7 @@ VALUES: Dict[str, Any] = {
     # style's base values (data/rulers.toml) plus a seeded draw within +- this spread, kept in [0, 1].
     "ruler_trait_spread": 0.15,
     "min_gap_years": 20,  # least time between a realm existing and its next event (conquest, war, treaty)
+    "conquest_war_years": [3, 25],  # the war that wins a vassal lasts this long (a conquest ends it)
     "first_founding_year": 10,  # the oldest realm is founded this year; every founding is shifted to match
     # Relations. A pair sharing a border may have had an older war first (``past_war_chance``, lasting
     # ``past_war_years``) that ended in peace; the relation itself then begins at any later year. A war's front sees

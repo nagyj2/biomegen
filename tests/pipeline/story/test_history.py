@@ -308,3 +308,42 @@ def test_a_seat_is_marked_by_its_realms_founding(world: World) -> None:
 def test_a_settlement_is_marked_by_the_event_that_settled_it(world: World) -> None:
     settled = [e for e in world.chronicle if e.kind == "settling"]
     assert settled and all(e.id in world.pois[e.poi_ids[0]].event_ids for e in settled)
+
+
+# --- a conquest is won in a war -----------------------------------------------------------------------------------
+
+
+def _vassal_ties(world: World):
+    return [(realm.id, realm.liege) for realm in world.realms if realm.liege >= 0]
+
+
+def _events(world: World, kind: str, vassal: int, liege: int):
+    return [e for e in world.chronicle if e.kind == kind and set(e.realm_ids) == {vassal, liege}]
+
+
+def test_every_conquest_has_a_war_before_it(world: World) -> None:
+    # A realm is never taken in peacetime: the overlord's war on it opens before the conquest.
+    for vassal, liege in _vassal_ties(world):
+        (conquest,) = _events(world, "conquest", vassal, liege)
+        wars = [e for e in _events(world, "war", vassal, liege) if "conquest" in e.tags]
+        assert len(wars) == 1 and (wars[0].year, wars[0].month) < (conquest.year, conquest.month)
+
+
+def test_the_overlord_attacks_in_a_conquest_war(world: World) -> None:
+    for vassal, liege in _vassal_ties(world):
+        war = next(e for e in _events(world, "war", vassal, liege) if "conquest" in e.tags)
+        assert war.realm_ids == [liege, vassal]
+
+
+def test_a_conquest_war_is_fought_between_its_war_and_its_conquest(world: World) -> None:
+    for vassal, liege in _vassal_ties(world):
+        war = next(e for e in _events(world, "war", vassal, liege) if "conquest" in e.tags)
+        (conquest,) = _events(world, "conquest", vassal, liege)
+        for battle in _events(world, "battle", vassal, liege):
+            assert (war.year, war.month) <= (battle.year, battle.month) < (conquest.year, conquest.month)
+
+
+def test_the_overlord_wins_the_battle_of_its_conquest_war(world: World) -> None:
+    for vassal, liege in _vassal_ties(world):
+        for battle in _events(world, "battle", vassal, liege):
+            assert battle.realm_ids[0] == liege and "decisive" in battle.tags
