@@ -447,6 +447,16 @@ def _network(world: World, config: Config, seed: int, eligible: List[Tuple[int, 
     )
 
 
+def _link_through(world: World, cell: Coord) -> int:
+    """Return the index of the first road link that covers ``cell`` (the road a spur ran into), or -1 when none does."""
+    flat = cell[1] * world.width + cell[0]
+    for index, link in enumerate(world.road_links):
+        at = int(np.searchsorted(link.cells, flat))
+        if at < len(link.cells) and int(link.cells[at]) == flat:
+            return index
+    return -1
+
+
 def _lay(
     world: World, network: _Network, comp_mask: np.ndarray, a: Coord, b: Coord, tier: int, ends: Tuple[int, int]
 ) -> None:
@@ -470,7 +480,8 @@ def _lay(
         if world.road_tier[y, x] == 0:
             world.road_tier[y, x] = tier
     cells = np.unique(np.array([y * world.width + x for x, y in path], dtype=np.int32))
-    world.road_links.append(RoadLink(ends[0], ends[1], tier, cells))
+    joins = _link_through(world, b) if ends[1] < 0 else -1
+    world.road_links.append(RoadLink(ends[0], ends[1], tier, cells, joins=joins))
 
 
 def run(world: World, config: Config, seed: int) -> None:

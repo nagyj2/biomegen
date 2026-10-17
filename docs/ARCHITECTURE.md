@@ -464,12 +464,17 @@ from its battle, a watchtower from its war until it is dismantled, a tower bandi
 the roads laid by then (`World.road_links`). The chronicle sits beside it, scrolled to the moment's events (highlighted; later
 ones dimmed), with recent events marked on the map by kind (`history.viewer.glyphs`).
 
-- **Stops.** `[` `]` step through every listed event and territory change, and the present is always the last stop
+- **Stops.** `[` `]` step through every listed event (one stop each, `(year, month, event id)`: two events of one month are two
+  stops, and the map, points, roads, wars and powers are read just after that event) and every territory change; the start
+  (before any event) is the first stop and the present is always the last
   (`change_moments`); `m` also lists the minor events (towers, roads, small settlements) and stops at them. From the explorer,
   `{` `}` step through the events and changes at the selected tile, ending at the present; `g` asks a year; `\` is the present.
 - **Powers.** Tab moves to the powers list (up / down choose one, kept across the stops): the right pane then shows that power's
-  profile at the moment (`world/powers.py`: ruler and style, seat, land, settlements, people, strength, liege and vassals, wars,
-  rivalries and pacts), and Space shows its land on the map until the next key (a terminal sends no key release).
+  profile at the stop (`world/powers.py`) in one fixed layout, so powers compare by flicking between them: a row per fact (status,
+  ruler, rule, reign in years, seat, land, share, people, density, strength, liege) with a `-` where there is none, a row per
+  settlement tier and homesteads, a vassals heading with three reserved rows (`+N more`), and the relations (wars, rivalries, pacts)
+  last, the one list left to grow, under a heading that never moves. Space shows the power's land on the map and Space again hides it.
+  A power exists from its opening event to its closing one (a split's old realm until the split event itself).
 
 #### Annals and the life of places (`pipeline/story/annals.py`)
 
@@ -481,6 +486,9 @@ when its war is declared, behind the front that war had then (`pois._border_at_w
 `World.vanished`, so today's map has no trace of it), or abandoned (`watchtower.abandon_chance`), and an abandoned one is taken by
 bandits `occupy_years` later and is a bandit `tower` from then on. The new events are merged into the finished chronicle
 (`ledger.merge_events`, renumbering every id the world keeps: `POI.event_ids`, `RoadLink.event_id`, `TerritoryChange.event_id`).
+A road is laid after both its ends stand and, for a spur, after the road it runs into (`RoadLink.joins`). A realm's people are the
+people in its settlements, hamlets and homesteads plus an outside share and a rural term, each drawn per realm
+(`realms.population`, recounted after the styles pass), so a realm follows its places and not its area.
 A settlement is also dated no sooner than its land was taken from the wild (`territory.wild_since`), and every conquest is won in a
 war (`history._conquest_events`: the war, a decisive battle on the shared border, then the conquest).
 

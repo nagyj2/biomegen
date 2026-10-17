@@ -292,3 +292,20 @@ def test_no_boat_is_placed(world: World) -> None:
 
 def test_the_boat_row_is_kept_but_switched_off(cfg: Config) -> None:
     assert cfg.get("tables.pois.boat.generated") is False and cfg.get("tables.pois.boat.km2_per_poi") > 0
+
+
+def test_a_spur_is_never_laid_before_the_road_it_runs_into(world: World) -> None:
+    spurs = [link for link in world.road_links if link.joins >= 0]
+    assert spurs
+    for link in spurs:
+        joined, event, parent = world.road_links[link.joins], world.chronicle[link.event_id], None
+        parent = world.chronicle[joined.event_id]
+        assert (parent.year, parent.month, parent.id) <= (event.year, event.month, event.id)
+
+
+def test_a_spur_runs_into_a_road_that_has_the_cell_it_ends_on(world: World) -> None:
+    width = world.width
+    for link in (item for item in world.road_links if item.joins >= 0):
+        joined = set(world.road_links[link.joins].cells.tolist())
+        assert joined & set(link.cells.tolist()) and all(c < world.width * world.height for c in joined)
+        assert width > 0

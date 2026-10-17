@@ -145,17 +145,25 @@ def _settling(world: World, config: Config, seed: int, ledger: Ledger, index: in
 
 
 def _roads(world: World, config: Config, seed: int) -> None:
-    """Add the laying of every road, up to ``road_delay_years`` after the later of its two ends appears."""
+    """Add the laying of every road, up to ``road_delay_years`` after both its ends stand.
+
+    A road is laid between places that stand, and a spur no sooner than the road it runs into (``RoadLink.joins``):
+    the links are dated in the order they were routed, so a road is always behind what it joins.
+    """
     ledger = Ledger(config)
     delay = int(config.get("history.annals.road_delay_years"))
     months = int(config.get("history.months_per_year"))
     laid: list[tuple[RoadLink, ChronicleEvent]] = []
+    when: dict[int, tuple[int, int]] = {}  # link index -> (year, month) it was laid
     for number, link in enumerate(world.road_links):
         ends = [link.a] + ([link.b] if link.b >= 0 else [])
-        starts = [poi_appears(world, config, index) for index in ends]
-        base = max((start for start in starts if start is not None), default=(0, 1))
+        waits = [poi_appears(world, config, index) for index in ends]
+        if link.joins >= 0 and link.joins in when:
+            waits.append(when[link.joins])
+        base = max((wait for wait in waits if wait is not None), default=(0, 1))
         roll_delay, roll_month = (rng.derive(seed, "history", "annals", "road", number).random() for _ in range(2))
         year = min(world.year, base[0] + int(roll_delay * (delay + 1)))
+        month = _month(roll_month, base[1] if year == base[0] else 1, months)
         middle = int(link.cells[len(link.cells) // 2])
         event = ledger.add(
             year,
@@ -169,7 +177,8 @@ def _roads(world: World, config: Config, seed: int) -> None:
             salience="minor",
         )
         if event is not None:
-            event.month = _month(roll_month, base[1] if year == base[0] else 1, months)
+            event.month = month
+            when[number] = (year, month)
             laid.append((link, event))
     merge_events(world, [event for _, event in laid])
     for link, event in laid:

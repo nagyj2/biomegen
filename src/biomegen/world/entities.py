@@ -286,6 +286,8 @@ class RoadLink:
         tier: 1 for a trunk road, 2 for a spur (as ``World.road_tier``).
         cells: Sorted unique flat row-major indices (``y * width + x``) of the cells it covers, ``int32``.
         event_id: The ``road`` chronicle event that laid it (set by the annals), or -1.
+        joins: For a spur, the index in ``World.road_links`` of the road it runs into (it cannot be laid before that
+            one), else -1.
     """
 
     a: int
@@ -293,3 +295,4 @@ class RoadLink:
     tier: int
     cells: np.ndarray
     event_id: int = -1
+    joins: int = -1
