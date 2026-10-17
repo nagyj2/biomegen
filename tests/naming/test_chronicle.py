@@ -398,3 +398,52 @@ def test_every_expansion_row_resolves_all_its_tokens(cfg: Config) -> None:
             world = _small_world()
             event = ChronicleEvent(0, 150, "expansion", template=template, near_poi=1, **kwargs)
             assert "{" not in _render(world, event, cfg), template
+
+
+# --- the per-entity helpers a simulation calls ------------------------------------------------------------------------
+
+
+def test_describing_one_event_words_it_as_the_bulk_call_does(cfg: Config) -> None:
+    template = "{realm} under {ruler} at {seat} ({short}, {year})."
+    bulk = ChronicleEvent(0, 100, "founding", [0], [0], template=template)
+    single = ChronicleEvent(0, 100, "founding", [0], [0], template=template)
+    world = _small_world()
+    chronicle.name_fallen_realms(world, cfg, 1)
+    world.chronicle = [bulk]
+    chronicle.describe_events(world, cfg, 1)
+    chronicle.describe_event(world, cfg, single)
+    assert (single.text, single.refs) == (bulk.text, bulk.refs)
+
+
+def test_describing_a_generated_worlds_events_again_gives_the_stored_text(world: World, cfg: Config) -> None:
+    # Every event re-renders to what the naming stage stored, so the helper is the stage's own step.
+    stored = [(event.text, event.refs) for event in world.chronicle]
+    for event in world.chronicle:
+        chronicle.describe_event(world, cfg, event)
+    assert [(event.text, event.refs) for event in world.chronicle] == stored
+
+
+def test_describing_one_event_leaves_the_others_alone(cfg: Config) -> None:
+    world = _small_world()
+    first = ChronicleEvent(0, 100, "founding", [0], template="{short} rises.", text="old")
+    second = ChronicleEvent(1, 110, "founding", [1], template="{short} rises.", text="old")
+    world.chronicle = [first, second]
+    chronicle.describe_event(world, cfg, first)
+    assert (first.text, second.text) == ("Aldor rises.", "old")
+
+
+def test_naming_one_fallen_realm_gives_the_name_the_bulk_call_gives(cfg: Config) -> None:
+    bulk, single = _small_world(), _small_world()
+    chronicle.name_fallen_realms(bulk, cfg, 1)
+    chronicle.name_fallen_realm(single, cfg, 1, single.fallen_realms[0])
+    assert (single.fallen_realms[0].name, single.fallen_realms[0].culture) == (
+        bulk.fallen_realms[0].name,
+        bulk.fallen_realms[0].culture,
+    )
+
+
+def test_naming_one_predecessor_gives_the_name_the_bulk_call_gives(cfg: Config) -> None:
+    bulk, single = _with_predecessor(), _with_predecessor()
+    chronicle.name_predecessors(bulk, cfg, 3)
+    chronicle.name_predecessor(single, cfg, 3, single.predecessors[0])
+    assert single.predecessors[0].name == bulk.predecessors[0].name

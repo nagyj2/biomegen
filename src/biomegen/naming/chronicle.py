@@ -8,6 +8,8 @@ resolves. Every draw is keyed on the entity, so a name never depends on processi
 
 from __future__ import annotations
 
+from typing import Optional
+
 from ..config.model import Config
 from ..world.entities import (
     REF_FALLEN,
@@ -16,6 +18,8 @@ from ..world.entities import (
     REF_REALM,
     REF_RULER,
     ChronicleEvent,
+    FallenRealm,
+    Predecessor,
     Realm,
     Relation,
 )
@@ -25,48 +29,60 @@ from . import cultures, polity
 from .render import Where, render_template
 
 
-def name_fallen_realms(world: World, config: Config, seed: int) -> None:
-    """Fill each fallen realm's ``culture`` (from its site's biome) and ``name`` (a major realm's form).
+def name_fallen_realm(world: World, config: Config, seed: int, fallen: FallenRealm) -> None:
+    """Fill ``fallen``'s ``culture`` (from its site's biome) and ``name`` (a major realm's form).
 
     The name is made by :func:`polity.name_realm` for a stand-in major realm of the site's biome whose id is negative
-    (``-1 - fallen id``), so its streams never meet a living realm's.
+    (``-1 - fallen id``), so its streams never meet a living realm's. The draws are keyed on the fallen realm alone, so
+    naming one never depends on naming another (a simulation can name a realm that falls).
     """
+    x, y = fallen.location
+    biome = int(world.biome[y, x])
+    fallen.culture = cultures.culture_for_site(seed, biome, fallen.id)
+    stand_in = Realm(
+        id=-1 - fallen.id,
+        kind="major",
+        culture=fallen.culture,
+        dominant_biome=biome,
+        highland=int(world.relief[y, x]) != int(Relief.NONE),
+    )
+    polity.name_realm(seed, stand_in, "", config)
+    fallen.name = stand_in.name
+
+
+def name_fallen_realms(world: World, config: Config, seed: int) -> None:
+    """Name every fallen realm (see :func:`name_fallen_realm`)."""
     for fallen in world.fallen_realms:
-        x, y = fallen.location
-        biome = int(world.biome[y, x])
-        fallen.culture = cultures.culture_for_site(seed, biome, fallen.id)
-        stand_in = Realm(
-            id=-1 - fallen.id,
-            kind="major",
-            culture=fallen.culture,
-            dominant_biome=biome,
-            highland=int(world.relief[y, x]) != int(Relief.NONE),
-        )
-        polity.name_realm(seed, stand_in, "", config)
-        fallen.name = stand_in.name
+        name_fallen_realm(world, config, seed, fallen)
 
 
 _PREDECESSOR_BASE = 1_000_000  # a predecessor's stand-in realm has id -(this + its id), clear of the fallen realms' ids
 
 
-def name_predecessors(world: World, config: Config, seed: int) -> None:
-    """Fill each predecessor's ``culture`` (its first child's) and ``name`` (a major realm's form).
+def name_predecessor(world: World, config: Config, seed: int, predecessor: Predecessor) -> None:
+    """Fill ``predecessor``'s ``culture`` (its first child's) and ``name`` (a major realm's form).
 
     The name is made by :func:`polity.name_realm` for a stand-in major realm of the child's biome whose id is negative
-    and far from the fallen realms' stand-ins, so its streams never meet another realm's.
+    and far from the fallen realms' stand-ins, so its streams never meet another realm's. The draws are keyed on the
+    predecessor alone, so a simulation can name one it adds.
     """
+    child = world.realms[predecessor.children[0]] if predecessor.children else None
+    stand_in = Realm(
+        id=-_PREDECESSOR_BASE - predecessor.id,
+        kind="major",
+        culture=child.culture if child else "common",
+        dominant_biome=child.dominant_biome if child else 0,
+        highland=child.highland if child else False,
+    )
+    predecessor.culture = stand_in.culture
+    polity.name_realm(seed, stand_in, "", config)
+    predecessor.name = stand_in.name
+
+
+def name_predecessors(world: World, config: Config, seed: int) -> None:
+    """Name every predecessor (see :func:`name_predecessor`)."""
     for predecessor in world.predecessors:
-        child = world.realms[predecessor.children[0]] if predecessor.children else None
-        stand_in = Realm(
-            id=-_PREDECESSOR_BASE - predecessor.id,
-            kind="major",
-            culture=child.culture if child else "common",
-            dominant_biome=child.dominant_biome if child else 0,
-            highland=child.highland if child else False,
-        )
-        predecessor.culture = stand_in.culture
-        polity.name_realm(seed, stand_in, "", config)
-        predecessor.name = stand_in.name
+        name_predecessor(world, config, seed, predecessor)
 
 
 def _ruler(world: World, realm: Realm, year: int) -> tuple[str, tuple[str, int] | None]:
@@ -240,17 +256,32 @@ def _tokens(
     return tokens, where
 
 
-def describe_events(world: World, config: Config, seed: int) -> None:
-    """Render ``text`` and ``refs`` of every event from its raw template; fallen realms are named first.
+def describe_event(
+    world: World,
+    config: Config,
+    event: ChronicleEvent,
+    relations: Optional[dict[tuple[int, int], Relation]] = None,
+) -> None:
+    """Render ``text`` and ``refs`` of ``event`` from its raw template, as it is worded at generation.
 
-    The first letter of the text is capitalised (a ruler's title such as "the Synod of ..." may open it); no span moves.
+    Pure apart from writing the event: it needs every realm, ruler, place and fallen or old realm the event names to be
+    named already. The first letter of the text is capitalised (a ruler's title such as "the Synod of ..." may open it);
+    no span moves. ``relations`` is ``{(a, b): Relation}`` for ``world.relations`` (built here when not given; a caller
+    describing many events builds it once).
     """
+    if relations is None:
+        relations = {(r.a, r.b): r for r in world.relations}
+    tokens, where = _tokens(world, config, event, relations)
+    pair = relations.get((min(event.realm_ids), max(event.realm_ids))) if len(event.realm_ids) == 2 else None
+    inner = {"reason": pair.why_refs} if pair else None
+    text, event.refs = render_template(event.template, tokens, where, inner)
+    event.text = text[:1].upper() + text[1:]
+
+
+def describe_events(world: World, config: Config, seed: int) -> None:
+    """Render ``text`` and ``refs`` of every event from its raw template; fallen realms are named first."""
     name_fallen_realms(world, config, seed)
     name_predecessors(world, config, seed)
     relations = {(r.a, r.b): r for r in world.relations}
     for event in world.chronicle:
-        tokens, where = _tokens(world, config, event, relations)
-        pair = relations.get((min(event.realm_ids), max(event.realm_ids))) if len(event.realm_ids) == 2 else None
-        inner = {"reason": pair.why_refs} if pair else None
-        text, event.refs = render_template(event.template, tokens, where, inner)
-        event.text = text[:1].upper() + text[1:]
+        describe_event(world, config, event, relations)

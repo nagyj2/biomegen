@@ -6,12 +6,13 @@ homestead or a generated hamlet), from its style's row in ``tables.poi_styles`` 
 ``hooks_<kind>_near``), with ``{name}`` the POI's own name and ``{near}`` the settlement's. A kind with neither (a
 village no event dates) has an empty hook. Runs after the chronicle's text is rendered and the POIs are named; every
 draw is keyed on the POI's cell, so a hook never depends on processing order. A later simulation calls
-:func:`describe_hook` for a POI it mints.
+:func:`render_hook` for a POI it mints.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Optional
 
 from ..config.model import Config
 from ..util import rng
@@ -25,18 +26,20 @@ def _remnant_of(world: World, poi: POI) -> int:
     return next((fid for e in (world.chronicle[i] for i in poi.event_ids) for fid in e.fallen_ids), -1)
 
 
-def _describe_free(world: World, config: Config, seed: int, index: int) -> bool:
-    """Write the hook of a free settlement from its tier's ``hooks_free`` (``hooks_remnant`` for a remnant).
+Hook = tuple[str, list[tuple[int, int, str, int]]]  # a hook's text and its (start, end, REF_KINDS entry, id) spans
 
-    Returns False when the tier has no such text, so the ordinary hook is written instead.
+
+def _free_hook(world: World, config: Config, seed: int, poi: POI, index: int) -> Optional[Hook]:
+    """Return the hook of a free settlement from its tier's ``hooks_free`` (``hooks_remnant`` for a remnant).
+
+    Returns None when the tier has no such text, so the ordinary hook is used instead.
     """
-    poi = world.pois[index]
     tier = config.get(f"tables.tiers.{poi.kind}", None) or {}
     fallen_id = _remnant_of(world, poi)
     pool = list(tier.get("hooks_remnant", [])) if fallen_id >= 0 else []
     pool = pool or list(tier.get("hooks_free", []))
     if not pool:
-        return False
+        return None
     fallen = world.fallen_realms[fallen_id].name if fallen_id >= 0 else ""
     tokens: dict[str, object] = {
         "name": poi.name,
@@ -46,8 +49,7 @@ def _describe_free(world: World, config: Config, seed: int, index: int) -> bool:
     if fallen_id >= 0:
         where["fallen"] = (REF_FALLEN, fallen_id)
     stream = rng.derive(seed, "naming", "hook", poi.x, poi.y)
-    poi.hook, poi.hook_refs = render_template(str(stream.choice(pool)), tokens, where)
-    return True
+    return render_template(str(stream.choice(pool)), tokens, where)
 
 
 def _pool(config: Config, poi: POI, near_index: int) -> list[str]:
@@ -61,26 +63,34 @@ def _pool(config: Config, poi: POI, near_index: int) -> list[str]:
     return pool + list(row.get("hooks_near", [])) if row and near_index >= 0 else pool
 
 
-def describe_hook(world: World, config: Config, seed: int, index: int, near_index: int) -> None:
-    """Fill ``hook`` and ``hook_refs`` of ``world.pois[index]``; ``near_index`` is its qualifying settlement or -1."""
-    poi: POI = world.pois[index]
-    poi.hook, poi.hook_refs = "", []
-    if poi.free and _describe_free(world, config, seed, index):
-        return
+def render_hook(world: World, config: Config, seed: int, poi: POI, index: int, near_index: int) -> Hook:
+    """Return the hook of ``poi`` (the POI at ``index`` for its spans) without writing it.
+
+    ``near_index`` is the settlement its text may name, or -1. Pure: a simulation calls it for a POI it mints, before
+    the POI is stored anywhere, so ``poi`` need not be in ``world.pois`` (``index`` is the id it will have).
+    """
+    if poi.free:
+        free = _free_hook(world, config, seed, poi, index)
+        if free is not None:
+            return free
     if poi.event_ids:
         event = world.chronicle[poi.event_ids[0]]
-        poi.hook, poi.hook_refs = event.text, list(event.refs)
-        return
+        return event.text, list(event.refs)
     pool = _pool(config, poi, near_index)
     if not pool:
-        return
+        return "", []
     stream = rng.derive(seed, "naming", "hook", poi.x, poi.y)
     tokens: dict[str, object] = {"name": poi.name, "near": world.pois[near_index].name if near_index >= 0 else ""}
     where = {"name": (REF_POI, index)}
     if near_index >= 0:
         where["near"] = (REF_POI, near_index)
-    text, refs = render_template(str(stream.choice(pool)), tokens, where)
-    poi.hook, poi.hook_refs = text, refs
+    return render_template(str(stream.choice(pool)), tokens, where)
+
+
+def describe_hook(world: World, config: Config, seed: int, index: int, near_index: int) -> None:
+    """Fill ``hook`` and ``hook_refs`` of ``world.pois[index]``; ``near_index`` is its qualifying settlement or -1."""
+    poi: POI = world.pois[index]
+    poi.hook, poi.hook_refs = render_hook(world, config, seed, poi, index, near_index)
 
 
 def describe_hooks(world: World, config: Config, seed: int, near_of: Callable[[int], int]) -> None:

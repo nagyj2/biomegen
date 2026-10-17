@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import pytest
 
+from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.naming.hooks import describe_hook, describe_hooks
+from biomegen.naming.hooks import describe_hook, describe_hooks, render_hook
+from biomegen.pipeline.story.places import nearest_settlement
 from biomegen.world.entities import POI, ChronicleEvent, FallenRealm
 from biomegen.world.world import World
 
@@ -146,3 +148,39 @@ def test_a_tier_with_no_free_text_falls_back_to_its_event_text(world: World, cfg
     world.pois[0].event_ids = [0]
     describe_hook(world, cfg, 5, 0, -1)
     assert world.pois[0].hook == "Aldburg is raised."
+
+
+def test_render_hook_returns_what_describe_hook_stores(world: World, cfg: Config) -> None:
+    # The pure helper and the writer agree, for a POI with no event and a near settlement.
+    hook = render_hook(world, cfg, 5, world.pois[1], 1, 0)
+    describe_hook(world, cfg, 5, 1, 0)
+    assert hook == (world.pois[1].hook, world.pois[1].hook_refs)
+
+
+def test_render_hook_writes_nothing_to_the_poi(world: World, cfg: Config) -> None:
+    render_hook(world, cfg, 5, world.pois[1], 1, -1)
+    assert (world.pois[1].hook, world.pois[1].hook_refs) == ("", [])
+
+
+def test_render_hook_serves_a_poi_that_is_not_in_the_world_yet(world: World, cfg: Config) -> None:
+    # A simulation renders the hook of a POI it mints before storing it; the index is the id it will have.
+    minted = POI(kind="tower", x=3, y=3, interior_seed=0, name="New Tower")
+    assert render_hook(world, cfg, 5, minted, 2, -1) == ("New Tower stands alone.", [(0, 9, "poi", 2)])
+
+
+def test_every_hook_of_a_generated_world_is_what_render_hook_returns() -> None:
+    # The naming stage stores render_hook's result, so the pure helper reproduces every stored hook.
+    config = load_config(None)
+    generated = pipeline.generate(config, 42)
+    again = [
+        render_hook(
+            generated,
+            config,
+            42,
+            poi,
+            index,
+            nearest_settlement(generated, config, poi.x, poi.y, (index,)),
+        )
+        for index, poi in enumerate(generated.pois)
+    ]
+    assert again == [(poi.hook, poi.hook_refs) for poi in generated.pois]
