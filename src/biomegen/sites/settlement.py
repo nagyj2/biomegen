@@ -391,12 +391,17 @@ def _lots(
     preplaced: Optional[list[Lot]] = None,
     reserved: int = 0,
     keep_out: Optional[np.ndarray] = None,
+    houses: Optional[int] = None,
 ) -> tuple[np.ndarray, list[Lot]]:
     """Pack buildings along the streets; return ``(roof mask, the lots)``.
 
     ``preplaced`` are lots already stamped into ``grid`` (the centre building, a mill): they count as built and keep
     their gap clear; a civic one (the centre) is not counted toward the fill. ``reserved`` is the ground of the centre's
     plot: it is carved out of the ground the fill is a share of, so which centre is drawn changes no other lot.
+
+    Houses are placed one by one, nearest the plaza first, until ``houses`` of them stand (no limit when None) or the
+    fill share of the ground is covered, so a plan with one house more is the same plan with one more lot: each lot
+    depends only on the ones placed before it.
     """
     settings = ctx.config.get("sites.settlement")
     gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
@@ -425,8 +430,9 @@ def _lots(
         key=lambda p: (((p[0] - centre[0]) / aspect) ** 2 + (p[1] - centre[1]) ** 2, p[1], p[0]),
     )
     streets = np.isin(grid, _STREET) & ~plot
+    built = 0
     for sx, sy in order:
-        if covered >= target:
+        if covered >= target or (houses is not None and built >= houses):
             break
         run_x = int(grid[sy, min(sx + 1, cols - 1)] in _STREET) + int(grid[sy, max(sx - 1, 0)] in _STREET)
         run_y = int(grid[min(sy + 1, rows - 1), sx] in _STREET) + int(grid[max(sy - 1, 0), sx] in _STREET)
@@ -473,6 +479,7 @@ def _lots(
             streets = np.isin(grid, _STREET) & ~plot
             covered += int(building.footprint.sum())
             placed.append(Lot(x0, y0, width, height, shape_seed, building))
+            built += 1
             break
     return roofs, placed
 
@@ -493,17 +500,17 @@ def _shrink(rect: Rect, stream: random.Random, aspect: float, low: float, high: 
     return (x, y if from_start else y + height - new, width, new) if new < height else rect
 
 
-def _storey_rects(ctx: SiteContext, lot: Lot, index: int, count: int) -> list[Rect]:
+def _storey_rects(ctx: SiteContext, lot: Lot, count: int) -> list[Rect]:
     """Return the outer rectangle, within the lot, of each of ``count`` upper storeys of ``lot``, lowest first.
 
     Each storey lies within the one below, so a tall building steps in: an L or a T keeps its whole outline on the first
     storey with chance ``sites.settlement.upper.whole`` and then only one of its wings (the large or the small), which
     reads as a tower on the building; a plain rectangle loses a share of its length at one end. Further storeys shrink
-    again. The draws are on their own stream (``site.layout`` ``cut``), keyed on the lot.
+    again. The draws are on their own stream (``site.layout`` ``cut``), keyed on the lot's position.
     """
     cfg = ctx.config.get("sites.settlement.upper")
     low, high = (float(v) for v in cfg["shrink"])
-    stream = rng.derive(ctx.seed, "site.layout", "cut", index)
+    stream = rng.derive(ctx.seed, "site.layout", "cut", lot.x, lot.y)
     spec = _spec(ctx, lot.kind)
     whole: Rect = (0, 0, lot.width, lot.height)
     wings = list(lot.building.wings) or [whole]
@@ -521,14 +528,14 @@ def _storey_rects(ctx: SiteContext, lot: Lot, index: int, count: int) -> list[Re
     return stack[:count]
 
 
-def _storeys(
-    ctx: SiteContext, grid: np.ndarray, lots: list[Lot], centre: Point, stream: random.Random
-) -> list[np.ndarray]:
+def _storeys(ctx: SiteContext, grid: np.ndarray, lots: list[Lot], centre: Point) -> list[np.ndarray]:
     """Raise the buildings: give each lot storeys, stamp the stairs on the ground floor and return the upper floors.
 
-    The nearer the plaza, the taller; at least the lot nearest it reaches the top floor. Every storey has the
-    footprint of the ground floor (same ``shape_seed``) and its own rooms, and the stairs stand on a floor cell free on
-    both floors. The result holds one full-size grid per floor above the ground (void outside the buildings).
+    The nearer the plaza, the taller; the centre and the first lot reach the top floor. Every storey has the footprint
+    of the ground floor (same ``shape_seed``) and its own rooms, and the stairs stand on a floor cell free on both
+    floors. The result holds one full-size grid per floor above the ground (void outside the buildings). Every draw is
+    keyed on the lot's own position and the distance is measured against the plan's size, never the other lots, so a
+    lot's storeys are the same whichever lots stand beside it.
     """
     top = ctx.floor_count
     if top <= 1 or not lots:
@@ -538,29 +545,31 @@ def _storeys(
     def distance(lot: Lot) -> float:
         return math.hypot((lot.x + lot.width / 2 - centre[0]) / ctx.aspect, lot.y + lot.height / 2 - centre[1])
 
-    reach = max(distance(lot) for lot in lots) or 1.0
+    reach = math.hypot(ctx.cols / ctx.aspect, ctx.rows) / 2.0 or 1.0
     levels = []
     for lot in lots:
         count = 1
         civic = kind_row(ctx.config, lot.kind)["function"] == "civic"
-        while count < top and not civic and stream.random() < chance * (1.0 - 0.7 * distance(lot) / reach):
-            count += 1  # the centre draws nothing from this stream (it is raised to the top below)
-        levels.append(count)
-    levels[min(range(len(lots)), key=lambda i: (distance(lots[i]), i))] = top
+        draw = rng.derive(ctx.seed, "site.layout", "levels", lot.x, lot.y)
+        while count < top and not civic and draw.random() < chance * (1.0 - 0.7 * min(1.0, distance(lot) / reach)):
+            count += 1  # the centre is raised to the top below
+        levels.append(top if civic else count)
+    levels[0] = top
     uppers = [np.zeros_like(grid) for _ in range(top - 1)]
     civic_stairs = rng.derive(ctx.seed, "site.layout", "centre", "stairs")  # the centre's stairs never move the others'
     for index, lot in enumerate(lots):
         spec = _spec(ctx, lot.kind)
-        chooser = civic_stairs if kind_row(ctx.config, lot.kind)["function"] == "civic" else stream
+        civic = kind_row(ctx.config, lot.kind)["function"] == "civic"
+        chooser = civic_stairs if civic else rng.derive(ctx.seed, "site.layout", "stairs", lot.x, lot.y)
         floors = [lot.building.cells]
-        rects = _storey_rects(ctx, lot, index, levels[index] - 1)
+        rects = _storey_rects(ctx, lot, levels[index] - 1)
         for storey in range(1, levels[index]):
             x, y, width, height = rects[storey - 1]
             whole = (width, height) == (lot.width, lot.height)
             upper = build_building(
                 height,
                 width,
-                rng.derive(ctx.seed, "site.layout", "upper", index, storey),
+                rng.derive(ctx.seed, "site.layout", "upper", lot.x, lot.y, storey),
                 spec if whole else replace(spec, shapes=("rect",)),
                 None,
                 random.Random(lot.shape_seed),
@@ -570,7 +579,7 @@ def _storeys(
                 upper = build_building(
                     height,
                     width,
-                    rng.derive(ctx.seed, "site.layout", "upper", index, storey),
+                    rng.derive(ctx.seed, "site.layout", "upper", lot.x, lot.y, storey),
                     spec,
                     None,
                     random.Random(lot.shape_seed),
@@ -1232,20 +1241,19 @@ def _roof_cells(ctx: SiteContext, shape: tuple[int, int], lots: list[Lot]) -> np
     return cells
 
 
-def _plant(
-    ctx: SiteContext,
-    grid: np.ndarray,
-    dry: np.ndarray,
-    roofs: np.ndarray,
-    stream: random.Random,
-    keep_clear: np.ndarray,
-) -> None:
-    """Scatter trees and bushes over free ground, keeping clear of buildings, streets and the centre's plot."""
+def _plant(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, roofs: np.ndarray, keep_clear: np.ndarray) -> None:
+    """Scatter trees and bushes over free ground, keeping clear of buildings, streets and the centre's plot.
+
+    Each cell draws for itself (a grid of numbers fixed by the site seed), so a building raised in one place only clears
+    the trees near it and no tree elsewhere moves.
+    """
     share = float(ctx.config.get("sites.settlement.trees"))
     near = ndimage.binary_dilation(roofs | np.isin(grid, _STREET + (_WALL, _DOOR)), iterations=1)
-    free = [(int(x), int(y)) for y, x in np.argwhere((grid == _VOID) & dry & ~near & ~keep_clear).tolist()]
-    for x, y in stream.sample(free, min(len(free), int(len(free) * share))):
-        grid[y, x] = int(Cell.TREE) if stream.random() < 0.7 else int(Cell.BUSH)
+    free = (grid == _VOID) & dry & ~near & ~keep_clear
+    chance = rng.derive_numpy(ctx.seed, "site.layout", "trees").random(grid.shape)
+    kind = rng.derive_numpy(ctx.seed, "site.layout", "trees", "kind").random(grid.shape)
+    planted = free & (chance < share)
+    grid[planted] = np.where(kind[planted] < 0.7, int(Cell.TREE), int(Cell.BUSH)).astype(grid.dtype)
 
 
 @layout("settlement")
@@ -1299,21 +1307,24 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray,
     if dressing is not None:
         dressing.note("wheel", before, grid, (_WHEEL, int(Cell.AXLE_H), int(Cell.AXLE_V)))
     placed = [lot for lot in (hall, *specialized, mill) if lot is not None]
-    roofs, lots = _lots(ctx, grid, ground, centre, stream, placed, int((ground[plot] & reserved).sum()), plot_mask)
-    if all(
+    houses = ctx.manifest.houses if ctx.manifest is not None else None
+    roofs, lots = _lots(
+        ctx, grid, ground, centre, stream, placed, int((ground[plot] & reserved).sum()), plot_mask, houses
+    )
+    if (houses is None or houses > 0) and all(  # at least one house besides the centre
         kind_row(ctx.config, lot.kind)["function"] == "civic" for lot in lots
-    ):  # at least one house besides the centre
+    ):
         house = _ensure_house(ctx, grid, dry, ground, centre)
         if house is not None:
             lots = [*lots, house]
             roofs[house.y : house.y + house.height, house.x : house.x + house.width] |= house.building.footprint
     if ctx.fall is not None and not lots:  # nothing stood here: the caller draws a single fallen building instead
         return None
-    uppers = _storeys(ctx, grid, lots, centre, stream)
+    uppers = _storeys(ctx, grid, lots, centre)
     wall: tuple[list[Point], list[Point]] = ([], [])
     if ctx.walled:
         wall = _wall(ctx, grid, dry, town, ends)
-    _plant(ctx, grid, dry, roofs, stream, plot_mask)
+    _plant(ctx, grid, dry, roofs, plot_mask)
     standing = lots  # the buildings that stand: all of them, or a ruin's survivors
     if ctx.fall is not None:
         survivors = _fall(ctx, grid, roofs, uppers, lots, wall)
