@@ -459,6 +459,40 @@ def apply_history_action(world: World, config: Config, state: HistoryState, acti
         state.scroll = max(0, state.scroll + action[1] * max(1, body - 1))
 
 
+def history_loop(
+    world: World,
+    config: Config,
+    state: HistoryState,
+    reader: KeyReader,
+    writer: DiffWriter,
+    size_of: Callable[[], Size],
+    color: bool,
+    ascii_only: bool,
+) -> None:
+    """Draw and handle keys until the user quits the viewer, on a reader and writer already in the terminal's modes.
+
+    The explorer calls this with its own reader and writer (and invalidates the writer afterwards); :func:`run_history`
+    wraps it for the command line.
+    """
+    help_open = False
+    while True:
+        size = size_of()
+        writer.draw(compose_history_frame(world, config, state, size, help_open, color, ascii_only))
+        action = resolve_history_action(reader.read_key(), config, state.prompt is not None)
+        if action[0] == "resize":
+            writer.invalidate()
+            continue
+        if help_open:
+            help_open = False  # any key closes the help and does nothing else
+            continue
+        if action[0] == "quit":
+            return
+        if action[0] == "help":
+            help_open = True
+            continue
+        apply_history_action(world, config, state, action, size)
+
+
 def run_history(
     world: World,
     config: Config,
@@ -485,29 +519,19 @@ def run_history(
     reader = reader if reader is not None else make_reader()
     writer = DiffWriter(out if out is not None else sys.stdout, color_mode)
     size_of = get_size if get_size is not None else _terminal_size
-    state = initial_state(world, config, start)
-    help_open = False
     with reader:
         writer.enter()
         try:
-            while True:
-                size = size_of()
-                writer.draw(
-                    compose_history_frame(world, config, state, size, help_open, color_mode != "none", ascii_only)
-                )
-                action = resolve_history_action(reader.read_key(), config, state.prompt is not None)
-                if action[0] == "resize":
-                    writer.invalidate()
-                    continue
-                if help_open:
-                    help_open = False  # any key closes the help and does nothing else
-                    continue
-                if action[0] == "quit":
-                    break
-                if action[0] == "help":
-                    help_open = True
-                    continue
-                apply_history_action(world, config, state, action, size)
+            history_loop(
+                world,
+                config,
+                initial_state(world, config, start),
+                reader,
+                writer,
+                size_of,
+                color_mode != "none",
+                ascii_only,
+            )
         finally:
             writer.leave()
 

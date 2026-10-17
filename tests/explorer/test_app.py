@@ -11,11 +11,11 @@ import numpy as np
 
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.explorer.app import compose_frame, run
+from biomegen.explorer.app import compose_frame, history_start, run
 from biomegen.explorer.state import ViewState, move_cursor, pan_view, step_in
 from biomegen.sampling.detail import SCALE_LOCAL, SCALE_SITE, SCALE_ZOOM
 from biomegen.sites import site_geometry
-from biomegen.world.entities import POI
+from biomegen.world.entities import POI, ChronicleEvent
 from biomegen.world.overlay import Overlay
 from biomegen.world.tile import Biome
 from tests.explorer.replay import RecordingOut
@@ -357,3 +357,35 @@ def test_the_site_frame_is_repeatable(config: Config) -> None:
     first = _frame(world, config, state).screen
     second = _frame(world, config, state).screen
     assert np.array_equal(first.glyph, second.glyph) and np.array_equal(first.bg, second.bg)
+
+
+def _village_with_events():
+    """The village world with two events at the village (years 90 and 120, the later in month 5) and one elsewhere."""
+    world = _village_world()
+    world.year = 300
+    world.chronicle = [
+        ChronicleEvent(0, 90, "settling", poi_ids=[0], text="Dunmere is settled.", month=2),
+        ChronicleEvent(1, 100, "war", location=(3, 3), text="A far war.", month=1),
+        ChronicleEvent(2, 120, "succession", poi_ids=[0], text="Dunmere crowns a new lord.", month=5),
+    ]
+    return world
+
+
+def test_the_history_key_opens_the_viewer_and_q_returns_to_the_explorer(config: Config) -> None:
+    out = _run(_village_world(), config, "t", "q")
+    assert _shown(out, "History of Testland") and "History of" not in _screen(out)
+
+
+def test_the_history_viewer_opens_at_the_latest_event_at_the_cursor(config: Config) -> None:
+    out = _run(_village_with_events(), config, "t", "q")
+    assert _shown(out, "year 120, month 5")
+
+
+def test_with_no_event_at_the_cursor_the_viewer_opens_at_the_present(config: Config) -> None:
+    world = _village_with_events()
+    state = ViewState(cx=3, cy=5)
+    assert history_start(world, config, state) == (300, config.get("history.months_per_year"))
+
+
+def test_the_history_start_is_the_latest_event_here(config: Config) -> None:
+    assert history_start(_village_with_events(), config, ViewState(cx=20, cy=10)) == (120, 5)

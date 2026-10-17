@@ -104,7 +104,8 @@ def controls_line(config: Config) -> str:
 
     return (
         f"[arrows] move  [WSAD] pan  [{show('zoom')}] zoom  [{show('local')}] local  [{show('toggle_scale')}] fit/1:1  "
-        f"[{show('cycle_view')}] view  [{show('help')}] help  [{show('export_view')}/{show('export_world')}] export  "
+        f"[{show('cycle_view')}] view  [{show('history')}] history  [{show('help')}] help  "
+        f"[{show('export_view')}/{show('export_world')}] export  "
         f"[{show('quit')}] quit"
     )
 
@@ -212,6 +213,7 @@ _HELP_LINES = (
     "{local}   step in: map -> zoom -> local, or into the site of a POI (arrows then move one cell)",
     "{toggle_scale}   fit-to-screen <-> 1:1 (map only)",
     "{cycle_view}   next view (terrain, political, elevation, temperature, rainfall)",
+    "{history}   history viewer, opened at the latest event at the cursor",
     "{floor_up} / {floor_down}   floor up / down on a structure",
     "{export_view} / {export_world}   export the view / the whole world",
     "{help}   this help      {quit} or Esc   quit",

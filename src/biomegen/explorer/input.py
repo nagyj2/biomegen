@@ -44,6 +44,7 @@ _BOUND_ACTIONS = (
     ("local", ("local",), "z"),
     ("toggle_scale", ("toggle_scale",), "f"),
     ("cycle_view", ("cycle_view",), "v"),
+    ("history", ("history",), "t"),
     ("help", ("help",), "?"),
     ("floor_up", ("floor", 1), ">"),
     ("floor_down", ("floor", -1), "<"),

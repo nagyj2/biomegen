@@ -27,6 +27,7 @@ from ..sites import SiteGeometry, site_geometry, window_sampler
 from ..world.overlay import Overlay
 from ..world.world import World
 from .exports import export_screen, export_world
+from .history_viewer import Stop, history_loop, initial_state
 from .input import Action, KeyReader, make_reader, resolve_action
 from .panel import build_panel, draw_help, panel_color
 from .prefetch import idle_work
@@ -305,6 +306,15 @@ def _export(world: World, config: Config, state: ViewState, overlay: Overlay, fr
     state.notify(f"exported {names}{suffix}")
 
 
+def history_start(world: World, config: Config, state: ViewState) -> Stop:
+    """Return the moment the history viewer opens at: the latest event at the cursor, else the present."""
+    events = world.events_at(state.cx, state.cy)
+    if events:
+        latest = max(events, key=lambda event: (event.year, event.month, event.id))
+        return latest.year, latest.month
+    return world.year, int(config.get("history.months_per_year"))
+
+
 def _drain_moves(world: World, config: Config, state: ViewState, reader: KeyReader) -> Optional[Action]:
     """Apply every move key already waiting, without drawing between them; return the first other action, if any.
 
@@ -405,6 +415,18 @@ def run(
                     state.notify(f"view: {view_names(config)[state.view_index]}")
                 elif name == "floor":
                     cycle_floor(world, config, state, action[1])
+                elif name == "history":
+                    history_loop(
+                        world,
+                        config,
+                        initial_state(world, config, history_start(world, config, state)),
+                        reader,
+                        writer,
+                        size_of,
+                        color_mode != "none",
+                        ascii_only,
+                    )
+                    writer.invalidate()  # the viewer drew the whole screen
                 elif name == "export":
                     _export(world, config, state, overlay, frame, action[1])
                 elif name == "help":
