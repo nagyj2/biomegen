@@ -325,13 +325,30 @@ def _events_layout(world: World, config: Config, state: HistoryState, width: int
     return state._events[1:]
 
 
+def _help_lines(config: Config) -> tuple[str, ...]:
+    """The help text: the keys, then what the marks on the map and the powers list mean (from the config's glyphs)."""
+    glyphs = config.get("history.viewer.glyphs")
+    marks = "   ".join(f"{glyph} {kind}" for kind, glyph in glyphs.items())
+    years = int(config.get("history.viewer.marker_years"))
+    return (
+        *_HISTORY_HELP[:-1],
+        "",
+        "Marks on the map: events that had a place",
+        f"  {marks}",
+        f"  bold: this moment's events; faded: those of the last {years} years",
+        "Powers list: the colour swatch is the power's colour on the map;",
+        "  (vassal of X) means it had bowed to X by then",
+        _HISTORY_HELP[-1],
+    )
+
+
 def _title(world: World, state: HistoryState) -> str:
     year, month = state.at
     index = stop_index(state.moments, state.at)
     place = "before the first change" if index < 0 else f"change {index + 1}/{len(state.moments)}"
     if state.moments and index == len(state.moments) - 1 and year >= state.moments[-1][0]:
         place += ", the present map"
-    return f"History of {world.island_name or 'the island'} - year {year}, month {month} ({place})"
+    return f"History of {world.island_name or 'the island'}  seed {world.seed}  -  year {year}, month {month} ({place})"
 
 
 def compose_history_frame(
@@ -375,7 +392,7 @@ def compose_history_frame(
             _put(screen, status_row, max(0, cols - len(state.message) - 1), state.message, head, bg, bold=True)
     _put(screen, rows - 1, 0, _hint_line(config, state.prompt is not None), dim, bg)
     if help_open:
-        draw_help(screen, config, _HISTORY_HELP)
+        draw_help(screen, config, _help_lines(config))
     return screen
 
 

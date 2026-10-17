@@ -241,3 +241,13 @@ def test_an_event_long_before_the_window_is_not_marked(world: World, cfg: Config
     _, _, frame = _marked(world, cfg, (300, 6))
     row, col = _cell(world, cfg, (20, 10))
     assert frame.glyph[row, col] != "x"
+
+
+def test_the_title_shows_the_seed(world: World, cfg: Config) -> None:
+    assert f"seed {world.seed}" in _text(world, cfg, initial_state(world, cfg))[0]
+
+
+def test_the_help_explains_the_map_marks(world: World, cfg: Config) -> None:
+    grid = compose_history_frame(world, cfg, initial_state(world, cfg), SIZE, help_open=True)
+    text = "\n".join("".join(row) for row in grid.glyph)
+    assert "Marks on the map" in text and "> expansion" in text and "x battle" in text
