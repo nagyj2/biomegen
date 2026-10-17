@@ -126,7 +126,10 @@ VALUES: Dict[str, Any] = {
     # ``core_share`` of its present area when it is founded, and one smaller than ``min_cells`` never expands or loses
     # a band under ``min_band_cells`` cells.
     "territory": {
-        "expansions": {"major": [1, 2], "city_state": [0, 1], "tribal": [0, 1]},
+        "expansions": {"major": [1, 2], "city_state": [0, 1], "tribal": [0, 1], "fallen": [0, 1]},
+        "fallen_area_km2": [50000.0, 300000.0],  # the land a fallen realm held when it fell (a draw per realm)
+        "fallen_reach": 2.5,  # it lies within this many radii (of a disc of that area) of its ruins
+        "victor_bias": 0.5,  # a conquering realm's cells count as this much nearer the ruins when the land is chosen
         "expansion_share": [0.15, 0.3],
         "core_share": 0.3,
         "min_cells": 12,

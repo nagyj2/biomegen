@@ -8,7 +8,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
-from biomegen.world.territory import WILD
+from biomegen.world.territory import WILD, fallen_owner
 from biomegen.world.world import World
 
 SEEDS = (42, 7)
@@ -24,8 +24,8 @@ def world(request: pytest.FixtureRequest, cfg: Config) -> World:
     return pipeline.generate(cfg, request.param)
 
 
-def _expansions(world: World):
-    return [event for event in world.chronicle if event.kind == "expansion"]
+def _expansions(world: World):  # the annexations of living realms
+    return [event for event in world.chronicle if event.kind == "expansion" and event.realm_ids]
 
 
 def test_a_world_has_expansions(world: World) -> None:
@@ -97,5 +97,66 @@ def test_with_expansion_off_a_realm_is_founded_whole(cfg: Config) -> None:
     config = load_config(None)
     config.data["history"]["kinds"] = [k for k in config.get("history.kinds") if k != "expansion"]
     world = pipeline.generate(config, 7)
-    founding = [c for c in world.territory if c.kind == "founding"]
-    assert not _expansions(world) and all(len(c.cells) == int((world.realm_id == c.to_owner).sum()) for c in founding)
+    founding = [c for c in world.territory if c.kind == "founding" and c.to_owner >= 0]
+    assert not [e for e in world.chronicle if e.kind == "expansion"] and all(
+        len(c.cells) == int((world.realm_id == c.to_owner).sum()) for c in founding
+    )
+
+
+# --- fallen realms ----------------------------------------------------------------------------------------------
+
+
+def _just_before(world: World, year: int, month: int) -> np.ndarray:
+    return world.owners_at(year, month - 1) if month > 1 else world.owners_at(year - 1)
+
+
+def _falls(world: World):
+    return [event for event in world.chronicle if event.kind == "fall"]
+
+
+def test_a_fallen_realm_holds_land_just_before_it_falls(world: World) -> None:
+    held = [int((_just_before(world, e.year, e.month) == fallen_owner(e.fallen_ids[0])).sum()) for e in _falls(world)]
+    assert held and all(count >= 3 for count in held)
+
+
+def test_a_fallen_realm_holds_nothing_once_it_has_fallen(world: World) -> None:
+    assert all(not (world.owners_at(e.year, e.month) == fallen_owner(e.fallen_ids[0])).any() for e in _falls(world))
+
+
+def test_a_fallen_realm_holds_nothing_before_it_is_founded(world: World) -> None:
+    for fallen in world.fallen_realms:
+        founding = next(e for e in world.chronicle if e.kind == "founding" and e.fallen_ids == [fallen.id])
+        assert not (_just_before(world, founding.year, founding.month) == fallen_owner(fallen.id)).any()
+
+
+def test_a_fallen_realm_holds_its_ruins_before_it_falls(world: World) -> None:
+    for event in _falls(world):
+        x, y = world.fallen_realms[event.fallen_ids[0]].location
+        assert _just_before(world, event.year, event.month)[y, x] == fallen_owner(event.fallen_ids[0])
+
+
+def test_a_fallen_realms_land_stays_on_the_landmass_of_its_ruins(world: World) -> None:
+    for event in _falls(world):
+        x, y = world.fallen_realms[event.fallen_ids[0]].location
+        owner = fallen_owner(event.fallen_ids[0])
+        ys, xs = np.nonzero(_just_before(world, event.year, event.month) == owner)
+        assert (world.landmass_id[ys, xs] == world.landmass_id[y, x]).all()
+
+
+def test_a_fall_hands_the_land_to_the_wild_or_the_victor(world: World) -> None:
+    for change in (c for c in world.territory if c.kind == "fall"):
+        event = world.chronicle[change.event_id]
+        assert change.to_owner == WILD or change.to_owner in event.realm_ids
+
+
+def test_a_fallen_realms_expansion_takes_wild_land_for_it(world: World) -> None:
+    by_event = {c.event_id: c for c in world.territory if c.kind == "expansion"}
+    for event in (e for e in world.chronicle if e.kind == "expansion" and e.fallen_ids):
+        change = by_event[event.id]
+        assert (change.from_owner, change.to_owner) == (WILD, fallen_owner(event.fallen_ids[0]))
+
+
+def test_a_fallen_realm_expands_only_inside_its_life(world: World) -> None:
+    for event in (e for e in world.chronicle if e.kind == "expansion" and e.fallen_ids):
+        fallen = world.fallen_realms[event.fallen_ids[0]]
+        assert fallen.founded < event.year < fallen.fell
