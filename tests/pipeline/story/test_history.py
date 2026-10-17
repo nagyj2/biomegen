@@ -354,3 +354,14 @@ def test_the_overlord_wins_the_battle_of_its_conquest_war(world: World) -> None:
     for vassal, liege in _vassal_ties(world):
         for battle in _events(world, "battle", vassal, liege):
             assert battle.realm_ids[0] == liege and "decisive" in battle.tags
+
+
+def test_every_event_tick_is_its_absolute_month(world: World, cfg: Config) -> None:
+    # The tick is the year and month flattened to one number, the same count a simulation's clock keeps.
+    months = cfg.get("history.months_per_year")
+    assert all(event.tick == event.year * months + event.month - 1 for event in world.chronicle)
+
+
+def test_every_generated_event_is_derived(world: World) -> None:
+    # The history and the annals are derived from the present state; only a simulation emits events that are not.
+    assert all(event.derived for event in world.chronicle)

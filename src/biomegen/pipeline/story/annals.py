@@ -180,7 +180,7 @@ def _roads(world: World, config: Config, seed: int) -> None:
             event.month = month
             when[number] = (year, month)
             laid.append((link, event))
-    merge_events(world, [event for _, event in laid])
+    merge_events(world, [event for _, event in laid], months)
     for link, event in laid:
         link.event_id = event.id
 
@@ -203,7 +203,7 @@ def run(world: World, config: Config, seed: int) -> None:
         elif poi.civilized and poi.kind not in settle_kinds and poi.founded > 0 and not _dated_by_history(world, poi):
             _settling(world, config, seed, ledger, index)
     events: list[ChronicleEvent] = [event for _, event in sorted(ledger.ordered(), key=lambda item: item[0][2])]
-    merge_events(world, events)
+    merge_events(world, events, int(config.get("history.months_per_year")))
     for event in events:
         for index in event.poi_ids:
             world.place(index).event_ids.append(event.id)

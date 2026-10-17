@@ -188,6 +188,8 @@ def chronicle_data(world: World, events: Optional[Sequence[ChronicleEvent]] = No
                 "id": e.id,
                 "year": e.year,
                 "month": e.month,
+                "tick": e.tick,
+                "derived": e.derived,
                 "kind": e.kind,
                 "text": e.text,
                 "tags": list(e.tags),

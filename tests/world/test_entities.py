@@ -13,6 +13,7 @@ from biomegen.world.entities import (
     Predecessor,
     Realm,
     Relation,
+    month_tick,
 )
 
 
@@ -125,3 +126,12 @@ def test_a_predecessors_children_are_not_shared() -> None:
 def test_a_poi_starts_with_no_style() -> None:
     # Only a homestead or a generated hamlet has a style (a tables.poi_styles row).
     assert POI(kind="tower", x=0, y=0, interior_seed=1).style == ""
+
+
+def test_a_hand_made_event_is_not_derived() -> None:
+    # Only the generation marks its events derived; an event built by hand (a simulation's) is not.
+    assert ChronicleEvent(0, 10, "founding").derived is False
+
+
+def test_month_tick_counts_months_from_the_first_month_of_year_zero() -> None:
+    assert (month_tick(0, 1, 12), month_tick(1, 1, 12), month_tick(3, 5, 12)) == (0, 12, 40)

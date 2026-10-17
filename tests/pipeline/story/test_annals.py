@@ -117,20 +117,20 @@ def _merge_world() -> World:
 def test_new_events_slot_in_by_moment_and_everything_is_renumbered() -> None:
     world = _merge_world()
     new = [ChronicleEvent(-1, 10, "creation", month=5), ChronicleEvent(-1, 5, "creation", month=12)]
-    merge_events(world, new)
+    merge_events(world, new, 12)
     assert [(e.year, e.month) for e in world.chronicle] == [(5, 12), (10, 2), (10, 5), (10, 9), (20, 1)]
     assert [e.id for e in world.chronicle] == [0, 1, 2, 3, 4]
 
 
 def test_a_new_event_of_the_same_month_goes_after_the_old_one() -> None:
     world = _merge_world()
-    merge_events(world, [ChronicleEvent(-1, 10, "creation", month=9)])
+    merge_events(world, [ChronicleEvent(-1, 10, "creation", month=9)], 12)
     assert [e.kind for e in world.chronicle][1:3] == ["war", "creation"]
 
 
 def test_the_ids_the_world_keeps_follow_the_renumbering() -> None:
     world = _merge_world()
-    merge_events(world, [ChronicleEvent(-1, 5, "creation", month=1), ChronicleEvent(-1, 10, "creation", month=5)])
+    merge_events(world, [ChronicleEvent(-1, 5, "creation", month=1), ChronicleEvent(-1, 10, "creation", month=5)], 12)
     assert world.chronicle[world.pois[0].event_ids[0]].kind == "fall"
     assert world.chronicle[world.territory[0].event_id].kind == "war"
 
@@ -309,3 +309,9 @@ def test_a_spur_runs_into_a_road_that_has_the_cell_it_ends_on(world: World) -> N
         joined = set(world.road_links[link.joins].cells.tolist())
         assert joined & set(link.cells.tolist()) and all(c < world.width * world.height for c in joined)
         assert width > 0
+
+
+def test_a_merged_event_gets_the_tick_of_its_moment() -> None:
+    world = _merge_world()
+    merge_events(world, [ChronicleEvent(-1, 10, "creation", month=5)], 12)
+    assert [e.tick for e in world.chronicle if e.kind == "creation"] == [10 * 12 + 5 - 1]

@@ -273,6 +273,13 @@ class ChronicleEvent:
         default_factory=list
     )  # (start, end, REF_KINDS entry, id) per name in text
     month: int = 1  # 1 to history.months_per_year within ``year``; events of a year are in month order
+    tick: int = 0  # the absolute month, ``month_tick(year, month, ...)``; a simulation's clock reads the same number
+    derived: bool = False  # made by the generation from the present state (False: a simulation emitted it)
+
+
+def month_tick(year: int, month: int, months_per_year: int) -> int:
+    """Return the absolute month of ``month`` (1 upward) in ``year``: month 1 of year 0 is tick 0."""
+    return year * months_per_year + month - 1
 
 
 @dataclass

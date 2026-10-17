@@ -363,3 +363,11 @@ def test_stats_count_the_styles_of_hamlets_and_homesteads(generated: World) -> N
 def test_the_json_settlements_carry_their_style(generated: World) -> None:
     data = chronicle_data(generated)
     assert {s["style"] for s in data["settlements"] if s["kind"] == "hamlet"} <= {"farm", "mill", "lodge"}
+
+
+def test_the_json_lists_each_events_tick_and_whether_it_is_derived() -> None:
+    event = ChronicleEvent(0, 100, "founding", [0], text="A is founded.", month=3, tick=1202, derived=True)
+    world = _tiny()
+    world.chronicle = [event]
+    first = chronicle_data(world)["events"][0]
+    assert (first["tick"], first["derived"]) == (1202, True)

@@ -7,7 +7,7 @@ from typing import Optional
 
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import EVENT_KINDS, NO_LOCATION, ChronicleEvent
+from ...world.entities import EVENT_KINDS, NO_LOCATION, ChronicleEvent, month_tick
 from ...world.world import World
 
 
@@ -59,6 +59,7 @@ class Ledger:
             template=str(stream.choice(pool)),
             tags=tuple(tags),
             salience=salience,
+            derived=True,
         )
         self._pending.append((year, EVENT_KINDS.index(kind), len(self._pending), event))
         return event
@@ -86,7 +87,7 @@ class Ledger:
         return [(item[:3], item[3]) for item in sorted(self._pending, key=lambda item: item[:3])]
 
     def finish(self, seed: int) -> list[ChronicleEvent]:
-        """Return the events oldest first with ``id`` set to their index and a ``month`` each.
+        """Return the events oldest first with ``id`` set to their index, a ``month`` and the ``tick`` of it each.
 
         The months of one year are drawn together and sorted, then dealt out in event order, so an event's month never
         precedes an earlier event's and causality within a year holds; the draw is keyed on the year alone.
@@ -101,18 +102,22 @@ class Ledger:
                 drawn = sorted(stream.randint(1, months) for _ in range(index + 1 - start))
                 for placed, month in zip(events[start : index + 1], drawn, strict=True):
                     placed.month = month
+                    placed.tick = month_tick(placed.year, month, months)
                 start = index + 1
         return events
 
 
-def merge_events(world: World, events: Sequence[ChronicleEvent]) -> None:
+def merge_events(world: World, events: Sequence[ChronicleEvent], months_per_year: int) -> None:
     """Merge ``events`` (each with its ``year`` and ``month`` set) into the finished chronicle.
 
     The chronicle stays ordered by ``(year, month)``, an existing event keeping its place before a new one of the same
     month; every event is renumbered and the ids the world keeps (``POI.event_ids``, ``TerritoryChange.event_id`` and
     ``RoadLink.event_id``)
-    follow. The new events' ``poi_ids`` are not linked back here: the caller appends each new id to its POIs.
+    follow. A new event gets its ``tick`` from its moment (``months_per_year`` is ``history.months_per_year``). The new
+    events' ``poi_ids`` are not linked back here: the caller appends each new id to its POIs.
     """
+    for event in events:
+        event.tick = month_tick(event.year, event.month, months_per_year)
     old = world.chronicle
     order = sorted(
         [(e.year, e.month, 0, i) for i, e in enumerate(old)] + [(e.year, e.month, 1, i) for i, e in enumerate(events)]
