@@ -19,6 +19,7 @@ import numpy as np
 
 from ..util.units import GridScale, grid_scale
 from .entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Lake, Predecessor, Realm, Relation, River, Ruler
+from .territory import OwnerTimeline, TerritoryChange
 from .tile import Biome, Relief, TileView, WaterType
 
 
@@ -118,6 +119,8 @@ class World:
         self.fallen_realms: list[FallenRealm] = []
         self.rulers: list[Ruler] = []  # every realm's rulers, realm by realm, oldest first
         self.predecessors: list[Predecessor] = []  # realms that ended in a clean split
+        self.territory: list[TerritoryChange] = []  # cells that changed hands, oldest first (``realm_id`` is the end)
+        self._owner_timeline: Optional[OwnerTimeline] = None
 
         # Terrain style row name (filled by the terrain stage; metadata, not hashed).
         self.terrain_style: str = ""
@@ -215,6 +218,21 @@ class World:
     def events_of(self, realm_id: int) -> list[ChronicleEvent]:
         """Return the events that name realm ``realm_id``, oldest first."""
         return [event for event in self.chronicle if realm_id in event.realm_ids]
+
+    def owners_at(self, year: int, month: Optional[int] = None) -> np.ndarray:
+        """Return the read-only ``[y, x]`` owner grid after every territory change at or before the moment.
+
+        With no ``month`` the moment is the end of ``year``. Owners are realm ids, ``WILD`` or a fallen realm's
+        ``fallen_owner`` (see :mod:`biomegen.world.territory`); at or after the last change it equals ``realm_id``.
+        """
+        timeline = self._owner_timeline
+        if timeline is None or timeline.size != len(self.territory):
+            timeline = self._owner_timeline = OwnerTimeline(self.realm_id, self.territory)
+        return timeline.owners_at(year, month)
+
+    def territory_moments(self) -> list[tuple[int, int]]:
+        """Return each distinct ``(year, month)`` at which land changed hands, oldest first."""
+        return sorted({change.moment for change in self.territory})
 
     # ------------------------------------------------------------------ reproducibility
     def fingerprint(self) -> str:
