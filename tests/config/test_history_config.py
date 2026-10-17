@@ -32,6 +32,8 @@ def test_every_event_kind_has_wording() -> None:
         "expansion_fallen",
         "creation_tower",
         "creation_dungeon",
+        "creation_camp",
+        "creation_camp_wild",
         "road_trunk",
         "road_spur",
         "creation_watchtower",

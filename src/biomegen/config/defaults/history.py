@@ -194,6 +194,7 @@ VALUES: Dict[str, Any] = {
         "watchtower": "war",
         "shrine": "succession",
         "tower": "creation",
+        "camp": "creation",
         "dungeon": "creation",
     },
     # Annals (pipeline/story/annals.py): the minor events the history leaves out. A tower or dungeon placed by location

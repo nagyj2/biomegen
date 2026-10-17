@@ -5,6 +5,7 @@
 #
 # Placement (the location pass of the pois stage), in `priority` order, lowest first:
 #   priority          order of the passes; unique
+#   generated         (optional, default true) false keeps the kind's code but never places one (the static boats: units later)
 #   source            where the kind comes from: "location" (placed by score), "history" (made from chronicle events) or
 #                     "both"
 #   km2_per_poi       one POI per this much land (sea, for on_water kinds) in km², times `poi.density`; omit for a
@@ -179,6 +180,7 @@ hooks_near = ["Drovers from {near} rest at {name}.", "{name} is a camp a few day
 [pois.boat]
 priority = 50
 source = "location"
+generated = false
 km2_per_poi = 2200000.0
 min_spacing_km = 350.0
 biomes = ["shallow", "deep", "lake"]

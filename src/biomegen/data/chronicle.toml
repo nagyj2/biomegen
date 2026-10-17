@@ -3,8 +3,8 @@
 # name. Override one row with e.g. `[tables.chronicle.war]` + `templates = [...]` in a user config.
 #
 # chronicle, one row per kind of event text (founding, founding_fallen, settling, expansion, expansion_fallen,
-# creation_tower, creation_dungeon, road_trunk, road_spur, conquest, succession, war, war_ended, war_fallen, rivalry,
-# treaty_alliance, treaty_trade, battle, peace, fall, fall_conquered):
+# creation_tower, creation_dungeon, creation_camp, creation_camp_wild, road_trunk, road_spur, conquest, succession, war,
+# war_ended, war_fallen, rivalry, treaty_alliance, treaty_trade, battle, peace, fall, fall_conquered):
 #   templates       sentences to pick from; they never name a nearby place
 #   templates_near  optional; sentences that name a nearby settlement with {near}. An event draws from these as well
 #                   only when a settlement of the same landmass lies within `history.near_km`; each must contain {near}
@@ -16,6 +16,8 @@
 #   expansion_fallen  {fallen}                                    a fallen realm doing the same
 #   creation_tower    {place}                                     a tower raised (minor event)
 #   creation_dungeon  {place}                                     a dungeon delved (minor event)
+#   creation_camp     {place} {realm} {short}                     a camp pitched on a realm's land (minor event)
+#   creation_camp_wild {place}                                    a camp pitched on wild land (minor event)
 #   creation_watchtower {place}                                   a watchtower raised when a war begins (minor event)
 #   abandon_watchtower, dismantle_watchtower {place}              a watchtower left empty / torn down at the peace (minor)
 #   occupation_tower  {place}                                     bandits take an abandoned watchtower (minor)
@@ -309,4 +311,23 @@ templates = [
 templates = [
   "Bandits take the empty watchtower of {place}.",
   "{place}, long abandoned, is claimed by bandits and becomes their tower.",
+]
+
+# A camp pitched (a minor event: a camp marks a building project, not a permanent structure). creation_camp: by the realm
+# that held the land ({realm} {short}); creation_camp_wild: where no realm did.
+
+[chronicle.creation_camp]
+templates = [
+  "{short} pitches a camp at {place}.",
+  "Workers of {realm} make camp at {place}.",
+  "{place} is set up as a camp of {short}.",
+]
+templates_near = [
+  "{short} pitches a camp at {place}, a few days from {near}.",
+]
+
+[chronicle.creation_camp_wild]
+templates = [
+  "A camp is pitched at {place}.",
+  "Travellers make camp at {place}, beyond any realm's rule.",
 ]

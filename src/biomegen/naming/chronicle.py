@@ -140,6 +140,10 @@ def _name_the_place(world: World, event: ChronicleEvent, tokens: dict[str, objec
     if event.kind in ("creation", "abandon", "occupation"):
         tokens["place"] = world.place(event.poi_ids[0]).name
         where["place"] = (REF_POI, event.poi_ids[0])
+        if event.realm_ids:  # a camp pitched on a realm's land: the realm made it
+            realm = world.realms[event.realm_ids[0]]
+            tokens.update(realm=realm.name, short=realm.short)
+            where.update(realm=(REF_REALM, realm.id), short=(REF_REALM, realm.id))
     elif event.kind == "settling" and "free" in event.tags:
         tokens["town"] = world.pois[event.poi_ids[0]].name
         where["town"] = (REF_POI, event.poi_ids[0])

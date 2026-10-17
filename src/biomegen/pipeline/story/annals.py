@@ -42,7 +42,11 @@ def _month(stream_roll: float, low: int, months: int) -> int:
 
 
 def _creation(world: World, config: Config, seed: int, ledger: Ledger, index: int, first: int, ancient: float) -> None:
-    """Add the creation of the tower or dungeon ``index``; dates a POI placed by location."""
+    """Add the creation of the tower, dungeon or camp ``index``; dates a POI placed by location.
+
+    A camp is made by whoever holds the land when it is made (a realm: ``creation_camp``) or by no one
+    (``creation_camp_wild``): it marks a building project, not a permanent structure.
+    """
     poi = world.pois[index]
     stream = rng.derive(seed, "history", "annals", "creation", index)
     roll_ancient, roll_year, roll_month = (stream.random() for _ in range(3))
@@ -54,12 +58,19 @@ def _creation(world: World, config: Config, seed: int, ledger: Ledger, index: in
         year = 0 if roll_ancient < ancient else first + int(roll_year * (world.year - first + 1))
         low = 1
         poi.founded = year
+    month = _month(roll_month, low, months)
+    row = f"creation_{poi.kind}"
+    realms: list[int] = []
+    if poi.kind == "camp":
+        owner = int(world.owners_at(year, month)[poi.y, poi.x])
+        row, realms = ("creation_camp", [owner]) if owner >= 0 else ("creation_camp_wild", [])
     event = ledger.add(
         year,
         "creation",
-        f"creation_{poi.kind}",
+        row,
         ("poi", index),
         seed,
+        realm_ids=realms,
         poi_ids=[index],
         location=(poi.x, poi.y),
         near_poi=nearest_settlement(world, config, poi.x, poi.y),
@@ -67,7 +78,7 @@ def _creation(world: World, config: Config, seed: int, ledger: Ledger, index: in
         salience="minor",
     )
     if event is not None:
-        event.month = _month(roll_month, low, months)
+        event.month = month
 
 
 def _watchtower(world: World, config: Config, seed: int, ledger: Ledger, ref: int) -> None:
@@ -178,7 +189,7 @@ def run(world: World, config: Config, seed: int) -> None:
     for index, poi in enumerate((*world.pois, *world.vanished)):
         if poi.extra.get("fate"):
             _watchtower(world, config, seed, ledger, index)
-        elif poi.kind in ("tower", "dungeon"):
+        elif poi.kind in ("tower", "dungeon", "camp"):
             _creation(world, config, seed, ledger, index, first, ancient)
         elif poi.civilized and poi.kind not in settle_kinds and poi.founded > 0 and not _dated_by_history(world, poi):
             _settling(world, config, seed, ledger, index)

@@ -296,7 +296,7 @@ def place_by_location(world: World, config: Config, seed: int, sources: Collecti
     placed = [(p.x, p.y) for p in world.pois]
     for kind in sorted(types, key=lambda name: (int(types[name].get("priority", 0)), name)):
         row = types[kind]
-        if row.get("source", "location") not in sources or "km2_per_poi" not in row:
+        if row.get("source", "location") not in sources or "km2_per_poi" not in row or not row.get("generated", True):
             continue
         on_water = bool(row.get("on_water", False))
         count = round(area_km2[not on_water] / float(row["km2_per_poi"]) * density)

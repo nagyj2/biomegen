@@ -253,3 +253,42 @@ def test_bandits_take_an_abandoned_watchtower_after_the_peace(world: World) -> N
 def test_a_dismantled_watchtowers_events_name_it(world: World) -> None:
     for index, poi in enumerate(world.vanished, start=len(world.pois)):
         assert all(poi.name in e.text for e in world.chronicle if e.poi_ids == [index])
+
+
+# --- camps and boats ------------------------------------------------------------------------------------------------
+
+
+def _camps(world: World):
+    return [(i, p) for i, p in enumerate(world.pois) if p.kind == "camp"]
+
+
+def test_every_camp_has_one_minor_creation_event(world: World) -> None:
+    assert _camps(world)
+    for index, _poi in _camps(world):
+        (event,) = _creation(world, index)
+        assert event.salience == "minor"
+
+
+def test_a_camp_is_made_by_the_realm_that_held_the_land_then(world: World) -> None:
+    from biomegen.world.territory import WILD
+
+    for index, poi in _camps(world):
+        (event,) = _creation(world, index)
+        owner = int(world.owners_at(event.year, event.month)[poi.y, poi.x])
+        assert event.realm_ids == ([owner] if owner >= 0 else []) and (owner >= 0 or owner == WILD or owner < 0)
+
+
+def test_a_camps_text_names_its_place_and_its_realm(world: World) -> None:
+    for index, poi in _camps(world):
+        (event,) = _creation(world, index)
+        assert poi.name in event.text and "{" not in event.text
+        if event.realm_ids:
+            assert world.realms[event.realm_ids[0]].short in event.text
+
+
+def test_no_boat_is_placed(world: World) -> None:
+    assert not [p for p in world.pois if p.kind == "boat"]
+
+
+def test_the_boat_row_is_kept_but_switched_off(cfg: Config) -> None:
+    assert cfg.get("tables.pois.boat.generated") is False and cfg.get("tables.pois.boat.km2_per_poi") > 0
