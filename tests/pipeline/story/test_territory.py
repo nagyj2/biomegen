@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 
@@ -263,3 +267,80 @@ def test_a_predecessor_holds_nothing_before_it_is_founded_or_after_the_split(spl
         split = next(e for e in world.chronicle if e.kind == "secession" and e.predecessor_ids == [predecessor.id])
         assert not (_just_before(world, founding.year, founding.month) == owner).any()
         assert not (world.owners_at(split.year, split.month) == owner).any()
+
+
+# --- invariants over whole worlds -------------------------------------------------------------------------------
+
+INVARIANT_SEEDS = (42, 7, 1337, 11, 15)
+
+
+@pytest.fixture(scope="module", params=INVARIANT_SEEDS)
+def checked(request: pytest.FixtureRequest, cfg: Config) -> World:
+    return pipeline.generate(cfg, request.param)
+
+
+def _moment_grids(world: World):
+    for moment in world.territory_moments():
+        yield moment, world.owners_at(*moment)
+
+
+def test_replaying_every_seed_gives_its_present_partition(checked: World) -> None:
+    assert np.array_equal(checked.owners_at(checked.year), checked.realm_id)
+
+
+def test_water_is_never_owned_at_any_moment(checked: World) -> None:
+    water = checked.landmass_id < 0
+    assert all((grid[water] == WILD).all() for _, grid in _moment_grids(checked))
+
+
+def test_every_owner_at_every_moment_exists(checked: World) -> None:
+    valid = {WILD, *(r.id for r in checked.realms), *(fallen_owner(f.id) for f in checked.fallen_realms)}
+    valid |= {predecessor_owner(p.id) for p in checked.predecessors}
+    assert all(set(np.unique(grid).tolist()) <= valid for _, grid in _moment_grids(checked))
+
+
+def test_a_change_takes_cells_its_from_owner_held(checked: World) -> None:
+    for change in checked.territory:
+        before = _just_before(checked, change.year, change.month)
+        assert (before.reshape(-1)[change.cells] == change.from_owner).all(), change.kind
+
+
+def test_a_fallen_realm_holds_land_only_inside_its_life(checked: World) -> None:
+    for fallen in checked.fallen_realms:
+        owner = fallen_owner(fallen.id)
+        for (year, _month), grid in _moment_grids(checked):
+            if (grid == owner).any():
+                assert fallen.founded <= year <= fallen.fell, (fallen.id, year)
+
+
+def test_changes_do_not_overlap_within_one_event(checked: World) -> None:
+    by_event: dict[int, list[np.ndarray]] = {}
+    for change in checked.territory:
+        by_event.setdefault(change.event_id, []).append(change.cells)
+    for cells in by_event.values():
+        joined = np.concatenate(cells)
+        assert len(joined) == len(np.unique(joined))
+
+
+def test_territory_does_not_depend_on_pythonhashseed() -> None:
+    code = (
+        "import hashlib;"
+        "from biomegen.config import load_config;"
+        "from biomegen import pipeline;"
+        "w = pipeline.generate(load_config(None), 15);"
+        "h = hashlib.blake2b();"
+        "[h.update(repr((c.year, c.month, c.kind, c.from_owner, c.to_owner, c.cells.tolist())).encode()) "
+        "for c in w.territory];"
+        "print(h.hexdigest())"
+    )
+    digests = set()
+    for hashseed in ("0", "1", "98765"):
+        result = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            env=dict(os.environ, PYTHONHASHSEED=hashseed),
+        )
+        assert result.returncode == 0, result.stderr
+        digests.add(result.stdout.strip())
+    assert len(digests) == 1

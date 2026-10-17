@@ -140,6 +140,7 @@ def stats(world: World) -> Dict[str, object]:
         "realms": len(world.realms),
         "events": len(world.chronicle),
         "event_kinds": dict(sorted(Counter(e.kind for e in world.chronicle).items())),
+        "territory_changes": dict(sorted(Counter(c.kind for c in world.territory).items())),
         "fallen_realms": len(world.fallen_realms),
         "predecessors": len(world.predecessors),
         "rulers": len(world.rulers),
