@@ -189,7 +189,7 @@ def _check(chance: float, seed: int = 1) -> tuple[World, list]:
     world = _tiny()
     ledger = Ledger(config)
     conflicts.derive(world, config, seed, 1200, ledger, None, {1: 0})
-    return world, ledger.finish()
+    return world, ledger.finish(0)
 
 
 def _kinds_of_realm_one(events: list) -> list[str]:

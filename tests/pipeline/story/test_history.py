@@ -42,6 +42,17 @@ def test_event_ids_are_their_indexes(world: World) -> None:
     assert [event.id for event in world.chronicle] == list(range(len(world.chronicle)))
 
 
+def test_every_event_has_a_month_in_range(world: World, cfg: Config) -> None:
+    months = cfg.get("history.months_per_year")
+    assert all(1 <= event.month <= months for event in world.chronicle)
+
+
+def test_months_never_go_backwards_within_a_year(world: World) -> None:
+    # Months are dealt out in event order, so an event never precedes an earlier one of its year.
+    keys = [(event.year, event.month) for event in world.chronicle]
+    assert keys == sorted(keys)
+
+
 def test_events_fall_inside_the_span(world: World) -> None:
     assert all(0 <= event.year <= world.year for event in world.chronicle)
 

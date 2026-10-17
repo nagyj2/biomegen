@@ -60,9 +60,21 @@ class Ledger:
         )
         self._pending.append((year, EVENT_KINDS.index(kind), len(self._pending), event))
 
-    def finish(self) -> list[ChronicleEvent]:
-        """Return the events oldest first with ``id`` set to their index."""
+    def finish(self, seed: int) -> list[ChronicleEvent]:
+        """Return the events oldest first with ``id`` set to their index and a ``month`` each.
+
+        The months of one year are drawn together and sorted, then dealt out in event order, so an event's month never
+        precedes an earlier event's and causality within a year holds; the draw is keyed on the year alone.
+        """
         events = [event for _, _, _, event in sorted(self._pending, key=lambda item: item[:3])]
+        months = int(self._config.get("history.months_per_year"))
+        start = 0
         for index, event in enumerate(events):
             event.id = index
+            if index + 1 == len(events) or events[index + 1].year != event.year:
+                stream = rng.derive(seed, "history", "month", event.year)
+                drawn = sorted(stream.randint(1, months) for _ in range(index + 1 - start))
+                for placed, month in zip(events[start : index + 1], drawn, strict=True):
+                    placed.month = month
+                start = index + 1
         return events

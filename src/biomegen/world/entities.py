@@ -265,3 +265,4 @@ class ChronicleEvent:
     refs: List[Tuple[int, int, str, int]] = field(
         default_factory=list
     )  # (start, end, REF_KINDS entry, id) per name in text
+    month: int = 1  # 1 to history.months_per_year within ``year``; events of a year are in month order

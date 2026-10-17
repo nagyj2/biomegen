@@ -43,7 +43,7 @@ def _derive(world: World, **overrides: object) -> tuple[dict, list]:
     config.data["history"].update(overrides)
     ledger = Ledger(config)
     timelines = rulers.derive(world, config, 1, 1200, ledger)
-    return timelines, ledger.finish()
+    return timelines, ledger.finish(0)
 
 
 # --- the timeline ---------------------------------------------------------------------------------

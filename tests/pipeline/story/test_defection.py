@@ -215,7 +215,7 @@ def _check(seed: int, chance: float = 1.0) -> list:
     world = _tiny()
     ledger = Ledger(config)
     conflicts.derive(world, config, seed, 1200, ledger, None, None, 0, {2: (0, 700)})
-    return ledger.finish()
+    return ledger.finish(0)
 
 
 def test_a_check_makes_the_defection_for_some_seeds() -> None:

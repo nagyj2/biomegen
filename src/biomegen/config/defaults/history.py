@@ -13,6 +13,7 @@ VALUES: Dict[str, Any] = {
     # settled, no chronicle) so a later simulation can start from a young world.
     "start": "present",
     "span_years": 1200,  # the present year of a "present" world
+    "months_per_year": 12,  # events of one year are placed in months 1 to this (a simulation may use the same range)
     # The event kinds to derive (any of world.entities.EVENT_KINDS); leave one out to switch it off.
     "kinds": [
         "founding",

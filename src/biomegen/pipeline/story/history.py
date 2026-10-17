@@ -295,7 +295,7 @@ def run(world: World, config: Config, seed: int) -> None:
     _split_events(world, config, seed, ledger)
     conflicts.derive(world, config, seed, span, ledger, styles, offshoots, len(splits), defections)
     remnants = _remnants(world, config, seed, ledger)
-    world.chronicle = ledger.finish()
+    world.chronicle = ledger.finish(seed)
     for event in world.chronicle:  # a settlement is marked by the event that founded or settled it
         if event.kind in ("founding", "secession", "settling"):
             for index in event.poi_ids:

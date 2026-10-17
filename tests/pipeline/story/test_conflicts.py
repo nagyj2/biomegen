@@ -220,14 +220,14 @@ def test_a_far_stronger_side_wins_a_battle() -> None:
     timeline = _timeline({(REALM, 0): 1e9, (REALM, 1): 1.0})
     timeline.plan(100, "battle", (REALM, 0), (REALM, 1), ("t",), (1, 1))
     timeline.play()
-    assert [e.realm_ids for e in timeline.ledger.finish() if e.kind == "battle"] == [[0, 1]]
+    assert [e.realm_ids for e in timeline.ledger.finish(0) if e.kind == "battle"] == [[0, 1]]
 
 
 def test_a_fallen_realm_beaten_below_the_floor_is_conquered() -> None:
     timeline = _timeline({(REALM, 0): 1e9, (FALLEN, 0): 0.31})
     timeline.plan(100, "battle", (REALM, 0), (FALLEN, 0), ("t",), (2, 2))
     timeline.play()
-    falls = [e for e in timeline.ledger.finish() if e.kind == "fall"]
+    falls = [e for e in timeline.ledger.finish(0) if e.kind == "fall"]
     assert [(e.realm_ids, e.fallen_ids, e.tags) for e in falls] == [([0], [0], ("conquered",))]
 
 
@@ -243,13 +243,13 @@ def test_a_conquered_realm_fights_no_more() -> None:
     timeline.plan(100, "battle", (REALM, 0), (FALLEN, 0), ("t",), (2, 2))
     timeline.plan(200, "battle", (REALM, 1), (FALLEN, 0), ("u",), (2, 2))
     timeline.play()
-    assert len([e for e in timeline.ledger.finish() if e.kind == "battle"]) == 1
+    assert len([e for e in timeline.ledger.finish(0) if e.kind == "battle"]) == 1
 
 
 def test_a_surviving_fallen_realm_falls_at_its_natural_year() -> None:
     timeline = _timeline({})
     timeline.play()
-    falls = [e for e in timeline.ledger.finish() if e.kind == "fall"]
+    falls = [e for e in timeline.ledger.finish(0) if e.kind == "fall"]
     assert [(e.year, e.tags) for e in falls] == [(500, ())]
 
 
