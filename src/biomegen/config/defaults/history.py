@@ -155,5 +155,20 @@ VALUES: Dict[str, Any] = {
         "min_map_cols": 40,
         "min_event_cols": 34,
         "current_bg": [60, 56, 30],
+        # Events with a place are marked on the map: those of the current moment in full colour, those of the
+        # ``marker_years`` years before it faded by ``marker_fade``. Each kind has a glyph (ASCII).
+        "marker_years": 30,
+        "marker_fade": 0.55,
+        "glyphs": {
+            "founding": "o",
+            "secession": "/",
+            "settling": ".",
+            "expansion": ">",
+            "conquest": "!",
+            "war": "x",
+            "battle": "x",
+            "peace": "=",
+            "fall": "+",
+        },
     },
 }

@@ -23,12 +23,13 @@ import numpy as np
 
 from ..config.model import Config
 from ..render.chronicle import layout_events
+from ..render.colors import mix_colors
 from ..render.fit import FitSampler
 from ..render.grid import RGB, CellGrid, Document
 from ..render.layers import build_grid
 from ..render.views import resolve_view
 from ..world.chronicle import ChronicleFilter, filter_events
-from ..world.entities import ChronicleEvent
+from ..world.entities import NO_LOCATION, ChronicleEvent
 from ..world.territory import (
     WILD,
     TerritoryChange,
@@ -238,13 +239,41 @@ def _geometry(config: Config, cols: int) -> tuple[int, int]:
 
 
 def _map_grid(world: World, config: Config, state: HistoryState, area: Size, color: bool, ascii_only: bool) -> CellGrid:
-    """Return the political map at ``state.at`` fitted into ``area`` (drawn again only when something changed)."""
+    """Return the political map at ``state.at`` fitted into ``area`` with the recent events marked on it.
+
+    Drawn again only when something changed.
+    """
     key = (area, state.at, color, ascii_only)
     if state._map is None or state._map[0] != key:
         sampler = FitSampler(world, config, area[0], area[1])
         view = resolve_view(config, "political")
-        state._map = (key, build_grid(world, config, view, sampler, None, ascii_only, color, "all", 0, None, state.at))
+        grid = build_grid(world, config, view, sampler, None, ascii_only, color, "all", 0, None, state.at)
+        _draw_markers(grid, world, config, state, sampler)
+        state._map = (key, grid)
     return state._map[1]
+
+
+def _draw_markers(grid: CellGrid, world: World, config: Config, state: HistoryState, sampler: FitSampler) -> None:
+    """Mark the events with a place on ``grid``: this moment's in full colour and bold, the earlier ones of the last
+    ``marker_years`` years faded (glyphs from ``history.viewer.glyphs``, colours from ``history.colors``)."""
+    settings = config.get("history.viewer")
+    glyphs, palette = settings["glyphs"], config.get("history.colors")
+    index = stop_index(state.moments, state.at)
+    current = state.moments[index] if index >= 0 else None
+    oldest = state.at[0] - int(settings["marker_years"])
+    for event in world.chronicle:  # oldest first, so a newer marker is drawn over an older one
+        moment = (event.year, event.month)
+        if event.kind not in glyphs or event.location == NO_LOCATION or moment > state.at or event.year < oldest:
+            continue
+        col, row = sampler.cell_coords(*event.location) or (-1, -1)
+        if not (0 <= row < grid.rows and 0 <= col < grid.cols):
+            continue
+        red, green, blue = palette[event.kind]
+        colour: RGB = (int(red), int(green), int(blue))
+        now = moment == current
+        grid.glyph[row, col] = glyphs[event.kind]
+        grid.fg[row, col] = colour if now else mix_colors(colour, grid.bg[row, col], float(settings["marker_fade"]))
+        grid.bold[row, col] = now
 
 
 def _paste(screen: CellGrid, grid: CellGrid, top: int, left: int) -> None:

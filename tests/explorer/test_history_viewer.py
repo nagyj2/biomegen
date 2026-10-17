@@ -185,3 +185,59 @@ def test_the_loop_steps_with_the_keys(world: World, cfg: Config) -> None:
     moments = change_moments(world)
     out = _run(world, cfg, "]", "]")
     assert f"year {moments[2][0]}, month {moments[2][1]}" in out.frames[-1][0]
+
+
+# --- event markers on the map -------------------------------------------------------------------------------------
+
+
+def _marked(world: World, cfg: Config, at: tuple[int, int]):
+    """The fitted map at ``at`` of a world with a battle at (60, 20) in year 300, month 6 and a founding at (60, 30)."""
+    from biomegen.world.entities import ChronicleEvent
+
+    marked = pipeline.generate(cfg, 42)
+    marked.chronicle = [
+        ChronicleEvent(0, 280, "founding", [0], location=(60, 30), month=2),
+        ChronicleEvent(1, 300, "battle", [0, 1], location=(60, 20), month=6),
+        ChronicleEvent(2, 301, "peace", [0, 1], location=(100, 20), month=1),
+        ChronicleEvent(3, 300, "succession", [0], month=7),
+        ChronicleEvent(4, 200, "war", [0, 1], location=(20, 10), month=1),
+    ]
+    marked.territory = []
+    state = initial_state(marked, cfg, at)
+    state.moments = [(300, 6)]
+    return marked, state, compose_history_frame(marked, cfg, state, SIZE)
+
+
+def _cell(world: World, cfg: Config, tile: tuple[int, int]) -> tuple[int, int]:
+    """The ``(row, column)`` of the frame cell showing ``tile`` (the map starts under the title row)."""
+    from biomegen.explorer.history_viewer import _POWER_ROWS, _geometry
+    from biomegen.render.fit import FitSampler
+
+    map_cols, _ = _geometry(cfg, SIZE[0])
+    sampler = FitSampler(world, cfg, map_cols, SIZE[1] - 3 - _POWER_ROWS)
+    col, row = sampler.cell_coords(*tile)
+    return row + 1, col
+
+
+def test_an_event_of_the_current_moment_is_marked_in_bold(world: World, cfg: Config) -> None:
+    _, _, frame = _marked(world, cfg, (300, 6))
+    row, col = _cell(world, cfg, (60, 20))
+    assert frame.glyph[row, col] == "x" and bool(frame.bold[row, col])
+
+
+def test_an_earlier_event_is_marked_faded(world: World, cfg: Config) -> None:
+    _, _, frame = _marked(world, cfg, (300, 6))
+    row, col = _cell(world, cfg, (60, 30))
+    assert frame.glyph[row, col] == "o" and not frame.bold[row, col]
+
+
+def test_a_later_event_is_not_marked(world: World, cfg: Config) -> None:
+    _, _, frame = _marked(world, cfg, (300, 6))
+    row, col = _cell(world, cfg, (100, 20))
+    assert frame.glyph[row, col] != "="
+
+
+def test_an_event_long_before_the_window_is_not_marked(world: World, cfg: Config) -> None:
+    _, _, frame = _marked(world, cfg, (300, 6))
+    row, col = _cell(world, cfg, (20, 10))
+    assert frame.glyph[row, col] != "x"
