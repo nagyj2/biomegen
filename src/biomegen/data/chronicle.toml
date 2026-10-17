@@ -16,6 +16,9 @@
 #   expansion_fallen  {fallen}                                    a fallen realm doing the same
 #   creation_tower    {place}                                     a tower raised (minor event)
 #   creation_dungeon  {place}                                     a dungeon delved (minor event)
+#   creation_watchtower {place}                                   a watchtower raised when a war begins (minor event)
+#   abandon_watchtower, dismantle_watchtower {place}              a watchtower left empty / torn down at the peace (minor)
+#   occupation_tower  {place}                                     bandits take an abandoned watchtower (minor)
 #   road_trunk        {a} {b}                                     a road laid between two places (minor event)
 #   road_spur         {a}                                         a track cut from a place to the road (minor event)
 #   founding_predecessor  {predecessor}                           a realm that later ended in a clean split (see below)
@@ -277,4 +280,33 @@ templates = [
 templates = [
   "A track is cut from {a} to the road.",
   "{a} is joined to the road by a new track.",
+]
+
+# The life of a watchtower (minor events, kept in the annals). {place} is its name. creation_watchtower: raised when its war
+# was declared; abandon_watchtower: left standing at the peace; dismantle_watchtower: torn down at the peace;
+# occupation_tower: bandits take an abandoned one, and it is a tower from then on.
+
+[chronicle.creation_watchtower]
+templates = [
+  "{place} is raised behind the front.",
+  "A watchtower, {place}, goes up as the war begins.",
+  "Soldiers raise {place} to watch the border.",
+]
+
+[chronicle.abandon_watchtower]
+templates = [
+  "{place} is left empty when the war ends.",
+  "With peace made, {place} is abandoned.",
+]
+
+[chronicle.dismantle_watchtower]
+templates = [
+  "{place} is torn down now the war is over.",
+  "With peace made, {place} is pulled down.",
+]
+
+[chronicle.occupation_tower]
+templates = [
+  "Bandits take the empty watchtower of {place}.",
+  "{place}, long abandoned, is claimed by bandits and becomes their tower.",
 ]

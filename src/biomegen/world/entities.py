@@ -23,6 +23,8 @@ EVENT_KINDS: Tuple[str, ...] = (
     "settling",
     "expansion",
     "creation",
+    "abandon",
+    "occupation",
     "road",
     "conquest",
     "succession",

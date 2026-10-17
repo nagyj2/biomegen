@@ -100,7 +100,7 @@ def sites_layer(ctx: LayerContext, grid: CellGrid) -> None:
     standing = (
         None
         if ctx.moment is None
-        else {id(p) for p, here in zip(ctx.world.pois, ctx.visible_pois, strict=True) if here}
+        else {id(p) for p, here in zip(ctx.world.pois, ctx.visible_pois, strict=False) if here}
     )
     for poi, geometry in site_pois(ctx.world, ctx.config):
         if standing is not None and id(poi) not in standing:

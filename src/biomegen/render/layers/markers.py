@@ -21,25 +21,32 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
     draw at every scale but the site scale, where the plan covers the ground.
     """
     world = ctx.world
-    poi_index = ctx.sampler.nearest(world.poi_index)
+    places, kinds, standing = ctx.places, ctx.place_kinds, ctx.visible_pois
+    stamped = world.poi_index
+    if len(places) > len(world.pois) and standing[len(world.pois) :].any():  # a vanished POI stands on a free cell
+        stamped = world.poi_index.copy()
+        for index in range(len(world.pois), len(places)):
+            if standing[index] and stamped[places[index].y, places[index].x] < 0:
+                stamped[places[index].y, places[index].x] = index
+    poi_index = ctx.sampler.nearest(stamped)
     sampler = ctx.sampler
     shown = not isinstance(sampler, DetailSampler) or sampler.scale in ctx.config.get("render.detail_marker_scales")
-    if world.pois and shown:
+    if places and shown:
         held = ctx.held_pois
         styles = [
-            poi_marker(ctx.config, poi.kind, ctx.ascii_only, poi.civilized and not held[i])
-            for i, poi in enumerate(world.pois)
+            poi_marker(ctx.config, kinds[i], ctx.ascii_only, poi.civilized and not held[i])
+            for i, poi in enumerate(places)
         ]
         glyphs = np.array([glyph for glyph, _fg, _bg in styles], dtype="U1")
         fgs = np.array([fg for _glyph, fg, _bg in styles], dtype=np.uint8)
         bgs = np.array([bg if bg is not None else (0, 0, 0) for _glyph, _fg, bg in styles], dtype=np.uint8)
         has_bg = np.array([bg is not None for _glyph, _fg, bg in styles])
-        at = np.clip(poi_index, 0, len(world.pois) - 1)
+        at = np.clip(poi_index, 0, len(places) - 1)
         anchored = ctx.sampler.inside & ctx.sampler.anchor & (poi_index >= 0)
-        marked = np.array([poi_has_marker(ctx.config, poi.kind) for poi in world.pois])  # a homestead has none
-        anchored &= marked[at] & ctx.visible_pois[at]
+        marked = np.array([poi_has_marker(ctx.config, kind) for kind in kinds])  # a homestead has none
+        anchored &= marked[at] & standing[at]
         if not isinstance(sampler, DetailSampler):  # the map scale leaves out kinds whose row hides them there
-            on_map = np.array([poi_on_map(ctx.config, poi.kind) for poi in world.pois])
+            on_map = np.array([poi_on_map(ctx.config, kind) for kind in kinds])
             anchored &= on_map[at]
         grid.put(anchored, glyph=glyphs[at], fg=fgs[at], bold=True)
         grid.put(anchored & has_bg[at], bg=bgs[at])

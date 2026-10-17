@@ -92,7 +92,7 @@ def event_entities(world: World, event: ChronicleEvent) -> list[tuple[str, str]]
     found = [(world.realms[i].name, REF_REALM) for i in event.realm_ids]
     found += [(world.fallen_realms[i].name, REF_FALLEN) for i in event.fallen_ids]
     found += [(world.predecessors[i].name, REF_PREDECESSOR) for i in event.predecessor_ids]
-    found += [(world.pois[i].name, REF_POI) for i in event.poi_ids]
+    found += [(world.place(i).name, REF_POI) for i in event.poi_ids]
     for _start, _end, kind, ref in event.refs:
         if kind == REF_REALM:
             found.append((world.realms[ref].name, kind))
@@ -103,7 +103,7 @@ def event_entities(world: World, event: ChronicleEvent) -> list[tuple[str, str]]
         elif kind == REF_PREDECESSOR:
             found.append((world.predecessors[ref].name, kind))
         elif kind == REF_POI:
-            found.append((world.pois[ref].name, kind))
+            found.append((world.place(ref).name, kind))
     return list(dict.fromkeys(entry for entry in found if entry[0]))
 
 
@@ -261,7 +261,7 @@ def chronicle_data(world: World, events: Optional[Sequence[ChronicleEvent]] = No
                 "realm_id": None if p.realm_id < 0 else p.realm_id,
                 "founded": p.founded,
             }
-            for i, p in enumerate(world.pois)
+            for i, p in enumerate((*world.pois, *world.vanished))
             if p.civilized or i in named_places
         ],
     }

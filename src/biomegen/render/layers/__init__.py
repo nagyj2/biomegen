@@ -18,7 +18,7 @@ from ...registry import Registry
 from ...sampling.sampler import Sampler
 from ...sampling.terrain import land_mask, river_mask
 from ...util import rng
-from ...world.lifespans import visible_pois, visible_roads
+from ...world.lifespans import poi_kind_at, visible_pois, visible_roads
 from ...world.overlay import Overlay
 from ...world.territory import FALLEN_OWNER_BASE, PREDECESSOR_OWNER_BASE, WILD
 from ...world.tile import Biome
@@ -172,11 +172,24 @@ class LayerContext:
         return np.array(tops + list(extra) + [-1])
 
     @cached_property
+    def places(self) -> list:
+        """Every POI there is to draw: the ones that stand today, then the vanished (see :meth:`World.place`)."""
+        return [*self.world.pois, *self.world.vanished]
+
+    @cached_property
     def visible_pois(self) -> np.ndarray:
-        """A bool per ``World.pois`` entry: whether it stands (all do today; at a past moment those founded by then)."""
+        """A bool per place: whether it stands. Today the POIs do and the vanished do not; at a past moment those whose
+        life covers it (founded by then, and not yet dismantled)."""
         if self.moment is None:
-            return np.ones(len(self.world.pois), dtype=bool)
+            return np.arange(len(self.places)) < len(self.world.pois)
         return visible_pois(self.world, self.config, self.moment)
+
+    @cached_property
+    def place_kinds(self) -> list[str]:
+        """The kind of each place at the moment: a tower bandits took is a watchtower until then."""
+        if self.moment is None:
+            return [poi.kind for poi in self.places]
+        return [poi_kind_at(self.world, poi, self.moment) for poi in self.places]
 
     @cached_property
     def road(self) -> np.ndarray:
@@ -187,9 +200,9 @@ class LayerContext:
 
     @cached_property
     def held_pois(self) -> np.ndarray:
-        """A bool per POI: whether a realm (or a fallen one) holds its cell. Today that is ``not poi.free``; at a past
+        """A bool per place: whether a realm (or a fallen one) holds its cell. Today that is ``not poi.free``; at a past
         moment the owner grid says, so a settlement on wild land is free then."""
-        pois = self.world.pois
+        pois = self.places
         if self.moment is None:
             return np.array([not poi.free for poi in pois], dtype=bool)
         return np.array([int(self.owners[poi.y, poi.x]) != WILD for poi in pois], dtype=bool)

@@ -207,3 +207,49 @@ def test_a_hamlet_or_homestead_is_founded_no_sooner_than_its_land(world: World) 
     for poi in world.pois:
         if poi.realm_id >= 0 and poi.kind in ("hamlet", "homestead") and poi.founded > 0:
             assert poi.founded >= since[poi.y, poi.x]
+
+
+# --- the life of a watchtower ---------------------------------------------------------------------------------------
+
+
+def _watchtowers(world: World):
+    return [(i, p) for i, p in enumerate((*world.pois, *world.vanished)) if p.extra.get("fate")]
+
+
+def _events_about(world: World, index: int, kind: str):
+    return [e for e in world.chronicle if e.kind == kind and e.poi_ids == [index]]
+
+
+def test_every_watchtower_is_raised_with_its_war(world: World) -> None:
+    for index, poi in _watchtowers(world):
+        (created,) = _events_about(world, index, "creation")
+        war = world.chronicle[poi.event_ids[0]]
+        assert (
+            war.kind == "war" and (created.year, created.month) == (war.year, war.month) and created.salience == "minor"
+        )
+
+
+def test_a_watchtower_not_standing_has_its_end_told_at_the_peace(world: World) -> None:
+    for index, poi in _watchtowers(world):
+        ended = _events_about(world, index, "abandon")
+        if poi.extra["fate"] == "standing":
+            assert not ended
+        else:
+            (event,) = ended
+            peace = world.chronicle[poi.event_ids[1]]
+            assert (event.year, event.month) == (peace.year, peace.month)
+
+
+def test_bandits_take_an_abandoned_watchtower_after_the_peace(world: World) -> None:
+    for index, poi in _watchtowers(world):
+        taken = _events_about(world, index, "occupation")
+        if poi.extra["fate"] == "occupied":
+            (event,) = taken
+            assert event.year == poi.extra["taken"] and event.year > world.chronicle[poi.event_ids[1]].year
+        else:
+            assert not taken
+
+
+def test_a_dismantled_watchtowers_events_name_it(world: World) -> None:
+    for index, poi in enumerate(world.vanished, start=len(world.pois)):
+        assert all(poi.name in e.text for e in world.chronicle if e.poi_ids == [index])

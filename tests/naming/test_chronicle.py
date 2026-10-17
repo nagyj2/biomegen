@@ -256,7 +256,7 @@ def test_the_capitalised_first_letter_does_not_move_a_span(cfg: Config) -> None:
 
 def test_every_span_in_a_generated_world_covers_a_name(world: World) -> None:
     names = {r.name for r in world.realms} | {r.short for r in world.realms} | {r.name for r in world.rulers}
-    names |= {p.name for p in world.pois} | {f.name for f in world.fallen_realms}
+    names |= {p.name for p in (*world.pois, *world.vanished)} | {f.name for f in world.fallen_realms}
     names |= {f.name.removeprefix("The ") for f in world.features}  # a river, range or sea named in a reason
     spans = [(e.text[a:b], kind) for e in world.chronicle for a, b, kind, _ in e.refs]
     lowered = {name.lower() for name in names}  # a ruler's title may be capitalised to open the sentence

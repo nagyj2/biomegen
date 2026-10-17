@@ -172,13 +172,13 @@ def test_the_default_chance_leaves_fewer_fields_than_decisive_battles(world: Wor
 
 
 def _towers(world: World) -> list[POI]:
-    return [p for p in world.pois if p.kind == "watchtower"]
+    """Every watchtower raised in a war: the ones that stand and the ones dismantled at a peace."""
+    return [p for p in (*world.pois, *world.vanished) if p.kind == "watchtower" or p.extra.get("fate")]
 
 
-def test_every_watchtower_stands_for_an_ongoing_war(world: World) -> None:
+def test_every_watchtower_stands_for_a_war(world: World) -> None:
     for tower in _towers(world):
-        event = world.chronicle[tower.event_ids[0]]
-        assert event.kind == "war" and "ongoing" in event.tags
+        assert world.chronicle[tower.event_ids[0]].kind == "war"
 
 
 def test_a_war_gets_at_most_the_rows_cap_of_towers(world: World, cfg: Config) -> None:
@@ -189,31 +189,62 @@ def test_a_war_gets_at_most_the_rows_cap_of_towers(world: World, cfg: Config) ->
     assert all(count <= cap for count in per_war.values())
 
 
-def test_a_watchtower_stands_back_from_its_wars_front(world: World, cfg: Config) -> None:
-    # Within the row's setback band behind the line: never on a front cell, never further back than the band.
-    from biomegen.pipeline.civilization.diplomacy import front_cells
+def test_a_watchtower_stands_back_from_its_wars_front_as_it_was_then(world: World, cfg: Config) -> None:
+    # Within the row's setback band behind the line the war had when it was declared (not today's border).
+    import numpy as np
+
+    from biomegen.pipeline.story.pois import _border_at_war
 
     low, high = cfg.get("tables.pois.watchtower.front_setback_km")
     for tower in _towers(world):
-        cells = front_cells(world, *world.chronicle[tower.event_ids[0]].realm_ids)
-        nearest = min(
-            world.scale.distance_km(tower.x, tower.y, int(c) % world.width, int(c) // world.width)
-            for c in cells.tolist()
-        )
-        assert tower.y * world.width + tower.x not in set(cells.tolist()) and nearest <= high + 1e-6
-        assert nearest >= low - 1e-6
+        front, _held = _border_at_war(world, world.chronicle[tower.event_ids[0]])
+        ys, xs = np.nonzero(front)
+        nearest = min(world.scale.distance_km(tower.x, tower.y, int(x), int(y)) for x, y in zip(xs, ys, strict=True))
+        assert low - 1e-6 <= nearest <= high + 1e-6
 
 
-def test_a_watchtower_belongs_to_a_realm_of_its_war(world: World) -> None:
+def test_a_watchtower_is_raised_the_year_its_war_is_declared(world: World) -> None:
     for tower in _towers(world):
-        powers = set(world.chronicle[tower.event_ids[0]].realm_ids)
-        assert tower.realm_id >= 0 and world.top_realm(tower.realm_id) in powers
+        assert tower.founded == world.chronicle[tower.event_ids[0]].year
 
 
-def test_a_watchtower_is_newer_than_its_lifespan_and_its_war(world: World, cfg: Config) -> None:
-    lifespan = cfg.get("tables.pois.watchtower.lifespan")
+def test_a_war_still_going_leaves_its_towers_standing(world: World) -> None:
     for tower in _towers(world):
-        assert max(world.chronicle[tower.event_ids[0]].year, world.year - lifespan) <= tower.founded <= world.year
+        war = world.chronicle[tower.event_ids[0]]
+        if "ongoing" in war.tags:
+            assert tower in world.pois and tower.extra["fate"] == "standing" and tower.kind == "watchtower"
+
+
+def test_a_dismantled_watchtower_is_history_only_and_ends_at_the_peace(world: World) -> None:
+    gone = list(world.vanished)
+    for tower in gone:
+        peace = world.chronicle[tower.event_ids[1]]
+        assert tower.extra["fate"] == "dismantled" and peace.kind in ("peace", "conquest") and tower.fell == peace.year
+        assert world.poi_index[tower.y, tower.x] < 0 and not tower.connect
+
+
+def test_a_tower_bandits_took_was_an_abandoned_watchtower(world: World) -> None:
+    taken = [p for p in world.pois if p.extra.get("fate") == "occupied"]
+    for tower in taken:
+        peace = world.chronicle[tower.event_ids[1]]
+        assert tower.kind == "tower" and tower.bandit_strength > 0
+        assert peace.year < tower.extra["taken"] <= world.year
+
+
+def test_an_abandoned_watchtower_not_yet_taken_is_still_a_watchtower(world: World) -> None:
+    for tower in world.pois:
+        if tower.extra.get("fate") == "abandoned":
+            assert tower.kind == "watchtower" and tower.extra["taken"] == 0
+
+
+def test_some_worlds_have_all_three_fates(cfg: Config) -> None:
+    fates = {
+        p.extra["fate"]
+        for seed in (42, 7, 1337)
+        for p in (*pipeline.generate(cfg, seed).pois, *pipeline.generate(cfg, seed).vanished)
+        if p.extra.get("fate")
+    }
+    assert {"standing", "dismantled", "occupied"} <= fates
 
 
 def test_watchtowers_of_one_war_keep_their_spacing(world: World, cfg: Config) -> None:
@@ -235,8 +266,9 @@ def test_watchtowers_are_dynamic_and_stand(cfg: Config) -> None:
     assert cfg.get("tables.pois.watchtower.dynamic") is True and cfg.get("tables.pois.watchtower.lifespan") > 0
 
 
-def test_no_watchtower_has_fallen(world: World) -> None:
-    assert all(tower.fell is None for tower in _towers(world))
+def test_only_a_dismantled_watchtower_has_fallen(world: World) -> None:
+    # Only a dismantled one has an end; the rest, the abandoned and the occupied included, still stand.
+    assert all((tower.fell is None) == (tower.extra["fate"] != "dismantled") for tower in _towers(world))
 
 
 # --- shrines -----------------------------------------------------------------------------------------
@@ -343,7 +375,7 @@ def test_a_dungeon_from_history_follows_a_conquered_fall(hideouts: World) -> Non
 
 def test_a_history_tower_stands_within_reach_of_its_fall(hideouts: World, cfg: Config) -> None:
     reach = cfg.get("tables.pois.tower.offset_km")
-    for tower in _made_by_events(hideouts, "tower"):
+    for tower in (t for t in _made_by_events(hideouts, "tower") if not t.extra.get("fate")):
         assert hideouts.scale.distance_km(tower.x, tower.y, *hideouts.chronicle[tower.event_ids[0]].location) <= reach
 
 

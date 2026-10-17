@@ -124,7 +124,7 @@ def merge_events(world: World, events: Sequence[ChronicleEvent]) -> None:
             remap[old[i].id] = new_id
         event.id = new_id
     world.chronicle = merged
-    for poi in world.pois:
+    for poi in (*world.pois, *world.vanished):
         poi.event_ids = [remap[i] for i in poi.event_ids]
     for link in world.road_links:
         if link.event_id in remap:

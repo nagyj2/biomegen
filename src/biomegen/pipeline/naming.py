@@ -59,7 +59,7 @@ def run(world: World, config: Config, seed: int) -> None:
 
     # 3. Name POIs from their kind's name forms; a fallen realm's capital ruin is named for the realm (named first).
     chronicle.name_fallen_realms(world, config, seed)
-    for poi in world.pois:
+    for poi in (*world.pois, *world.vanished):
         row = config.get(f"tables.pois.{poi.kind}", None)
         style = config.get(f"tables.poi_styles.{poi.style}", None) if poi.style else None
         forms, extra = (style["names"] if style else row["names"] if row else None), None

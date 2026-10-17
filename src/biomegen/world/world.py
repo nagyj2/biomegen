@@ -125,6 +125,9 @@ class World:
         self.lakes: list[Lake] = []
         self.features: list[GeoFeature] = []  # filled by the geography stage
         self.road_links: list[RoadLink] = []  # each road laid between points of interest (filled by the roads stages)
+        # Points of interest that stood once and are gone (a watchtower dismantled at the peace): history only, never on
+        # today's map, so not in ``pois`` or ``poi_index``; ``place`` finds one by an index past ``pois``.
+        self.vanished: list[POI] = []
 
         # History (filled by the history stage). ``year`` is the present; events are sorted and ``id`` is the index.
         self.year: int = 0
@@ -200,6 +203,10 @@ class World:
         """Return the :class:`~biomegen.world.entities.Realm` at ``(x, y)``, or None for wild land and water."""
         i = int(self.realm_id[y, x])
         return self.realms[i] if 0 <= i < len(self.realms) else None
+
+    def place(self, index: int) -> POI:
+        """Return POI ``index``: one that stands today, or (an index past ``pois``) one that has vanished."""
+        return self.pois[index] if index < len(self.pois) else self.vanished[index - len(self.pois)]
 
     def top_realm(self, index: int) -> int:
         """Return the id of the independent power at the top of realm ``index``'s chain of lieges."""

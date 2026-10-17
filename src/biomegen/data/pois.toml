@@ -55,6 +55,9 @@
 #   bandit_strength   (optional) bandits it holds when it is wild and made with them
 #   bandit_radius_km  (optional) how far its bandits' danger reaches
 #   lifespan          (optional) years a dynamic POI stands before it is dismantled
+#   abandon_chance    (optional, watchtower) when the war it was raised in ends, the chance it is left standing and (after
+#                     `occupy_years` [least, most] years) taken by bandits as a `tower`; else it is dismantled at the peace
+#   occupy_years      (optional, watchtower) see abandon_chance
 
 # Styles (the `poi_styles` table below, one row per style) place the lone building (homestead) and the generated hamlet:
 #   source = "style"  a kind placed by the styles pass, not by location or history (the `homestead` kind row)
@@ -209,7 +212,8 @@ names = ["{n} Field", "Field of {n}", "{n} Moor"]
 priority = 70
 source = "history"
 events = ["war"]
-tags = ["ongoing"]
+abandon_chance = 0.35
+occupy_years = [5, 60]
 per_km_of_front = 300.0
 max_per_event = 3
 front_setback_km = [25.0, 100.0]

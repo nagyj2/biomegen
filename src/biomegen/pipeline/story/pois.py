@@ -35,9 +35,9 @@ from ...config.model import Config
 from ...util import geometry as geo
 from ...util import rng
 from ...world.entities import ChronicleEvent
+from ...world.wars import war_end
 from ...world.world import World
 from .. import pois
-from ..civilization.diplomacy import front_cells
 from ..civilization.settlements import habitability
 from . import poi_styles
 from .poi_rules import PoiPlan, event_key, poi_for_event
@@ -174,25 +174,45 @@ def _place_near_event(world: World, config: Config, seed: int, event: ChronicleE
     )
 
 
-def _place_watchtowers(world: World, config: Config, seed: int, event: ChronicleEvent, plan: PoiPlan) -> None:
-    """Place a war's watchtowers a little behind its front, on high ground, spread ``kind_spacing_km`` apart.
+def _border_at_war(world: World, event: ChronicleEvent) -> tuple[np.ndarray, np.ndarray]:
+    """Return ``(front, held)`` bool grids for a war when it was declared: the cells of the two powers that touch the
+    other's, and every cell either power held then (a vassal counting for its overlord).
 
-    A tower belongs to the realm that owns its cell. It is built within the last ``lifespan`` years (and not before the
-    war began), since a later simulation dismantles towers that outlive it.
+    Read from the owner map of that moment (:meth:`World.owners_at`), not today's, since borders have moved since.
+    """
+    moment = (event.year, event.month)
+    owners = world.owners_at(*moment)
+    tops = np.array([world.top_realm_at(r.id, *moment) for r in world.realms], dtype=np.int32)
+    power = np.where(owners >= 0, tops[np.clip(owners, 0, len(tops) - 1)], -1)
+    first, second = (int(tops[r]) for r in event.realm_ids[:2])
+    mine, theirs = power == first, power == second
+    front = np.zeros_like(mine)
+    for here, there in ((mine, theirs), (theirs, mine)):
+        touching = np.zeros_like(here)
+        touching[:, :-1] |= there[:, 1:]
+        touching[:, 1:] |= there[:, :-1]
+        touching[:-1, :] |= there[1:, :]
+        touching[1:, :] |= there[:-1, :]
+        front |= here & touching
+    return front, mine | theirs
+
+
+def _place_watchtowers(world: World, config: Config, seed: int, event: ChronicleEvent, plan: PoiPlan) -> None:
+    """Place a war's watchtowers a little behind its front as it was when the war was declared, on high ground, spread
+    ``kind_spacing_km`` apart. Each is raised with the war.
+
+    A war still going leaves its watchtowers standing. At the peace of an ended war a tower is abandoned (chance
+    ``abandon_chance``) or dismantled. An abandoned one is taken by bandits ``occupy_years`` later and is a bandit
+    ``tower`` from then on (still an abandoned watchtower if that would be after the present); a dismantled one is
+    kept only in ``World.vanished``. The fate is recorded in ``POI.extra`` for the annals to tell.
     """
     row = config.get("tables.pois.watchtower")
-    front = np.zeros((world.height, world.width), dtype=bool)
-    cells = front_cells(world, *event.realm_ids)
-    front[cells // world.width, cells % world.width] = True
+    front, held = _border_at_war(world, event)
     back_km = geo.distance_to(
         front, backend=config.get("compute.backend"), metric="euclidean", sampling=world.scale.sampling
     )
     low, high = (float(v) for v in row["front_setback_km"])
-    tops = np.array([world.top_realm(r.id) for r in world.realms], dtype=np.int32)
-    owner = np.where(world.realm_id >= 0, tops[np.clip(world.realm_id, 0, len(tops) - 1)], -1)
-    mask = (
-        np.isin(owner, event.realm_ids) & (back_km >= low) & (back_km <= high)
-    )  # behind the line, in the owner's land
+    mask = held & (back_km >= low) & (back_km <= high)  # behind the line, in the land of either power then
     mask &= pois.eligible_mask(
         world, row, pois.max_footprint(config, "watchtower"), float(config.get("poi.min_footprint_land"))
     )
@@ -201,24 +221,47 @@ def _place_watchtowers(world: World, config: Config, seed: int, event: Chronicle
     noise = rng.derive_numpy(seed, "poi", "watchtower", *event_key(event)).random(mask.shape) * float(
         config.get("poi.jitter")
     )
-    placed = [(p.x, p.y) for p in world.pois if p.kind == "watchtower"]
+    placed = [(p.x, p.y) for p in (*world.pois, *world.vanished) if p.kind == "watchtower" or p.extra.get("fate")]
     picks = pois.pick_blue_noise(
         np.where(mask, 1.0 + rise + noise, -np.inf), plan.count, float(row["kind_spacing_km"]), placed, world
     )
     stream = rng.derive(seed, "poi", "watchtower", "built", *event_key(event))
+    closing = war_end(world, event)
+    lo, hi = (int(v) for v in row["occupy_years"])
     for x, y in picks:
-        age = stream.randint(0, min(int(row["lifespan"]), world.year - event.year))
-        pois.commit(
+        floors = pois.draw_floors("watchtower", row, stream)
+        roll, delay = stream.random(), stream.randint(lo, hi)
+        ids = [event.id] if closing is None else [event.id, closing.id]
+        if closing is None:
+            fate, kind = "standing", "watchtower"
+        elif roll < float(row["abandon_chance"]):
+            taken = closing.year + delay
+            fate, kind = ("occupied", "tower") if taken <= world.year else ("abandoned", "watchtower")
+        else:
+            fate, kind = "dismantled", "watchtower"
+        extra = {"fate": fate, "taken": closing.year + delay if fate == "occupied" and closing else 0}
+        if fate == "dismantled":
+            assert closing is not None
+            gone = pois.build_poi(
+                seed, "watchtower", x, y, floors, connect=False, founded=event.year, fell=closing.year, event_ids=ids
+            )
+            gone.extra.update(extra)
+            world.vanished.append(gone)
+            continue
+        tower_row = config.get("tables.pois.tower")
+        index = pois.commit(
             world,
             seed,
-            "watchtower",
+            kind,
             x,
             y,
-            pois.draw_floors("watchtower", row, stream),
-            connect=bool(row.get("connect", True)),
-            founded=world.year - age,
-            event_ids=[event.id],
+            pois.draw_floors("tower", tower_row, stream) if kind == "tower" else floors,
+            connect=bool((tower_row if kind == "tower" else row).get("connect", True)),
+            founded=event.year,
+            bandit_strength=int(tower_row.get("bandit_strength", 0)) if kind == "tower" else 0,
+            event_ids=ids,
         )
+        world.pois[index].extra.update(extra)
 
 
 def _place_shrine(

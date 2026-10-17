@@ -156,8 +156,9 @@ def test_a_short_front_gets_one_watchtower(world: World, cfg: Config) -> None:
     assert plan is not None and plan.count == 1
 
 
-def test_a_war_that_is_over_makes_no_watchtower(world: World, cfg: Config) -> None:
-    assert _plan(world, cfg, _war((0, 1), tags=("ended",)), "watchtower") is None
+def test_a_war_that_is_over_makes_watchtowers_too(world: World, cfg: Config) -> None:
+    # They stand while the war lasts and are dismantled or abandoned at the peace.
+    assert _plan(world, cfg, _war((0, 1), tags=("ended",)), "watchtower") is not None
 
 
 def test_a_war_with_no_relation_makes_no_watchtower(world: World, cfg: Config) -> None:

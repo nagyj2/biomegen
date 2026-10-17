@@ -7,6 +7,8 @@ stands) without filling the default listing:
 - a **tower** raised or a **dungeon** delved: one that came of a fall is dated by it; one placed by location is either
   ancient (year 0, with chance ``history.annals.ancient_share``: it stood before the history began) or made in a year
   drawn over the history, and then gets that year as its ``founded``;
+- the **life of a watchtower** raised in a war: raised with the war, abandoned or dismantled at the peace, and taken by
+  bandits later (after which it is a tower; ``World.vanished`` holds the dismantled);
 - the **founding of a village or hamlet** (the settlements the history does not give a ``settling`` event); a hamlet or
   homestead on land a realm annexed is founded no sooner than the land came in (as the history does for a settlement).
 
@@ -66,6 +68,48 @@ def _creation(world: World, config: Config, seed: int, ledger: Ledger, index: in
     )
     if event is not None:
         event.month = _month(roll_month, low, months)
+
+
+def _watchtower(world: World, config: Config, seed: int, ledger: Ledger, ref: int) -> None:
+    """Add the life of a watchtower raised in a war (``ref`` indexes :meth:`World.place`): its raising in the month the
+    war was declared, at the peace its abandonment or dismantling in that month, and, if bandits took it, their
+    occupation (a month of its year)."""
+    poi = world.place(ref)
+    months = int(config.get("history.months_per_year"))
+    roll = rng.derive(seed, "history", "annals", "watchtower", ref).random()
+    near = nearest_settlement(world, config, poi.x, poi.y)
+
+    def add(year: int, month: int, row: str, kind: str, *tags: str) -> None:
+        event = ledger.add(
+            year,
+            kind,
+            row,
+            ("watch", ref),
+            seed,
+            poi_ids=[ref],
+            location=(poi.x, poi.y),
+            near_poi=near,
+            tags=tags,
+            salience="minor",
+        )
+        if event is not None:
+            event.month = month
+
+    war = world.chronicle[poi.event_ids[0]]
+    add(war.year, war.month, "creation_watchtower", "creation", "watchtower")
+    fate = str(poi.extra["fate"])
+    if fate == "standing":
+        return
+    closing = world.chronicle[poi.event_ids[1]]
+    add(
+        closing.year,
+        closing.month,
+        "dismantle_watchtower" if fate == "dismantled" else "abandon_watchtower",
+        "abandon",
+        fate,
+    )
+    if fate == "occupied":
+        add(int(poi.extra["taken"]), _month(roll, 1, months), "occupation_tower", "occupation", "tower")
 
 
 def _settling(world: World, config: Config, seed: int, ledger: Ledger, index: int) -> None:
@@ -131,8 +175,10 @@ def run(world: World, config: Config, seed: int) -> None:
     for poi in world.pois:  # a hamlet or homestead on annexed land is founded no sooner than the land was taken in
         if poi.realm_id >= 0 and poi.kind in ("hamlet", "homestead") and poi.founded > 0:
             poi.founded = max(poi.founded, int(since[poi.y, poi.x]))
-    for index, poi in enumerate(world.pois):
-        if poi.kind in ("tower", "dungeon"):
+    for index, poi in enumerate((*world.pois, *world.vanished)):
+        if poi.extra.get("fate"):
+            _watchtower(world, config, seed, ledger, index)
+        elif poi.kind in ("tower", "dungeon"):
             _creation(world, config, seed, ledger, index, first, ancient)
         elif poi.civilized and poi.kind not in settle_kinds and poi.founded > 0 and not _dated_by_history(world, poi):
             _settling(world, config, seed, ledger, index)
@@ -140,5 +186,5 @@ def run(world: World, config: Config, seed: int) -> None:
     merge_events(world, events)
     for event in events:
         for index in event.poi_ids:
-            world.pois[index].event_ids.append(event.id)
+            world.place(index).event_ids.append(event.id)
     _roads(world, config, seed)

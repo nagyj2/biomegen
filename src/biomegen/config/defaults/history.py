@@ -21,6 +21,8 @@ VALUES: Dict[str, Any] = {
         "settling",
         "expansion",
         "creation",
+        "abandon",
+        "occupation",
         "road",
         "conquest",
         "succession",
@@ -89,6 +91,8 @@ VALUES: Dict[str, Any] = {
         "settling": [150, 200, 160],
         "expansion": [170, 215, 120],
         "creation": [150, 170, 200],
+        "abandon": [150, 150, 150],
+        "occupation": [200, 130, 110],
         "road": [170, 160, 140],
         "conquest": [230, 150, 90],
         "succession": [200, 180, 120],
@@ -177,6 +181,8 @@ VALUES: Dict[str, Any] = {
             "peace": "=",
             "fall": "+",
             "creation": "^",  # a tower or dungeon made (a minor event, marked only while minor events are shown)
+            "abandon": "-",  # a watchtower left empty or dismantled (minor)
+            "occupation": "&",  # bandits take an abandoned watchtower (minor)
         },
     },
     # When a point of interest appears on the map of the past (world/lifespans.py): the kind of the event that made it
