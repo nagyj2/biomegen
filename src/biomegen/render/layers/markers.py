@@ -25,7 +25,11 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
     sampler = ctx.sampler
     shown = not isinstance(sampler, DetailSampler) or sampler.scale in ctx.config.get("render.detail_marker_scales")
     if world.pois and shown:
-        styles = [poi_marker(ctx.config, poi.kind, ctx.ascii_only, poi.free) for poi in world.pois]
+        held = ctx.held_pois
+        styles = [
+            poi_marker(ctx.config, poi.kind, ctx.ascii_only, poi.civilized and not held[i])
+            for i, poi in enumerate(world.pois)
+        ]
         glyphs = np.array([glyph for glyph, _fg, _bg in styles], dtype="U1")
         fgs = np.array([fg for _glyph, fg, _bg in styles], dtype=np.uint8)
         bgs = np.array([bg if bg is not None else (0, 0, 0) for _glyph, _fg, bg in styles], dtype=np.uint8)
@@ -33,7 +37,7 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
         at = np.clip(poi_index, 0, len(world.pois) - 1)
         anchored = ctx.sampler.inside & ctx.sampler.anchor & (poi_index >= 0)
         marked = np.array([poi_has_marker(ctx.config, poi.kind) for poi in world.pois])  # a homestead has none
-        anchored &= marked[at]
+        anchored &= marked[at] & ctx.visible_pois[at]
         if not isinstance(sampler, DetailSampler):  # the map scale leaves out kinds whose row hides them there
             on_map = np.array([poi_on_map(ctx.config, poi.kind) for poi in world.pois])
             anchored &= on_map[at]

@@ -46,13 +46,13 @@ def _press(world: World, cfg: Config, state: HistoryState, *tokens: str) -> None
         apply_history_action(world, cfg, state, resolve_history_action(token, cfg, state.prompt is not None), SIZE)
 
 
-def test_the_moments_are_distinct_and_ordered(world: World) -> None:
-    moments = change_moments(world)
+def test_the_moments_are_distinct_and_ordered(world: World, cfg: Config) -> None:
+    moments = change_moments(world, cfg)
     assert moments == sorted(set(moments)) and len(moments) > 10
 
 
-def test_the_moments_include_every_territory_change_and_conquest(world: World) -> None:
-    moments = set(change_moments(world))
+def test_the_moments_include_every_territory_change_and_conquest(world: World, cfg: Config) -> None:
+    moments = set(change_moments(world, cfg))
     assert {c.moment for c in world.territory} <= moments
     assert {(e.year, e.month) for e in world.chronicle if e.kind == "conquest"} <= moments
 
@@ -157,7 +157,7 @@ def test_the_status_line_describes_the_change(world: World, cfg: Config) -> None
     state = initial_state(world, cfg)
     state.at = next(c.moment for c in world.territory if c.kind == "expansion")
     status = _text(world, cfg, state)[SIZE[1] - 2]
-    assert status.strip().startswith(moment_summary(world, state.at)[:30])
+    assert status.strip().startswith(moment_summary(world, cfg, state.at)[:30])
 
 
 def test_a_small_terminal_gets_a_message(world: World, cfg: Config) -> None:
@@ -182,7 +182,7 @@ def test_the_loop_draws_then_quits_on_q(world: World, cfg: Config) -> None:
 
 
 def test_the_loop_steps_with_the_keys(world: World, cfg: Config) -> None:
-    moments = change_moments(world)
+    moments = change_moments(world, cfg)
     out = _run(world, cfg, "]", "]")
     assert f"year {moments[2][0]}, month {moments[2][1]}" in out.frames[-1][0]
 
@@ -251,3 +251,16 @@ def test_the_help_explains_the_map_marks(world: World, cfg: Config) -> None:
     grid = compose_history_frame(world, cfg, initial_state(world, cfg), SIZE, help_open=True)
     text = "\n".join("".join(row) for row in grid.glyph)
     assert "Marks on the map" in text and "> expansion" in text and "x battle" in text
+
+
+def test_every_fall_war_and_peace_is_a_stop(world: World, cfg: Config) -> None:
+    moments = set(change_moments(world, cfg))
+    stops = {(e.year, e.month) for e in world.chronicle if e.kind in ("fall", "war", "peace")}
+    assert stops and stops <= moments
+
+
+def test_the_status_line_describes_a_fall(world: World, cfg: Config) -> None:
+    fall = next(e for e in world.chronicle if e.kind == "fall")
+    state = initial_state(world, cfg, (fall.year, fall.month))
+    state.at = (fall.year, fall.month)
+    assert moment_summary(world, cfg, (fall.year, fall.month)).count("fall:") >= 1

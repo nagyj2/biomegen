@@ -18,8 +18,9 @@ from ...registry import Registry
 from ...sampling.sampler import Sampler
 from ...sampling.terrain import land_mask, river_mask
 from ...util import rng
+from ...world.lifespans import visible_pois
 from ...world.overlay import Overlay
-from ...world.territory import FALLEN_OWNER_BASE, PREDECESSOR_OWNER_BASE
+from ...world.territory import FALLEN_OWNER_BASE, PREDECESSOR_OWNER_BASE, WILD
 from ...world.tile import Biome
 from ...world.wars import wars_at
 from ...world.world import World
@@ -169,6 +170,22 @@ class LayerContext:
             tops = [world.top_realm_at(r.id, *self.moment) for r in world.realms]
         extra = range(len(world.realms), len(world.realms) + len(world.fallen_realms) + len(world.predecessors))
         return np.array(tops + list(extra) + [-1])
+
+    @cached_property
+    def visible_pois(self) -> np.ndarray:
+        """A bool per ``World.pois`` entry: whether it stands (all do today; at a past moment those founded by then)."""
+        if self.moment is None:
+            return np.ones(len(self.world.pois), dtype=bool)
+        return visible_pois(self.world, self.config, self.moment)
+
+    @cached_property
+    def held_pois(self) -> np.ndarray:
+        """A bool per POI: whether a realm (or a fallen one) holds its cell. Today that is ``not poi.free``; at a past
+        moment the owner grid says, so a settlement on wild land is free then."""
+        pois = self.world.pois
+        if self.moment is None:
+            return np.array([not poi.free for poi in pois], dtype=bool)
+        return np.array([int(self.owners[poi.y, poi.x]) != WILD for poi in pois], dtype=bool)
 
     @cached_property
     def at_war(self) -> np.ndarray:

@@ -97,7 +97,14 @@ def sites_layer(ctx: LayerContext, grid: CellGrid) -> None:
     if not isinstance(sampler, DetailSampler):
         return
     inside = sampler.scale == SCALE_SITE
+    standing = (
+        None
+        if ctx.moment is None
+        else {id(p) for p, here in zip(ctx.world.pois, ctx.visible_pois, strict=True) if here}
+    )
     for poi, geometry in site_pois(ctx.world, ctx.config):
+        if standing is not None and id(poi) not in standing:
+            continue
         row0, col0, span_rows, span_cols = _extent_cells(sampler, geometry)
         if row0 >= sampler.rows or col0 >= sampler.cols or row0 + span_rows <= 0 or col0 + span_cols <= 0:
             continue

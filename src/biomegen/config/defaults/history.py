@@ -156,6 +156,8 @@ VALUES: Dict[str, Any] = {
         "min_map_cols": 40,
         "min_event_cols": 34,
         "current_bg": [60, 56, 30],
+        # Besides every territory change, these event kinds are stops of the viewer (they change what the map shows).
+        "stop_kinds": ["conquest", "fall", "war", "peace"],
         # Events with a place are marked on the map: those of the current moment in full colour, those of the
         # ``marker_years`` years before it faded by ``marker_fade``. Each kind has a glyph (ASCII).
         "marker_years": 30,
@@ -171,5 +173,16 @@ VALUES: Dict[str, Any] = {
             "peace": "=",
             "fall": "+",
         },
+    },
+    # When a point of interest appears on the map of the past (world/lifespans.py): the kind of the event that made it
+    # (it stands from that event; a kind with none linked, an ancient ruin, is always there). A settlement stands from
+    # the event that founded or settled it, else the year it was founded; any other kind with no row is always there.
+    "appears": {
+        "ruin": "fall",
+        "battlefield": "battle",
+        "watchtower": "war",
+        "shrine": "succession",
+        "tower": "creation",
+        "dungeon": "creation",
     },
 }

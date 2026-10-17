@@ -122,3 +122,61 @@ def test_a_border_at_war_is_reddened_at_that_moment(config) -> None:
 def test_a_border_after_the_peace_is_a_plain_border_again(config) -> None:
     world = _war_world(config)
     assert _line(world, config, (130, 1)) == _line(world, config, (90, 1))
+
+
+# --- points of interest at a moment -------------------------------------------------------------------------------
+
+
+def _poi_world() -> World:
+    """Realm 0 holds the whole 6x2 world from year 50; a town founded in 100 and a ruin left by a fall in 200."""
+    from biomegen.world.entities import POI
+
+    world = make_world(6, 2, Biome.GRASS)
+    world.realms = [Realm(id=0, kind="major", color=RED)]
+    world.realm_id[:] = 0
+    world.chronicle = [
+        ChronicleEvent(0, 100, "settling", [0], [0], month=1),
+        ChronicleEvent(1, 200, "fall", fallen_ids=[0], month=1),
+    ]
+    world.pois = [
+        POI(kind="town", x=1, y=0, interior_seed=1, civilized=True, event_ids=[0], founded=100, realm_id=0),
+        POI(kind="ruin", x=4, y=1, interior_seed=1, event_ids=[1], founded=20, fell=200),
+    ]
+    world.poi_index[0, 1], world.poi_index[1, 4] = 0, 1
+    world.territory = [TerritoryChange(50, 1, "founding", _cells(0, 1, 2, 3, 4, 5), WILD, 0)]
+    return world
+
+
+def _glyphs(world: World, config, moment) -> list[str]:
+    grid = build_grid(
+        world,
+        config,
+        View("p", ("terrain", "markers"), ""),
+        Sampler.viewport(world, world.height, world.width),
+        moment=moment,
+    )
+    return [str(g) for g in grid.glyph[grid.bold]]  # markers are drawn bold
+
+
+def test_a_town_is_not_drawn_before_it_is_founded(config) -> None:
+    assert len(_glyphs(_poi_world(), config, (90, 1))) < len(_glyphs(_poi_world(), config, (110, 1)))
+
+
+def test_a_ruin_is_drawn_only_after_the_fall(config) -> None:
+    world = _poi_world()
+    assert len(_glyphs(world, config, (150, 1))) == 1 and len(_glyphs(world, config, (200, 1))) == 2
+
+
+def test_the_present_draws_every_poi(config) -> None:
+    world = _poi_world()
+    assert len(_glyphs(world, config, None)) == 2
+
+
+def test_a_settlement_on_wild_land_then_is_drawn_as_a_free_one(config) -> None:
+    from biomegen.render.layers import LayerContext
+
+    world = _poi_world()
+    sampler = Sampler.viewport(world, world.height, world.width)
+    early = LayerContext(world, config, TINT_ONLY, sampler, moment=(40, 1))  # before realm 0 held anything
+    late = LayerContext(world, config, TINT_ONLY, sampler, moment=(150, 1))
+    assert (bool(early.held_pois[0]), bool(late.held_pois[0])) == (False, True)

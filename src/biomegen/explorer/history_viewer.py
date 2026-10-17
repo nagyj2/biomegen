@@ -104,13 +104,21 @@ class HistoryState:
     _events: Optional[tuple[int, list[ChronicleEvent], Document, list[int]]] = field(default=None, repr=False)
 
 
-def change_moments(world: World) -> list[Stop]:
+def _stop_event(config: Config, event: ChronicleEvent) -> bool:
+    """Whether ``event`` is a stop of the viewer: a conquest (a vassal tie), fall, war or peace (``stop_kinds``)."""
+    return event.kind in config.get("history.viewer.stop_kinds") and not (
+        event.kind == "conquest" and "vassalage" not in event.tags
+    )
+
+
+def change_moments(world: World, config: Config) -> list[Stop]:
     """Return each distinct ``(year, month)`` at which the political map changes, oldest first.
 
-    That is every territory change and every conquest (a vassal tie recolours land without moving a cell).
+    That is every territory change and every stop event (``history.viewer.stop_kinds``: a conquest recolours land
+    without moving a cell, a fall removes a realm, a war or a peace opens or closes a front).
     """
     moments = set(world.territory_moments())
-    moments |= {(e.year, e.month) for e in world.chronicle if e.kind == "conquest" and "vassalage" in e.tags}
+    moments |= {(e.year, e.month) for e in world.chronicle if _stop_event(config, e)}
     return sorted(moments)
 
 
@@ -125,7 +133,7 @@ def _year_end(world: World, config: Config, year: int) -> Stop:
 
 def initial_state(world: World, config: Config, start: Optional[int | Stop] = None) -> HistoryState:
     """Return the starting state: at ``start`` (a year, or a ``(year, month)``), else the first change."""
-    moments = change_moments(world)
+    moments = change_moments(world, config)
     if start is None:
         at = moments[0] if moments else _year_end(world, config, 0)
     elif isinstance(start, int):
@@ -205,14 +213,18 @@ def _words_for(world: World, change: TerritoryChange) -> str:
     return f"{change.kind}: {gained} takes {cells} cells from {lost}"
 
 
-def moment_summary(world: World, moment: Stop) -> str:
-    """Describe what changed at ``moment``: its territory changes and conquests, one phrase each."""
+def moment_summary(world: World, config: Config, moment: Stop) -> str:
+    """Describe what changed at ``moment``: its territory changes, then its fall, war, peace and conquest events."""
     parts = [_words_for(world, c) for c in world.territory if c.moment == moment]
     for event in world.chronicle:
-        if event.kind == "conquest" and "vassalage" in event.tags and (event.year, event.month) == moment:
+        if (event.year, event.month) != moment or not _stop_event(config, event):
+            continue
+        if event.kind == "conquest":
             parts.append(
                 f"conquest: {world.realms[event.realm_ids[1]].short} takes {world.realms[event.realm_ids[0]].short}"
             )
+        else:
+            parts.append(f"{event.kind}: {event.text}")
     return "; ".join(parts)
 
 
@@ -382,7 +394,7 @@ def compose_history_frame(
     screen.fg[_HEADER_ROWS : rows - _FOOTER_ROWS, map_cols] = dim
     _draw_events(screen, world, config, state, event_col, body)
     index = stop_index(state.moments, state.at)
-    status = moment_summary(world, state.moments[index]) if index >= 0 else "no change yet"
+    status = moment_summary(world, config, state.moments[index]) if index >= 0 else "no change yet"
     status_row = rows - _FOOTER_ROWS
     if state.prompt is not None:
         _put(screen, status_row, 0, f" year: {state.prompt}_", head, bg, bold=True)
