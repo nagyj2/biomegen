@@ -133,3 +133,47 @@ def test_the_ids_the_world_keeps_follow_the_renumbering() -> None:
     merge_events(world, [ChronicleEvent(-1, 5, "creation", month=1), ChronicleEvent(-1, 10, "creation", month=5)])
     assert world.chronicle[world.pois[0].event_ids[0]].kind == "fall"
     assert world.chronicle[world.territory[0].event_id].kind == "war"
+
+
+# --- roads ----------------------------------------------------------------------------------------------------------
+
+
+def test_the_road_links_cover_exactly_the_road_tiles(world: World) -> None:
+    covered = np.zeros(world.road.shape, dtype=bool)
+    for link in world.road_links:
+        covered.reshape(-1)[link.cells] = True
+    assert np.array_equal(covered, world.road > 0)
+
+
+def test_every_road_link_has_one_minor_road_event(world: World) -> None:
+    for link in world.road_links:
+        event = world.chronicle[link.event_id]
+        assert event.kind == "road" and event.salience == "minor"
+    assert len({link.event_id for link in world.road_links}) == len(world.road_links)
+
+
+def test_a_road_is_laid_after_both_its_ends_stand(world: World, cfg: Config) -> None:
+    from biomegen.world.lifespans import poi_appears
+
+    for link in world.road_links:
+        event = world.chronicle[link.event_id]
+        for end in (link.a, link.b):
+            if end >= 0:
+                appears = poi_appears(world, cfg, end)
+                assert appears is None or appears <= (event.year, event.month)
+
+
+def test_a_trunk_road_joins_two_places_and_a_spur_one(world: World) -> None:
+    for link in world.road_links:
+        assert len(world.chronicle[link.event_id].poi_ids) == (2 if link.b >= 0 else 1)
+
+
+def test_road_events_name_their_places(world: World) -> None:
+    for link in world.road_links:
+        text = world.chronicle[link.event_id].text
+        assert world.pois[link.a].name in text and "{" not in text
+
+
+def test_the_road_links_keep_their_events_through_the_merges(world: World) -> None:
+    for link in world.road_links:
+        assert world.chronicle[link.event_id].id == link.event_id

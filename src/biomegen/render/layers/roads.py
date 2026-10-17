@@ -151,8 +151,8 @@ def roads_layer(ctx: LayerContext, grid: CellGrid) -> None:
         _detail_roads(ctx, grid, ctx.sampler)
         return
     cfg = ctx.config.get("render.roads")
-    road = ctx.sampler.inside & (ctx.sampler.nearest(ctx.world.road) > 0)
+    road = ctx.sampler.inside & ctx.sampler.nearest(ctx.road)
     if not road.any():
         return
     glyphs = road_glyph_table(ctx.config, ctx.ascii_only)
-    grid.put(road, glyph=glyphs[ctx.sampler.nearest(connection_mask8(ctx.world.road))], fg=tuple(cfg["fg"]))
+    grid.put(road, glyph=glyphs[ctx.sampler.nearest(connection_mask8(ctx.road))], fg=tuple(cfg["fg"]))

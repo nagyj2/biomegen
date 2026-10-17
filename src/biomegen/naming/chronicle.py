@@ -135,13 +135,18 @@ def _secession_tokens(
 
 def _name_the_place(world: World, event: ChronicleEvent, tokens: dict[str, object], where: Where) -> bool:
     """Fill the tokens of an event that names one place and nothing else, and return whether it was one: a tower
-    raised or a dungeon delved (``{place}``), or a settlement no realm holds (``{town}``)."""
+    raised or a dungeon delved (``{place}``), a road laid (``{a}`` and ``{b}``) or a settlement no realm holds
+    (``{town}``)."""
     if event.kind == "creation":
         tokens["place"] = world.pois[event.poi_ids[0]].name
         where["place"] = (REF_POI, event.poi_ids[0])
     elif event.kind == "settling" and "free" in event.tags:
         tokens["town"] = world.pois[event.poi_ids[0]].name
         where["town"] = (REF_POI, event.poi_ids[0])
+    elif event.kind == "road":  # a road between two places, or a spur from one
+        for token, poi_id in zip(("a", "b"), event.poi_ids, strict=False):
+            tokens[token] = world.pois[poi_id].name
+            where[token] = (REF_POI, poi_id)
     else:
         return False
     return True

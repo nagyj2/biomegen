@@ -40,3 +40,15 @@ def visible_pois(world: World, config: Config, moment: Stop) -> np.ndarray:
         appears = poi_appears(world, config, index)
         visible[index] = appears is None or appears <= moment
     return visible
+
+
+def visible_roads(world: World, config: Config, moment: Stop) -> np.ndarray:
+    """Return a ``[y, x]`` bool grid of the road laid at ``moment``: the links built by then whose ends stand."""
+    standing = visible_pois(world, config, moment)
+    road = np.zeros(world.road.shape, dtype=bool)
+    for link in world.road_links:
+        laid = world.chronicle[link.event_id] if 0 <= link.event_id < len(world.chronicle) else None
+        built = laid is None or (laid.year, laid.month) <= moment
+        if built and standing[link.a] and (link.b < 0 or standing[link.b]):
+            road.reshape(-1)[link.cells] = True
+    return road

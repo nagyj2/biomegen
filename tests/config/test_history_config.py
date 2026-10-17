@@ -32,9 +32,11 @@ def test_every_event_kind_has_wording() -> None:
         "expansion_fallen",
         "creation_tower",
         "creation_dungeon",
+        "road_trunk",
+        "road_spur",
     } | {f"secession_{form}_{tag}" for form in ("offshoot", "split", "defection") for tag in ("bitter", "amicable")}
     assert set(rows) == {"treaty_alliance", "treaty_trade"} | variants | (
-        set(EVENT_KINDS) - {"treaty", "secession", "creation"}
+        set(EVENT_KINDS) - {"treaty", "secession", "creation", "road"}
     )
 
 

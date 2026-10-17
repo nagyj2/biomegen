@@ -18,7 +18,7 @@ from ...registry import Registry
 from ...sampling.sampler import Sampler
 from ...sampling.terrain import land_mask, river_mask
 from ...util import rng
-from ...world.lifespans import visible_pois
+from ...world.lifespans import visible_pois, visible_roads
 from ...world.overlay import Overlay
 from ...world.territory import FALLEN_OWNER_BASE, PREDECESSOR_OWNER_BASE, WILD
 from ...world.tile import Biome
@@ -177,6 +177,13 @@ class LayerContext:
         if self.moment is None:
             return np.ones(len(self.world.pois), dtype=bool)
         return visible_pois(self.world, self.config, self.moment)
+
+    @cached_property
+    def road(self) -> np.ndarray:
+        """A ``[y, x]`` bool grid of the road tiles: today's, or at a past moment the roads laid by then."""
+        if self.moment is None:
+            return self.world.road > 0
+        return visible_roads(self.world, self.config, self.moment)
 
     @cached_property
     def held_pois(self) -> np.ndarray:

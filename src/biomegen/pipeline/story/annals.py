@@ -9,6 +9,8 @@ stands) without filling the default listing:
   drawn over the history, and then gets that year as its ``founded``;
 - the **founding of a village or hamlet** (the settlements the history does not give a ``settling`` event).
 
+The roads laid between them (``World.road_links``) each get a minor ``road`` event too, once both ends exist.
+
 It runs after the POIs and their roads, so the chronicle is finished: the new events are merged into it (renumbering the
 ids the world keeps) and linked from the POI they are about. Every draw is a ``history`` / ``annals`` stream keyed on
 the POI.
@@ -18,7 +20,8 @@ from __future__ import annotations
 
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import POI, ChronicleEvent
+from ...world.entities import POI, ChronicleEvent, RoadLink
+from ...world.lifespans import poi_appears
 from ...world.world import World
 from .ledger import Ledger, merge_events
 from .places import nearest_settlement
@@ -84,6 +87,38 @@ def _settling(world: World, config: Config, seed: int, ledger: Ledger, index: in
         event.month = _month(roll, 1, int(config.get("history.months_per_year")))
 
 
+def _roads(world: World, config: Config, seed: int) -> None:
+    """Add the laying of every road, up to ``road_delay_years`` after the later of its two ends appears."""
+    ledger = Ledger(config)
+    delay = int(config.get("history.annals.road_delay_years"))
+    months = int(config.get("history.months_per_year"))
+    laid: list[tuple[RoadLink, ChronicleEvent]] = []
+    for number, link in enumerate(world.road_links):
+        ends = [link.a] + ([link.b] if link.b >= 0 else [])
+        starts = [poi_appears(world, config, index) for index in ends]
+        base = max((start for start in starts if start is not None), default=(0, 1))
+        roll_delay, roll_month = (rng.derive(seed, "history", "annals", "road", number).random() for _ in range(2))
+        year = min(world.year, base[0] + int(roll_delay * (delay + 1)))
+        middle = int(link.cells[len(link.cells) // 2])
+        event = ledger.add(
+            year,
+            "road",
+            "road_trunk" if link.b >= 0 else "road_spur",
+            ("link", number),
+            seed,
+            poi_ids=ends,
+            location=(middle % world.width, middle // world.width),
+            tags=("trunk" if link.b >= 0 else "spur",),
+            salience="minor",
+        )
+        if event is not None:
+            event.month = _month(roll_month, base[1] if year == base[0] else 1, months)
+            laid.append((link, event))
+    merge_events(world, [event for _, event in laid])
+    for link, event in laid:
+        link.event_id = event.id
+
+
 def run(world: World, config: Config, seed: int) -> None:
     """Add the minor events to ``world.chronicle`` and link them from their POIs."""
     ledger = Ledger(config)
@@ -100,3 +135,4 @@ def run(world: World, config: Config, seed: int) -> None:
     for event in events:
         for index in event.poi_ids:
             world.pois[index].event_ids.append(event.id)
+    _roads(world, config, seed)

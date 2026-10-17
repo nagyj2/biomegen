@@ -21,6 +21,7 @@ VALUES: Dict[str, Any] = {
         "settling",
         "expansion",
         "creation",
+        "road",
         "conquest",
         "succession",
         "war",
@@ -87,6 +88,7 @@ VALUES: Dict[str, Any] = {
         "settling": [150, 200, 160],
         "expansion": [170, 215, 120],
         "creation": [150, 170, 200],
+        "road": [170, 160, 140],
         "conquest": [230, 150, 90],
         "succession": [200, 180, 120],
         "war": [235, 90, 90],
@@ -189,5 +191,6 @@ VALUES: Dict[str, Any] = {
     },
     # Annals (pipeline/story/annals.py): the minor events the history leaves out. A tower or dungeon placed by location
     # stood before the history began (year 0) with chance ``ancient_share``, else it was made in a year drawn over it.
-    "annals": {"ancient_share": 0.5},
+    # A road is laid up to ``road_delay_years`` after the later of the places it joins appears.
+    "annals": {"ancient_share": 0.5, "road_delay_years": 30},
 }

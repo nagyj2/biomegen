@@ -33,7 +33,7 @@ import numpy as np
 from ...config.model import Config
 from ...util import geometry as geo
 from ...util import noise, rng
-from ...world.entities import POI
+from ...world.entities import POI, RoadLink
 from ...world.tile import BIOME_NAME, RELIEF_NAME, WaterType
 from ...world.world import World
 
@@ -447,8 +447,13 @@ def _network(world: World, config: Config, seed: int, eligible: List[Tuple[int, 
     )
 
 
-def _lay(world: World, network: _Network, comp_mask: np.ndarray, a: Coord, b: Coord, tier: int) -> None:
-    """Route ``a`` to ``b`` and write the path into the road arrays (``tier`` 1 trunk, 2 spur)."""
+def _lay(
+    world: World, network: _Network, comp_mask: np.ndarray, a: Coord, b: Coord, tier: int, ends: Tuple[int, int]
+) -> None:
+    """Route ``a`` to ``b``, write the path into the road arrays (``tier`` 1 trunk, 2 spur) and record the link.
+
+    ``ends`` are the POI indices at the two ends (-1 where the road runs to the nearest road tile, not a POI).
+    """
     path = _route(
         world,
         comp_mask,
@@ -464,6 +469,8 @@ def _lay(world: World, network: _Network, comp_mask: np.ndarray, a: Coord, b: Co
         world.road[y, x] = 1
         if world.road_tier[y, x] == 0:
             world.road_tier[y, x] = tier
+    cells = np.unique(np.array([y * world.width + x for x, y in path], dtype=np.int32))
+    world.road_links.append(RoadLink(ends[0], ends[1], tier, cells))
 
 
 def run(world: World, config: Config, seed: int) -> None:
@@ -501,7 +508,7 @@ def run(world: World, config: Config, seed: int) -> None:
 
         # Trunk phase: route the MST backbone + extra loop edges first.
         for i, j in trunk_edges:
-            _lay(world, network, comp_mask, coords[i], coords[j], 1)
+            _lay(world, network, comp_mask, coords[i], coords[j], 1, (group[i][0], group[j][0]))
 
         # Spur phase: connect each isolated POI to the nearest existing road tile.
         # Routing after the trunk means spurs branch off the closest point on the network,
@@ -520,7 +527,7 @@ def run(world: World, config: Config, seed: int) -> None:
                     for t in backbone
                 ]
                 target = coords[backbone[int(np.argmin(d2_list))]]
-            _lay(world, network, comp_mask, start, target, 2)
+            _lay(world, network, comp_mask, start, target, 2, (group[node_idx][0], -1))
     if network.cardinal_only:
         _close_diagonals(world)
 
@@ -552,10 +559,9 @@ def spurs(world: World, config: Config, seed: int) -> None:
         if len(road_yx) == 0:
             continue
         stream = rng.derive(seed, "roads", "spurs", comp)
-        for _index, poi in network.groups[comp]:
+        for index, poi in network.groups[comp]:
             if stream.random() < chance:
-                _lay(
-                    world, network, comp_mask, _endpoint(poi), _nearest_road(road_yx, _endpoint(poi), col_km, row_km), 2
-                )
+                target = _nearest_road(road_yx, _endpoint(poi), col_km, row_km)
+                _lay(world, network, comp_mask, _endpoint(poi), target, 2, (index, -1))
     if network.cardinal_only:
         _close_diagonals(world)

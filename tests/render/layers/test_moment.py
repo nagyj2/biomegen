@@ -180,3 +180,57 @@ def test_a_settlement_on_wild_land_then_is_drawn_as_a_free_one(config) -> None:
     early = LayerContext(world, config, TINT_ONLY, sampler, moment=(40, 1))  # before realm 0 held anything
     late = LayerContext(world, config, TINT_ONLY, sampler, moment=(150, 1))
     assert (bool(early.held_pois[0]), bool(late.held_pois[0])) == (False, True)
+
+
+# --- roads at a moment --------------------------------------------------------------------------------------------
+
+
+def _road_world() -> World:
+    """Two towns (founded 100 and 120) joined by a road along row 0, columns 1 to 4, laid in year 150."""
+    from biomegen.world.entities import POI, RoadLink
+
+    world = make_world(6, 2, Biome.GRASS)
+    world.chronicle = [
+        ChronicleEvent(0, 100, "settling", [], [0], month=1),
+        ChronicleEvent(1, 120, "settling", [], [1], month=1),
+        ChronicleEvent(2, 150, "road", poi_ids=[0, 1], month=1),
+    ]
+    world.pois = [
+        POI(kind="town", x=1, y=0, interior_seed=1, civilized=True, event_ids=[0], founded=100),
+        POI(kind="town", x=4, y=0, interior_seed=1, civilized=True, event_ids=[1], founded=120),
+    ]
+    world.road[0, 1:5] = 1
+    world.road_links = [RoadLink(0, 1, 1, np.array([1, 2, 3, 4], dtype=np.int32), event_id=2)]
+    return world
+
+
+def _road_cells(world: World, config, moment) -> int:
+    grid = build_grid(
+        world,
+        config,
+        View("p", ("terrain", "roads"), ""),
+        Sampler.viewport(world, world.height, world.width),
+        moment=moment,
+    )
+    plain = build_grid(
+        world, config, View("p", ("terrain",), ""), Sampler.viewport(world, world.height, world.width), moment=moment
+    )
+    return int((grid.glyph != plain.glyph).sum())
+
+
+def test_a_road_is_not_drawn_before_it_is_laid(config) -> None:
+    assert _road_cells(_road_world(), config, (140, 1)) == 0
+
+
+def test_a_road_is_drawn_once_it_is_laid(config) -> None:
+    assert _road_cells(_road_world(), config, (160, 1)) == 4
+
+
+def test_the_present_draws_all_the_road(config) -> None:
+    assert _road_cells(_road_world(), config, None) == 4
+
+
+def test_a_road_waits_for_both_of_its_ends(config) -> None:
+    world = _road_world()
+    world.chronicle[2].year = 110  # laid before the second town was founded
+    assert _road_cells(world, config, (115, 1)) == 0

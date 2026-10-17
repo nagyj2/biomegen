@@ -18,7 +18,19 @@ from typing import Optional
 import numpy as np
 
 from ..util.units import GridScale, grid_scale
-from .entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Lake, Predecessor, Realm, Relation, River, Ruler
+from .entities import (
+    POI,
+    ChronicleEvent,
+    FallenRealm,
+    GeoFeature,
+    Lake,
+    Predecessor,
+    Realm,
+    Relation,
+    River,
+    RoadLink,
+    Ruler,
+)
 from .territory import OwnerTimeline, TerritoryChange
 from .tile import Biome, Relief, TileView, WaterType
 
@@ -112,6 +124,7 @@ class World:
         self.rivers: list[River] = []
         self.lakes: list[Lake] = []
         self.features: list[GeoFeature] = []  # filled by the geography stage
+        self.road_links: list[RoadLink] = []  # each road laid between points of interest (filled by the roads stages)
 
         # History (filled by the history stage). ``year`` is the present; events are sorted and ``id`` is the index.
         self.year: int = 0

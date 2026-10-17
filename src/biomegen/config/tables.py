@@ -379,6 +379,8 @@ _CHRONICLE_TOKENS = {
     "expansion_fallen": frozenset({"fallen"}),
     "creation_tower": frozenset({"place"}),
     "creation_dungeon": frozenset({"place"}),
+    "road_trunk": frozenset({"a", "b"}),
+    "road_spur": frozenset({"a"}),
     "founding_predecessor": frozenset({"predecessor"}),
     "settling_free": frozenset({"town"}),
     "settling_remnant": frozenset({"town", "fallen"}),

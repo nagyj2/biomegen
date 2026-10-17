@@ -12,6 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
+import numpy as np
+
 REALM_KINDS: Tuple[str, ...] = ("major", "city_state", "tribal")
 RELATION_KINDS: Tuple[str, ...] = ("war", "rivalry", "alliance", "trade")
 REALM_ORIGINS: Tuple[str, ...] = ("", "offshoot", "split")  # how a realm began: ex nihilo, or by a secession
@@ -21,6 +23,7 @@ EVENT_KINDS: Tuple[str, ...] = (
     "settling",
     "expansion",
     "creation",
+    "road",
     "conquest",
     "succession",
     "war",
@@ -268,3 +271,23 @@ class ChronicleEvent:
         default_factory=list
     )  # (start, end, REF_KINDS entry, id) per name in text
     month: int = 1  # 1 to history.months_per_year within ``year``; events of a year are in month order
+
+
+@dataclass
+class RoadLink:
+    """One road laid between two points of interest (or from one to the nearest road): what the history viewer draws
+    once both ends exist and the road is built.
+
+    Attributes:
+        a: Index into ``World.pois`` of the first end.
+        b: Index of the second end, or -1 for a spur that runs to the nearest road tile.
+        tier: 1 for a trunk road, 2 for a spur (as ``World.road_tier``).
+        cells: Sorted unique flat row-major indices (``y * width + x``) of the cells it covers, ``int32``.
+        event_id: The ``road`` chronicle event that laid it (set by the annals), or -1.
+    """
+
+    a: int
+    b: int
+    tier: int
+    cells: np.ndarray
+    event_id: int = -1

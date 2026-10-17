@@ -3,8 +3,8 @@
 # name. Override one row with e.g. `[tables.chronicle.war]` + `templates = [...]` in a user config.
 #
 # chronicle, one row per kind of event text (founding, founding_fallen, settling, expansion, expansion_fallen,
-# creation_tower, creation_dungeon, conquest, succession, war, war_ended, war_fallen, rivalry, treaty_alliance,
-# treaty_trade, battle, peace, fall, fall_conquered):
+# creation_tower, creation_dungeon, road_trunk, road_spur, conquest, succession, war, war_ended, war_fallen, rivalry,
+# treaty_alliance, treaty_trade, battle, peace, fall, fall_conquered):
 #   templates       sentences to pick from; they never name a nearby place
 #   templates_near  optional; sentences that name a nearby settlement with {near}. An event draws from these as well
 #                   only when a settlement of the same landmass lies within `history.near_km`; each must contain {near}
@@ -16,6 +16,8 @@
 #   expansion_fallen  {fallen}                                    a fallen realm doing the same
 #   creation_tower    {place}                                     a tower raised (minor event)
 #   creation_dungeon  {place}                                     a dungeon delved (minor event)
+#   road_trunk        {a} {b}                                     a road laid between two places (minor event)
+#   road_spur         {a}                                         a track cut from a place to the road (minor event)
 #   founding_predecessor  {predecessor}                           a realm that later ended in a clean split (see below)
 #   settling_free     {town}                                      a city or town no realm holds
 #   settling_remnant  {town} {fallen}                             a free settlement founded in the life of a fallen realm
@@ -260,4 +262,19 @@ templates = [
 ]
 templates_near = [
   "{place} is delved beneath the lands near {near}.",
+]
+
+# A road laid (a minor event). road_trunk joins two places ({a} and {b}); road_spur runs from {a} to the nearest road.
+
+[chronicle.road_trunk]
+templates = [
+  "A road is laid between {a} and {b}.",
+  "{a} and {b} are joined by a road.",
+  "Carts begin to travel the new road from {a} to {b}.",
+]
+
+[chronicle.road_spur]
+templates = [
+  "A track is cut from {a} to the road.",
+  "{a} is joined to the road by a new track.",
 ]

@@ -96,7 +96,8 @@ def merge_events(world: World, events: Sequence[ChronicleEvent]) -> None:
     """Merge ``events`` (each with its ``year`` and ``month`` set) into the finished chronicle.
 
     The chronicle stays ordered by ``(year, month)``, an existing event keeping its place before a new one of the same
-    month; every event is renumbered and the ids the world keeps (``POI.event_ids`` and ``TerritoryChange.event_id``)
+    month; every event is renumbered and the ids the world keeps (``POI.event_ids``, ``TerritoryChange.event_id`` and
+    ``RoadLink.event_id``)
     follow. The new events' ``poi_ids`` are not linked back here: the caller appends each new id to its POIs.
     """
     old = world.chronicle
@@ -112,6 +113,9 @@ def merge_events(world: World, events: Sequence[ChronicleEvent]) -> None:
     world.chronicle = merged
     for poi in world.pois:
         poi.event_ids = [remap[i] for i in poi.event_ids]
+    for link in world.road_links:
+        if link.event_id in remap:
+            link.event_id = remap[link.event_id]
     for change in world.territory:
         if change.event_id in remap:
             change.event_id = remap[change.event_id]
