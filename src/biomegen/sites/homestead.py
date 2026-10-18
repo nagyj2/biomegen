@@ -90,9 +90,14 @@ def _house(
     return None
 
 
-@layout("homestead")
-def build_homestead(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray, tuple[SiteBuilding, ...]]]:
-    """A homestead floor, seen from inside and from outside: one house, its track and its dressing."""
+def _building(
+    ctx: SiteContext,
+) -> Optional[tuple[np.ndarray, np.ndarray, Lot, str, random.Random]]:
+    """Lay the track and find the homestead's building: ``(grid, dry, its lot, its kind, the site stream)``, or None.
+
+    Everything the building depends on is drawn here, in a fixed order on ``site.homestead``, so the lot is a pure
+    function of the site seed and the terrain: :func:`homestead_lot` returns it for a hamlet that grows from it.
+    """
     rows, cols = ctx.rows, ctx.cols
     dry = ctx.patch.dry
     ground = ndimage.binary_erosion(dry, structure=np.ones((3, 3), bool), border_value=1)
@@ -113,8 +118,26 @@ def build_homestead(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray, 
         _track(ctx, grid, dry, centre[0], min(rows - 2, centre[1] + tallest // 2 + 2))
         lot = _mill(ctx, grid, dry, ground, centre, stream, kind)
     lot = lot or _house(ctx, grid, dry, ground, centre, stream, kind)
-    if lot is None:
+    return None if lot is None else (grid, dry, lot, kind, stream)
+
+
+def homestead_lot(ctx: SiteContext) -> Optional[Lot]:
+    """Return the building a homestead of ``ctx`` stands on, as a lot in the site's own cells, or None with no room.
+
+    It is the very lot :func:`build_homestead` draws, so a hamlet the homestead grows into can stamp the same building
+    where it stood.
+    """
+    found = _building(ctx)
+    return None if found is None else found[2]
+
+
+@layout("homestead")
+def build_homestead(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray, tuple[SiteBuilding, ...]]]:
+    """A homestead floor, seen from inside and from outside: one house, its track and its dressing."""
+    found = _building(ctx)
+    if found is None:
         return None
+    grid, dry, lot, kind, stream = found
     roofs = np.zeros(grid.shape, dtype=bool)
     roofs[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width] |= lot.building.footprint
     lay_dress(ctx, grid, dry, roofs, (lot.x, lot.y, lot.width, lot.height), stream, condition="standing")

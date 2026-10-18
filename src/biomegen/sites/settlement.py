@@ -1170,6 +1170,42 @@ def _place_edge(
     return None
 
 
+def _stamp_grown(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray) -> Optional[Lot]:
+    """Stamp the building of the homestead this hamlet grew from where it stood; return its lot, or None for none.
+
+    ``ctx.grown`` is that building in the plan's own cells. It is dropped if it does not lie wholly on dry ground in
+    the plan. It is stamped before any street is laid, so the plaza and the streets run round it, and becomes the
+    hamlet's first specialized building (:func:`_place_kinds`).
+    """
+    lot = ctx.grown
+    rows, cols = grid.shape
+    if lot is None or not (0 <= lot.x and 0 <= lot.y and lot.x + lot.width <= cols and lot.y + lot.height <= rows):
+        return None
+    window = (slice(lot.y, lot.y + lot.height), slice(lot.x, lot.x + lot.width))
+    if not dry[window][lot.building.footprint].all() or (grid[window][lot.building.footprint] != _VOID).any():
+        return None
+    inside = lot.building.cells != _VOID
+    grid[window][inside] = lot.building.cells[inside]
+    return lot
+
+
+def _join_grown(ctx: SiteContext, grid: np.ndarray, dry: np.ndarray, town: np.ndarray, lot: Lot) -> None:
+    """Join the door of the grown building to the nearest street, so a hamlet that grew round it is reached from it.
+
+    The way is laid over free ground (:func:`~biomegen.sites.streets.lay_street`); with no street yet or no way, the
+    door is left as it is.
+    """
+    if lot.building.front is None:
+        return
+    front = (lot.x + lot.building.front[0], lot.y + lot.building.front[1])
+    streets = np.isin(grid, _STREET)
+    if not streets.any() or streets[front[1], front[0]]:
+        return
+    ys, xs = np.nonzero(streets)
+    nearest = int(np.argmin(((xs - front[0]) / ctx.aspect) ** 2 + (ys - front[1]) ** 2))
+    lay_street(grid, dry, front, (int(xs[nearest]), int(ys[nearest])), ctx.street_rules, town | streets)
+
+
 def _place_kinds(
     ctx: SiteContext,
     grid: np.ndarray,
@@ -1181,6 +1217,7 @@ def _place_kinds(
     landing: Optional[Point] = None,
     dressing: Optional[Dressing] = None,
     town: Optional[np.ndarray] = None,
+    grown: Optional[Lot] = None,
 ) -> tuple[list[Lot], list[tuple[bool, np.ndarray, np.ndarray]]]:
     """Preplace the specialized buildings the settlement is chosen to have that stand on the outer ground.
 
@@ -1215,14 +1252,17 @@ def _place_kinds(
     for index, (position, kind) in enumerate(candidates):
         siting = kind_row(ctx.config, kind)["siting"]
         shore = siting == "shore"
+        carried = grown is not None and position == 0 and kind == style_kind  # the homestead's building, already stood
         if shore and landing is None:
             continue  # no pier to stand beside: its slot is housing
-        if siting != "river" and reached is None:
+        if siting != "river" and reached is None and not carried:
             continue  # no street to reach
-        stands = position < ctx.standing
+        stands = carried or position < ctx.standing
         before = grid.copy()
         around = landing if shore and landing is not None else centre
-        if siting == "river":
+        if carried:
+            built = grown
+        elif siting == "river":
             built = _mill(ctx, grid, dry, ground, centre, kind=kind)
         else:
             assert reached is not None
@@ -1314,7 +1354,9 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray,
     town = _outline(ctx, centre, inner & ground, stream)
     ground = ground & town
     lay_roads(grid, ctx.patch)
-    grid[_plaza(ctx, centre, stream) & dry & town] = _PATH
+    grown = _stamp_grown(ctx, grid, dry)  # the homestead's building stands first; every street runs round it
+    plaza = _plaza(ctx, centre, stream) & dry & town
+    grid[plaza & (grid == _VOID)] = _PATH
     plot_x, plot_y, plot_width, plot_height = _plot(ctx, centre, inner)
     plot = (slice(plot_y, plot_y + plot_height), slice(plot_x, plot_x + plot_width))
     reserved = town[plot] & dry[plot]
@@ -1335,11 +1377,13 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray,
         dressing.add("boat", (grid != before) & ~np.isin(grid, _STREET))
     _join_roads(grid, dry, ctx.patch.road, ctx.aspect, float(ctx.config.get("sites.settlement.road_join_rows")))
     _close_slivers(grid, dry)
+    if grown is not None:
+        _join_grown(ctx, grid, dry, town, grown)
     hall = _centre(
         ctx, grid, dry, ground, centre, ends[0] if ends else None
     )  # the busiest street: a gate's spoke first
     specialized, slots = _place_kinds(
-        ctx, grid, dry, ground, centre, plot_mask, [hall] if hall is not None else [], landing, dressing, town
+        ctx, grid, dry, ground, centre, plot_mask, [hall] if hall is not None else [], landing, dressing, town, grown
     )
     gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
     keep_clear = plot_mask | _hold(grid, slots, (gap_x, gap_y))

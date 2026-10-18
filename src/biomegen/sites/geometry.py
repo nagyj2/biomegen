@@ -109,6 +109,17 @@ def site_row_for(config: Config, poi: POI) -> str:
     return site_row_name(config, poi.kind, poi.purpose or poi.style)
 
 
+def resolution_row(config: Config, poi: POI, row: dict) -> dict:
+    """Return the site row whose ``rows_per_tile`` draws ``poi``: ``row``, or for a homestead that may grow (its style
+    has a ``grows_into``) the row of its potential, so the homestead and the hamlet it becomes share one cell grid and
+    its building keeps its cells when the hamlet is drawn round it."""
+    if poi.kind == "homestead":
+        grown = config.get(f"tables.sites.{plan_tier(config, poi)}", None) if plan_tier(config, poi) else None
+        if grown is not None:
+            return grown
+    return row
+
+
 def _scale(poi: POI, config: Config, row: dict) -> float:
     """Return the extent factor for ``poi``: a seeded jitter, times the row's ``ruin_extent_share`` for a ruin.
 
@@ -134,7 +145,7 @@ def site_geometry(poi: POI, config: Config) -> Optional[SiteGeometry]:
     cam_y = math.floor(extent[1] - margin + 0.5)
     tiles_w = math.ceil(extent[2] + margin + 0.5) - cam_x
     tiles_h = math.ceil(extent[3] + margin + 0.5) - cam_y
-    cell_h = int(row["rows_per_tile"])
+    cell_h = int(resolution_row(config, poi, row)["rows_per_tile"])
     cell_w = max(cell_h, round(cell_h * float(config.get("render.cell_aspect"))))
     geometry = SiteGeometry(poi.kind, cell_w, cell_h, cam_x, cam_y, tiles_w, tiles_h, extent, (0, 0, 0, 0))
     col0, row0 = geometry.cell_at(extent[0], extent[1])

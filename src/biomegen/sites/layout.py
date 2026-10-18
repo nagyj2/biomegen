@@ -8,7 +8,7 @@ values over the extent box, where void means the terrain shows through. Layouts 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 
@@ -17,6 +17,9 @@ from ..world.manifest import SiteManifest
 from ..world.tile import Cell
 from .patch import SitePatch
 from .streets import StreetRules
+
+if TYPE_CHECKING:
+    from .settlement import Lot
 
 Layout = Callable[
     ["SiteContext"],
@@ -92,6 +95,8 @@ class SiteContext:
         walled: Whether the wall of a settlement stands (the manifest says).
         wall_planned: Whether the plan has a wall outline (its potential's row is walled), built or not.
             Dressings stay inside it.
+        grown: The building of the homestead a hamlet grew from, in the plan's own cells: the settlement stamps it as
+            its first specialized building, where it stood.
         config: The merged configuration, for the tunables of the ``sites`` section.
         tags: The POI's site traits (``port``, ``river``, ``lake``): a settlement builds a harbour or a mill for them.
         age_years: Years since the POI fell (a ruin fell in with them); None when it is undated or still stands.
@@ -124,6 +129,7 @@ class SiteContext:
     centre: str = ""
     manifest: Optional[SiteManifest] = None
     wall_planned: bool = False
+    grown: Optional["Lot"] = None
     kinds: tuple[str, ...] = ()
     style: str = ""
 

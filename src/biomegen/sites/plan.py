@@ -22,11 +22,13 @@ from ..world.world import World
 from . import battlefield, boat, camp, homestead, settlement, structure  # noqa: F401  (imported for their @layout registrations)
 from .cells import VOID
 from .geometry import SiteGeometry, site_floor_range, site_geometry, site_roof_floor, site_row_for
+from .homestead import homestead_lot
 from .kinds import family_weights, tier_centre
 from .layout import LAYOUTS, Fall, SiteBuilding, SiteContext
 from .manifest import site_manifest
 from .patch import read_patch
 from .potential import plan_tier
+from .settlement import Lot
 from .streets import clear_roads
 from .surroundings import settlement_kinds
 
@@ -97,6 +99,42 @@ def _fall(config: Config, row: dict, age_years: Optional[int]) -> Fall:
     )
 
 
+def _grown_lot(poi: POI, manifest: SiteManifest, config: Config, world: World, geometry: SiteGeometry) -> Optional[Lot]:
+    """Return the building of the homestead ``poi`` grew from, in the cells of ``poi``'s own plan, or None.
+
+    The homestead is drawn as the twin of ``poi`` (same cell, seed, tags and potential) with the style the manifest
+    names; its building is the lot :func:`~biomegen.sites.homestead.homestead_lot` finds, moved by the difference
+    between the two windows. The cells line up because a growing homestead is drawn on its potential's grid
+    (``resolution_row``); with a different grid, or no room for the homestead, there is nothing to carry over.
+    """
+    twin = replace(poi, kind="homestead", civilized=False, ruin_of="", purpose="", style=manifest.grown_from)
+    before = site_geometry(twin, config)
+    if before is None or (before.cell_w, before.cell_h) != (geometry.cell_w, geometry.cell_h):
+        return None
+    row = config.get(f"tables.sites.{site_row_for(config, twin)}")
+    context = SiteContext(
+        kind="homestead",
+        seed=int(poi.interior_seed),
+        floor=0,
+        lowest_floor=0,
+        floor_count=1,
+        patch=read_patch(twin, before, world, config),
+        furniture=_furniture(config, row),
+        plaza_rows=0,
+        walled=False,
+        config=config,
+        tags=tuple(poi.tags),
+        dress=str(row.get("dress", "")),
+        style=manifest.grown_from,
+    )
+    lot = homestead_lot(context)
+    if lot is None:
+        return None
+    dx = (before.cam_x - geometry.cam_x) * geometry.cell_w + before.box[0] - geometry.box[0]
+    dy = (before.cam_y - geometry.cam_y) * geometry.cell_h + before.box[1] - geometry.box[1]
+    return replace(lot, x=lot.x + dx, y=lot.y + dy)
+
+
 def site_plan(
     poi: POI, floor: int, config: Config, world: World, manifest: Optional[SiteManifest] = None
 ) -> Optional[SitePlan]:
@@ -136,7 +174,7 @@ def site_plan(
     age_years = None if poi.fell is None else max(0, world.year - poi.fell)
     # Only a settlement lays its own roof level; any other layout is built on the ground floor and seen from outside.
     roof_view = floor == site_roof_floor(poi, config) and row["layout"] != "settlement"
-    settled = row["layout"] == "settlement" and manifest is not None
+    settled = manifest if row["layout"] == "settlement" else None  # what stands, for a settlement layout only
     # A ruin falls as the tier it was (its own row's numbers), on the plan its potential draws.
     fallen_row = config.get(f"tables.sites.{poi.ruin_of}", row) if poi.kind == "ruin" and poi.ruin_of else row
     context = SiteContext(
@@ -148,7 +186,7 @@ def site_plan(
         patch=read_patch(poi, geometry, world, config),
         furniture=_furniture(config, row),
         plaza_rows=round(float(row.get("plaza_tiles", 0.0)) * int(row["rows_per_tile"])),
-        walled=manifest.walled if settled and manifest is not None else bool(row.get("walled", False)),
+        walled=settled.walled if settled is not None else bool(row.get("walled", False)),
         wall_planned=bool(row.get("walled", False)),
         config=config,
         tags=tuple(poi.tags),
@@ -156,11 +194,12 @@ def site_plan(
         purpose=poi.purpose,
         fall=_fall(config, fallen_row, age_years) if poi.kind == "ruin" and "ruin_standing" in fallen_row else None,
         dress=str(row.get("dress", "")),
-        potential=plan_tier(config, poi) if settled else "",
-        centre=tier_centre(config, manifest.tier) if settled and manifest is not None else "",
-        manifest=manifest if settled else None,
-        kinds=tuple(settlement_kinds(world, config, poi)) if settled else (),
+        potential=plan_tier(config, poi) if settled is not None else "",
+        centre=tier_centre(config, settled.tier) if settled is not None else "",
+        manifest=settled,
+        kinds=tuple(settlement_kinds(world, config, poi)) if settled is not None else (),
         style=poi.style,
+        grown=_grown_lot(poi, settled, config, world, geometry) if settled is not None and settled.grown_from else None,
     )
     built = LAYOUTS[row["layout"]](context)
     if built is None and context.fall is not None:  # no room for the settlement: a single fallen building instead
