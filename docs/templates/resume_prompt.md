@@ -41,7 +41,7 @@ At the end of the phase, write the handoff (a new top section in docs/handoffs/l
 
 | Field | Fill with |
 |---|---|
-| `phase_number`, `phase_name` | From `docs/redesign_plan.md` section 7 |
+| `phase_number`, `phase_name` | From `docs/simulation_plan.md` section 7 (the redesign plan is archived in `docs/handoffs/archive/`) |
 | `subphase_or_none` | Subphase label, or `none` |
 | `task_number_and_name` | The first unfinished task in the phase's todo list |
 | `handoff_file_and_section` | e.g. `docs/handoffs/landed-work.md, top section only` |

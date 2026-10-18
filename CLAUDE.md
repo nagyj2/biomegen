@@ -1,7 +1,7 @@
 # biomegen
 
 Seed-reproducible procedural island generator with a terminal explorer. Code map: `docs/ARCHITECTURE.md`.
-Redesign plan and phases: `docs/redesign_plan.md`. Nested `CLAUDE.md` files hold per-folder rules.
+The redesign (phases 0 to 9b) is complete: its record is `docs/ARCHITECTURE.md` and the log in `docs/handoffs/`. What is left is the simulation, `docs/simulation_plan.md`. Nested `CLAUDE.md` files hold per-folder rules.
 
 ## Rules
 

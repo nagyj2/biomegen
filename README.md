@@ -6,8 +6,8 @@ rulers, vassals, wars and alliances, points of interest (villages, towns, cities
 battlefields, watchtowers, shrines, camps, boats) connected by meandering roads — and lets you explore it in a colour terminal UI,
 zoom in to see structure detail, and export the view to SVG/PNG.
 
-> **Status:** The world generator and the layered renderer are in place (redesign phases 0–4; see
-> `docs/redesign_plan.md`). One layer stack draws the interactive explorer, static maps, zoomed views and
+> **Status:** The world generator and the layered renderer are in place (the redesign is complete; see
+> `docs/ARCHITECTURE.md`). One layer stack draws the interactive explorer, static maps, zoomed views and
 > the SVG/PNG exports, so they all look alike. Every POI archetype renders an interior embedded in the
 > terrain at the zoom (shell) and local (full, furnished) scales, with floor cycling for towers and dungeons.
 > Settlements and politics (realms, vassals, relations and a political view with borders and war fronts) and the

@@ -94,7 +94,7 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   `history.remnant_km` of a fallen realm's site on its landmass is a remnant, dated after the conflicts inside that realm's
   life, with a `settling_remnant` event and the fall event in its `event_ids`. Hooks come from the tier's `hooks_free` or
   `hooks_remnant`.
-- **Secession** (`secession.py`, `founding.py`; `docs/redesign_plan.md` phase 8b). No cell moves and the
+- **Secession** (`secession.py`, `founding.py`; phase 8b). No cell moves and the
   partition, one seat per major, acyclic vassal tree and relation invariants are untouched. Order: clean splits are planned
   and applied first (touching realms of `OFFSHOOT_KINDS` share the earlier founding year, the old realm is a `Predecessor`
   with its own founding, one `secession` event replaces the two foundings), then the rulers, then offshoots and defections are

@@ -66,7 +66,7 @@ LABELS: frozenset[str] = frozenset(
         "naming",  # name/lore generation
         "naming.culture",  # per-realm culture assignment (mixed-culture naming)
         "regen",  # perturbed master seed for a regeneration attempt after the land-fraction gate
-        # Stages of the redesigned pipeline (docs/redesign_plan.md 4.1), registered ahead of their
+        # Stages of the redesigned pipeline (the redesign's pipeline design), registered ahead of their
         # phase so no earlier stage can claim the name. Each stage adds its own suffixes when it lands.
         "terrain",  # map latitude, elevation, mountain belts, sea level
         "climate",  # temperature and rainfall
