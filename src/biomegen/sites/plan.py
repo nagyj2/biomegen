@@ -149,6 +149,7 @@ def site_plan(
         furniture=_furniture(config, row),
         plaza_rows=round(float(row.get("plaza_tiles", 0.0)) * int(row["rows_per_tile"])),
         walled=manifest.walled if settled and manifest is not None else bool(row.get("walled", False)),
+        wall_planned=bool(row.get("walled", False)),
         config=config,
         tags=tuple(poi.tags),
         age_years=age_years,
@@ -158,7 +159,7 @@ def site_plan(
         potential=plan_tier(config, poi) if settled else "",
         centre=tier_centre(config, manifest.tier) if settled and manifest is not None else "",
         manifest=manifest if settled else None,
-        kinds=tuple(settlement_kinds(world, config, poi))[: manifest.specialized] if settled and manifest else (),
+        kinds=tuple(settlement_kinds(world, config, poi)) if settled else (),
         style=poi.style,
     )
     built = LAYOUTS[row["layout"]](context)
@@ -171,6 +172,7 @@ def site_plan(
                 furniture=_furniture(config, ruin_row),
                 plaza_rows=0,
                 walled=False,
+                wall_planned=False,
                 fall=None,
                 floor=0 if roof_view else floor,
             )

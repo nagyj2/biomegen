@@ -89,7 +89,9 @@ class SiteContext:
         patch: The terrain under the extent, and the road gates.
         furniture: Per room role, the site's furniture as ``(cell, weight)`` pairs.
         plaza_rows: A settlement's plaza radius in rows (0 for none).
-        walled: Whether a settlement has a wall.
+        walled: Whether the wall of a settlement stands (the manifest says).
+        wall_planned: Whether the plan has a wall outline (its potential's row is walled), built or not.
+            Dressings stay inside it.
         config: The merged configuration, for the tunables of the ``sites`` section.
         tags: The POI's site traits (``port``, ``river``, ``lake``): a settlement builds a harbour or a mill for them.
         age_years: Years since the POI fell (a ruin fell in with them); None when it is undated or still stands.
@@ -121,8 +123,14 @@ class SiteContext:
     potential: str = ""
     centre: str = ""
     manifest: Optional[SiteManifest] = None
+    wall_planned: bool = False
     kinds: tuple[str, ...] = ()
     style: str = ""
+
+    @property
+    def standing(self) -> int:
+        """How many of ``kinds`` (the first ones) are built; the others keep their spot clear for later."""
+        return len(self.kinds) if self.manifest is None else self.manifest.specialized
 
     def weights(self, role: str) -> list[tuple[Cell, float]]:
         """The furniture weights of a room role (empty: the role is left bare)."""

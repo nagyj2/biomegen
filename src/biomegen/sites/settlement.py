@@ -1181,41 +1181,61 @@ def _place_kinds(
     landing: Optional[Point] = None,
     dressing: Optional[Dressing] = None,
     town: Optional[np.ndarray] = None,
-) -> list[Lot]:
+) -> tuple[list[Lot], list[tuple[bool, np.ndarray, np.ndarray]]]:
     """Preplace the specialized buildings the settlement is chosen to have that stand on the outer ground.
 
-    Each kind of ``ctx.kinds`` whose ``siting`` is ``edge`` or ``any`` is built where :func:`_place_edge` finds room,
-    then dressed (a farmhouse's field, a lodge's clearing, a mine's spoil: ``sites.homestead.dress``; the settlement
-    plants its own trees; a walled settlement's dressings stay inside the wall, in ``town``). A kind that finds no room
-    is simply left out: its slot is housing. One nearest-street transform serves them all. ``taken`` are the lots
-    already stamped (the centre), kept clear.
+    Each kind of ``ctx.kinds`` is given the spot its ``siting`` finds: :func:`_place_edge` for ``edge``, ``any`` and
+    ``shore``, :func:`_mill` for ``river``. It is then dressed (a farmhouse's field, a lodge's clearing, a mine's
+    spoil: ``sites.homestead.dress``; the settlement plants its own trees; a walled settlement's dressings stay inside
+    the wall, in ``town``). Every kind is placed, in list order, so a slot's spot never depends on how many stand; only
+    the first ``ctx.standing`` are kept. The others are returned as ``(cells changed, the grid before)`` pairs to be
+    taken back out once everything is placed (:func:`_hold`), leaving their spot clear. A kind that finds no room is
+    simply left out: its slot is housing. One nearest-street transform serves them all. ``taken`` are the lots already
+    stamped (the centre), kept clear.
+
+    Returns:
+        The lots that stand, and for every slot placed whether it stands, the cells it changed and the grid before.
     """
-    kinds = [kind for kind in ctx.kinds if kind_row(ctx.config, kind)["siting"] in ("edge", "any", "shore")]
+    candidates = [(position, kind) for position, kind in enumerate(ctx.kinds)]
+    if not candidates:
+        return [], []
     streets = np.isin(grid, _STREET)
-    if not kinds or not streets.any():
-        return []
-    distance, nearest = ndimage.distance_transform_edt(~streets, sampling=(1.0, 1.0 / ctx.aspect), return_indices=True)
+    reached = None
+    if streets.any():
+        reached = ndimage.distance_transform_edt(~streets, sampling=(1.0, 1.0 / ctx.aspect), return_indices=True)
     stream = rng.derive(ctx.seed, "site.layout", "kinds")
     roofs = np.zeros(grid.shape, dtype=bool)
     for lot in taken:
         roofs[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width] |= lot.building.footprint
     condition = "standing" if ctx.fall is None else "ruin"
-    dress_land = dry & town if ctx.walled and town is not None else dry  # the wall ring lies just outside the town
+    dress_land = dry & town if ctx.wall_planned and town is not None else dry  # the wall ring lies outside the town
     style_kind = str(ctx.config.get(f"tables.poi_styles.{ctx.style}.building", "")) if ctx.style else ""
     placed: list[Lot] = []
-    for index, kind in enumerate(kinds):
-        shore = kind_row(ctx.config, kind)["siting"] == "shore"
+    slots: list[tuple[bool, np.ndarray, np.ndarray]] = []
+    for index, (position, kind) in enumerate(candidates):
+        siting = kind_row(ctx.config, kind)["siting"]
+        shore = siting == "shore"
         if shore and landing is None:
             continue  # no pier to stand beside: its slot is housing
+        if siting != "river" and reached is None:
+            continue  # no street to reach
+        stands = position < ctx.standing
+        before = grid.copy()
         around = landing if shore and landing is not None else centre
-        built = _place_edge(ctx, grid, dry, ground, around, kind, distance, nearest, keep_out, stream, not shore)
+        if siting == "river":
+            built = _mill(ctx, grid, dry, ground, centre, kind=kind)
+        else:
+            assert reached is not None
+            distance, nearest = reached
+            built = _place_edge(ctx, grid, dry, ground, around, kind, distance, nearest, keep_out, stream, not shore)
         if built is None and index == 0 and ctx.style and kind == style_kind:
             built = _ensure_house(ctx, grid, dry, ground, centre, kind)  # a hamlet always has its style's building
         if built is None:
             continue
-        placed.append(built)
         roofs[built.y : built.y + built.height, built.x : built.x + built.width] |= built.building.footprint
-        dress = str(kind_row(ctx.config, kind).get("dress", ""))
+        if siting == "river" and stands and dressing is not None:
+            dressing.note("wheel", before, grid, (_WHEEL, int(Cell.AXLE_H), int(Cell.AXLE_V)))
+        dress = str(kind_row(ctx.config, kind).get("dress", "")) if siting != "river" else ""
         if dress:
             lay_dress(
                 replace(ctx, dress=dress),
@@ -1225,10 +1245,31 @@ def _place_kinds(
                 (built.x, built.y, built.width, built.height),
                 rng.derive(ctx.seed, "site.layout", "dress", index),
                 condition=condition,
-                dressing=dressing,
+                dressing=dressing if stands else None,
                 plant=False,
             )
-    return placed
+        if stands:
+            placed.append(built)
+        slots.append((stands, grid != before, before))
+    return placed, slots
+
+
+def _hold(grid: np.ndarray, slots: list[tuple[bool, np.ndarray, np.ndarray]], gap: tuple[int, int]) -> np.ndarray:
+    """Take the slots that do not stand (see :func:`_place_kinds`) back out of ``grid``; return what to keep clear.
+
+    The cells an unbuilt slot's building, access path and dressing changed are restored. The mask returned is the cells
+    every slot changed, built or not, grown by the street gap: the houses and the trees keep off all of them, so which
+    slots stand moves nothing else.
+    """
+    keep = np.zeros(grid.shape, dtype=bool)
+    for stands, mask, original in slots:
+        if not stands:
+            grid[mask] = original[mask]
+        keep |= mask
+    if not slots:
+        return keep
+    gap_x, gap_y = gap
+    return ndimage.binary_dilation(keep, structure=np.ones((2 * gap_y + 1, 2 * gap_x + 1), dtype=bool))
 
 
 def _roof_cells(ctx: SiteContext, shape: tuple[int, int], lots: list[Lot]) -> np.ndarray:
@@ -1297,19 +1338,15 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray,
     hall = _centre(
         ctx, grid, dry, ground, centre, ends[0] if ends else None
     )  # the busiest street: a gate's spoke first
-    specialized = _place_kinds(
+    specialized, slots = _place_kinds(
         ctx, grid, dry, ground, centre, plot_mask, [hall] if hall is not None else [], landing, dressing, town
     )
-    before = grid.copy() if dressing is not None else grid
-    mill = _mill(ctx, grid, dry, ground, centre, kind="mill") if "mill" in ctx.kinds else None
-    if mill is None and ctx.style and ctx.config.get(f"tables.poi_styles.{ctx.style}.building", "") == "mill":
-        mill = _ensure_house(ctx, grid, dry, ground, centre, "mill")  # a mill hamlet always has its mill
-    if dressing is not None:
-        dressing.note("wheel", before, grid, (_WHEEL, int(Cell.AXLE_H), int(Cell.AXLE_V)))
-    placed = [lot for lot in (hall, *specialized, mill) if lot is not None]
+    gap_x, gap_y = (int(v) for v in ctx.setting("street_gap"))
+    keep_clear = plot_mask | _hold(grid, slots, (gap_x, gap_y))
+    placed = [lot for lot in (hall, *specialized) if lot is not None]
     houses = ctx.manifest.houses if ctx.manifest is not None else None
     roofs, lots = _lots(
-        ctx, grid, ground, centre, stream, placed, int((ground[plot] & reserved).sum()), plot_mask, houses
+        ctx, grid, ground, centre, stream, placed, int((ground[plot] & reserved).sum()), keep_clear, houses
     )
     if (houses is None or houses > 0) and all(  # at least one house besides the centre
         kind_row(ctx.config, lot.kind)["function"] == "civic" for lot in lots
@@ -1324,7 +1361,7 @@ def build_settlement(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray,
     wall: tuple[list[Point], list[Point]] = ([], [])
     if ctx.walled:
         wall = _wall(ctx, grid, dry, town, ends)
-    _plant(ctx, grid, dry, roofs, plot_mask)
+    _plant(ctx, grid, dry, roofs, keep_clear)
     standing = lots  # the buildings that stand: all of them, or a ruin's survivors
     if ctx.fall is not None:
         survivors = _fall(ctx, grid, roofs, uppers, lots, wall)
