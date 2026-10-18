@@ -20,6 +20,7 @@ from typing import Optional
 import numpy as np
 
 from ..config.model import Config
+from ..config.population import tier_pop_range
 from ..util import rng
 from ..world.entities import POI
 from ..world.tile import BIOME_NAME, RELIEF_NAME, WaterType, biome_from_name
@@ -80,7 +81,7 @@ def _score(suits: dict[str, float], terms: dict[str, float]) -> float:
 def specialized_slots(config: Config, tier: str, pop: int) -> int:
     """Return how many specialized buildings a settlement of ``tier`` and ``pop`` has: its slot range, by population."""
     low, high = (int(v) for v in config.get(f"tables.sites.{tier}.specialized"))
-    pop_low, pop_high = (int(v) for v in config.get(f"tables.tiers.{tier}.pop"))
+    pop_low, pop_high = tier_pop_range(config, tier)
     fraction = 0.0 if pop_high <= pop_low else min(1.0, max(0.0, (pop - pop_low) / (pop_high - pop_low)))
     return low + round((high - low) * fraction)
 

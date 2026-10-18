@@ -29,6 +29,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ...config.model import Config
+from ...config.population import pop_scale
 from ...util import geometry as geo
 from ...util import rng
 from ...world.entities import POI, Realm
@@ -171,7 +172,7 @@ def population(
     row = config.get(f"tables.realm_kinds.{kind}")
     settled = sum(p.pop for p in world.pois if (p.civilized or p.kind == "homestead") and mine[p.y, p.x])
     share = stream.uniform(*(float(v) for v in row["outside_share"]))
-    rural = stream.uniform(*(float(v) for v in row["rural_per_km2"]))
+    rural = stream.uniform(*(float(v) for v in row["rural_per_km2"])) * pop_scale(config)  # drawn first, then scaled
     return settled + int(settled * share) + int(area_km2 * rural)
 
 

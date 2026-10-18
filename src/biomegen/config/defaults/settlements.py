@@ -9,6 +9,9 @@ from typing import Any, Dict
 
 VALUES: Dict[str, Any] = {
     "density": 1.0,  # multiplies every tier's settlement count (1.0 = one per land_per_settlement_km2)
+    # Multiplies every population drawn from the tables: settlements, hamlets, ruins (peak), homesteads and the people a
+    # realm has on the land (config/population.py). The draws are unchanged, so the world is too; 1.0 = table numbers.
+    "pop_scale": 1.5,
     "min_habitability": 0.05,  # cells at or below this never hold a settlement
     "jitter": 0.3,  # habitability is scaled by 1 +/- jitter (seeded per cell), so equal sites are not tied
     # A cell gets a bonus when water lies within the reach (km). Bonuses apply only where the relief allows

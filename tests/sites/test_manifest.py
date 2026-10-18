@@ -7,6 +7,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.config.population import tier_pop_range
 from biomegen.sites.kinds import tier_centre
 from biomegen.sites.manifest import manifest_buildings, site_manifest
 from biomegen.sites.potential import settlement_tier
@@ -28,8 +29,7 @@ def _poi(kind: str, pop: int, **fields: object) -> POI:
 
 
 def _pop_range(config: Config, tier: str) -> tuple[int, int]:
-    low, high = config.get(f"tables.tiers.{tier}.pop")
-    return int(low), int(high)
+    return tier_pop_range(config, tier)
 
 
 @pytest.mark.parametrize("tier", TIERS)

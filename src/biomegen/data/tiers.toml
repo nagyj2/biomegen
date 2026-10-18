@@ -11,7 +11,7 @@
 #   glyph, ascii  map marker (one character) for unicode and ASCII output
 #   fg            marker colour, [r, g, b] or "#rrggbb"
 #   bg            optional marker background colour (omit to keep the terrain background)
-#   pop           [min, max] population
+#   pop           [min, max] population, drawn per settlement and then multiplied by `settlements.pop_scale`
 #   floors        [min, max] storeys of the settlement's tallest buildings (its site has this many floors)
 #   spacing_km    minimum distance to any already-placed settlement
 #   land_per_settlement_km2  one settlement of this tier per this much land area (km²)

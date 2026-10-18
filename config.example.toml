@@ -67,6 +67,7 @@ months_per_year = 12             # events and territory changes carry a month 1 
 
 [settlements]
 density = 1.0                    # multiplies every tier's settlement count (tiers: data/tiers.toml)
+pop_scale = 1.5                  # multiplies every population drawn from the tables (1.0 = the table numbers); the map is unchanged
 capital_min_landmass_km2 = 400000.0
 max_capitals = 16
 

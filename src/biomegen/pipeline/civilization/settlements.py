@@ -20,6 +20,7 @@ from __future__ import annotations
 import numpy as np
 
 from ...config.model import Config
+from ...config.population import scaled_people
 from ...util import geometry as geo
 from ...util import rng
 from ...world.tile import BIOME_NAME, RELIEF_NAME, Biome, WaterType
@@ -153,7 +154,8 @@ def run(world: World, config: Config, seed: int) -> None:
                 if landmass < 0 or not allowed[landmass]:
                     continue
             floors = rng.derive(seed, "poi_interior", x, y, "floors").randint(*(int(v) for v in row["floors"]))
-            _commit(world, reach, seed, tier, x, y, stream.randint(lo, hi), floors, bool(row.get("connect", True)))
+            people = scaled_people(config, stream.randint(lo, hi))
+            _commit(world, reach, seed, tier, x, y, people, floors, bool(row.get("connect", True)))
             nearest_km = np.minimum(nearest_km, _km_to(world, x, y))
             placed += 1
 

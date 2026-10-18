@@ -7,7 +7,8 @@
 # realm_kinds, one row per kind in world/entities.py REALM_KINDS (major, city_state, tribal):
 #   label            display name of the kind ("realm", "city-state", ...)
 #   strength         [min, max] claim strength: a realm's cost to expand a step is divided by it
-#   rural_per_km2    [min, max] people per km2 of land, spread over the whole realm: the populace living off the land
+#   rural_per_km2    [min, max] people per km2 of land, spread over the whole realm: the populace living off the land (drawn, then
+#                    multiplied by `settlements.pop_scale` like every population)
 #   outside_share    [min, max] of the people in its settlements and homesteads that live outside them (a drawn share, so
 #                    each realm has its own jitter); a realm's population is the people in them plus both outside terms
 #   vassal_chance    chance that the realm swears fealty to a neighbouring major (needs one)

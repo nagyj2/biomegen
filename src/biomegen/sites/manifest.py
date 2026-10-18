@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..config.model import Config
+from ..config.population import tier_pop_range
 from ..world.entities import POI
 from ..world.manifest import SiteManifest
 from ..world.world import World
@@ -22,7 +23,7 @@ from .surroundings import settlement_kinds, specialized_slots
 
 def _pop_share(config: Config, tier: str, pop: int) -> float:
     """Return where ``pop`` lies in ``tier``'s population range, from 0 (its smallest) to 1 (its largest)."""
-    low, high = (int(v) for v in config.get(f"tables.tiers.{tier}.pop"))
+    low, high = tier_pop_range(config, tier)
     return 0.0 if high <= low else min(1.0, max(0.0, (pop - low) / (high - low)))
 
 

@@ -22,6 +22,7 @@ import numpy as np
 from scipy import ndimage
 
 from ...config.model import Config
+from ...config.population import scaled_people
 from ...util import geometry as geo
 from ...util import rng
 from ...world.entities import POI
@@ -210,7 +211,7 @@ def _commit(world: World, config: Config, seed: int, style: str, kind: str, x: i
     founded = max(1, world.year - stream.randint(lo, hi))
     if kind == "hamlet":
         tier = config.get("tables.tiers.hamlet")
-        pop = stream.randint(*(int(v) for v in tier["pop"]))
+        pop = scaled_people(config, stream.randint(*(int(v) for v in tier["pop"])))
         floors = (max(1, stream.randint(*(int(v) for v in tier["floors"]))), 0)
         pois.commit(
             world,
@@ -238,7 +239,7 @@ def _commit(world: World, config: Config, seed: int, style: str, kind: str, x: i
         style=style,
         connect=bool(row.get("connect", False)),
         founded=founded,
-        pop=stream.randint(*(int(v) for v in config.get("poi.homestead_people"))),
+        pop=scaled_people(config, stream.randint(*(int(v) for v in config.get("poi.homestead_people")))),
         tags=settlement_tags(reach, x, y),
     )
 

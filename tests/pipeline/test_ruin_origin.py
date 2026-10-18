@@ -6,6 +6,7 @@ import pytest
 
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.config.population import tier_pop_range
 from biomegen.pipeline import pois
 
 SEED = 11
@@ -38,5 +39,5 @@ def test_the_holding_weights_never_draw_a_capital_or_hamlet(cfg: Config) -> None
 
 
 def test_the_population_comes_from_the_tiers_range(cfg: Config) -> None:
-    lo, hi = cfg.get("tables.tiers.capital.pop")
+    lo, hi = tier_pop_range(cfg, "capital")
     assert all(lo <= pois.ruin_origin(cfg, SEED, x, 1, tier="capital")[1] <= hi for x in range(50))

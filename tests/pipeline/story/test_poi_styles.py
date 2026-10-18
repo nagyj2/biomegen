@@ -6,6 +6,7 @@ import numpy as np
 
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.config.population import scaled_people, tier_pop_range
 from biomegen.pipeline.story import poi_styles
 from biomegen.util.units import grid_scale
 from biomegen.world.entities import POI
@@ -244,14 +245,14 @@ def test_a_homestead_is_a_lone_unnamed_building_with_its_style() -> None:
     poi_styles.place_styles(world, cfg, 7)
     poi = _placed(world, "homestead")[0]
     assert (poi.style, poi.civilized, poi.connect, poi.floor_count) == ("farm", False, False, 1)
-    low, high = cfg.get("poi.homestead_people")
+    low, high = (scaled_people(cfg, v) for v in cfg.get("poi.homestead_people"))
     assert low <= poi.pop <= high  # one household
 
 
 def test_a_generated_hamlet_is_a_small_civilized_settlement() -> None:
     world, cfg = _island(), _spread_config(hamlet_km2_per_poi=400000.0, grows_into="hamlet", hooks_hamlet=["{name}."])
     poi_styles.place_styles(world, cfg, 7)
-    lo, hi = cfg.get("tables.tiers.hamlet.pop")
+    lo, hi = tier_pop_range(cfg, "hamlet")
     hamlets = _placed(world, "hamlet")
     assert hamlets and all(p.civilized and lo <= p.pop <= hi and p.style == "farm" and not p.connect for p in hamlets)
 

@@ -25,6 +25,7 @@ from typing import NamedTuple
 import numpy as np
 
 from ..config.model import Config
+from ..config.population import scaled_people
 from ..sites.geometry import site_row_name
 from ..util import geometry as geo
 from ..util import rng
@@ -151,7 +152,7 @@ def ruin_origin(
             break
     origin = tier or chosen
     lo, hi = (int(v) for v in config.get(f"tables.tiers.{origin}.pop"))
-    return origin, stream.randint(lo, hi)
+    return origin, scaled_people(config, stream.randint(lo, hi))
 
 
 def build_poi(

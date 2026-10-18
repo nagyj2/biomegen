@@ -8,6 +8,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.config.population import tier_pop_range
 from biomegen.pipeline.civilization import settlements
 from biomegen.util.units import grid_scale
 from biomegen.world.tile import Biome, Relief, WaterType
@@ -115,7 +116,7 @@ def test_settlements_stand_on_dry_habitable_land(generated: World, cfg: Config) 
 def test_population_is_inside_the_tier_range(generated: World, cfg: Config) -> None:
     for p in generated.pois:
         if p.kind in TIERS:
-            lo, hi = cfg.get(f"tables.tiers.{p.kind}.pop")
+            lo, hi = tier_pop_range(cfg, p.kind)
             assert lo <= p.pop <= hi
 
 

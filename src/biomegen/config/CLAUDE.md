@@ -34,3 +34,7 @@ Every tunable lives here. The program must run correctly with no config file at 
 - Callers work on copies (`get_defaults()` deep-copies); never mutate `DEFAULTS` in place.
 - Precedence is CLI flag > config file > defaults. A new CLI flag overrides the merged tree in `cli.py`.
 - Changing a default changes the world: say so, and compare `scripts/fingerprint.sh` before and after.
+- **Populations are scaled after the draw** (`population.py`): every population drawn from a table (`tables.tiers.<tier>.pop`,
+  `poi.homestead_people`, a realm kind's `rural_per_km2`) is multiplied by `settlements.pop_scale` with `scaled_people`, and a
+  population is measured against its tier's range with `tier_pop_range`. To raise or lower the numbers change the scale; changing a
+  range changes the draws and so, through the tribes' seats, the world.

@@ -7,6 +7,7 @@ import pytest
 from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
+from biomegen.config.population import tier_pop_range
 from biomegen.pipeline.story.poi_rules import event_key
 from biomegen.world.entities import POI
 from biomegen.world.world import World
@@ -437,7 +438,7 @@ def test_a_fallen_realms_holdings_were_one_of_the_holding_origins(world: World, 
 def test_a_ruin_held_the_peak_population_of_its_origin_tier(world: World, cfg: Config) -> None:
     for poi in world.pois:
         if poi.kind == "ruin":
-            lo, hi = cfg.get(f"tables.tiers.{poi.ruin_of}.pop")
+            lo, hi = tier_pop_range(cfg, poi.ruin_of)
             assert lo <= poi.pop <= hi
 
 
