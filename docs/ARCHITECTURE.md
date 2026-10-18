@@ -58,15 +58,20 @@ src/biomegen/
     entities.py         POI / Realm / Relation / River / Lake / GeoFeature / ChronicleEvent / FallenRealm dataclasses
     chronicle.py        chronicle_text() and chronicle_json(): the history as three-column text or JSON; ChronicleFilter / filter_events()
     territory.py        TerritoryChange deltas and OwnerTimeline: the owner map at any moment, owner ids (wild, fallen, predecessor)
+    ledger.py           EventLog: the generated chronicle and a continuation (a simulation's events) read as one list, `id == index`
+    manifest.py         SiteManifest: what stands in a settlement's plan (houses, specialized slots, the centre's tier, the wall)
+    sim_state.py        SimState: the simulation's state (tick, continuation lists, manifests); empty and unused until phase 10
   sites/                Lazy, deterministic, cached site plans: what you see zooming into a POI
-    geometry.py         Extent, window and plan resolution of a POI's site, in world tiles
+    geometry.py         Extent, window and plan resolution of a POI's site, in world tiles (a settlement's from its potential)
+    potential.py        potential_tier(): the largest tier a site could grow into, from its land and room; assign_potentials(), the pass
+    manifest.py         site_manifest(): today's manifest from a settlement's tier and population; manifest_buildings()
     patch.py            The terrain under a site (read through the render sampler) and the road gates
-    plan.py             site_plan(): the per-floor plan, memoised; SitePlan
+    plan.py             site_plan(poi, floor, config, world, manifest=None): the per-floor plan, memoised; SitePlan
     layout.py           SiteContext and the layout registry
     building.py         Thin-walled building model: footprint, subdivided rooms, doors, roles, furniture
-    settlement.py structure.py camp.py boat.py homestead.py   The layouts (structure = dungeon, tower, ruin; homestead = one building of its style's kind in a yard, dressed)
-    kinds.py            Building kinds (`tables.buildings`): roof cells, sizes, specs, a tier's centre and reserve; the legend names of kind and dress cells
-    surroundings.py     settlement_kinds(): the specialized buildings a settlement is chosen to have, from the terrain round it (pure, memoised)
+    settlement.py structure.py camp.py boat.py homestead.py   The layouts (structure = dungeon, tower, ruin; homestead = one building of its style's kind in a yard, dressed; `homestead_lot` hands that building to the hamlet it grows into)
+    kinds.py            Building kinds (`tables.buildings`): roof cells, sizes, specs, a tier's centre; the legend names of kind and dress cells
+    surroundings.py     settlement_kinds(): the specialized buildings a settlement's potential is chosen to have, from the terrain round it (pure, memoised)
     dress.py            Dressings (`tables.dress`): variants by condition, laying a field, clearing, spoil, supplies; the Dressing record and a ruin's wear
     carve.py partition.py shapes.py furnish.py circulation.py streets.py   the layout toolkit
     cells.py            Cell groups, outside priority, wall autotile index
@@ -91,7 +96,7 @@ src/biomegen/
       secession.py      Secession score (pure term functions shared with a later simulation) and the planning of splits, offshoots and defections
       founding.py       The founding and settling events a secession step may add or change
       conflicts.py      Wars, peace, pacts, battles and falls played through time with faction strengths
-      ledger.py         Ledger: collects the events, then sorts and numbers them
+      ledger.py         Ledger: collects the events, then sorts and numbers them (and sets `tick` and `derived`); `merge_events` for the annals
       territory.py      The territory planner: walks the ledger back from today's map (expansions, foundings, falls, strips, secessions)
       territory_fields.py  Seat cells and km from the seat, computed once per world for the planner
       places.py         nearest_settlement() and nearest_feature(): the locality rule for a place named in text
@@ -132,9 +137,10 @@ src/biomegen/
     app.py              compose_frame (map + cursor + panel) and the event-driven loop; restart and the history key
     chronicle_pager.py  --chronicle on a terminal: scroll, filter and search the chronicle
     history_viewer.py   --history and t: the political map at a moment, the powers then and the chronicle beside it
-    events.py           EventReader: where the panel reads history from
+    events.py           EventReader / ChronicleReader: where the panel reads history from (through world.ledger.EventLog)
     ticks.py            TickSource, NoTicks and Clock: the time seam (speed, pause) a simulation plugs into
 tests/                  pytest suite mirroring src/: golden-world hash, RNG determinism, config, overlay, renderer, explorer …
+                        (test_layering.py checks the package layering; test_scripts.py smoke-tests the measuring scripts)
 config.example.toml     Sparse-overlay example (every key with its default value)
 ```
 
@@ -175,7 +181,20 @@ was, always set) and `pop` (its peak population); `POI.free` is derived (civiliz
 (`Ruler`: realm, reign years, style, five traits, name) lists every realm's rulers, founder first, read through
 `rulers_of(realm_id)` and `ruler_at(realm_id, year)`. A realm that began in a secession records `origin` (`offshoot` or `split`),
 `parent` (an offshoot's parent realm) or `predecessor` (a split's index into `predecessors`: a `Predecessor`, the old realm that
-ended in a clean split). None of this is in the per-tile arrays, so the fingerprint ignores it.
+ended in a clean split). A `ChronicleEvent` also has a `tick` (its absolute month, `year * history.months_per_year + month - 1`) and
+`derived` (True for what the generation made, False for what a simulation emits). A `POI` holds `potential`, the largest settlement
+tier its site could grow into (set by `sites.potential`; empty for a POI with no settlement plan). None of this is in the per-tile
+arrays, so the fingerprint ignores it.
+
+#### The simulation's seams (`world/ledger.py`, `manifest.py`, `sim_state.py`)
+
+Phase 10's simulation reads three shapes that exist now and hold nothing yet. `EventLog(world, extra)` reads the chronicle and a
+continuation as one list, so `id == index` holds across both and a reader (`explorer/events.py`) asks one object; `append` numbers
+an event after the last and refuses to go back before its `(year, month)`. `SiteManifest` is what stands in a settlement's plan
+(`houses`, `specialized`, the centre's `tier`, `walled`, `grown_from`). `SimState` is the simulation's own state: a `tick`, a
+`revision`, continuation lists for events, rulers, predecessors and POIs (their ids continue after the generated ones:
+`next_ruler_id`, `next_predecessor_id`, `next_poi_index`) and a manifest per changed settlement. `world/` imports only `util` and
+`config`; `tests/test_layering.py` holds every package to the layer order.
 
 Scale metadata: `World.scale` is a `util.units.GridScale` built by `generate()` from `world.size_km`
 and `world.center_lat` / `center_lon` (`center_lat = "seed"` draws it per generation attempt from the
@@ -416,7 +435,7 @@ and every draw is a `history` sub-stream keyed on the entity.
 
 An event holds a raw template from `tables.chronicle` (`templates_near` only when `places.nearest_settlement` finds a
 settlement on the same landmass within `history.near_km`); naming renders `text` and the `refs` (the span, kind and id of
-every name in it). The ledger sorts events by `(year, kind order, creation order)` and numbers them.
+every name in it). The ledger sorts events by `(year, kind order, creation order)` and numbers them, dealing each event a month, its `tick` and `derived = True`.
 `--chronicle [--chronicle-format json]` prints them as three columns (year, event type, text), coloured by `--color` or
 the terminal (`render/chronicle.py`): a realm, its ruler and its settlements are in the realm's map colour (`Realm.color`),
 a fallen realm in its own (`FallenRealm.color`), the old realm of a split in its own (`Predecessor.color`); a settlement is in its realm's colour from its first mention (the neutral `history.colors.settlement` only when no realm holds it), a bandit tower or dungeon in `hideout`,
@@ -526,6 +545,9 @@ and the simulation seams (`owner`, `dynamic`, `connect`, `bandit_strength`, `ban
    only for a style that grows (`grows_into`), placed first, each keeping the tier's `spacing_km` from every settlement.
    A hamlet is `civilized` with a population from the tier range; both get `founded` from `poi.style_founded_years`.
 5. **Interior seed**: each POI mints `interior_seed = blake2b(master_seed, "poi_interior", x, y)` for its lazy site plan.
+6. **Potential** (`sites.potential.assign_potentials`, the stage's last step): once every POI exists, each POI with a settlement
+   plan gets `potential`, the largest tier its land and room allow (never below what it is). Nothing moves, so the
+   fingerprint is the same; the site plans are drawn for it.
 
 ### Stage 9f — Spurs (`roads.spurs`)
 
@@ -666,8 +688,19 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
 - **Extent and window** (`geometry.py`). Each kind has a row in `tables.sites` (`data/sites.toml`): an `extent_tiles`
   `[w, h]` in world tiles, centred on the anchor (a tower or camp is under one tile, a village about one, a capital
   several), and `rows_per_tile`, the plan resolution (columns follow `render.cell_aspect`, so a tile stays square).
-  The extent is scaled by a seeded jitter and, for settlements, by population. The **window** is the whole tiles that
-  hold the extent plus `sites.margin_tiles`: a detail grid whose cells are plan cells.
+  The extent is scaled by a seeded jitter. A settlement, and a ruin that records what it was, is drawn from the row of its
+  **potential** (`POI.potential`, see below), never of its tier or population, so growth never redraws its plan; a homestead
+  that may grow is drawn on its potential's `rows_per_tile` (`geometry.resolution_row`), so it shares one cell grid with the
+  hamlet it becomes. The **window** is the whole tiles that hold the extent plus `sites.margin_tiles`: a detail grid whose
+  cells are plan cells.
+- **Potential and the manifest** (`potential.py`, `manifest.py`, `world/manifest.py`). The largest tier a site could grow into is
+  the best tier T whose `potential_land` the habitable share of land within `sites.potential.radius_km` reaches and whose
+  `spacing_km` times `sites.potential.room_share` is no more than the distance to the nearest other settlement of note; it is
+  never less than what the POI already is (a ruin: the tier it was; a growing homestead: the hamlet it grows into) and a tier
+  without `potential_land` (the capital) is nobody's potential. `assign_potentials` stores it on every POI at the end of the
+  pois stage (so room sees them all); a simulation calls `potential_tier` for a POI it mints. The plan reads that and a
+  `SiteManifest` (which lots are built, the centre's tier, whether the wall stands), never the tier or population:
+  `site_plan(..., manifest=None)` uses `site_manifest`, the one place that turns a settlement's tier and population into one.
 - **Terrain patch** (`patch.py`). The terrain under the extent is read through the same `DetailSampler` the renderer
   uses (`sampling/terrain.py` defines land and river once), so a plan agrees exactly with the water drawn around it.
   Roads are not stored: the road bed over the extent (`sampling/roads.py`, the raster the renderer draws) is read
@@ -684,7 +717,11 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   wobbling outline (stretched towards each road), a plaza, spokes from it to the outline, partial rings, lanes into any
   ground still too far from a street, then lots fitted to the free ground beside the streets (each a building whose door
   faces its street), and for walled tiers a wall along the outline with gates where spokes and the road meet it (the
-  buildings of a settlement are kinds: see **Building kinds** below). `structure.py` builds dungeon (a surface gatehouse plus underground rock floors of rooms and
+  buildings of a settlement are kinds: see **Building kinds** below). **The lots are ordered**: houses are placed one by one,
+  nearest the plaza first, until `manifest.houses` stand (or the `sites.settlement.fill` share of the ground is covered), and
+  each lot depends only on the ones before it, so a plan with one more house is the same plan with one more lot. Every other
+  per-lot draw (storeys, stairs) is keyed on the lot's position and trees are drawn per cell, so a new lot disturbs nothing
+  but the ground beside it. The wall outline is fixed; it is stamped only when `manifest.walled`. `structure.py` builds dungeon (a surface gatehouse plus underground rock floors of rooms and
   corridors or caves), tower (tapering single-room floors, aligned stairs, a lookout; a watchtower is the same layout in its
   own furniture), ruin (a building with breaches, rubble, trees and partial roofs, eroded more the longer ago it fell; a ruin with a `ruin_of` is
   instead its tier's settlement plan with a fall pass: each building survives with a chance that falls with age (the
@@ -701,16 +738,22 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   own in a reserved block (`KIND_ROOF_BASE + rank`, `world/tile.py`), so a plan stays one `uint8` array and the outside
   view shows each kind in its colour; inside, a kind is told by its rooms and furniture.
 - **The centre** (`settlement._centre`, `_plot`). Every tier row names a `centre` kind (hamlet gathering point, village
-  chapel, town hall, city cathedral, capital palace) and optionally a `reserve` (the next tier's centre). The plaza is a
-  paved square, the *reserved plot*, sized for the reserve kind plus an apron; the centre stands in it at the plaza point,
+  chapel, town hall, city cathedral, capital palace). The plaza is a paved square, the *reserved plot*, sized for the
+  centre of the settlement's *potential* plus an apron; the centre of the manifest's tier stands in it at the plaza point,
   its door facing the busiest street, on its own random streams, and the plot is carved out of the ground the `fill` share
-  counts. Swapping the centre kind therefore changes nothing outside the plot (the rule behind growth never redrawing a
-  plan: a promotion rebuilds only the centre). A ruin keeps its centre as its guaranteed survivor.
+  counts. Swapping the centre kind (a promotion) therefore changes nothing outside the plot (the rule behind growth never
+  redrawing a plan). A ruin keeps its centre as its guaranteed survivor.
 - **Specialized buildings** (`surroundings.settlement_kinds`). A pure rule reads small windows of terrain round the
   settlement (fertility, forest, roughness, fresh water, sea), scores each production kind by its `suits` weights
-  (`needs_tag`, `min_score`), and shares the tier's `specialized` slots (more with population) by score (D'Hondt,
-  `max_per_kind`); a hamlet's style kind is first. The layout preplaces them: `edge` kinds on the outer ground, the mill
-  at the river bank with its wheel, the fishery beside the harbour's pier; a kind with no room leaves its slot to housing.
+  (`needs_tag`, `min_score`), and shares the potential's `specialized` slots (the most) by score (D'Hondt, `max_per_kind`);
+  a hamlet's style kind is first. They are fixed slots: the layout places *every* kind in list order (`edge` kinds on the
+  outer ground, the mill at the river bank with its wheel, the fishery beside the harbour's pier; a kind with no room leaves
+  its slot to housing), stamps the first `manifest.specialized` and takes the rest back out, keeping their ground clear of
+  houses and trees, so a slot's spot never depends on how many stand.
+- **A homestead that grows** (`manifest.grown_from`, `plan._grown_lot`, `settlement._stamp_grown`). The hamlet's plan stamps the
+  homestead's own building first, where it stood (the lot `homestead.homestead_lot` finds, moved by the difference between the
+  two windows), runs the plaza and streets round it and joins its door to the nearest street; it is the hamlet's first
+  specialized building. The yard's dressing is not carried over.
 - **Dressings** (`data/dress.toml`, `dress.py`). A dressing has variants drawn by condition (`standing` or `ruin`) and POI
   kind: a field is full or harvested rows, or in a ruin harvested or dead. A variant is an existing cell or a look of its
   own in the dress cell block (`DRESS_BASE + rank`). In a ruin each dressing (field, clearing, spoil, pier, boats, wheel,
@@ -769,8 +812,8 @@ stopping when a key is waiting. Once that is done an idle explorer uses no CPU.
 - **Chronicle pager.** `run_chronicle` is a second, smaller loop over the same reader, writer and key table (see the chronicle
   section above); its frame is built by `compose_pager_frame` and its state is a `PagerState`.
 - **Panel history.** The panel lists the latest events at the cursor's tile and then its realm's (`render.panel_events`) and the
-  hook of the point of interest, reading them through `explorer/events.py` (`EventReader`; `ChronicleReader` is the generated
-  chronicle) so a later simulation's ledger can join the one reader.
+  hook of the point of interest, reading them through `explorer/events.py` (`EventReader`; `ChronicleReader` reads through `world.ledger.EventLog`: the generated
+  chronicle and, later, a simulation's events as one list).
 - **History viewer.** `t` opens `explorer/history_viewer.py` on the explorer's own reader and writer, at the latest event at the
   cursor (the present when there is none), and quitting it returns to the same explorer state. `--history [YEAR]`
   (`scripts/history.sh`) runs it alone. See the territory section below.

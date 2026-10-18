@@ -31,11 +31,16 @@ one (echoed). `-h` as the first argument shows the script's usage; later `-h` re
 - `scripts/export.sh [args]`: headless SVG/PNG export to `build/export`.
 - `scripts/view.sh [args]`: a static map fitted to the terminal; add `--scale zoom|local --at X,Y` for a magnified part.
 - `scripts/bench_render.sh [--seed S] [runs] [COLSxROWS] [view]`: frame times of the detail layers and the explorer frame.
+- `scripts/bench.sh [--seed S] [--sim] [runs] [WxH ...]`: per-stage generation time; `--sim` times what a simulation tick would redo
+  (the claim Dijkstra, the front distance, the danger field).
+- `scripts/plan_digest.sh [--seed S] [--list]` and `scripts/bench_sites.sh [--seed S]... [runs]`: the proof that a site-plan change moved
+  (or left) plans, and its cost (mean calls per kind; budget: no row grows more than 25%).
 
 ## Layering
 
 Dependency direction: `util -> config -> world -> sampling -> sites, naming -> pipeline -> render -> explorer -> cli`. A lower
-layer never imports a higher one; `render/` does no terminal I/O (rules in `src/biomegen/render/CLAUDE.md`).
+layer never imports a higher one (`tests/test_layering.py` checks it; `world/` imports only `util` and `config`); `render/` does no
+terminal I/O (rules in `src/biomegen/render/CLAUDE.md`).
 
 ## Determinism (do not break)
 

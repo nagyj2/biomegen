@@ -105,9 +105,12 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   first event is its founding or its secession; an offshoot's parent is an older major realm; a split's children share its
   year; a defecting town was settled for the realm it left.
 - **Ledger.** Events are collected, sorted by `(year, kind order in EVENT_KINDS, creation order)` and then numbered, so an
-  event's `id` is its index. Anything added later (a simulation) has `year >= World.year`, so appending keeps the order. An id
-  shifts whenever an event is added, swapped or a kind is switched off, so nothing seeded may be keyed on it: POI draws use
-  `poi_rules.event_key` (the event's content).
+  event's `id` is its index; `finish` also deals each a month and its `tick` (the absolute month,
+  `entities.month_tick`), and `Ledger.add` marks every event `derived` (the generation's; a simulation's are not).
+  `merge_events(world, events, months_per_year)` does the same for events merged in later (the annals). Anything added later (a
+  simulation) has `year >= World.year`, so appending keeps the order, and `world.ledger.EventLog` is the reader that joins the
+  two lists. An id shifts whenever an event is added, swapped or a kind is switched off, so nothing seeded may be keyed on it:
+  POI draws use `poi_rules.event_key` (the event's content).
 - **Territory** (`story/territory.py`; `docs/ARCHITECTURE.md`, "Territory"). The present map `realm_id` is the end state and never
   moves: the planner walks the ledger newest to oldest and undoes each step, recording `world.territory` deltas (the owner map at
   any moment is `World.owners_at`). It runs after every other event is in the ledger and before `Ledger.finish`, because it adds
@@ -156,8 +159,13 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 - **Event link.** A POI lists the events that made or mark it in `event_ids` (and a settlement its founding or settling event);
   an event's `poi_ids` is never appended to, because naming reads `poi_ids[0]` as a `{town}`. `World.events_at` finds events
   through both.
+- **Potential pass** (`sites.potential.assign_potentials`, the last step of the pois stage, also at a dawn start). Once every POI
+  exists each POI with a settlement plan gets `potential` (its land and room, never below what it is); it moves nothing, so the
+  fingerprint is the same. A simulation that mints a POI calls `potential_tier` itself (`pois.build_poi` stays world-free).
 - **Simulation seams.** Rows carry `owner`, `dynamic`, `connect`, `bandit_strength`, `bandit_radius_km`, `lifespan`; `POI.fell`
-  and `bandit_strength` are data only until a simulation reads them. No simulation code lives here.
+  and `bandit_strength` are data only until a simulation reads them. The naming helpers it calls exist per entity
+  (`naming.chronicle.describe_event`, `name_fallen_realm`, `name_predecessor`, `naming.hooks.render_hook`,
+  `naming.polity.name_ruler`). No simulation code lives here.
 
 ## Adding a stage
 

@@ -35,8 +35,10 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 ## Sites and furniture
 
 - `sites.toml` has one row per POI kind: its `layout`, the `furniture` set, `extent_tiles` (w, h in world tiles, below 1
-  for a site smaller than a tile), `rows_per_tile` (plan resolution) and, for settlements, `grows_with_pop`,
-  `plaza_tiles` and the optional `walled` (a wall with a gate where each road arrives). A tier that a ruin may have been
+  for a site smaller than a tile), `rows_per_tile` (plan resolution) and, for settlements, `plaza_tiles`, `specialized` and
+  `houses` (`[min, max]` buildings, mapped from population in `sites/manifest.py` only) and the optional `walled` (a wall
+  with a gate where each road arrives). A settlement or ruin is drawn from the row of its *potential*
+  (`POI.potential`), so its extent, plaza, wall outline and resolution are those of the tier it could grow into. A tier that a ruin may have been
   (`tables.pois.ruin` origins) also needs `ruin_standing` and `ruin_wall_fall` ([young, old] shares of buildings standing and
   wall fallen, over `sites.ruin_erosion_years`) and `ruin_extent_share` (a factor on its extent as a ruin). Every settlement tier in `tiers.toml` and every `tables.pois` kind needs a site row to be zoomable. A camp's `purpose` picks the row
   `camp_<purpose>` (`site_row_name`).
@@ -77,8 +79,10 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   it), `map_marker` (false hides the marker at the map scale) and `near_target` (false: other places' texts never name it as
   the settlement nearby and the legend leaves it out of settlement counts): the hamlet tier does all four.
 - Every `tiers.toml` row needs a `centre` (a civic kind of `buildings.toml`: the building that stands at the plaza and defines a settlement
-  of the tier) and may set `reserve` (the civic kind whose plot the plaza keeps clear: the next tier's centre; absent means its own).
-  A `sites.toml` settlement row may set `specialized` (`[min, max]` specialized buildings, more with population).
+  of the tier; the plaza keeps clear the plot of the centre of the settlement's potential) and may set `potential_land` (0 to 1: the
+  habitable share of the land round a site, within `sites.potential.radius_km`, it takes for the site to grow into the tier; a
+  tier without it, the capital and the hamlet, is never a potential beyond what a POI already is). A `sites.toml` settlement row
+  has `specialized` and `houses` (`[min, max]`, more with population, the range of the tier the settlement *is*).
 
 ## Buildings and dressings
 
@@ -87,7 +91,7 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   (`KIND_ROOF_BASE + rank`); civic kinds rank last. `rows` and `width` size a lot, `shapes`, `roles` and `furniture` its rooms, `roof`
   its look (`glyph`, `ascii`, `color`). A production kind's `suits` weights (`fertility`, `forest`, `roughness`, `fresh_water`,
   `coast`) feed `sites/surroundings.py`, with `needs_tag`, `min_score`, `max_per_kind`, `siting` (`river`, `shore`, `edge`, `any`),
-  `tries` and a `dress` set. A `poi_styles` row's `building` names a production kind, a tier's `centre` and `reserve` civic kinds.
+  `tries` and a `dress` set. A `poi_styles` row's `building` names a production kind, a tier's `centre` a civic kind.
 - `dress.toml` has one row per dressing: `variants` (each an existing `cell` or a look of its own with a `rank` below 64, a weight
   per condition `standing` and `ruin`, and optional `kinds`) and `wear` (the shares a ruin turns its cells to `void`, `rubble` or
   `overgrown`). A row may have only `wear` (a pier, a boat). A site asks for the dress for its kind in its condition, so a standing

@@ -14,7 +14,8 @@ key tables and the terminal.
 - **Keys** come from the rebindable `keys` table: add the default in `config/defaults/keys.py`, the action in `input.py`,
   the key to the controls line and help in `panel.py`, and a row in `README.md` and `config.example.toml`. A bound key beats
   the `HJKL` and `WASD` letters, so check a new letter is free (`H` is a fast move).
-- **History is read through `events.py`** (`EventReader`), never `World.chronicle`, so a simulation's ledger can join it.
+- **History is read through `events.py`** (`EventReader`; `ChronicleReader` reads through `world.ledger.EventLog`), never
+  `World.chronicle`, so a simulation's events can join it as one list.
 - **The explorer shows the present.** Time travel is the history viewer's (`--history`, `t`): it never changes the world and
   reads the map at a moment with `World.owners_at` and `build_grid(..., moment=)`. Do not give the explorer a time cursor.
 - **Restart (`r`)** makes the same world again from its seed and resets view, overlay, cache, clock and the tick source

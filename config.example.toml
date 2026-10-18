@@ -88,6 +88,7 @@ ruin_erosion = 0.45             # fraction of a ruin's walls that have collapsed
 ruin_damage = { breaches = 6.0, crack = 0.6, strip = 0.85, roof = 0.8 }  # how hard a ruin damages a building that survives, at full wear
 ruin_rubble = { wall = 0.8, floor = 0.45 }  # shares of a destroyed building left as rubble (the rest is bare ground)
 kinds = { radius_km = { fertility = 60.0, forest = 60.0, roughness = 150.0, fresh_water = 60.0, coast = 60.0 }, saturate = { fertility = 0.6, forest = 0.5, roughness = 0.25, fresh_water = 0.04, coast = 0.08 } }  # what a settlement is chosen to have
+potential = { radius_km = 150.0, room_share = 1.0 }  # the tier a site could grow into: land within radius_km, room = share of a tier's spacing
 coast_margin_rows = 1           # bare ground kept between a solid structure and any water
 bridge_max_rows = 6             # the widest water a settlement street will bridge
 # Per-kind site rows (layout, extent in tiles, plan resolution, furniture set) live in
