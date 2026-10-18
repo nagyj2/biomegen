@@ -179,7 +179,7 @@ def test_the_site_panel_lists_the_buildings_that_stand(config: Config) -> None:
     world = flat_world(16, 12)
     poi = add_poi(world, "town", 8, 6, pop=3000, civilized=True)
     lines = _panel(world, config, state=_site_state(config, world, poi), width=140)
-    assert "buildings: Hall" in lines[6]
+    assert "buildings: Hall" in lines[7]
 
 
 def test_the_site_panel_names_the_building_under_the_cursor(config: Config) -> None:
@@ -194,7 +194,7 @@ def test_the_site_panel_names_the_building_under_the_cursor(config: Config) -> N
     left, top, _r, _b = plan.geometry.box
     state = _site_state(config, world, poi)
     state.px, state.py = left + hall.x + hall.width // 2, top + hall.y + hall.height // 2
-    assert "under cursor: Hall" in _panel(world, config, state=state, width=160)[6]
+    assert "under cursor: Hall" in _panel(world, config, state=state, width=160)[7]
 
 
 def test_the_panel_lists_no_buildings_outside_a_site(config: Config) -> None:
@@ -310,3 +310,29 @@ def test_a_name_in_an_event_line_is_in_its_realms_colour(config: Config) -> None
     world.chronicle[1].refs = [(0, 7, "poi", 0)]  # "Dunmere is settled."
     grid = build_panel(world, config, ViewState(cx=2, cy=1), "terrain", Seen(), 100, 12)
     assert _cell_color(grid, "Dunmere is settled") == (200, 40, 40)
+
+
+# --- a layout that holds still --------------------------------------------------------------------------------------
+
+
+def _legend_row(lines: list[str]) -> int:
+    return next(row for row, line in enumerate(lines) if "legend:" in line)
+
+
+def test_the_hook_is_told_on_its_own_reserved_row(config: Config) -> None:
+    assert "A mill burned here once." in _panel(_storied_world(), config)[6]
+
+
+def test_a_poi_with_no_hook_leaves_the_hook_row_blank(config: Config) -> None:
+    world = _storied_world()
+    world.pois[0].hook = ""
+    assert _panel(world, config, seen=Seen(biomes={int(Biome.GRASS)}))[6].strip() == ""
+
+
+def test_the_legend_stays_on_its_row_whether_or_not_there_is_a_hook(config: Config) -> None:
+    # The row below the POI line is the hook's either way, so nothing under it jumps when the cursor leaves a POI.
+    seen = Seen(biomes={int(Biome.GRASS)})
+    told = _panel(_storied_world(), config, seen=seen)
+    silent = _storied_world()
+    silent.pois[0].hook = ""
+    assert _legend_row(told) == _legend_row(_panel(silent, config, seen=seen))

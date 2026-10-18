@@ -236,19 +236,18 @@ def build_panel(
     else:
         canvas.text(3, 0, " realm: open water" if tile.is_water else " realm: none (wild land)")
     canvas.spans(5, 0, _poi_spans(world, config, poi))
+    # The hook's row is always reserved (blank when there is none), so nothing under it jumps as the cursor moves.
+    canvas.spans(6, 0, _hook_spans(world, config, poi), canvas.fg)
     info: list[tuple[list[Span], RGB]] = [
         ([Span(line)], canvas.fg) for line in [_buildings_line(world, config, state, poi)] if line
     ]
-    hook = _hook_spans(world, config, poi)
-    if hook:
-        info.append((hook, canvas.fg))
     info += [
         (spans, canvas.fg if at_cursor else dim)
         for spans, at_cursor in _event_spans(world, events or ChronicleReader(world), config, state, realm)
     ]
     for offset, (spans, default) in enumerate(info):
-        canvas.spans(6 + offset, 0, spans, default)
-    first = 6 + len(info)
+        canvas.spans(7 + offset, 0, spans, default)
+    first = 7 + len(info)
     last = height - 1
     if config.get("render.show_legend", True) and first < last:
         _legend(canvas, config, seen, first, last, ascii_only)
