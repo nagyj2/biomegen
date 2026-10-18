@@ -20,10 +20,18 @@ def _lines(grid: CellGrid) -> list[str]:
     return ["".join(row) for row in grid.glyph.tolist()]
 
 
-def _panel(world, config: Config, state: ViewState | None = None, seen: Seen | None = None, width=100, height=12):
+def _panel(
+    world,
+    config: Config,
+    state: ViewState | None = None,
+    seen: Seen | None = None,
+    width=100,
+    height=15,
+    view="terrain",
+):
     world.island_name = "Testland"
     state = state or ViewState(cx=2, cy=1)
-    return _lines(build_panel(world, config, state, "terrain", seen or Seen(), width, height))
+    return _lines(build_panel(world, config, state, view, seen or Seen(), width, height))
 
 
 def test_panel_has_the_requested_size(config: Config) -> None:
@@ -106,7 +114,7 @@ def test_latest_message_sits_at_the_end_of_the_controls_row(config: Config) -> N
 
 
 def test_a_very_narrow_panel_clips_instead_of_failing(config: Config) -> None:
-    assert len(_panel(make_world(6, 3), config, seen=Seen(biomes={int(Biome.GRASS)}), width=12)) == 12
+    assert len(_panel(make_world(6, 3), config, seen=Seen(biomes={int(Biome.GRASS)}), width=12, height=12)) == 12
 
 
 @pytest.mark.parametrize(
@@ -179,7 +187,7 @@ def test_the_site_panel_lists_the_buildings_that_stand(config: Config) -> None:
     world = flat_world(16, 12)
     poi = add_poi(world, "town", 8, 6, pop=3000, civilized=True)
     lines = _panel(world, config, state=_site_state(config, world, poi), width=140)
-    assert "buildings: Hall" in lines[7]
+    assert any("buildings: Hall" in line for line in lines)
 
 
 def test_the_site_panel_names_the_building_under_the_cursor(config: Config) -> None:
@@ -194,7 +202,7 @@ def test_the_site_panel_names_the_building_under_the_cursor(config: Config) -> N
     left, top, _r, _b = plan.geometry.box
     state = _site_state(config, world, poi)
     state.px, state.py = left + hall.x + hall.width // 2, top + hall.y + hall.height // 2
-    assert "under cursor: Hall" in _panel(world, config, state=state, width=160)[7]
+    assert any("under cursor: Hall" in line for line in _panel(world, config, state=state, width=160))
 
 
 def test_the_panel_lists_no_buildings_outside_a_site(config: Config) -> None:
@@ -231,20 +239,20 @@ def test_the_panel_tells_the_hook_of_the_poi_under_the_cursor(config: Config) ->
 
 
 def test_the_panel_lists_the_events_at_the_cursor(config: Config) -> None:
-    lines = "\n".join(_panel(_storied_world(), config))
+    lines = "\n".join(_panel(_storied_world(), config, view="political"))
     assert "Dunmere is settled." in lines and "A battle at Dunmere." in lines
 
 
 def test_realm_events_fill_the_rest_when_few_are_at_the_cursor(config: Config) -> None:
     world = _storied_world()
-    lines = "\n".join(_panel(world, config, state=ViewState(cx=4, cy=2)))  # no POI here: only the realm's events
+    lines = "\n".join(_panel(world, config, state=ViewState(cx=4, cy=2), view="political"))  # no POI: realm events only
     assert "Aldor goes to war." in lines and "A battle at Dunmere." in lines
 
 
 def test_the_panel_lists_no_more_events_than_panel_events(config: Config) -> None:
     config = load_config(None)
     config.data["render"]["panel_events"] = 1
-    lines = "\n".join(_panel(_storied_world(), config))
+    lines = "\n".join(_panel(_storied_world(), config, view="political"))
     assert "A battle at Dunmere." in lines and "Dunmere is settled." not in lines
 
 
@@ -263,7 +271,7 @@ def test_the_panel_reads_events_through_the_reader_it_is_given(config: Config) -
 
     world = _storied_world()
     state = ViewState(cx=2, cy=1)
-    lines = _lines(build_panel(world, config, state, "terrain", Seen(), 100, 12, events=Fake()))
+    lines = _lines(build_panel(world, config, state, "political", Seen(), 100, 15, events=Fake()))
     assert any("Only the reader knows." in line for line in lines) and "A battle at Dunmere." not in "\n".join(lines)
 
 
@@ -308,7 +316,7 @@ def test_the_poi_under_the_cursor_is_in_its_realms_colour(config: Config) -> Non
 def test_a_name_in_an_event_line_is_in_its_realms_colour(config: Config) -> None:
     world = _coloured_world()
     world.chronicle[1].refs = [(0, 7, "poi", 0)]  # "Dunmere is settled."
-    grid = build_panel(world, config, ViewState(cx=2, cy=1), "terrain", Seen(), 100, 12)
+    grid = build_panel(world, config, ViewState(cx=2, cy=1), "political", Seen(), 100, 15)
     assert _cell_color(grid, "Dunmere is settled") == (200, 40, 40)
 
 
@@ -336,3 +344,72 @@ def test_the_legend_stays_on_its_row_whether_or_not_there_is_a_hook(config: Conf
     silent = _storied_world()
     silent.pois[0].hook = ""
     assert _legend_row(told) == _legend_row(_panel(silent, config, seen=seen))
+
+
+# --- the legend, and the events under it in the political view ------------------------------------------------------
+
+
+def _row_with(lines: list[str], text: str) -> int:
+    return next(row for row, line in enumerate(lines) if text in line)
+
+
+def test_the_events_are_listed_in_the_political_view(config: Config) -> None:
+    assert "Dunmere is settled." in "\n".join(_panel(_storied_world(), config, view="political"))
+
+
+def test_the_events_are_not_listed_in_the_other_views(config: Config) -> None:
+    # The rows under the legend are left to the view; only the political map fills them with events.
+    for view in ("terrain", "elevation", "temperature", "rainfall"):
+        assert "Dunmere is settled." not in "\n".join(_panel(_storied_world(), config, view=view))
+
+
+def test_the_event_rows_are_blank_outside_the_political_view(config: Config) -> None:
+    lines = _panel(_storied_world(), config, seen=Seen(biomes={int(Biome.GRASS)}), view="terrain")
+    assert [line.strip() for line in lines[10:14]] == [""] * 4
+
+
+def test_the_events_sit_under_the_legend(config: Config) -> None:
+    lines = _panel(_storied_world(), config, view="political")
+    assert _row_with(lines, "Dunmere is settled.") > _row_with(lines, "legend:")
+
+
+def test_the_legend_takes_its_rows_before_the_events_start(config: Config) -> None:
+    # A short legend still keeps render.legend_rows rows, so the first event is that many rows below it.
+    lines = _panel(_storied_world(), config, seen=Seen(biomes={int(Biome.GRASS)}), view="political")
+    rows = int(config.get("render.legend_rows"))
+    assert _row_with(lines, "Dunmere is settled.") == _row_with(lines, "legend:") + rows
+
+
+def test_the_legend_grows_past_its_rows_when_more_is_on_screen(config: Config) -> None:
+    few = _panel(_storied_world(), config, seen=Seen(biomes={int(Biome.GRASS)}), view="political", width=60)
+    many = _panel(_storied_world(), config, seen=Seen(biomes={int(b) for b in Biome}), view="political", width=60)
+    assert _row_with(many, "Dunmere is settled.") > _row_with(few, "Dunmere is settled.")
+
+
+def test_the_events_do_not_move_while_the_legend_fits_its_rows(config: Config) -> None:
+    # One biome or three, the legend fits its three rows, so the events stay put.
+    one = _panel(_storied_world(), config, seen=Seen(biomes={int(Biome.GRASS)}), view="political")
+    three = _panel(
+        _storied_world(),
+        config,
+        seen=Seen(biomes={int(Biome.GRASS), int(Biome.FOREST), int(Biome.DESERT)}),
+        view="political",
+    )
+    assert _row_with(one, "Dunmere is settled.") == _row_with(three, "Dunmere is settled.")
+
+
+def test_a_short_panel_lists_only_the_events_that_fit(config: Config) -> None:
+    lines = _panel(_storied_world(), config, view="political", height=12)
+    assert sum("Dunmere" in line or "Aldor" in line for line in lines[10:]) <= 1
+
+
+def test_the_site_buildings_share_the_detail_area_with_the_events(config: Config) -> None:
+    # The buildings of an open site come first under the legend; the events take the rows that remain.
+    from tests.sites.conftest import add_poi, flat_world
+
+    world = flat_world(16, 12)
+    world.realms.append(Realm(id=0, kind="major", name="Kingdom of Aldor", short="Aldor"))
+    world.realm_id[:] = 0
+    poi = add_poi(world, "town", 8, 6, pop=3000, civilized=True)
+    lines = _panel(world, config, state=_site_state(config, world, poi), width=140, view="political")
+    assert _row_with(lines, "buildings:") == _row_with(lines, "legend:") + int(config.get("render.legend_rows"))

@@ -811,9 +811,12 @@ stopping when a key is waiting. Once that is done an idle explorer uses no CPU.
   pseudo-terminal. The Windows paths cannot be exercised on Linux.
 - **Chronicle pager.** `run_chronicle` is a second, smaller loop over the same reader, writer and key table (see the chronicle
   section above); its frame is built by `compose_pager_frame` and its state is a `PagerState`.
-- **Panel history.** The panel lists the latest events at the cursor's tile and then its realm's (`render.panel_events`) and the
-  hook of the point of interest, reading them through `explorer/events.py` (`EventReader`; `ChronicleReader` reads through `world.ledger.EventLog`: the generated
-  chronicle and, later, a simulation's events as one list).
+- **Panel layout.** Every panel row has a fixed place (see the layout rule in `explorer/CLAUDE.md`): the island line, the cursor
+  tile, the realm (two rows), the POI line, the hook of the point of interest (its row is reserved, blank when there is none), the
+  legend (`render.legend_rows` rows, growing only when more is on screen) and, under it, the detail area: an open site's buildings,
+  then in the political view only the latest events at the cursor's tile and its realm's (`render.panel_events`, as many as fit).
+  The other views leave those rows to themselves. The panel reads events through `explorer/events.py` (`EventReader`;
+  `ChronicleReader` reads through `world.ledger.EventLog`: the generated chronicle and, later, a simulation's events as one list).
 - **History viewer.** `t` opens `explorer/history_viewer.py` on the explorer's own reader and writer, at the latest event at the
   cursor (the present when there is none), and quitting it returns to the same explorer state. `--history [YEAR]`
   (`scripts/history.sh`) runs it alone. See the territory section below.

@@ -1,7 +1,9 @@
 """The explorer's info panel and help overlay, drawn as cell grids (pure: no terminal I/O).
 
-The panel sits under the map: the island line, the tile under the cursor, its realm and point of interest, a
-legend of what is on screen, and the controls with the latest message. The help overlay lists every key.
+The panel sits under the map: the island line, the tile under the cursor, its realm, point of interest and hook, a
+legend of what is on screen, the detail area (an open site's buildings; the events in the political view) and the
+controls with the latest message. Every row has a fixed place, so nothing jumps when data is absent or there is a lot
+of it. The help overlay lists every key.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from ..render.chronicle import colored_text, event_row, name_color
 from ..render.colors import biome_style, interior_style
 from ..render.grid import RGB, CellGrid, Span
 from ..render.layers import Seen
+from ..render.views import resolve_view
 from ..sampling.detail import SCALE_MAP, SCALE_SITE
 from ..sites import site_plan
 from ..sites.kinds import building_at, building_counts, cell_name
@@ -112,13 +115,17 @@ def _hook_spans(world: World, config: Config, poi: Optional[POI]) -> list[Span]:
     return [Span(" "), *colored_text(world, config, poi.hook, poi.hook_refs)]
 
 
+def _event_limit(config: Config) -> int:
+    """How many events the panel may list at most: ``render.panel_events``."""
+    return int(config.get("render.panel_events"))
+
+
 def _event_spans(
-    world: World, events: EventReader, config: Config, state: ViewState, realm: Optional[Realm]
+    world: World, events: EventReader, config: Config, state: ViewState, realm: Optional[Realm], limit: int
 ) -> list[tuple[list[Span], bool]]:
-    """List up to ``render.panel_events`` events as ``(spans, at the cursor)``: the latest at the cursor's tile (they
-    stay while the cursor does), then the latest of the realm that holds it (plain text dimmed) to fill the rest. Every
-    name is in its realm's colour."""
-    limit = int(config.get("render.panel_events"))
+    """List up to ``limit`` events as ``(spans, at the cursor)``: the latest at the cursor's tile (they stay while the
+    cursor does), then the latest of the realm that holds it (plain text dimmed) to fill the rest. Every name is in its
+    realm's colour."""
     here = events.at(state.cx, state.cy)[-limit:] if limit else []
     lines = [(event_row(world, config, event), True) for event in here]
     if realm is not None and len(lines) < limit:
@@ -238,19 +245,28 @@ def build_panel(
     canvas.spans(5, 0, _poi_spans(world, config, poi))
     # The hook's row is always reserved (blank when there is none), so nothing under it jumps as the cursor moves.
     canvas.spans(6, 0, _hook_spans(world, config, poi), canvas.fg)
-    info: list[tuple[list[Span], RGB]] = [
+    # The legend has a fixed place and height (``render.legend_rows``); it grows only when what is on screen needs more.
+    # Under it is the detail area: the buildings of an open site, then (in the political view only) the events. Other
+    # views leave those rows for their own use, so what lies above never moves with the data.
+    last = height - 1
+    legend_top = 7
+    legend_end = legend_top
+    if config.get("render.show_legend", True) and legend_top < last:
+        drawn = _legend(canvas, config, seen, legend_top, last, ascii_only)
+        legend_end = min(last, max(legend_top + int(config.get("render.legend_rows")), drawn))
+    detail: list[tuple[list[Span], RGB]] = [
         ([Span(line)], canvas.fg) for line in [_buildings_line(world, config, state, poi)] if line
     ]
-    info += [
-        (spans, canvas.fg if at_cursor else dim)
-        for spans, at_cursor in _event_spans(world, events or ChronicleReader(world), config, state, realm)
-    ]
-    for offset, (spans, default) in enumerate(info):
-        canvas.spans(7 + offset, 0, spans, default)
-    first = 7 + len(info)
-    last = height - 1
-    if config.get("render.show_legend", True) and first < last:
-        _legend(canvas, config, seen, first, last, ascii_only)
+    if resolve_view(config, view_name).political:
+        room = max(0, last - legend_end - len(detail))
+        detail += [
+            (spans, canvas.fg if at_cursor else dim)
+            for spans, at_cursor in _event_spans(
+                world, events or ChronicleReader(world), config, state, realm, min(room, _event_limit(config))
+            )
+        ]
+    for offset, (spans, default) in enumerate(detail[: max(0, last - legend_end)]):
+        canvas.spans(legend_end + offset, 0, spans, default)
     message = state.last_message
     controls = controls_line(config)
     if message:

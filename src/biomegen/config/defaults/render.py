@@ -71,7 +71,8 @@ VALUES: Dict[str, Any] = {
     },
     "default_view": "onetoone",  # "fit" (whole map downsampled) or "onetoone" (1:1 panning)
     "status_height": 15,  # rows reserved below the map for the status/legend panel
-    "panel_events": 3,  # events listed in the panel: the latest at the cursor, then the realm's latest
+    "panel_events": 4,  # events the panel lists in the political view: the latest at the cursor, then the realm's
+    "legend_rows": 3,  # rows the panel's legend always takes; it grows past this only when what is on screen needs more
     # The explorer's render cache (render/cache.py). At the zoom, local and site scales the terrain layers are drawn
     # once into chunks of chunk_cols x chunk_rows cells and reused while panning; at most max_cells cells are kept
     # (about 14 bytes each), the least recently shown dropped first. The map scales keep their last map_frames frames.
