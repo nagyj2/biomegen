@@ -192,3 +192,16 @@ roles = ["throne_room", "chamber", "kitchen", "storage"]
 furniture = "palace"
 roof = { glyph = "█", ascii = "@", color = [206, 164, 58] }
 apron = 1
+
+# The shrine of a POI (not a tier's centre): its roof is what the sky view shows, so it has a colour of its own like every other building.
+[buildings.shrine]
+label = "Shrine"
+rank = 11
+function = "civic"
+rows = [7, 9]
+width = [1.0, 1.2]
+shapes = ["rect"]
+roles = ["altar"]
+furniture = "shrine"
+roof = { glyph = "▓", ascii = "^", color = [188, 150, 98] }
+apron = 1

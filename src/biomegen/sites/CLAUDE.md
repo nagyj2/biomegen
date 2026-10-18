@@ -79,7 +79,7 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
   runs the homestead as the hamlet's twin (same cell, seed, tags and potential), moves its lot by the difference of the two
   windows (they share a cell grid because a growing homestead is drawn on its potential's `rows_per_tile`) and the settlement
   stamps it first (`_stamp_grown`), before any street, then joins its door (`_join_grown`); it is the style's slot 0.
-- **Shrine**: one small walled room, a street door, an altar (`hearth`) at its middle, a roof from outside.
+- **Shrine**: one small walled room, a street door, an altar (`hearth`) at its middle; from outside its roof is the `shrine` building kind's own coloured roof, and it has a roof level like the settlements.
 - **Battlefield**: open ground, an ellipse of floor (`sites.battlefield.clearing`) strewn with debris and a few wrecked
   wagons; nothing is built.
 - **Camp** purposes override keys of `sites.camp` with `sites.camp_<purpose>` (builders: few tents; army: a field of tents).

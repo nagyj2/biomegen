@@ -42,6 +42,7 @@ from .carve import (
 )
 from .circulation import floor_links, force_floor_access, stamp_stairs
 from .furnish import Weights, adjacent, keep_reachable, scatter, weighted_choice
+from .kinds import roof_cell
 from .layout import SiteContext, layout
 from .partition import bsp_rooms
 from .shapes import SHAPES
@@ -410,7 +411,7 @@ def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
 # ---------------------------------------------------------------------------------------------------------- shrine
 @layout("shrine")
 def build_shrine(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
-    """A shrine: one small walled room with its door to the road and an altar in it, seen from outside as a roof."""
+    """A shrine: one small walled room with its door to the road and an altar, its roof the shrine kind's own colour."""
     stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
     rows = max(7, round(ctx.rows * 0.6))
     rect = _fit(ctx, min(rows, ctx.rows - 2), min(round(rows * ctx.aspect), ctx.cols - 2))
@@ -429,5 +430,5 @@ def build_shrine(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     keep_reachable(grid, sorted((x + dx, y + dy) for dx, dy in building.doors))
     _approach(ctx, grid, building, rect)
     outside = grid.copy()
-    outside[y : y + h, x : x + w][building.footprint] = _ROOF
+    outside[y : y + h, x : x + w][building.footprint] = roof_cell(ctx.config, "shrine")
     return grid, outside

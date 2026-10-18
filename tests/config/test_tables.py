@@ -706,7 +706,7 @@ def test_the_shipped_building_kinds() -> None:
     assert by_function == {
         "housing": ["house"],
         "production": ["farmhouse", "fishery", "lodge", "mill", "mine"],
-        "civic": ["cathedral", "chapel", "gathering_point", "hall", "palace"],
+        "civic": ["cathedral", "chapel", "gathering_point", "hall", "palace", "shrine"],
     }
 
 
