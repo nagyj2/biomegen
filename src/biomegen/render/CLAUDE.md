@@ -57,6 +57,10 @@ here imports `explorer/`. The explorer, `--view`, `--scale` and the exports all 
   (it places text or reads the screen) stays out of the set and runs every frame. `tests/render/test_cache.py` checks
   cached frames against fresh draws.
 
+- **Layouts hold still.** A frame, panel or legend whose content varies (absent, or a lot of it) keeps every region at a fixed
+  place and height: reserve a blank row for a field that may be missing, give a list a fixed size with a rule for overflow, and put
+  what varies last. The rule and its tests are in `src/biomegen/explorer/CLAUDE.md`.
+
 ## Adding a layer
 
 1. A module in `layers/` with a function `(ctx, grid) -> None` decorated `@LAYERS.register("name")`; import it
