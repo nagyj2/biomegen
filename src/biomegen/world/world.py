@@ -21,6 +21,7 @@ from ..util.units import GridScale, grid_scale
 from .entities import (
     POI,
     ChronicleEvent,
+    Episode,
     FallenRealm,
     GeoFeature,
     Lake,
@@ -121,6 +122,7 @@ class World:
         self.pois: list[POI] = []
         self.realms: list[Realm] = []  # filled by the realms stage
         self.relations: list[Relation] = []  # filled by the diplomacy stage
+        self.episodes: list[Episode] = []  # the ended stretches of each pair's history (filled by the history stage)
         self.rivers: list[River] = []
         self.lakes: list[Lake] = []
         self.features: list[GeoFeature] = []  # filled by the geography stage

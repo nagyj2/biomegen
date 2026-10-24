@@ -41,7 +41,16 @@ def test_every_event_kind_has_wording() -> None:
         "dismantle_watchtower",
         "occupation_tower",
     } | {f"secession_{form}_{tag}" for form in ("offshoot", "split", "defection") for tag in ("bitter", "amicable")}
-    assert set(rows) == {"treaty_alliance", "treaty_trade"} | variants | (
+    ended_and_deals = {
+        "peace_truce",
+        "rivalry_ended",
+        "treaty_alliance_ended",
+        "treaty_trade_ended",
+        "treaty_purchase",
+        "treaty_supply",
+        "treaty_supply_ended",
+    }
+    assert set(rows) == {"treaty_alliance", "treaty_trade"} | variants | ended_and_deals | (
         set(EVENT_KINDS) - {"treaty", "secession", "creation", "road", "abandon", "occupation"}
     )
 

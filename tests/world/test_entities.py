@@ -135,3 +135,21 @@ def test_a_hand_made_event_is_not_derived() -> None:
 
 def test_month_tick_counts_months_from_the_first_month_of_year_zero() -> None:
     assert (month_tick(0, 1, 12), month_tick(1, 1, 12), month_tick(3, 5, 12)) == (0, 12, 40)
+
+
+def test_an_episode_is_a_relation_with_years() -> None:
+    # An ended episode carries everything a relation does plus when it started and ended.
+    from biomegen.world.entities import Episode, Relation
+
+    episode = Episode(a=0, b=1, kind="trade", deal="swap", goods=["wood", "metal"], start=100, end=140)
+    assert isinstance(episode, Relation) and (episode.start, episode.end, episode.goods) == (
+        100,
+        140,
+        ["wood", "metal"],
+    )
+
+
+def test_an_event_belongs_to_no_episode_by_default() -> None:
+    from biomegen.world.entities import ChronicleEvent
+
+    assert ChronicleEvent(0, 10, "war").episode == -1

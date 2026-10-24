@@ -41,7 +41,14 @@
 #                     (its name stands for both the name and the short name)
 #   peace             {winner} {winner_short} {loser} {loser_short}   the end of an older war
 #   fall_conquered    {fallen} {founded} {victor} {victor_short}   a fallen realm conquered by a living one
+#   peace_truce       {winner} {winner_short} {loser} {loser_short}   the end of a war between near equals (the two names)
+#   rivalry_ended, treaty_alliance_ended, treaty_trade_ended   {a} {a_short} {b} {b_short}
+#                     the end of a rivalry, an alliance or a trade of goods (minor events)
+#   treaty_purchase, treaty_supply, treaty_supply_ended   {buyer} {buyer_short} {seller} {seller_short} {goods}
+#                     a realm buys a good for money once, contracts a standing supply of it, or the contract runs out
+#                     (minor events)
 # {reason} is the wording of the relation (data/reasons.toml); {town} the claimed town of the war.
+# {goods} is the chronicle's word for a good (a biome's or relief's `goods`), as the seller's land knows it.
 
 [chronicle.founding]
 templates = [
@@ -124,6 +131,41 @@ templates = [
   "A trade pact is struck between {a} and {b}: {reason}.",
 ]
 
+[chronicle.treaty_trade_ended]
+templates = [
+  "The trade between {a_short} and {b_short} dwindles and ends.",
+  "{a_short} and {b_short} let their trade pact lapse.",
+]
+
+[chronicle.treaty_alliance_ended]
+templates = [
+  "The alliance of {a_short} and {b_short} lapses.",
+  "{a_short} and {b_short} part ways, their pact forgotten.",
+]
+
+[chronicle.rivalry_ended]
+templates = [
+  "The rivalry between {a_short} and {b_short} fades.",
+  "{a_short} and {b_short} set their old quarrel aside.",
+]
+
+[chronicle.treaty_purchase]
+templates = [
+  "{buyer_short} buys {goods} from {seller_short}.",
+  "{seller_short} sells a cargo of {goods} to {buyer_short}.",
+]
+
+[chronicle.treaty_supply]
+templates = [
+  "{buyer_short} contracts {seller_short} for a steady supply of {goods}.",
+  "{seller_short} agrees to furnish {goods} to {buyer_short} for coin.",
+]
+
+[chronicle.treaty_supply_ended]
+templates = [
+  "{buyer_short}'s supply contract with {seller_short} runs out.",
+]
+
 [chronicle.battle]
 templates = [
   "{winner_short} defeats {loser_short} in a bloody battle on the border.",
@@ -174,6 +216,12 @@ templates = [
   "{loser_short} sues for peace; {winner_short} keeps the border it won.",
   "The war ends in victory for {winner_short}; {loser_short} yields ground.",
   "{winner_short} and {loser_short} make peace, with the border redrawn in {winner_short}'s favour.",
+]
+
+[chronicle.peace_truce]
+templates = [
+  "{winner_short} and {loser_short} lay down their arms in a truce.",
+  "Neither side can win: {winner_short} and {loser_short} agree a truce.",
 ]
 
 [chronicle.fall_conquered]

@@ -157,13 +157,30 @@ class Relation:
 
     a: int
     b: int
-    kind: str  # "war" | "rivalry" | "alliance" | "trade"
+    kind: str  # one of RELATION_KINDS
     border_km: float = 0.0
     why: str = ""
     attacker: int = -1
     claim_poi: int = -1
     places: dict = field(default_factory=dict)  # reason token ({river}, {range}, {sea}) -> id in World.features
     why_refs: List[Tuple[int, int, str, int]] = field(default_factory=list)  # (start, end, REF_KINDS entry, id) in why
+    deal: str = ""  # a trade only, one of DEALS (set by the history stage, which knows the rulers)
+    goods: List[str] = field(default_factory=list)  # a trade only: swap [a gives, b gives]; purchase [the good bought]
+    buyer: int = -1  # a purchase only: the realm id paying money
+    volume: str = ""  # a trade only: "small", "steady" or "large" (a simulation turns it into units)
+
+
+@dataclass
+class Episode(Relation):
+    """One ended stretch of the history of a pair of powers (the present relation is the :class:`Relation` itself).
+
+    It has every field of a relation (``kind``, its ``why`` and ``places``, the deal of a trade, the attacker of a war)
+    and the years it lasted: from ``start`` to ``end`` (a one-off purchase has ``end == start``). Events refer to it by
+    ``ChronicleEvent.episode``.
+    """
+
+    start: int = 0
+    end: int = 0
 
 
 @dataclass
@@ -281,6 +298,7 @@ class ChronicleEvent:
     month: int = 1  # 1 to history.months_per_year within ``year``; events of a year are in month order
     tick: int = 0  # the absolute month, ``month_tick(year, month, ...)``; a simulation's clock reads the same number
     derived: bool = False  # made by the generation from the present state (False: a simulation emitted it)
+    episode: int = -1  # index into World.episodes of the ended episode it belongs to; -1: none (the present relation)
 
 
 def month_tick(year: int, month: int, months_per_year: int) -> int:

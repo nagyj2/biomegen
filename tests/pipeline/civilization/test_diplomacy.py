@@ -352,3 +352,18 @@ def test_every_named_place_of_a_generated_reason_lies_near_the_border(generated:
         for token, feature in relation.places.items():
             assert nearest_feature(generated, cfg, token, points) == feature
             assert generated.features[feature].name.removeprefix("The ") in relation.why
+
+
+def test_power_fronts_hold_the_same_cells_as_front_cells(generated: World) -> None:
+    # power_fronts finds every pair's border from one scan: its cells equal front_cells of the pair.
+    fronts = diplomacy.power_fronts(generated)
+    assert all(
+        cells.tolist() == diplomacy.front_cells(generated, a, b).tolist() for (a, b), (_, cells) in fronts.items()
+    )
+
+
+def test_power_fronts_cover_every_relation_of_a_bordering_pair(generated: World) -> None:
+    # A relation with a border has an entry; its km is the relation's up to rounding.
+    fronts = diplomacy.power_fronts(generated)
+    bordering = [r for r in generated.relations if r.border_km > 0]
+    assert all(abs(fronts[(r.a, r.b)][0] - r.border_km) < 1e-6 for r in bordering)

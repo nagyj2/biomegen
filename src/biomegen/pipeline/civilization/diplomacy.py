@@ -224,17 +224,25 @@ def _war(
 _PLACE_TOKENS = ("river", "range", "sea")
 
 
-def _reason_points(world: World, relation: Relation) -> list[tuple[int, int]]:
-    """The cells a reason's places are measured from: the border of the two powers, else their seats."""
+def _reason_points(world: World, relation: Relation, front: np.ndarray | None = None) -> list[tuple[int, int]]:
+    """The cells a reason's places are measured from: the border of the two powers, else their seats.
+
+    ``front`` is the border's flat cell indices when the caller has them (:func:`power_fronts`).
+    """
     if relation.border_km > 0:
-        flat = front_cells(world, relation.a, relation.b).tolist()
+        flat = (front if front is not None else front_cells(world, relation.a, relation.b)).tolist()
         return [(index % world.width, index // world.width) for index in flat]
     seats = [world.realms[r].seat_poi for r in (relation.a, relation.b)]
     return [(world.pois[seat].x, world.pois[seat].y) for seat in seats if seat >= 0]
 
 
-def _word(world: World, config: Config, relation: Relation, stream: random.Random) -> None:
+def word_relation(
+    world: World, config: Config, relation: Relation, stream: random.Random, front: np.ndarray | None = None
+) -> None:
     """Pick the relation's raw reason template, only one whose river, range or sea lies near the border.
+
+    ``relation`` may be an ended :class:`~biomegen.world.entities.Episode` too; ``front`` is its border's cells when
+    known.
 
     The chosen template's place tokens are recorded in ``relation.places`` (token -> feature id) for naming to word.
     A template whose place is far away is dropped; when none qualifies the whole list stays and naming uses the
@@ -243,7 +251,7 @@ def _word(world: World, config: Config, relation: Relation, stream: random.Rando
     templates = list(config.get(f"tables.reasons.{relation.kind}.templates"))
     used = {template: _place_tokens(template) for template in templates}
     wanted = {token for tokens in used.values() for token in tokens}
-    points = _reason_points(world, relation) if wanted else []
+    points = _reason_points(world, relation, front) if wanted else []
     near = {token: pick for token in sorted(wanted) if (pick := nearest_feature(world, config, token, points)) >= 0}
     allowed = [t for t in templates if used[t] <= set(near)]
     chosen = stream.choice(allowed or templates)
@@ -254,6 +262,25 @@ def _word(world: World, config: Config, relation: Relation, stream: random.Rando
 def _place_tokens(template: str) -> set[str]:
     """The ``{river}``, ``{range}`` and ``{sea}`` tokens a reason template uses."""
     return {field for _, field, _, _ in string.Formatter().parse(template) if field in _PLACE_TOKENS}
+
+
+def power_fronts(world: World) -> dict[Pair, tuple[float, np.ndarray]]:
+    """Return ``{(a, b): (border km, front cells)}`` for every pair of independent powers sharing a border (sorted).
+
+    The cells are the sorted flat indices :func:`front_cells` gives, found for all pairs from one scan of the edges.
+    """
+    tops = np.array([world.top_realm(r.id) for r in world.realms], dtype=np.int32)
+    edges = _edges(world)
+    low, high = tops[edges.low], tops[edges.high]
+    first, second = np.minimum(low, high), np.maximum(low, high)
+    apart = first != second
+    first, second = first[apart], second[apart]
+    cell_a, cell_b, length = edges.cell_a[apart], edges.cell_b[apart], edges.length_km[apart]
+    fronts: dict[Pair, tuple[float, np.ndarray]] = {}
+    for pair in sorted(set(zip(first.tolist(), second.tolist(), strict=True))):
+        sel = (first == pair[0]) & (second == pair[1])
+        fronts[pair] = (float(length[sel].sum()), np.unique(np.concatenate([cell_a[sel], cell_b[sel]])))
+    return fronts
 
 
 def front_cells(world: World, a: int, b: int) -> np.ndarray:
@@ -294,4 +321,4 @@ def run(world: World, config: Config, seed: int) -> None:
     for relation in world.relations:
         if relation.kind == "war":
             _war(world, config, edges, tops, relation, stream)
-        _word(world, config, relation, stream)
+        word_relation(world, config, relation, stream)

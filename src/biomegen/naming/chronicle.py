@@ -172,13 +172,42 @@ def _name_the_place(world: World, event: ChronicleEvent, tokens: dict[str, objec
     return True
 
 
+def _relation_of(world: World, event: ChronicleEvent, relations: dict[tuple[int, int], Relation]) -> Optional[Relation]:
+    """The relation an event of two powers belongs to: its ended episode, else the pair's present relation."""
+    if event.episode >= 0:
+        return world.episodes[event.episode]
+    return relations.get((min(event.realm_ids), max(event.realm_ids))) if len(event.realm_ids) == 2 else None
+
+
+def _commerce_tokens(
+    world: World,
+    config: Config,
+    event: ChronicleEvent,
+    relation: Optional[Relation],
+    tokens: dict[str, object],
+    where: Where,
+) -> None:
+    """Fill the buyer, the seller and the good of a treaty that is a purchase (a trade struck for money).
+
+    The good is worded as the seller's land knows it.
+    """
+    if event.kind != "treaty" or relation is None or not relation.goods or relation.buyer < 0:
+        return
+    seller = world.realms[relation.b if relation.buyer == relation.a else relation.a]
+    buyer = world.realms[relation.buyer]
+    for prefix, realm in (("buyer", buyer), ("seller", seller)):
+        tokens[prefix], tokens[f"{prefix}_short"] = realm.name, realm.short
+        where[prefix] = where[f"{prefix}_short"] = (REF_REALM, realm.id)
+    tokens["goods"] = polity.good_name(world, config, seller.id, relation.goods[0])
+
+
 def _tokens(
     world: World, config: Config, event: ChronicleEvent, relations: dict[tuple[int, int], Relation]
 ) -> tuple[dict[str, object], Where]:
     """Return every token an event's wording may use (a superset; a template uses its row's) and what each names."""
     realms = [world.realms[i] for i in event.realm_ids]
     fallen = world.fallen_realms[event.fallen_ids[0]] if event.fallen_ids else None
-    pair = relations.get((min(event.realm_ids), max(event.realm_ids))) if len(event.realm_ids) == 2 else None
+    pair = _relation_of(world, event, relations)
     tokens: dict[str, object] = {
         "year": event.year,
         "near": world.pois[event.near_poi].name if event.near_poi >= 0 else "",
@@ -253,6 +282,7 @@ def _tokens(
                 tokens[prefix], tokens[f"{prefix}_short"] = realm.name, realm.short
                 where[prefix] = where[f"{prefix}_short"] = (REF_REALM, realm.id)
         tokens["town"] = town
+        _commerce_tokens(world, config, event, pair, tokens, where)
     return tokens, where
 
 
@@ -272,7 +302,7 @@ def describe_event(
     if relations is None:
         relations = {(r.a, r.b): r for r in world.relations}
     tokens, where = _tokens(world, config, event, relations)
-    pair = relations.get((min(event.realm_ids), max(event.realm_ids))) if len(event.realm_ids) == 2 else None
+    pair = _relation_of(world, event, relations)
     inner = {"reason": pair.why_refs} if pair else None
     text, event.refs = render_template(event.template, tokens, where, inner)
     event.text = text[:1].upper() + text[1:]

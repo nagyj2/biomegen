@@ -39,6 +39,7 @@ class Ledger:
         near_poi: int = -1,
         tags: Sequence[str] = (),
         salience: str = "major",
+        episode: int = -1,
     ) -> Optional[ChronicleEvent]:
         """Record an event of ``kind`` worded by chronicle row ``row``; None (nothing recorded) when its kind is off."""
         if kind not in self._enabled:
@@ -60,6 +61,7 @@ class Ledger:
             tags=tuple(tags),
             salience=salience,
             derived=True,
+            episode=episode,
         )
         self._pending.append((year, EVENT_KINDS.index(kind), len(self._pending), event))
         return event

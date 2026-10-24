@@ -15,6 +15,7 @@ from typing import Optional
 from ..config.model import Config
 from ..util import rng
 from ..world.entities import REF_FEATURE, REF_POI, Realm, Relation, Ruler
+from ..world.resources import goods_word
 from ..world.tile import BIOME_NAME
 from ..world.world import World
 from . import forge
@@ -106,8 +107,21 @@ def _goods(realm: Realm, config: Config) -> str:
     return str(config.get(f"tables.biomes.{BIOME_NAME[realm.dominant_biome]}.goods"))
 
 
-def _trade_goods(a: Realm, b: Realm, config: Config) -> tuple[str, str]:
-    """Return the goods ``a`` sells ``b`` and ``b`` sells ``a``, using ``politics.fallback_goods`` for a missing one."""
+def good_name(world: World, config: Config, realm_id: int, resource: str) -> str:
+    """Return the chronicle's word for ``resource`` as ``realm_id``'s land knows it (else the resource's label)."""
+    return (
+        goods_word(world, config, realm_id, resource) or str(config.get(f"tables.resources.{resource}.label")).lower()
+    )
+
+
+def _trade_goods(world: World, a: Realm, b: Realm, relation: Relation, config: Config) -> tuple[str, str]:
+    """Return the goods ``a`` sells ``b`` and ``b`` sells ``a``.
+
+    A swap the history stage struck names them from its resources; otherwise each realm's biome good is used, with
+    ``politics.fallback_goods`` for a missing one.
+    """
+    if relation.kind == "trade" and len(relation.goods) == 2:
+        return good_name(world, config, a.id, relation.goods[0]), good_name(world, config, b.id, relation.goods[1])
     first, second, tie = (str(g) for g in config.get("politics.fallback_goods"))
     goods_a, goods_b = _goods(a, config) or first, _goods(b, config) or second
     if goods_a == goods_b:
@@ -143,16 +157,24 @@ def _town(
 
 
 def describe_relations(world: World, config: Config, seed: int) -> None:
-    """Replace each relation's raw reason template by its text, naming the town, river, range, sea and goods.
+    """Replace the raw reason template of each relation and each ended episode by its text, naming the town, river,
+    range, sea and goods.
 
     A river, range or sea is the nearby feature diplomacy recorded in ``relation.places``.
     """
     realms = world.realms
     tops = {r.id: world.top_realm(r.id) for r in realms}
-    for index, relation in enumerate(world.relations):
-        stream = rng.derive(seed, "naming", "reason", index)
+    labelled = [("relation", i, r) for i, r in enumerate(world.relations)] + [
+        ("episode", i, r) for i, r in enumerate(world.episodes)
+    ]
+    for label, index, relation in labelled:
+        stream = (
+            rng.derive(seed, "naming", "reason", index)
+            if label == "relation"
+            else rng.derive(seed, "naming", "reason", label, index)
+        )
         a, b = realms[relation.a], realms[relation.b]
-        goods_a, goods_b = _trade_goods(a, b, config)
+        goods_a, goods_b = _trade_goods(world, a, b, relation, config)
         town, town_index = _town(world, config, relation, stream, tops)
         tokens = {
             **{token: _place(world, relation, token, config) for token in ("river", "range", "sea")},

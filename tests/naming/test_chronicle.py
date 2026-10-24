@@ -11,7 +11,17 @@ from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.naming import chronicle, polity
 from biomegen.util.units import grid_scale
-from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, GeoFeature, Predecessor, Realm, Relation, Ruler
+from biomegen.world.entities import (
+    POI,
+    ChronicleEvent,
+    Episode,
+    FallenRealm,
+    GeoFeature,
+    Predecessor,
+    Realm,
+    Relation,
+    Ruler,
+)
 from biomegen.world.tile import Biome
 from biomegen.world.world import World
 
@@ -447,3 +457,36 @@ def test_naming_one_predecessor_gives_the_name_the_bulk_call_gives(cfg: Config) 
     chronicle.name_predecessors(bulk, cfg, 3)
     chronicle.name_predecessor(single, cfg, 3, single.predecessors[0])
     assert single.predecessors[0].name == bulk.predecessors[0].name
+
+
+def test_an_episode_event_reads_its_own_reason_not_the_present_relations(cfg: Config) -> None:
+    # A battle of an ended war of the pair uses that episode's reason, while the present relation says something else.
+    world = _small_world()
+    world.episodes = [Episode(a=0, b=1, kind="war", why="an old grudge", start=10, end=20)]
+    event = ChronicleEvent(
+        0, 15, "battle", [0, 1], template="{winner_short} beats {loser_short} ({reason}).", episode=0
+    )
+    assert _render(world, event, cfg) == "Aldor beats Wend (an old grudge)."
+
+
+def test_a_purchase_names_the_buyer_the_seller_and_the_good(cfg: Config) -> None:
+    # Realm 1 buys the good realm 0's land is known for (grass: grain); the realm that lacks it is the buyer.
+    world = _small_world()
+    world.realm_id[:, :3] = 0
+    world.episodes = [Episode(a=0, b=1, kind="trade", deal="buy_once", goods=["food"], buyer=1, start=50, end=50)]
+    event = ChronicleEvent(
+        0, 50, "treaty", [0, 1], template="{buyer_short} buys {goods} from {seller_short}.", episode=0
+    )
+    assert _render(world, event, cfg) == "Wend buys grain from Aldor."
+
+
+def test_a_swap_is_worded_from_the_goods_each_side_gives(cfg: Config) -> None:
+    # The reason of a swap names each realm's own good for the resource it gives.
+    world = _small_world()
+    world.realm_id[:, :3] = 0
+    world.realm_id[:, 3:] = 1
+    world.biome[:, 3:] = int(Biome.FOREST)
+    world.relations = [Relation(a=0, b=1, kind="trade", why="{goods_a} from {short_a} for {goods_b} from {short_b}")]
+    world.relations[0].goods = ["food", "wood"]
+    polity.describe_relations(world, cfg, 1)
+    assert world.relations[0].why == "grain from Aldor for timber from Wend"
