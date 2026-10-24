@@ -19,7 +19,8 @@
 #   creation_camp     {place} {realm} {short}                     a camp pitched on a realm's land (minor event)
 #   creation_camp_wild {place}                                    a camp pitched on wild land (minor event)
 #   creation_watchtower {place}                                   a watchtower raised when a war begins (minor event)
-#   abandon_watchtower, dismantle_watchtower {place}              a watchtower left empty / torn down at the peace (minor)
+#   abandon_watchtower, dismantle_watchtower {place}              a watchtower left standing and empty / torn down at the peace
+#                                                                 (minor; the first is an `abandon` event, the second a `removal`)
 #   occupation_tower  {place}                                     bandits take an abandoned watchtower (minor)
 #   road_trunk        {a} {b}                                     a road laid between two places (minor event)
 #   road_spur         {a}                                         a track cut from a place to the road (minor event)
@@ -333,7 +334,8 @@ templates = [
 ]
 
 # The life of a watchtower (minor events, kept in the annals). {place} is its name. creation_watchtower: raised when its war
-# was declared; abandon_watchtower: left standing at the peace; dismantle_watchtower: torn down at the peace;
+# was declared; abandon_watchtower: left standing at the peace (an `abandon`); dismantle_watchtower: torn down at the peace
+# (a `removal`: it leaves the map);
 # occupation_tower: bandits take an abandoned one, and it is a tower from then on.
 
 [chronicle.creation_watchtower]

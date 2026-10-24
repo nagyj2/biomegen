@@ -51,7 +51,7 @@ def test_every_event_kind_has_wording() -> None:
         "treaty_supply_ended",
     }
     assert set(rows) == {"treaty_alliance", "treaty_trade"} | variants | ended_and_deals | (
-        set(EVENT_KINDS) - {"treaty", "secession", "creation", "road", "abandon", "occupation"}
+        set(EVENT_KINDS) - {"treaty", "secession", "creation", "road", "abandon", "removal", "occupation"}
     )
 
 

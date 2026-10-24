@@ -17,7 +17,7 @@ def cfg() -> Config:
 
 
 def _world() -> World:
-    """A world with a fall, a battle, a war and a settling in its chronicle and a POI of each kind linked to them."""
+    """A world with a fall, a battle, a war (and the tower it raised) and a settling, and a POI of each kind linked."""
     world = World(10, 10, 1)
     world.chronicle = [
         ChronicleEvent(0, 100, "founding", [0], month=3),
@@ -25,6 +25,7 @@ def _world() -> World:
         ChronicleEvent(2, 200, "fall", fallen_ids=[0], month=7),
         ChronicleEvent(3, 220, "battle", [0, 1], month=2),
         ChronicleEvent(4, 240, "war", [0, 1], month=9),
+        ChronicleEvent(5, 240, "creation", poi_ids=[6], month=9),
     ]
     world.pois = [
         POI(kind="capital", x=0, y=0, interior_seed=1, civilized=True, event_ids=[0], founded=100),
@@ -33,7 +34,7 @@ def _world() -> World:
         POI(kind="ruin", x=3, y=0, interior_seed=1, event_ids=[2], founded=20),
         POI(kind="ruin", x=4, y=0, interior_seed=1),
         POI(kind="battlefield", x=5, y=0, interior_seed=1, event_ids=[3], founded=220),
-        POI(kind="watchtower", x=6, y=0, interior_seed=1, event_ids=[4], founded=300),
+        POI(kind="watchtower", x=6, y=0, interior_seed=1, event_ids=[4, 5], founded=300),
         POI(kind="camp", x=7, y=0, interior_seed=1),
     ]
     return world
@@ -63,7 +64,7 @@ def test_a_battlefield_appears_at_its_battle(cfg: Config) -> None:
     assert poi_appears(_world(), cfg, 5) == (220, 2)
 
 
-def test_a_watchtower_appears_when_its_war_is_declared(cfg: Config) -> None:
+def test_a_watchtower_appears_when_it_is_raised(cfg: Config) -> None:
     assert poi_appears(_world(), cfg, 6) == (240, 9)
 
 

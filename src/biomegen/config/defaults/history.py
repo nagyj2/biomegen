@@ -22,6 +22,7 @@ VALUES: Dict[str, Any] = {
         "expansion",
         "creation",
         "abandon",
+        "removal",
         "occupation",
         "road",
         "conquest",
@@ -117,6 +118,7 @@ VALUES: Dict[str, Any] = {
         "expansion": [170, 215, 120],
         "creation": [150, 170, 200],
         "abandon": [150, 150, 150],
+        "removal": [130, 130, 140],
         "occupation": [200, 130, 110],
         "road": [170, 160, 140],
         "conquest": [230, 150, 90],
@@ -206,7 +208,8 @@ VALUES: Dict[str, Any] = {
             "peace": "=",
             "fall": "+",
             "creation": "^",  # a tower or dungeon made (a minor event, marked only while minor events are shown)
-            "abandon": "-",  # a watchtower left empty or dismantled (minor)
+            "abandon": "-",  # a watchtower left standing and empty at the peace (minor)
+            "removal": "_",  # a watchtower torn down at the peace: it leaves the map (minor)
             "occupation": "&",  # bandits take an abandoned watchtower (minor)
         },
     },
@@ -216,7 +219,7 @@ VALUES: Dict[str, Any] = {
     "appears": {
         "ruin": "fall",
         "battlefield": "battle",
-        "watchtower": "war",
+        "watchtower": "creation",
         "shrine": "succession",
         "tower": "creation",
         "camp": "creation",

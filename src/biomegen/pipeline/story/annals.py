@@ -7,8 +7,9 @@ stands) without filling the default listing:
 - a **tower** raised or a **dungeon** delved: one that came of a fall is dated by it; one placed by location is either
   ancient (year 0, with chance ``history.annals.ancient_share``: it stood before the history began) or made in a year
   drawn over the history, and then gets that year as its ``founded``;
-- the **life of a watchtower** raised in a war: raised with the war, abandoned or dismantled at the peace, and taken by
-  bandits later (after which it is a tower; ``World.vanished`` holds the dismantled);
+- the **life of a watchtower** raised in a war: a ``creation`` when the war is declared, then at the peace either an
+  ``abandon`` (it is left standing and empty, and bandits may take it later with an ``occupation``, after which it is a
+  tower) or a ``removal`` (it is torn down and leaves the map; ``World.vanished`` holds it);
 - the **founding of a village or hamlet** (the settlements the history does not give a ``settling`` event); a hamlet or
   homestead on land a realm annexed is founded no sooner than the land came in (as the history does for a settlement).
 
@@ -83,8 +84,8 @@ def _creation(world: World, config: Config, seed: int, ledger: Ledger, index: in
 
 def _watchtower(world: World, config: Config, seed: int, ledger: Ledger, ref: int) -> None:
     """Add the life of a watchtower raised in a war (``ref`` indexes :meth:`World.place`): its raising in the month the
-    war was declared, at the peace its abandonment or dismantling in that month, and, if bandits took it, their
-    occupation (a month of its year)."""
+    war was declared, at the peace its abandonment (``abandon``) or its tearing down (``removal``) in that month, and,
+    if bandits took it, their occupation (a month of its year)."""
     poi = world.place(ref)
     months = int(config.get("history.months_per_year"))
     roll = rng.derive(seed, "history", "annals", "watchtower", ref).random()
@@ -116,7 +117,7 @@ def _watchtower(world: World, config: Config, seed: int, ledger: Ledger, ref: in
         closing.year,
         closing.month,
         "dismantle_watchtower" if fate == "dismantled" else "abandon_watchtower",
-        "abandon",
+        "removal" if fate == "dismantled" else "abandon",
         fate,
     )
     if fate == "occupied":

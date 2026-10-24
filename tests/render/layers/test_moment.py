@@ -241,7 +241,7 @@ def test_a_road_waits_for_both_of_its_ends(config) -> None:
 
 def _tower_world() -> World:
     """A watchtower raised in 100, abandoned at the peace of 120 and taken by bandits in 150 (a tower from then);
-    another raised in 100 and dismantled in 120 (history only)."""
+    another raised in 100 and removed in 120 (history only)."""
     from biomegen.world.entities import POI
 
     world = make_world(8, 2, Biome.GRASS)
@@ -250,10 +250,12 @@ def _tower_world() -> World:
         ChronicleEvent(1, 120, "peace", [0, 1], month=1),
         ChronicleEvent(2, 150, "occupation", poi_ids=[0], month=1),
         ChronicleEvent(3, 100, "creation", poi_ids=[0], month=1),
+        ChronicleEvent(4, 100, "creation", poi_ids=[1], month=1),
+        ChronicleEvent(5, 120, "removal", poi_ids=[1], month=1),
     ]
     taken = POI(kind="tower", x=2, y=0, interior_seed=1, event_ids=[0, 1, 2, 3], founded=100)
     taken.extra.update({"fate": "occupied", "taken": 150})
-    gone = POI(kind="watchtower", x=5, y=1, interior_seed=1, event_ids=[0, 1], founded=100, fell=120)
+    gone = POI(kind="watchtower", x=5, y=1, interior_seed=1, event_ids=[0, 1, 4, 5], founded=100, fell=120)
     gone.extra.update({"fate": "dismantled", "taken": 0})
     world.pois, world.vanished = [taken], [gone]
     world.poi_index[0, 2] = 0
@@ -279,7 +281,7 @@ def test_a_tower_bandits_took_is_a_watchtower_until_they_did(config) -> None:
     assert (_marker_glyphs(world, config, (110, 1))[0], _marker_glyphs(world, config, (160, 1))[0]) == (watch, tower)
 
 
-def test_a_dismantled_watchtower_stands_only_until_the_peace(config) -> None:
+def test_a_removed_watchtower_stands_only_from_its_raising_to_its_removal(config) -> None:
     world = _tower_world()
     counts = [len(_marker_glyphs(world, config, moment)) for moment in ((90, 1), (110, 1), (125, 1))]
     assert counts == [0, 2, 1]

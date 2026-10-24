@@ -498,7 +498,8 @@ changes forward or backward from checkpoints (`OwnerTimeline`) and `World.top_re
 at a moment (`build_grid(..., moment=)`): fallen realms and predecessors in their colours, a vassal tinted as its overlord only
 after its conquest, the war fronts of the wars then (`world/wars.py`, read from the war, peace and conquest events), only the
 points of interest that stood then (`world/lifespans.py`: a settlement from its founding, a ruin from its fall, a battlefield
-from its battle, a watchtower from its war until it is dismantled, a tower bandits took as a watchtower until they did), and only
+from its battle, a watchtower from its raising (`creation` event) until its `removal`, a tower bandits took as a watchtower until
+they did), and only
 the roads laid by then (`World.road_links`). The chronicle sits beside it, scrolled to the moment's events (highlighted; later
 ones dimmed), with recent events marked on the map by kind (`history.viewer.glyphs`).
 
@@ -520,9 +521,11 @@ The history records what moves realms; the annals (after the pois and spurs) add
 by default) for what stands on the land: a tower raised or a dungeon delved (one that came of a fall is dated by it; one placed by
 location is ancient, year 0, with chance `history.annals.ancient_share`, else made in a drawn year), the founding of villages and
 hamlets, every road laid (`World.road_links`, dated after both ends stand), and a watchtower's life. A **watchtower** is raised
-when its war is declared, behind the front that war had then (`pois._border_at_war`); at the peace it is dismantled (kept only in
-`World.vanished`, so today's map has no trace of it), or abandoned (`watchtower.abandon_chance`), and an abandoned one is taken by
-bandits `occupy_years` later and is a bandit `tower` from then on. The new events are merged into the finished chronicle
+when its war is declared (a `creation` event), behind the front that war had then (`pois._border_at_war`); at the peace it is
+torn down (a `removal` event: it leaves the map, kept only in `World.vanished`, so today's map has no trace of it), or abandoned
+(`watchtower.abandon_chance`; an `abandon` event: it stays standing and empty), and an abandoned one is taken by bandits
+`occupy_years` later (an `occupation` event) and is a bandit `tower` from then on. The map of the past shows a tower from its
+`creation` to its `removal`. The new events are merged into the finished chronicle
 (`ledger.merge_events`, renumbering every id the world keeps: `POI.event_ids`, `RoadLink.event_id`, `TerritoryChange.event_id`).
 A road is laid after both its ends stand and, for a spur, after the road it runs into (`RoadLink.joins`). A realm's people are the
 people in its settlements, hamlets and homesteads plus an outside share and a rural term, each drawn per realm

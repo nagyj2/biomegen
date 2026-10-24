@@ -1,11 +1,12 @@
 """When each point of interest appears on the map of the past.
 
-A settlement stands from the event that founded or settled it (else the year it was founded), a ruin from the fall that
-left it, a battlefield from its battle, a watchtower from the war it guards and so on, each kind's event being the
-``history.appears`` row; a point with no such date (a camp before its creation, an ancient ruin) is always there. A
-watchtower dismantled at the peace (``World.vanished``) stands only until then, and one that bandits took stands as a
-watchtower until they did. Moments are ``(year, month)`` (the end of the month) or ``(year, month, event id)`` (just
-after that event), so two events of one month are told apart. Nothing here changes the world.
+A settlement stands from the event that founded or settled it (else the year it was founded), a ruin from the fall
+that left it, a battlefield from its battle, a watchtower from its raising (a ``creation`` event) and so on, each
+kind's event being the ``history.appears`` row; a point with no such date (a camp before its creation, an ancient ruin)
+is always there. A watchtower dismantled at the peace (``World.vanished``) stands from its raising until its
+``removal`` event, and one that bandits took stands as a watchtower until they did. Moments are ``(year, month)`` (the
+end of the month) or ``(year, month, event id)`` (just after that event), so two events of one month are told apart.
+Nothing here changes the world.
 """
 
 from __future__ import annotations
@@ -48,15 +49,12 @@ def poi_appears(world: World, config: Config, index: int) -> Optional[Stop]:
 
 
 def place_gone(world: World, poi: POI) -> Optional[Key]:
-    """Return the place in time a vanished ``poi`` was dismantled (the closing event it links), else ``None``."""
-    if (
-        poi.extra.get("fate") != "dismantled"
-        or len(poi.event_ids) < 2
-        or not 0 <= poi.event_ids[1] < len(world.chronicle)
-    ):
+    """Return the place in time a vanished ``poi`` was torn down (the ``removal`` event it links), else ``None``."""
+    if poi.extra.get("fate") != "dismantled":
         return None
-    closing = world.chronicle[poi.event_ids[1]]
-    return closing.year, closing.month, closing.id
+    removed = [world.chronicle[i] for i in poi.event_ids if 0 <= i < len(world.chronicle)]
+    removal = next((e for e in removed if e.kind == "removal"), None)
+    return None if removal is None else (removal.year, removal.month, removal.id)
 
 
 def poi_kind_at(world: World, poi: POI, moment: tuple[int, ...]) -> str:

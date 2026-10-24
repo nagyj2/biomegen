@@ -230,14 +230,23 @@ def test_every_watchtower_is_raised_with_its_war(world: World) -> None:
 
 
 def test_a_watchtower_not_standing_has_its_end_told_at_the_peace(world: World) -> None:
+    # A tower left standing is abandoned, one torn down is removed: one end event of that kind, in the peace's month.
     for index, poi in _watchtowers(world):
-        ended = _events_about(world, index, "abandon")
-        if poi.extra["fate"] == "standing":
-            assert not ended
-        else:
-            (event,) = ended
-            peace = world.chronicle[poi.event_ids[1]]
-            assert (event.year, event.month) == (peace.year, peace.month)
+        abandoned = _events_about(world, index, "abandon")
+        removed = _events_about(world, index, "removal")
+        fate = poi.extra["fate"]
+        assert len(abandoned) == (fate in ("abandoned", "occupied")) and len(removed) == (fate == "dismantled")
+        peace = world.chronicle[poi.event_ids[1]] if fate != "standing" else None
+        assert all((e.year, e.month) == (peace.year, peace.month) for e in abandoned + removed if peace)
+
+
+def test_every_watchtower_that_is_removed_was_raised_first(world: World) -> None:
+    # A removal comes after the raising of the same tower, so the history never tears down what it did not build.
+    for index, _poi in _watchtowers(world):
+        (removed, *_) = _events_about(world, index, "removal") or [None]
+        if removed is not None:
+            (created,) = _events_about(world, index, "creation")
+            assert (created.year, created.month, created.id) < (removed.year, removed.month, removed.id)
 
 
 def test_bandits_take_an_abandoned_watchtower_after_the_peace(world: World) -> None:
