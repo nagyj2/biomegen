@@ -79,6 +79,34 @@ VALUES: Dict[str, Any] = {
     "fallen_neighbours": 3,
     "fall_strength": 0.3,
     "fall_delay_years": [2, 25],
+    # Episodes (pipeline/story/episodes.py, pair_timeline.py; the rows are data/episodes.toml): a pair of
+    # independent powers has a run of episodes (war, rivalry, alliance, trade) ending in today's relation, drawn
+    # backwards from it. After an episode there is a quiet ``gap_years`` [least, most] before the next older one,
+    # which exists with chance ``more_chance`` (times ``decay`` for each one drawn already) up to ``max_per_pair``
+    # episodes, at most ``max_wars_per_pair`` of them wars. A pair sharing a border with no relation today had any
+    # history with chance ``first_chance``. The odds of a kind are the pair class's ``tables.relation_weights``,
+    # scaled and tilted by ruler traits (the ruler of each realm at the time); a ruler's tilt is ``1 +
+    # sum(coefficient * (trait - 0.5))``, never below ``tilt_floor``. A war's odds also grow with the border
+    # (``border_ref_km`` km is neutral, kept within ``border_range``) and the gap in the two realms' strength
+    # (``gap_weight`` times the share of the larger). A war is minor when both realms are of ``minor_war_kinds``. A
+    # peace is a truce when the weaker side's strength is at least ``truce_balance`` of the stronger's. A deal's
+    # volume is the match of what one side has and the other lacks (0 to 1) tilted by traits: under
+    # ``volume_cuts[0]`` small, from ``volume_cuts[1]`` large.
+    "episodes": {
+        "gap_years": [8, 100],
+        "first_chance": 0.6,
+        "more_chance": 0.6,
+        "decay": 0.75,
+        "max_per_pair": 5,
+        "max_wars_per_pair": 2,
+        "tilt_floor": 0.1,
+        "border_ref_km": 400.0,
+        "border_range": [0.5, 1.5],
+        "gap_weight": 0.5,
+        "minor_war_kinds": ["city_state", "tribal"],
+        "truce_balance": 0.75,
+        "volume_cuts": [0.25, 0.6],
+    },
     # Colours of the coloured text output: the year column, each event kind, and neutral colours for names that
     # belong to no faction: ``settlement`` (a settlement's first mention, and any wild place), ``hideout`` (a bandit
     # tower or dungeon) and ``place`` (mountains, seas, rivers and other named land). A faction's name, ruler and

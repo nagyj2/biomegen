@@ -1,0 +1,81 @@
+# The episodes of a pair of powers, loaded into the config tree as `tables.episode_kinds` and `tables.deals`. A pair's history
+# is a run of episodes (a war, a rivalry, an alliance, a trade) ending in today's relation; `pipeline/story/episodes.py` holds
+# the pure functions that read these rows, so the derived history and a later simulation weigh, time and size them alike.
+# Counts and caps are in the `history.episodes` config section; the base odds of each kind per pair are the
+# `relation_weights` of `polity.toml`.
+#
+# Both tables tilt odds by ruler personality. A `traits` / `length_traits` / `volume_traits` row maps a trait of
+# `world.entities.TRAITS` (aggression, greed, trust, expansionism, caution) to a coefficient: the factor is
+# `1 + sum(coefficient * (the two rulers' mean of the trait - 0.5))`, never below `history.episodes.tilt_floor`. A positive
+# coefficient makes the outcome likelier (or longer, or larger) for a ruler high in the trait, a negative one for a ruler low in it.
+#
+# episode_kinds, one row per relation kind (`world.entities.RELATION_KINDS`):
+#   years          [least, most] length of an episode that has ended
+#   present_age    [least, most] age of the episode that is today's relation (older ones are always the far past)
+#   weight_scale   factor on the kind's `relation_weights` odds when an earlier episode is drawn (below 1 rations a kind)
+#   traits         tilt of the odds of the kind
+#   length_traits  tilt of how long it lasts
+#   salience       "major" or "minor": how noteworthy the event that starts it is (a war between two small powers is minor,
+#                  `history.episodes.minor_war_kinds`)
+#   end_salience   the same for the event that ends it
+#
+# deals, one row per kind of deal a trade can be (`world.entities.DEALS`): `swap` goods for goods, `buy_once` one realm pays
+# money for a good (a single event), `buy_ongoing` a standing supply paid in money. Money is never a swap good.
+#   weight         relative odds among the deals of a trade
+#   ongoing        true when the deal lasts a while and has an end (buy_once has none, and is never a present relation)
+#   traits         tilt of the odds of the deal
+#   volume_traits  tilt of the volume (`small`, `steady`, `large`) it is struck at
+
+[episode_kinds.war]
+years = [4, 40]
+present_age = [2, 60]
+weight_scale = 0.55
+traits = { aggression = 1.2, expansionism = 0.8, caution = -1.0, trust = -0.6 }
+length_traits = { aggression = 0.8, caution = -0.8 }
+salience = "major"
+end_salience = "major"
+
+[episode_kinds.rivalry]
+years = [20, 160]
+present_age = [10, 140]
+weight_scale = 1.0
+traits = { aggression = 0.6, trust = -0.8, greed = 0.3 }
+length_traits = { trust = -0.6 }
+salience = "major"
+end_salience = "minor"
+
+[episode_kinds.alliance]
+years = [30, 220]
+present_age = [10, 250]
+weight_scale = 1.0
+traits = { trust = 1.2, aggression = -0.6, caution = 0.3 }
+length_traits = { trust = 0.8 }
+salience = "major"
+end_salience = "minor"
+
+[episode_kinds.trade]
+years = [20, 200]
+present_age = [10, 220]
+weight_scale = 1.2
+traits = { greed = 1.2, trust = 0.6, aggression = -0.6 }
+length_traits = { trust = 0.6, greed = 0.4 }
+salience = "minor"
+end_salience = "minor"
+
+[deals.swap]
+weight = 1.0
+ongoing = true
+traits = { trust = 0.4 }
+volume_traits = { greed = 0.8, trust = 0.6 }
+
+[deals.buy_once]
+weight = 0.5
+ongoing = false
+traits = { greed = 0.6, trust = -0.4 }
+volume_traits = { greed = 0.6, aggression = 0.3 }
+
+[deals.buy_ongoing]
+weight = 0.5
+ongoing = true
+traits = { greed = 0.5, caution = 0.4 }
+volume_traits = { greed = 0.8, trust = 0.4 }

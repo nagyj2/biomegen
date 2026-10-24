@@ -16,6 +16,11 @@ import numpy as np
 
 REALM_KINDS: Tuple[str, ...] = ("major", "city_state", "tribal")
 RELATION_KINDS: Tuple[str, ...] = ("war", "rivalry", "alliance", "trade")
+DEALS: Tuple[str, ...] = (
+    "swap",
+    "buy_once",
+    "buy_ongoing",
+)  # the ways a trade is struck (money is only ever a payment)
 REALM_ORIGINS: Tuple[str, ...] = ("", "offshoot", "split")  # how a realm began: ex nihilo, or by a secession
 EVENT_KINDS: Tuple[str, ...] = (
     "founding",

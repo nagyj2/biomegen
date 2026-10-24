@@ -284,6 +284,16 @@ _RULING_STYLE_ROW = {
     "traits": "traits",
 }
 _CHRONICLE_ROW = {"templates": "text_list", "templates_near": "text_list"}
+_EPISODE_KIND_ROW = {
+    "years": "range",
+    "present_age": "range",
+    "weight_scale": "nonneg",
+    "traits": "trait_weights",
+    "length_traits": "trait_weights",
+    "salience": "salience",
+    "end_salience": "salience",
+}
+_DEAL_ROW = {"weight": "nonneg", "ongoing": "bool", "traits": "trait_weights", "volume_traits": "trait_weights"}
 SECESSION_TERMS = ("proximity", "size", "age", "relation", "prosperity", "leader", "strength")
 SECESSION_FORMS = ("offshoot", "split", "defection")
 SECESSION_TAGS = ("bitter", "amicable")  # how a break is worded, by the relation between the two sides
@@ -370,6 +380,7 @@ POI_OWNERS = ("realm", "wild")
 TEMPERS = ("aggressive", "passive")
 SITE_LANDS = ("realm", "any")
 RESOURCE_KINDS = ("land", "luxury", "currency")
+SALIENCES = ("major", "minor")  # mirrors world.entities.SALIENCES (a test keeps the two equal)
 
 DETAIL_FACTORS = ("none", "moisture", "elevation")
 
@@ -494,6 +505,8 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "reason_tokens": (_REASON_TOKEN_ROW, frozenset()),
     "ruling_styles": (_RULING_STYLE_ROW, frozenset()),
     "resources": (_RESOURCE_ROW, frozenset()),
+    "episode_kinds": (_EPISODE_KIND_ROW, frozenset()),
+    "deals": (_DEAL_ROW, frozenset()),
     "chronicle": (_CHRONICLE_ROW, frozenset({"templates_near"})),
     "secession_terms": (_SECESSION_TERM_ROW, frozenset()),
     "secession_relations": (_SECESSION_RELATION_ROW, frozenset()),
@@ -514,6 +527,13 @@ def _is_traits(value: Any) -> bool:
         and set(value) == set(TRAITS)
         and all(_is_number(v) and 0.0 <= v <= 1.0 for v in value.values())
     )
+
+
+def _is_trait_weights(value: Any) -> bool:
+    """A tilt: a table from names of ``world.entities.TRAITS`` to numbers of either sign (empty means no tilt)."""
+    from ..world.entities import TRAITS  # local import: avoids import-order coupling
+
+    return isinstance(value, dict) and set(value) <= set(TRAITS) and all(_is_number(v) for v in value.values())
 
 
 def _is_floors(value: Any) -> bool:
@@ -681,6 +701,8 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
             isinstance(v, list) and len(v) == 2 and all(_is_number(n) and 0.0 <= n <= 1.0 for n in v)
         ),
         "traits": _is_traits,
+        "trait_weights": _is_trait_weights,
+        "salience": lambda v: v in SALIENCES,
         "weights": lambda v: (
             isinstance(v, dict)
             and len(v) > 0
@@ -1120,6 +1142,29 @@ def _validate_dress(tables: Dict[str, Any], errors: List[str]) -> None:
                     errors.append(f"{where}.kinds: {kind!r} is no POI kind")
 
 
+def _validate_episodes(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check that the episode and deal tables have exactly one row per relation kind and per deal, and one open deal."""
+    from ..world.entities import DEALS, RELATION_KINDS
+
+    kinds = tables.get("episode_kinds", {})
+    if isinstance(kinds, dict):
+        if set(kinds) != set(RELATION_KINDS):
+            errors.append(
+                f"tables.episode_kinds must have exactly one row per relation kind: {', '.join(RELATION_KINDS)}"
+            )
+        for name in sorted(kinds):
+            row = kinds[name]
+            if isinstance(row, dict) and isinstance(row.get("years"), list) and row["years"][:1] == [0]:
+                errors.append(f"tables.episode_kinds.{name}.years: an episode lasts at least a year")
+    deals = tables.get("deals", {})
+    if isinstance(deals, dict):
+        if set(deals) != set(DEALS):
+            errors.append(f"tables.deals must have exactly one row per deal: {', '.join(DEALS)}")
+        open_rows = [r for r in deals.values() if isinstance(r, dict) and r.get("ongoing") and r.get("weight", 0) > 0]
+        if not open_rows:
+            errors.append("tables.deals: needs an ongoing deal with a weight above 0 (a present trade lasts)")
+
+
 def _validate_pois(tables: Dict[str, Any], errors: List[str]) -> None:
     """Check the POI kinds' history keys, name patterns and hook texts, and the shrine-like sites."""
     pois, styles = tables.get("pois", {}), tables.get("ruling_styles", {})
@@ -1211,6 +1256,7 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     _validate_dress(tables, errors)
     _validate_secession(tables, errors)
     _validate_resources(tables, errors)
+    _validate_episodes(tables, errors)
 
     styles = tables.get("styles", {})
     style = cfg.get("terrain", {}).get("style")

@@ -35,9 +35,11 @@ def test_shipped_tables_load_and_validate() -> None:
         "biomes",
         "buildings",
         "chronicle",
+        "deals",
         "detail",
         "detail_relief",
         "dress",
+        "episode_kinds",
         "free_fates",
         "furniture",
         "geo_names",
@@ -177,9 +179,11 @@ def test_loader_combines_the_shipped_files() -> None:
         "biomes",
         "buildings",
         "chronicle",
+        "deals",
         "detail",
         "detail_relief",
         "dress",
+        "episode_kinds",
         "free_fates",
         "furniture",
         "geo_names",
@@ -969,4 +973,37 @@ def test_money_cannot_be_yielded_by_land() -> None:
     cfg = get_defaults()
     cfg["tables"]["biomes"]["grass"]["resource"] = "money"
     with pytest.raises(ConfigError, match="not a land or luxury resource"):
+        validate(cfg)
+
+
+def test_table_salience_names_match_the_entity_constant() -> None:
+    # The schema's list of saliences is a copy (config sits below world), so a test keeps the two equal.
+    from biomegen.config.tables import SALIENCES
+    from biomegen.world.entities import SALIENCES as ENTITY_SALIENCES
+
+    assert SALIENCES == ENTITY_SALIENCES
+
+
+def test_episode_kind_for_unknown_trait_is_rejected() -> None:
+    # A tilt may name only the traits rulers have.
+    cfg = get_defaults()
+    cfg["tables"]["episode_kinds"]["war"]["traits"] = {"bravery": 1.0}
+    with pytest.raises(ConfigError, match=r"tables\.episode_kinds\.war\.traits"):
+        validate(cfg)
+
+
+def test_missing_deal_row_is_rejected() -> None:
+    # A trade is struck as exactly the deals the entity module lists.
+    cfg = get_defaults()
+    del cfg["tables"]["deals"]["buy_once"]
+    with pytest.raises(ConfigError, match="one row per deal"):
+        validate(cfg)
+
+
+def test_no_ongoing_deal_is_rejected() -> None:
+    # Today's trade relation lasts, so at least one deal must be ongoing with a weight.
+    cfg = get_defaults()
+    cfg["tables"]["deals"]["swap"]["weight"] = 0.0
+    cfg["tables"]["deals"]["buy_ongoing"]["weight"] = 0.0
+    with pytest.raises(ConfigError, match="ongoing deal"):
         validate(cfg)
