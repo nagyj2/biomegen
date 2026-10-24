@@ -198,8 +198,15 @@ VALUES: Dict[str, Any] = {
         "marker_years": 30,
         "marker_fade": 0.55,
         # What the events of the current moment are about is lit on the map and the rest dimmed (as a selected power
-        # is): their tiles, or the land of their realms for an event with no place (war, trade, peace).
-        "event_highlight": {"enabled": True, "lift": 0.45, "dim": 0.55},
+        # is). The ``realm_kinds`` are about their realms and light the land of every realm in them, whatever place they
+        # carry; any other kind lights its place (its tile, settlements, road and the land it moved: a battle's front),
+        # or its realms when it has none.
+        "event_highlight": {
+            "enabled": True,
+            "lift": 0.45,
+            "dim": 0.55,
+            "realm_kinds": ["war", "rivalry", "treaty", "peace"],
+        },
         "glyphs": {
             "founding": "o",
             "secession": "/",

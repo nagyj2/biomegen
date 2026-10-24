@@ -24,6 +24,7 @@ from biomegen.explorer.history_viewer import (
 from biomegen.explorer.history_viewer import (
     present_moment as present_stop,
 )
+from biomegen.world.territory import fallen_owner
 from biomegen.world.world import World
 from tests.explorer.replay import RecordingOut
 from tests.explorer.test_app import ScriptedKeys
@@ -706,7 +707,7 @@ def test_a_placed_event_lights_its_tile(world: World, cfg: Config) -> None:
     # A stop whose event has a location focuses on cells, not on realms
     event = next(e for e in world.chronicle if e.salience == "major" and e.location != (-1, -1) and e.kind != "war")
     state = initial_state(world, cfg, (event.year, event.month, event.id))
-    cells, _ = event_focus(world, state)
+    cells, _ = event_focus(world, cfg, state)
     assert event.location[1] * world.width + event.location[0] in cells
 
 
@@ -714,7 +715,7 @@ def test_an_event_with_no_place_lights_its_realms(world: World, cfg: Config) -> 
     # A war has no tile, so the focus is its realms' land
     state = _war_state(world, cfg)
     event = next(e for e in world.chronicle if (e.year, e.month, e.id) == state.at)
-    _, owners = event_focus(world, state)
+    _, owners = event_focus(world, cfg, state)
     assert set(event.realm_ids) <= owners
 
 
@@ -732,7 +733,7 @@ def test_every_stop_with_minor_events_has_a_focus() -> None:
     config = load_config(None)
     made = pipeline.generate(config, 7904325738223517320)
     for stop in change_moments(made, config, minor=True):
-        cells, owners = event_focus(made, initial_state(made, config, stop))
+        cells, owners = event_focus(made, config, initial_state(made, config, stop))
         assert cells.ndim == 1 and isinstance(owners, set)
 
 
@@ -743,3 +744,30 @@ def test_every_stop_is_a_listed_event_or_the_ends() -> None:
     listed = {(e.year, e.month, e.id) for e in made.chronicle if e.salience == "major"}
     ends = {START, present_stop(made, config)}
     assert set(change_moments(made, config)) <= listed | ends
+
+
+@pytest.fixture(scope="module")
+def war_world(cfg: Config) -> World:
+    return pipeline.generate(cfg, 17261501894059739936)
+
+
+def test_a_war_with_a_settlement_lights_its_combatants_not_the_settlement(war_world: World, cfg: Config) -> None:
+    # Year 1157 month 2 of this seed: a war naming settlement 19 still lights both realms, and not the settlement tile
+    war = next(e for e in war_world.chronicle if e.kind == "war" and e.poi_ids and e.year == 1157)
+    cells, owners = event_focus(war_world, cfg, initial_state(war_world, cfg, (war.year, war.month, war.id)))
+    settlement = war_world.pois[war.poi_ids[0]]
+    assert set(war.realm_ids) <= owners and settlement.y * war_world.width + settlement.x not in cells
+
+
+def test_a_war_with_a_location_lights_its_combatants(war_world: World, cfg: Config) -> None:
+    # A war with a place (and a fallen realm for one side) is still about its combatants
+    war = next(e for e in war_world.chronicle if e.kind == "war" and e.location != (-1, -1))
+    _, owners = event_focus(war_world, cfg, initial_state(war_world, cfg, (war.year, war.month, war.id)))
+    assert {fallen_owner(i) for i in war.fallen_ids} | set(war.realm_ids) <= owners
+
+
+def test_a_battle_lights_the_front_it_moved_and_not_the_realms(world: World, cfg: Config) -> None:
+    # A battle that moved land lights those cells and leaves the whole realms dim
+    change = next(c for c in world.territory if c.kind == "battle")
+    cells, owners = event_focus(world, cfg, initial_state(world, cfg, change.key))
+    assert set(change.cells.tolist()) <= set(cells.tolist()) and not owners

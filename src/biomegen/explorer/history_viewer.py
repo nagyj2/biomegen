@@ -395,22 +395,27 @@ def _show_power(grid: CellGrid, world: World, state: HistoryState, sampler: FitS
     grid.fg[~mine] = mix_colors(grid.fg[~mine], (0, 0, 0), 0.55)
 
 
-def event_focus(world: World, state: HistoryState) -> tuple[np.ndarray, set[int]]:
+def event_focus(world: World, config: Config, state: HistoryState) -> tuple[np.ndarray, set[int]]:
     """Return ``(cells, owners)`` the events at ``state.at`` are about.
 
     ``cells`` are flat tile indices: an event's location, its points of interest, the road it laid and the land its
-    territory changes moved. An event with none of those (a war, a trade deal, a peace) is about its realms, so
-    ``owners`` holds their territory owner values; an event with a place leaves its realms out.
+    territory changes moved (a battle's front). ``owners`` holds the territory owner values of the realms of an event
+    of a ``realm_kinds`` kind (a war: its combatants), or of an event with no place at all; any other event with a
+    place leaves its realms out.
     """
     cells: list[int] = []
     owners: set[int] = set()
+    realm_kinds = set(config.get("history.viewer.event_highlight.realm_kinds"))
     here = [e for e in world.chronicle if _event_stop(e) == state.at]
     for event in here:
-        found = [] if event.location == NO_LOCATION else [event.location[1] * world.width + event.location[0]]
-        found += [world.pois[i].y * world.width + world.pois[i].x for i in event.poi_ids if i < len(world.pois)]
-        for link in world.road_links:
-            if link.event_id == event.id:
-                found += link.cells.tolist()
+        found: list[int] = []
+        if event.kind not in realm_kinds:
+            if event.location != NO_LOCATION:
+                found.append(event.location[1] * world.width + event.location[0])
+            found += [world.pois[i].y * world.width + world.pois[i].x for i in event.poi_ids if i < len(world.pois)]
+            for link in world.road_links:
+                if link.event_id == event.id:
+                    found += link.cells.tolist()
         if found:
             cells += found
         else:
@@ -430,7 +435,7 @@ def _show_event(grid: CellGrid, world: World, config: Config, state: HistoryStat
     settings = config.get("history.viewer.event_highlight")
     if not settings["enabled"] or state.focus != "time" or not state.highlight:
         return
-    cells, owners = event_focus(world, state)
+    cells, owners = event_focus(world, config, state)
     lit = np.zeros((grid.rows, grid.cols), dtype=bool)
     if owners:
         lit |= np.isin(sampler.nearest(world.owners_at(*state.at)), sorted(owners))
