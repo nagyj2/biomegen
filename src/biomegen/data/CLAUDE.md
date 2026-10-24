@@ -12,7 +12,7 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.buildings` from `buildings.toml`; `tables.dress` from `dress.toml`; `tables.pois`, `tables.poi_fates`, `tables.poi_sites` and `tables.poi_styles` from `pois.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
   `tables.relation_weights` and `tables.realm_colors` from `polity.toml`; `tables.reasons` and `tables.reason_tokens` from
   `reasons.toml`; `tables.ruling_styles` from `rulers.toml`; `tables.chronicle` from `chronicle.toml`; `tables.secession_terms`,
-  `tables.secession_relations` and `tables.secession_forms` from `secession.toml`; `tables.free_fates` from `pois.toml`; `tables.resources` from `resources.toml`).
+  `tables.secession_relations` and `tables.secession_forms` from `secession.toml`; `tables.free_fates` from `pois.toml`; `tables.resources` from `resources.toml`; `tables.episode_kinds` and `tables.deals` from `episodes.toml`).
 - A user config overrides with the ordinary deep-merge: `[tables.biomes.desert]` + `goods = "glass"`
   changes one attribute and keeps the rest of the row.
 - `config/tables.py` validates every row against its table's schema (`SCHEMAS`): unknown keys, missing
@@ -118,6 +118,16 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   chronicle's word for it); every land or luxury resource needs a row that yields it and a row may name only those
   (`validate_tables` checks). `world/resources.py` reads a realm's supply from them. The simulation adds `bulk` (cargo space per unit).
 
+## Episodes
+
+- `episodes.toml`: `episode_kinds` has one row per relation kind (`war`, `rivalry`, `alliance`, `trade`): `years` (how long an ended
+  episode lasts), `present_age` (how old today's relation is), `weight_scale` (a factor on the kind's `relation_weights` odds when an
+  earlier episode is drawn: below 1 rations it), `traits` and `length_traits` (ruler personality tilts), and the `salience` of the
+  event that starts it and `end_salience` of the one that ends it. `deals` has one row per deal (`swap`, `buy_once`, `buy_ongoing`):
+  `weight`, `ongoing`, `traits` and `volume_traits`. A tilt is `1 + sum(coefficient * (the two rulers' mean of the trait - 0.5))`, never
+  below `history.episodes.tilt_floor`; a coefficient is positive where a ruler high in the trait makes the outcome likelier or larger.
+  Counts, caps and chances are in `history.episodes`; `pipeline/story/episodes.py` reads the rows.
+
 ## Chronicle
 
 - `rulers.toml`: `ruling_styles` has one row per ruling style: `label` (the word the text uses), `weight` (the chance it is
@@ -133,7 +143,8 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 - `chronicle.toml`: `chronicle` has one row per kind of event text (`founding`, `founding_fallen`, `founding_predecessor`,
   `settling`, `settling_free`, `settling_remnant`, `secession_<offshoot|split|defection>_<bitter|amicable>`, `conquest`,
   `succession`, `war`, `war_ended`, `war_fallen`, `rivalry`, `treaty_alliance`, `treaty_trade`, `battle`, `peace`, `fall`,
-  `fall_conquered`). `templates` are sentences that name no nearby place;
+  `fall_conquered`, and for episodes `peace_truce`, `rivalry_ended`, `treaty_alliance_ended`, `treaty_trade_ended`,
+  `treaty_purchase`, `treaty_supply`, `treaty_supply_ended`). `templates` are sentences that name no nearby place;
   `templates_near` (optional) are sentences that name one with `{near}` and must contain it. The tokens a row may use are
   listed in the file's header and checked (`{year}` is allowed everywhere); `{near}` is allowed in `templates_near` only.
 - The history stage picks a template per event (`templates_near` only when a settlement qualifies, see

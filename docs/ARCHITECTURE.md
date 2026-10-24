@@ -43,6 +43,8 @@ src/biomegen/
     chronicle.toml      Wording of the chronicle's events: templates, and templates_near that name a nearby place
     rulers.toml         Ruling styles: label, draw weight, battle strength multiplier, temper and base personality traits
     secession.toml      Secession scoring: term weights, relation scores and wording tags, form weights
+    resources.toml      Resources (food, wood, stone, metal, luxury, money); biome and relief rows say which land yields which
+    episodes.toml       The episode kinds (length, odds scale, trait tilt, salience) and the deals of a trade
     terrain.toml        Terrain styles (continents, pangaea, archipelago, islands)
     geography.toml      Name patterns per geographic feature kind
   util/
@@ -55,6 +57,7 @@ src/biomegen/
     world.py            Immutable World (parallel numpy arrays) + fingerprint()
     overlay.py          Mutable Overlay (runtime edits, composited at read time; a revision counts edits)
     derived.py          derived(): values worked out once per world (road pieces), checked by a source digest
+    resources.py        realm_supply / goods_word: what a realm's land yields, from the `resource` column of the biome rows
     entities.py         POI / Realm / Relation / River / Lake / GeoFeature / ChronicleEvent / FallenRealm dataclasses
     chronicle.py        chronicle_text() and chronicle_json(): the history as three-column text or JSON; ChronicleFilter / filter_events()
     territory.py        TerritoryChange deltas and OwnerTimeline: the owner map at any moment, owner ids (wild, fallen, predecessor)
@@ -96,6 +99,8 @@ src/biomegen/
       secession.py      Secession score (pure term functions shared with a later simulation) and the planning of splits, offshoots and defections
       founding.py       The founding and settling events a secession step may add or change
       conflicts.py      Wars, peace, pacts, battles and falls played through time with faction strengths
+      episodes.py       The pure functions that weigh, time and size a pair's episodes (shared with a later simulation)
+      pair_timeline.py  A pair's episodes drawn backwards from today's relation (generation only)
       ledger.py         Ledger: collects the events, then sorts and numbers them (and sets `tick` and `derived`); `merge_events` for the annals
       territory.py      The territory planner: walks the ledger back from today's map (expansions, foundings, falls, strips, secessions)
       territory_fields.py  Seat cells and km from the seat, computed once per world for the planner
@@ -388,6 +393,8 @@ Partitions solid land (any cell whose biome is not water; a river keeps its land
    alliance, trade or none by `tables.relation_weights`; at least one war when any border exists; one sea pact between
    far-apart majors. `Relation.why` is a raw template from `tables.reasons`, one whose river, range or sea lies within
    `politics.reason_near_km` of the border (`places.nearest_feature`; recorded in `Relation.places`); naming fills its tokens.
+   A relation is *today's* state: the history stage draws what came before it (episodes, below) and gives a trade its deal.
+   `power_fronts` gives every pair's border km and front cells from one scan; `word_relation` words a relation or an ended episode.
 5. **Fronts**: a war marks the border cells of its two powers in `World.front`, picks an attacker by coin toss and
    claims the defender's non-capital settlement nearest `claim_samples` border cells.
 
@@ -424,11 +431,23 @@ and every draw is a `history` sub-stream keyed on the entity.
    the realm, settling and conquest events, the conflicts (with the secession checks), then the remnants.
 4. **Conflicts** (`conflicts.py`): every faction has a strength (a realm's area over the mean; a draw for a fallen realm)
    that a won battle raises and a lost one lowers. The timeline is planned, then played in year order:
-   - each relation of two powers sharing a border may have an older, ended war (`past_war_chance`, `past_war_years`) with
-     battles and a `peace`; the relation itself (an ongoing `war`, `rivalry` or `treaty`) begins at any later year, so wars
-     and pacts are not confined to one period;
+   - every pair of independent powers that shares a border or holds a relation has a run of **episodes** (a war, rivalry,
+     alliance or trade) drawn backwards from today's relation (`pair_timeline.py`; the pure functions that weigh, time and size
+     them are `episodes.py`, shared with a later simulation; rows in `data/episodes.toml`, tunables in `history.episodes`).
+     Today's relation is the last episode and never moves (so realms, fronts and the claimed town do not); its age is drawn from
+     `present_age`. An older episode follows `gap_years` of quiet, with chance `more_chance` (times `decay` per episode), up to
+     `max_per_pair` of them and `max_wars_per_pair` wars. Its kind is the pair class's `relation_weights` scaled by the kind's
+     `weight_scale` and tilted by the traits of the two rulers of that time (`world.ruler_at`); a war's odds also follow the
+     border and the strength gap (`war_pull`). A war has battles on its front (at least one, `battles_per_100km_front`) and
+     ends in a `peace` (a `truce` when the sides are near equal, `truce_terms`); only its decisive battle and its peace are
+     major, and a war of two small powers (`minor_war_kinds`) is minor throughout. A rivalry or pact has an `ended` event (minor).
+     A trade is a `swap` of goods or a purchase paid in money (`buy_once`, a single event, or `buy_ongoing`, a standing supply),
+     its goods drawn from what each side's land yields (`world/resources.py`, `data/resources.toml`) and its `volume` from
+     the match and the rulers' greed and trust; money is never a swap good. An ended episode is a `world.episodes` entry (a
+     `Relation` with `start` and `end`); its events carry `episode`, so a battle or treaty reads its own reason and goods.
+     `Relation.deal`, `goods`, `buyer` and `volume` are set here too, for today's trade;
    - a fallen realm fights up to `fallen_wars` wars against the nearest living realms that exist at the time, one
-     battle each at its ruins (the one that conquers it is tagged `decisive`, as is the last battle of an older war); once a lost battle leaves it under `fall_strength` it is conquered a few years on (a `fall`
+     battle each at its ruins (the one that conquers it is tagged `decisive`, as is the last battle of an ended war); once a lost battle leaves it under `fall_strength` it is conquered a few years on (a `fall`
      tagged `conquered` naming the victor), otherwise it falls at its natural year;
    - battles along a front (`battles_per_100km_front`, on `diplomacy.front_cells`) are won with a chance proportional to
      strength; `realm_ids` of a battle or peace is `[winner, loser]`.

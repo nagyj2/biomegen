@@ -74,12 +74,27 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
 ## Story stage (`story/history.py`)
 
 - The chronicle is derived from the finished political state; there is no tick simulation. It runs after diplomacy and
-  before naming, writes only entities (`world.chronicle`, `fallen_realms`, `founded`, `year`) and never a per-tile array, so
-  the fingerprint is the same with or without it.
+  before naming, writes only entities (`world.chronicle`, `world.episodes`, `fallen_realms`, `founded`, `year`) and never a
+  per-tile array itself. The world fingerprint still follows the events through the stages after it: the POIs events make
+  (watchtowers, battlefields, towers) and the spurs to them are per-tile (`poi_index`, `road`), so more or fewer wars move it.
 - **Causality.** A realm's first event is its founding or the secession that made it (a fallen realm's is its founding); a conquest, war, rivalry or treaty comes
   at least `history.min_gap_years` after both realms exist (or at the present); nothing happens to a fallen realm outside
-  its life; a fall is before the present. Wars join independent, bordering powers only (they are `Relation`s), and
-  a relation that follows an older war begins after its peace.
+  its life; a fall is before the present. Wars join independent, bordering powers only (a `Relation` or an `Episode`), and
+  a pair's episodes never overlap: each starts after the previous one ended.
+- **Episodes** (`pair_timeline.py`, `episodes.py`, `data/episodes.toml`, `history.episodes`). Every bordering pair, and every
+  pair with a relation, has a run of episodes drawn *backwards* from today's relation, which is the last one and never moves
+  (so the realms, fronts and claimed town are untouched; the fingerprint moves only through the POIs and roads that events
+  make). Draws are `rng.derive(seed, "history", "episode", a, b, number)` (`number` counts back from the present) with a fixed set
+  of rolls, so an episode never depends on how many others were drawn. The functions that weigh, time and size episodes
+  (`tilt`, `kind_weights`, `war_pull`, `episode_years`, `truce_terms`, `pact_goods`, `deal_volume`) are pure and shared with a later
+  simulation, like `secession.py`: the caller draws the numbers. The traits of the ruler of each realm at the time tilt the odds,
+  the length and the volume. An ended episode is a `world.episodes` entry and its events carry `ChronicleEvent.episode`; today's
+  relation's events carry -1 and read the `Relation`. A war ends in a `peace` event of the same pair (a `truce` when the
+  sides are near equal): `world/wars.py` pairs each war with the first peace of its pair after it, which is why every ended war
+  needs exactly one. Salience: a war between two powers of `history.episodes.minor_war_kinds` is minor with its battles and peace;
+  otherwise only the decisive battle and the peace of a war are major; trade is minor; a rivalry or pact starts major (trade
+  minor) and its end is minor. A trade is a `swap` of goods, or a purchase paid in money (`buy_once`: one event; `buy_ongoing`:
+  a standing supply); money is never a swap good. Goods come from `world/resources.py` (the `resource` column of the biome rows).
 - **Rulers are records, successions mostly silent.** `rulers.py` gives a realm a ruling style that may change every
   `succession_years` and a `Ruler` per reign (the founder, then one per succession, silent ones included) with the style's
   base traits plus a draw on its own stream (`history.ruler_trait_spread`); only a style change is an event, so the chronicle
@@ -130,8 +145,8 @@ Ordered generation stages that fill an immutable `World`. `pipeline/__init__.py`
   feature, never the largest in the world.
 - Every draw is `rng.derive(seed, "history", ...)` keyed on the entity (realm, POI, relation, battle number, fallen realm),
   so no event depends on another's draws.
-- **Decisive battles.** `conflicts.py` tags a battle `decisive` when it changes a border: the last battle of an older war
-  before its peace, and the battle that conquers a fallen realm. A battlefield may mark it.
+- **Decisive battles.** `conflicts.py` tags a battle `decisive` when it changes a border: the last battle of an ended war
+  before its peace, and the battle that conquers a fallen realm. A battlefield may mark it. Other battles are minor.
 - `history.start = "dawn"` skips settlements through history and the spurs in `generate()` (`DAWN_SKIPPED`); the pois stage
   still runs, placing only `source = "both"` kinds by location. Everything that reads a world must work with no realms,
   settlements or events.

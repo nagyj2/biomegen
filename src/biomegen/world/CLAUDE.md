@@ -14,6 +14,9 @@ shapes a later simulation fills. It sits just above `util` and `config`.
 - **Entities are plain dataclasses** with defaulted trailing fields, so a new field never breaks a positional construction.
   `ChronicleEvent.tick` is the absolute month (`month_tick(year, month, months_per_year)`) and `derived` says the generation made
   it; `POI.potential` is the largest settlement tier its site could grow into.
+- **Episodes.** `World.relations` is today's relation of each pair; `World.episodes` holds the ended stretches of earlier history
+  (`Episode` is a `Relation` with `start` and `end`; the history stage fills it). `ChronicleEvent.episode` indexes it (-1 for an
+  event of today's relation). `resources.py` reads what a realm's land yields from the biome and relief `resource` column.
 - **Ids continue, never reuse.** `EventLog` (`ledger.py`) reads `World.chronicle` and a continuation as one list with `id == index`;
   a `SimState` (`sim_state.py`) numbers its rulers, predecessors and POIs after the generated ones (`next_ruler_id`,
   `next_predecessor_id`, `next_poi_index`, which counts the vanished POIs too). `SiteManifest` (`manifest.py`) is frozen: a
