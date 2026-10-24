@@ -67,9 +67,14 @@ def event_key(event: ChronicleEvent) -> tuple[object, ...]:
 
 
 def front_km(world: World, event: ChronicleEvent) -> float:
-    """Return the length of the front (the shared border, km) of a two-realm event's relation, 0 when it has none."""
+    """Return the length of the front (the shared border, km) of a two-realm event's relation, 0 when it has none.
+
+    An event of an ended episode reads that episode's border, any other the present relation of its pair.
+    """
     if len(event.realm_ids) != 2:
         return 0.0
+    if event.episode >= 0:
+        return world.episodes[event.episode].border_km
     pair = (min(event.realm_ids), max(event.realm_ids))
     for relation in world.relations:
         if (relation.a, relation.b) == pair:

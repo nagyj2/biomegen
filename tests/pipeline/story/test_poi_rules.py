@@ -9,7 +9,7 @@ import pytest
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.pipeline.story.poi_rules import PoiPlan, event_key, poi_for_event
-from biomegen.world.entities import ChronicleEvent, Relation
+from biomegen.world.entities import ChronicleEvent, Episode, Relation
 from biomegen.world.world import World
 
 SEED = 5
@@ -120,8 +120,8 @@ def _battle(n: int, tags: tuple[str, ...] = ("decisive",), year: int = 500) -> C
     return _event("battle", n, year=year, tags=tags)
 
 
-def test_a_quarter_of_decisive_old_battles_make_a_battlefield(world: World, cfg: Config) -> None:
-    assert 0.18 < _share(world, cfg, "battlefield", _battle) < 0.32
+def test_half_of_decisive_old_battles_make_a_battlefield(world: World, cfg: Config) -> None:
+    assert 0.4 < _share(world, cfg, "battlefield", _battle) < 0.6
 
 
 def test_a_battle_that_is_not_decisive_makes_no_battlefield(world: World, cfg: Config) -> None:
@@ -163,6 +163,16 @@ def test_a_war_that_is_over_makes_watchtowers_too(world: World, cfg: Config) -> 
 
 def test_a_war_with_no_relation_makes_no_watchtower(world: World, cfg: Config) -> None:
     assert _plan(world, cfg, _war((3, 4)), "watchtower") is None
+
+
+def test_a_war_of_an_ended_episode_reads_the_episodes_front(
+    world: World, cfg: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Realms 3 and 4 have no relation today, but an earlier war of theirs had a 650 km front: three watchtowers.
+    monkeypatch.setattr(world, "episodes", [Episode(a=3, b=4, kind="war", border_km=650.0, start=800, end=850)])
+    war = replace(_war((3, 4), tags=("ended",)), episode=0)
+    plan = _plan(world, cfg, war, "watchtower")
+    assert plan is not None and plan.count == 3
 
 
 # --------------------------------------------------------------------------- shrines

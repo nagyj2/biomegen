@@ -51,3 +51,15 @@ def test_wars_at_a_moment_are_those_begun_and_not_yet_ended() -> None:
 def test_a_war_with_a_fallen_realm_is_not_listed() -> None:
     world = _world(_event(100, "war", [0], "ended", fallen=[0]))
     assert war_intervals(world) == []
+
+
+def test_each_war_of_a_pair_ends_at_its_own_peace() -> None:
+    # Two wars of one pair: the first ends at the first peace, the second at the second.
+    world = _world(
+        _event(100, "war", [0, 1], "ended"),
+        _event(120, "peace", [1, 0]),
+        _event(150, "war", [1, 0], "ended"),
+        _event(170, "peace", [0, 1]),
+        _event(200, "war", [0, 1], "ongoing"),
+    )
+    assert [end for *_, end in war_intervals(world)] == [(120, 1), (170, 1), None]
