@@ -87,7 +87,8 @@ _HISTORY_HELP = (
     "{filter_salience}   show / hide the minor events (towers, roads, small settlements)",
     "Home / End   the start (before any event) / the present",
     "arrows / WASD / HJKL   scroll the chronicle (shift or capitals: {step})",
-    "space / Page Down / Page Up   scroll a page",
+    "space   light what this moment's events are about on the map (a place, or the realms of a war or deal)",
+    "Page Down / Page Up   scroll a page",
     "{help}   this help      {quit} or Esc   quit",
 )
 
@@ -194,7 +195,8 @@ def resolve_history_action(token: str, config: Config, prompting: bool = False) 
     """Translate a key token into a viewer action.
 
     Actions: ``("step", ±1)``, ``("tile", ±1)``, ``("goto",)``, ``("present",)``, ``("first",)``, ``("last",)``,
-    ``("scroll", n)``, ``("page", ±1)``, ``("help",)``, ``("quit",)``, ``("resize",)``, ``("none",)``; while the year
+    ``("scroll", n)``, ``("page", ±1)``,
+    ``("highlight",)``, ``("help",)``, ``("quit",)``, ``("resize",)``, ``("none",)``; while the year
     prompt is open also ``("type", char)``, ``("backspace",)``, ``("submit",)`` and ``("cancel",)``.
     """
     keys = config.get("keys")
@@ -224,7 +226,9 @@ def resolve_history_action(token: str, config: Config, prompting: bool = False) 
     lower = token.lower()
     if len(token) == 1 and lower in _SCROLL_LETTERS:
         return ("scroll", steps[_SCROLL_LETTERS[lower]] * (step if token.isupper() else 1))
-    if token == "pagedown" or token == " ":
+    if token == " ":
+        return ("highlight",)
+    if token == "pagedown":
         return ("page", 1)
     if token == "pageup":
         return ("page", -1)
@@ -346,7 +350,7 @@ def _map_grid(world: World, config: Config, state: HistoryState, area: Size, col
     Drawn again only when something changed.
     """
     shown = state.selected if state.highlight else None
-    key = (area, state.at, state.minor, state.tile, shown, state.focus, color, ascii_only)
+    key = (area, state.at, state.minor, state.tile, shown, state.highlight, state.focus, color, ascii_only)
     if state._map is None or state._map[0] != key:
         sampler = FitSampler(world, config, area[0], area[1])
         view = resolve_view(config, "political")
@@ -393,7 +397,7 @@ def event_focus(world: World, state: HistoryState) -> tuple[np.ndarray, set[int]
     here = [e for e in world.chronicle if _event_stop(e) == state.at]
     for event in here:
         found = [] if event.location == NO_LOCATION else [event.location[1] * world.width + event.location[0]]
-        found += [world.pois[i].y * world.width + world.pois[i].x for i in event.poi_ids]
+        found += [world.pois[i].y * world.width + world.pois[i].x for i in event.poi_ids if i < len(world.pois)]
         for link in world.road_links:
             if link.event_id == event.id:
                 found += link.cells.tolist()
@@ -411,9 +415,10 @@ def event_focus(world: World, state: HistoryState) -> tuple[np.ndarray, set[int]
 
 def _show_event(grid: CellGrid, world: World, config: Config, state: HistoryState, sampler: FitSampler) -> None:
     """Brighten what the current moment's events are about (their tiles, or the land of their realms when they have no
-    place) and dim the rest, as the powers list does for a power. Off while the powers list has the focus."""
+    place) and dim the rest, as the powers list does for a power. Shown while Space has switched the highlight on, and
+    only in the time focus (the powers list lights its own power)."""
     settings = config.get("history.viewer.event_highlight")
-    if not settings["enabled"] or state.focus != "time":
+    if not settings["enabled"] or state.focus != "time" or not state.highlight:
         return
     cells, owners = event_focus(world, state)
     lit = np.zeros((grid.rows, grid.cols), dtype=bool)
@@ -637,7 +642,7 @@ def _help_lines(config: Config, tile: bool) -> tuple[str, ...]:
         "Marks on the map: events that had a place",
         f"  {marks}",
         f"  bold: this moment's events; faded: those of the last {years} years",
-        "  lit land: what this moment's events are about (their tiles, or their realms' land for a war or a deal)",
+        "  Space lights what this moment's events are about (their tiles, or their realms' land for a war or a deal)",
         "Powers list: the swatch is the power's colour on the map; (vassal of X): it had bowed to X by then.",
         "  {history_focus}: examine a power; up / down choose; Space shows its land on the map, Space again hides it",
         _HISTORY_HELP[-1],
@@ -766,7 +771,7 @@ def _hint_line(config: Config, prompting: bool, tile: bool, focus: str = "time")
             f"[{show('history_prev')}/{show('history_next')}] event  {here}[{show('help')}] help  [{show('quit')}] quit"
         )
     return (
-        f" [{show('history_prev')}/{show('history_next')}] event  {here}"
+        f" [{show('history_prev')}/{show('history_next')}] event  {here}[Space] light events  "
         f"[{show('history_goto')}] go to year  [{show('history_present')}] present  [{show('filter_salience')}] minor  "
         f"[{show('history_focus')}] powers  [arrows] scroll  [{show('help')}] help  [{show('quit')}] quit"
     )
@@ -818,7 +823,7 @@ def _examine(world: World, state: HistoryState, action: Action) -> None:
     """Apply a key while the powers list has the focus: up and down choose a power, Space shows it on the map."""
     if action[0] == "scroll":
         _select(world, state, 1 if action[1] > 0 else -1)
-    else:
+    elif action[0] == "highlight":
         state.highlight = state.selected is not None and not state.highlight  # Space shows, Space again hides
 
 
@@ -837,8 +842,10 @@ def apply_history_action(world: World, config: Config, state: HistoryState, acti
         state.highlight = False
         if state.focus == "powers" and state.selected is None:
             _select(world, state, 1)
-    elif state.focus == "powers" and name in ("scroll", "page"):
+    elif state.focus == "powers" and name in ("scroll", "highlight"):
         _examine(world, state, action)
+    elif name == "highlight":
+        state.highlight = not state.highlight  # Space lights what the events at this moment are about
     elif name == "scroll":
         state.scroll = max(0, state.scroll + action[1])
     elif name == "page":

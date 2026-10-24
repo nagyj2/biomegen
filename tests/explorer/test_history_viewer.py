@@ -437,9 +437,9 @@ def test_leaving_the_powers_list_hides_the_highlight(world: World, cfg: Config) 
     assert state.focus == "time" and state.highlight is False
 
 
-def test_space_in_the_time_focus_still_pages_the_chronicle(world: World, cfg: Config) -> None:
+def test_page_down_in_the_time_focus_pages_the_chronicle(world: World, cfg: Config) -> None:
     state = initial_state(world, cfg)
-    _press(world, cfg, state, " ")
+    _press(world, cfg, state, "pagedown")
     assert not state.highlight and state.scroll > 0
 
 
@@ -695,6 +695,11 @@ def _map_bg(world: World, cfg: Config, state: HistoryState) -> np.ndarray:
     return compose_history_frame(world, cfg, state, SIZE).bg[1:12, :70].copy()
 
 
+def _war_state(world: World, cfg: Config) -> HistoryState:
+    event = next(e for e in world.chronicle if e.kind == "war" and e.location == (-1, -1) and e.realm_ids)
+    return initial_state(world, cfg, (event.year, event.month, event.id))
+
+
 def test_a_placed_event_lights_its_tile(world: World, cfg: Config) -> None:
     # A stop whose event has a location focuses on cells, not on realms
     event = next(e for e in world.chronicle if e.salience == "major" and e.location != (-1, -1) and e.kind != "war")
@@ -705,15 +710,25 @@ def test_a_placed_event_lights_its_tile(world: World, cfg: Config) -> None:
 
 def test_an_event_with_no_place_lights_its_realms(world: World, cfg: Config) -> None:
     # A war has no tile, so the focus is its realms' land
-    event = next(e for e in world.chronicle if e.kind == "war" and e.location == (-1, -1) and e.realm_ids)
-    state = initial_state(world, cfg, (event.year, event.month, event.id))
+    state = _war_state(world, cfg)
+    event = next(e for e in world.chronicle if (e.year, e.month, e.id) == state.at)
     _, owners = event_focus(world, state)
     assert set(event.realm_ids) <= owners
 
 
-def test_the_event_highlight_is_off_in_the_powers_focus(world: World, cfg: Config) -> None:
-    event = next(e for e in world.chronicle if e.kind == "war" and e.location == (-1, -1) and e.realm_ids)
-    state = initial_state(world, cfg, (event.year, event.month, event.id))
+def test_space_lights_the_events_on_the_map_and_space_again_hides_them(world: World, cfg: Config) -> None:
+    state = _war_state(world, cfg)
+    plain = _map_bg(world, cfg, state)
+    _press(world, cfg, state, " ")
     lit = _map_bg(world, cfg, state)
-    _press(world, cfg, state, "\t")
-    assert (lit != _map_bg(world, cfg, state)).any()
+    _press(world, cfg, state, " ")
+    assert state.highlight is False and (lit != plain).any() and (_map_bg(world, cfg, state) == plain).all()
+
+
+def test_every_stop_with_minor_events_has_a_focus() -> None:
+    # Seed 7904325738223517320 has creation events naming points of interest past World.pois: they must not crash
+    config = load_config(None)
+    made = pipeline.generate(config, 7904325738223517320)
+    for stop in change_moments(made, config, minor=True):
+        cells, owners = event_focus(made, initial_state(made, config, stop))
+        assert cells.ndim == 1 and isinstance(owners, set)
