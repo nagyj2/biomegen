@@ -8,7 +8,7 @@ object where it used to ask ``World``. The generation's own builder, which colle
 
 from __future__ import annotations
 
-from typing import Iterator, Sequence
+from typing import Iterator, Optional, Sequence
 
 from .entities import ChronicleEvent
 from .world import World
@@ -19,14 +19,26 @@ class EventLog:
 
     The continuation is appended with :meth:`append`, which numbers each event after every earlier one and refuses to go
     back before the last ``(year, month)``. Build the log after generation: it reads ``world.chronicle`` as it is, so a
-    chronicle renumbered later would leave the continuation's ids behind.
+    chronicle renumbered later would leave the continuation's ids behind. An ``extra`` that is a list is the
+    continuation itself (it is numbered in place and later appends join it), so a simulation's own list and the log
+    are one store.
     """
 
     def __init__(self, world: World, extra: Sequence[ChronicleEvent] = ()) -> None:
         self._world = world
-        self._extra: list[ChronicleEvent] = []
-        for event in extra:
-            self.append(event)
+        last = world.chronicle[-1] if world.chronicle else None
+        for offset, event in enumerate(extra):
+            self._check_order(last, event)
+            event.id = len(world.chronicle) + offset
+            last = event
+        self._extra: list[ChronicleEvent] = extra if isinstance(extra, list) else list(extra)
+
+    @staticmethod
+    def _check_order(last: Optional[ChronicleEvent], event: ChronicleEvent) -> None:
+        if last is not None and (event.year, event.month) < (last.year, last.month):
+            raise ValueError(
+                f"event dated {event.year}/{event.month} comes before the last one, {last.year}/{last.month}"
+            )
 
     def __len__(self) -> int:
         return len(self._world.chronicle) + len(self._extra)
@@ -49,11 +61,7 @@ class EventLog:
         Raises:
             ValueError: ``event`` is dated before the last event's ``(year, month)``.
         """
-        last = self[-1] if len(self) else None
-        if last is not None and (event.year, event.month) < (last.year, last.month):
-            raise ValueError(
-                f"event dated {event.year}/{event.month} comes before the last one, {last.year}/{last.month}"
-            )
+        self._check_order(self[-1] if len(self) else None, event)
         event.id = len(self)
         self._extra.append(event)
         return event

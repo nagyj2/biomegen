@@ -40,6 +40,25 @@ def test_every_event_id_is_its_index() -> None:
     assert [event.id for event in log] == [0, 1, 2, 3]
 
 
+def test_a_list_given_as_the_continuation_is_the_logs_own_store() -> None:
+    # A simulation keeps its events in one list and the log reads and appends to that same list.
+    held = [_later()]
+    log = EventLog(_world(), held)
+    log.append(_later(210))
+    assert len(held) == 2
+
+
+def test_a_list_given_as_the_continuation_is_numbered_in_place() -> None:
+    held = [_later(), _later(210)]
+    EventLog(_world(), held)
+    assert [event.id for event in held] == [2, 3]
+
+
+def test_a_continuation_that_goes_back_in_time_is_refused() -> None:
+    with pytest.raises(ValueError):
+        EventLog(_world(), [_later(210), _later(200)])
+
+
 def test_an_index_reaches_across_the_chronicle_into_the_continuation() -> None:
     log = EventLog(_world(), [_later()])
     assert (log[1].kind, log[2].kind, log[-1].kind) == ("war", "treaty", "treaty")
