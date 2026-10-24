@@ -140,12 +140,19 @@ def _event_stop(event: ChronicleEvent) -> Stop:
     return event.year, event.month, event.id
 
 
+def _listed_keys(world: World, minor: bool) -> list[Stop]:
+    """The keys of the territory changes the chronicle lists: a change made by a minor event is left out while minor
+    events are hidden (it would be a stop with no line), and shows on the map from the next stop."""
+    hidden = {e.id for e in world.chronicle if e.salience != "major"} if not minor else set()
+    return [key for key in world.territory_keys() if key[2] not in hidden]
+
+
 def change_moments(world: World, config: Config, minor: bool = False) -> list[Stop]:
     """Return every stop of the viewer, oldest first: one for each listed event (the major ones, and the minor too when
-    ``minor``) and for each territory change, so two events of one month are two stops; the start (before any event)
-    first and the present last."""
+    ``minor``) and for each territory change of a listed event, so two events of one month are two stops; the start
+    (before any event) first and the present last."""
     events = world.chronicle if minor else [e for e in world.chronicle if e.salience == "major"]
-    moments = {_event_stop(e) for e in events} | set(world.territory_keys())
+    moments = {_event_stop(e) for e in events} | set(_listed_keys(world, minor))
     moments |= {START, present_moment(world, config)}
     return sorted(moments)
 
@@ -160,13 +167,16 @@ def _year_end(world: World, config: Config, year: int) -> Stop:
 
 
 def tile_moments(world: World, config: Config, tile: tuple[int, int], minor: bool = False) -> list[Stop]:
-    """Return a stop for each event at ``tile`` (the minor ones too when ``minor``) and each territory change that took
-    the tile from one owner to another, oldest first, between the start and the present (both always reachable, even
-    when nothing happens at the tile)."""
+    """Return a stop for each event at ``tile`` (the minor ones too when ``minor``) and each territory change of a
+    listed event that took the tile from one owner to another, oldest first, between the start and the present (both
+    always reachable, even when nothing happens at the tile)."""
     x, y = tile
     cell = y * world.width + x
     moments = {_event_stop(e) for e in world.events_at(x, y) if minor or e.salience == "major"}
+    listed = set(_listed_keys(world, minor))
     for change in world.territory:
+        if change.key not in listed:
+            continue
         at = int(np.searchsorted(change.cells, cell))
         if at < len(change.cells) and int(change.cells[at]) == cell:
             moments.add(change.key)

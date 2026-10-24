@@ -9,6 +9,7 @@ from biomegen import pipeline
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.explorer.history_viewer import (
+    START,
     HistoryState,
     apply_history_action,
     change_moments,
@@ -55,9 +56,10 @@ def test_the_moments_are_distinct_and_ordered(world: World, cfg: Config) -> None
     assert moments == sorted(set(moments)) and len(moments) > 10
 
 
-def test_the_moments_include_every_territory_change_and_conquest(world: World, cfg: Config) -> None:
+def test_the_moments_include_every_territory_change_of_a_major_event_and_conquest(world: World, cfg: Config) -> None:
     moments = set(change_moments(world, cfg))
-    assert {c.key for c in world.territory} <= moments
+    major = {e.id for e in world.chronicle if e.salience == "major"}
+    assert {c.key for c in world.territory if c.key[2] in major} <= moments
     assert {(e.year, e.month, e.id) for e in world.chronicle if e.kind == "conquest"} <= moments
 
 
@@ -732,3 +734,12 @@ def test_every_stop_with_minor_events_has_a_focus() -> None:
     for stop in change_moments(made, config, minor=True):
         cells, owners = event_focus(made, initial_state(made, config, stop))
         assert cells.ndim == 1 and isinstance(owners, set)
+
+
+def test_every_stop_is_a_listed_event_or_the_ends() -> None:
+    # Seed 17261501894059739936 has a minor battle that moves land: hidden, it must not be a stop with no line
+    config = load_config(None)
+    made = pipeline.generate(config, 17261501894059739936)
+    listed = {(e.year, e.month, e.id) for e in made.chronicle if e.salience == "major"}
+    ends = {START, present_stop(made, config)}
+    assert set(change_moments(made, config)) <= listed | ends
