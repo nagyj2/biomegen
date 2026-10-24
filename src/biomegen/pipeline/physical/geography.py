@@ -9,8 +9,9 @@ naming stage gives every feature its name):
 2. **Ranges.** Connected mountain, peak and volcano relief of at least ``min_range_km2``, with a summit.
    Every distinct summit (of a range or a landmass) is one peak feature.
 3. **Lakes.** Hydrology's lakes of at least ``min_named_lake_km2``.
-4. **Seas.** Up to ``max_seas`` sea cells farthest from land, at least ``sea_min_offshore_km`` out and
-   ``sea_spacing_km`` apart, each with the greatest depth within ``sea_depth_radius_km``.
+4. **Seas.** Up to ``max_seas`` sea cells farthest from land, at least ``sea_min_offshore_km`` out,
+   ``sea_edge_margin`` (a fraction of the map) in from the edges and ``sea_spacing_km`` apart,
+   each with the greatest depth within ``sea_depth_radius_km``.
 5. **Rivers.** The ``max_named_rivers`` rivers with the largest catchment at the mouth that are at least
    ``min_river_km`` long; ``into`` is the lake at the mouth, else the nearest sea.
 
@@ -142,6 +143,11 @@ def _seas(world: World, config: Config, build: _Builder, land: np.ndarray) -> li
     sea = world.water_type == int(WaterType.SALT)
     offshore = geo.distance_to(land, backend=backend, sampling=sampling)
     eligible = sea & (offshore >= float(g.get("sea_min_offshore_km")))
+    # Keep centres off the ocean frame, where the farthest-from-land cells always sit (the map corners).
+    margin_x = int(world.width * float(g.get("sea_edge_margin")))
+    margin_y = int(world.height * float(g.get("sea_edge_margin")))
+    eligible[:margin_y] = eligible[world.height - margin_y :] = False
+    eligible[:, :margin_x] = eligible[:, world.width - margin_x :] = False
     flat = np.flatnonzero(eligible.ravel())
     # Farthest from land first; the stable sort keeps row-major order among equal distances.
     order = flat[np.argsort(-offshore.ravel()[flat], kind="stable")]

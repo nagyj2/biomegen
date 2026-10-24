@@ -16,6 +16,7 @@ VALUES: Dict[str, Any] = {
     # apart; each reports the greatest depth within sea_depth_radius_km of its centre.
     "max_seas": 3,
     "sea_min_offshore_km": 90.0,
+    "sea_edge_margin": 0.15,  # fraction of the map's width / height kept clear of sea centres (the ocean frame)
     "sea_spacing_km": 2100.0,
     "sea_depth_radius_km": 1000.0,
     # Rivers: the max_named_rivers with the largest catchment at the mouth, if at least min_river_km long.

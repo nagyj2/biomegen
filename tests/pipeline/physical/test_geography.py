@@ -155,3 +155,11 @@ def test_labelling_backend_does_not_change_landmasses_or_ranges() -> None:
         areas = [(f.kind, f.anchor, f.area_km2) for f in world.features if f.kind in ("landmass", "range")]
         results.append((world.landmass_id.copy(), areas))
     assert np.array_equal(results[0][0], results[1][0]) and results[0][1] == results[1][1]
+
+
+def test_sea_centres_keep_off_the_ocean_frame() -> None:
+    # The deepest sea cell sits in the far corner, but a sea centre must lie inside the margin kept clear of the edges.
+    world = _world()
+    geography.run(world, _cfg(max_seas=1, sea_min_offshore_km=0.0, sea_edge_margin=0.25), 1)
+    x, y = _kind(world, "sea")[0].anchor
+    assert world.width * 0.25 <= x < world.width * 0.75 and world.height * 0.25 <= y < world.height * 0.75
