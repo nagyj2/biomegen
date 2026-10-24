@@ -212,6 +212,7 @@ def test_nothing_is_planned_when_the_defection_form_has_no_weight() -> None:
 
 def _check(seed: int, chance: float = 1.0) -> list:
     config = _eager(chance=chance)
+    config.data["history"]["episodes"]["first_chance"] = 0.0  # the two neighbours have no history: only the check
     world = _tiny()
     ledger = Ledger(config)
     conflicts.derive(world, config, seed, 1200, ledger, None, None, 0, {2: (0, 700)})

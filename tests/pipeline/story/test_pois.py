@@ -221,7 +221,8 @@ def test_a_dismantled_watchtower_is_history_only_and_ends_at_the_peace(world: Wo
     for tower in gone:
         peace = world.chronicle[tower.event_ids[1]]
         assert tower.extra["fate"] == "dismantled" and peace.kind in ("peace", "conquest") and tower.fell == peace.year
-        assert world.poi_index[tower.y, tower.x] < 0 and not tower.connect
+        later = world.poi_at(tower.x, tower.y)  # a building raised on the site long after is not the tower
+        assert (later is None or later.founded > tower.fell) and not tower.connect
 
 
 def test_a_tower_bandits_took_was_an_abandoned_watchtower(world: World) -> None:

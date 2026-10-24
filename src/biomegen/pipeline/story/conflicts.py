@@ -5,10 +5,10 @@ draw for a fallen realm) and moves with what happens to it: each battle won mult
 history.victory_gain``, each lost one by ``1 - history.defeat_loss`` (never below ``history.min_strength``). The
 timeline is planned first, then played in year order so every result sees the strengths of that moment:
 
-1. **Relations.** Each relation of two independent powers may have an older, ended war first (``past_war_chance``,
-   lasting ``past_war_years``, when the pair share a border): its battles, then a ``peace`` won by the likelier side.
-   The relation itself (a war that is still going, a rivalry or a treaty) begins at a year drawn anywhere after that,
-   so wars and pacts can be old or new.
+1. **Episodes.** Each pair of independent powers has a run of episodes (a war, a rivalry, an alliance, a trade) drawn
+   backwards from today's relation (:mod:`.pair_timeline`, weighed by :mod:`.episodes`): a war with its battles and a
+   ``peace`` or ``truce`` that ends it, a pact or rivalry with the event that ends it, a trade as a swap, a standing
+   supply or a one-off purchase. Today's relation is the last episode and never moves.
 2. **Fallen realms.** Each fights a few wars (``fallen_wars``) against the nearest living realms that exist at the
    time, one decisive battle each at its ruins. A realm whose strength falls below ``fall_strength`` after a lost
    battle is conquered a few years later (``fall_delay_years``); the others fall at their natural year.
@@ -25,12 +25,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+import numpy as np
+
 from ...config.model import Config
 from ...util import rng
-from ...world.entities import NO_LOCATION
+from ...world.entities import NO_LOCATION, Episode, Relation
+from ...world.resources import realm_supply
 from ...world.world import World
-from ..civilization.diplomacy import front_cells
-from . import secession
+from ..civilization import diplomacy
+from . import episodes, pair_timeline, secession
 from .founding import add_founding, add_settling
 from .ledger import Ledger
 from .places import nearest_settlement
@@ -52,6 +55,10 @@ class _Step:
     key: tuple  # labels of this step's rng stream
     location: tuple[int, int] = (-1, -1)
     tags: tuple[str, ...] = ()  # a "war" step's tags, or the tags a realm-pair "battle" adds (``decisive``)
+    salience: str = (
+        "major"  # of the war it belongs to: only its decisive battle and its peace take it, the rest are minor
+    )
+    episode: int = -1  # index into World.episodes of the ended episode the step belongs to, -1 for none
 
 
 class _Timeline:
@@ -90,8 +97,10 @@ class _Timeline:
         key: tuple,
         location: tuple[int, int] = (-1, -1),
         tags: tuple[str, ...] = (),
+        salience: str = "major",
+        episode: int = -1,
     ) -> None:
-        self.steps.append(_Step(min(year, self.span), kind, a, b, key, location, tags))
+        self.steps.append(_Step(min(year, self.span), kind, a, b, key, location, tags, salience, episode))
 
     def _result(self, step: _Step) -> tuple[Faction, Faction]:
         """Return ``(winner, loser)`` of ``step``: ``a`` wins with a chance proportional to its strength."""
@@ -136,10 +145,19 @@ class _Timeline:
                 )
                 continue
             winner, loser = self._result(step)
+            terms = episodes.truce_terms(self.config, self._odds(step.a, step.year), self._odds(step.b, step.year))
             self._settle(winner, loser)
             if step.kind == "peace":
                 self.ledger.add(
-                    step.year, "peace", "peace", step.key, self.seed, realm_ids=[winner[1], loser[1]], tags=("ended",)
+                    step.year,
+                    "peace",
+                    "peace_truce" if terms == "truce" else "peace",
+                    step.key,
+                    self.seed,
+                    realm_ids=[winner[1], loser[1]],
+                    tags=("ended", *(("truce",) if terms == "truce" else ())),
+                    salience=step.salience,
+                    episode=step.episode,
                 )
             else:
                 self._battle(step, winner, loser)
@@ -240,6 +258,8 @@ class _Timeline:
                 location=step.location,
                 near_poi=near,
                 tags=("front", *step.tags),
+                salience=step.salience if "decisive" in step.tags else "minor",
+                episode=step.episode,
             )
             return
         realm = step.a if step.a[0] == REALM else step.b
@@ -261,6 +281,7 @@ class _Timeline:
                 "won_by_fallen" if winner == fallen else "won_by_realm",
                 *(("decisive",) if conquering else ()),
             ),
+            salience="major" if conquering else "minor",
         )
         if conquering:
             self._conquer(step, realm, fallen)
@@ -293,69 +314,174 @@ def _draw_year(roll: float, first: int, last: int) -> int:
     return first + int(roll * max(0, last - first + 1))
 
 
-def _plan_relations(timeline: _Timeline) -> None:
-    """Plan each relation: an optional older war with its battles and peace, then the relation itself."""
-    world, config, seed, span = timeline.world, timeline.config, timeline.seed, timeline.span
-    gap = int(config.get("history.min_gap_years"))
+_TREATY_ROWS = {
+    "alliance": "treaty_alliance",
+    "swap": "treaty_trade",
+    "buy_once": "treaty_purchase",
+    "buy_ongoing": "treaty_supply",
+}
+
+
+def _treaty_row(span: pair_timeline.Span) -> str:
+    """The chronicle row of the event that starts a treaty episode (an alliance, or a trade by its deal)."""
+    return _TREATY_ROWS[span.deal.name if span.deal is not None else span.kind]
+
+
+def _episode_of(
+    world: World,
+    config: Config,
+    seed: int,
+    pair: tuple[int, int],
+    span: pair_timeline.Span,
+    km: float,
+    front: np.ndarray,
+) -> Episode:
+    """Record the ended episode ``span`` of ``pair`` in ``World.episodes`` and return it, with its reason worded.
+
+    A war is worded without a reason (its start event has none); a purchase has none either.
+    """
+    deal = span.deal
+    episode = Episode(
+        a=pair[0],
+        b=pair[1],
+        kind=span.kind,
+        border_km=km,
+        attacker=span.attacker,
+        deal=deal.name if deal else "",
+        goods=list(deal.goods) if deal else [],
+        buyer=deal.buyer if deal else -1,
+        volume=deal.volume if deal else "",
+        start=span.start,
+        end=span.end,
+    )
+    if span.kind != "war" and (deal is None or deal.name == "swap"):
+        stream = rng.derive(seed, "history", "reason", pair[0], pair[1], span.number)
+        diplomacy.word_relation(world, config, episode, stream, front if km > 0 else None)
+    world.episodes.append(episode)
+    return episode
+
+
+def _plan_war(
+    timeline: _Timeline,
+    pair: tuple[int, int],
+    span: pair_timeline.Span,
+    relation: Relation | None,
+    index: int,
+    km: float,
+    front: np.ndarray,
+) -> None:
+    """Add a war episode's start event and plan its battles and, if it ended, its peace.
+
+    Battles fall at random places of the front and years of the war (at least one when the pair has a front), the last
+    battle before the peace of an ended war decisive. Only the decisive battle and the peace take the war's salience.
+    """
+    world, config, seed = timeline.world, timeline.config, timeline.seed
+    a, b = pair
+    attacker = span.attacker if span.attacker >= 0 else a
+    defender = b if attacker == a else a
+    salience = episodes.war_salience(config, world.realms[a].kind, world.realms[b].kind)
+    key = ("episode", a, b, span.number)
+    if span.present:
+        assert relation is not None
+        timeline.ledger.add(
+            span.start,
+            "war",
+            "war",
+            key,
+            seed,
+            realm_ids=[attacker, defender],
+            poi_ids=[relation.claim_poi] if relation.claim_poi >= 0 else [],
+            tags=("ongoing",),
+            salience=salience,
+        )
+    else:
+        timeline.ledger.add(
+            span.start,
+            "war",
+            "war_ended",
+            key,
+            seed,
+            realm_ids=[attacker, defender],
+            tags=("ended",),
+            salience=salience,
+            episode=index,
+        )
+    cells = front.tolist()
     rate = float(config.get("history.battles_per_100km_front"))
-    chance = float(config.get("history.past_war_chance"))
-    len_lo, len_hi = (int(v) for v in config.get("history.past_war_years"))
-    for index, relation in enumerate(world.relations):
-        stream = rng.derive(seed, "history", "relation", index)
-        roll_past, roll_length, roll_start, roll_main, roll_side = (stream.random() for _ in range(5))
-        pair = [relation.a, relation.b]
-        first = min(max(world.realms[relation.a].founded, world.realms[relation.b].founded) + gap, span)
-        cells = front_cells(world, relation.a, relation.b).tolist() if relation.border_km > 0 else []
-        battles = max(1, round(relation.border_km / 100.0 * rate)) if cells else 0
-        main_first = first
-        if cells and roll_past < chance:
-            length = len_lo + int(roll_length * (len_hi - len_lo + 1))
-            latest = span - length - gap
-            if latest >= first:
-                start = _draw_year(roll_start, first, latest)
-                end = start + length
-                attacker, defender = (relation.a, relation.b) if roll_side < 0.5 else (relation.b, relation.a)
-                timeline.ledger.add(
-                    start, "war", "war_ended", ("past", index), seed, realm_ids=[attacker, defender], tags=("ended",)
-                )
-                fought = []
-                for number in range(battles):
-                    step_stream = rng.derive(seed, "history", "place", "past", index, number)
-                    y, x = divmod(cells[step_stream.randrange(len(cells))], world.width)
-                    fought.append((_draw_year(step_stream.random(), start, end), number, (x, y)))
-                last = max(fought)[1] if fought else -1  # the last battle before the peace is the decisive one
-                for year, number, place in fought:
-                    tags = ("decisive",) if number == last else ()
-                    timeline.plan(
-                        year, "battle", (REALM, attacker), (REALM, defender), ("past", index, number), place, tags
-                    )
-                timeline.plan(end, "peace", (REALM, attacker), (REALM, defender), ("past", index))
-                main_first = min(end + gap, span)
-        year = _draw_year(roll_main, main_first, span)
-        if relation.kind == "war":
-            attacker = relation.attacker if relation.attacker >= 0 else relation.a
-            defender = relation.b if attacker == relation.a else relation.a
-            timeline.ledger.add(
-                year,
-                "war",
-                "war",
-                (index,),
-                seed,
-                realm_ids=[attacker, defender],
-                poi_ids=[relation.claim_poi] if relation.claim_poi >= 0 else [],
-                tags=("ongoing",),
-            )
-            for number in range(round(relation.border_km / 100.0 * rate) if cells else 0):
-                step_stream = rng.derive(seed, "history", "place", index, number)
-                y, x = divmod(cells[step_stream.randrange(len(cells))], world.width)
-                battle_year = _draw_year(step_stream.random(), year, span)
-                timeline.plan(battle_year, "battle", (REALM, attacker), (REALM, defender), (index, number), (x, y))
-        elif relation.kind == "rivalry":
-            timeline.ledger.add(year, "rivalry", "rivalry", (index,), seed, realm_ids=pair, tags=("rivalry",))
-        else:
-            timeline.ledger.add(
-                year, "treaty", f"treaty_{relation.kind}", (index,), seed, realm_ids=pair, tags=(relation.kind,)
-            )
+    fought = []
+    for number in range(max(1, round(km / 100.0 * rate)) if cells and rate > 0.0 else 0):
+        stream = rng.derive(seed, "history", "place", a, b, span.number, number)
+        y, x = divmod(cells[stream.randrange(len(cells))], world.width)
+        fought.append((_draw_year(stream.random(), span.start, span.end), number, (x, y)))
+    decisive = max(fought)[1] if fought and not span.present else -1  # the last battle before the peace
+    for year, number, place in fought:
+        tags = ("decisive",) if number == decisive else ()
+        timeline.plan(
+            year, "battle", (REALM, attacker), (REALM, defender), (*key, number), place, tags, salience, index
+        )
+    if not span.present:
+        timeline.plan(span.end, "peace", (REALM, attacker), (REALM, defender), key, salience=salience, episode=index)
+
+
+def _plan_commerce(timeline: _Timeline, pair: tuple[int, int], span: pair_timeline.Span, index: int) -> None:
+    """Add the events of a rivalry, alliance or trade episode: its start and, unless a one-off or today's, its end."""
+    config, seed = timeline.config, timeline.seed
+    a, b = pair
+    key = ("episode", a, b, span.number)
+    row = config.get(f"tables.episode_kinds.{span.kind}")
+    if span.kind == "rivalry":
+        kind, start_row, tags = "rivalry", "rivalry", ("rivalry",)
+    else:
+        kind, start_row = "treaty", _treaty_row(span)
+        tags = (span.kind, *((span.deal.name,) if span.deal else ()))
+    timeline.ledger.add(
+        span.start, kind, start_row, key, seed, realm_ids=[a, b], tags=tags, salience=row["salience"], episode=index
+    )
+    lasts = span.deal is None or span.deal.name != "buy_once"
+    if not span.present and lasts:
+        timeline.ledger.add(
+            span.end,
+            kind,
+            f"{start_row}_ended",
+            (*key, "end"),
+            seed,
+            realm_ids=[a, b],
+            tags=(*tags, "ended"),
+            salience=row["end_salience"],
+            episode=index,
+        )
+
+
+def _plan_episodes(timeline: _Timeline) -> None:
+    """Draw the episodes of every pair of independent powers that share a border or hold a relation; add their events.
+
+    Today's relation is the last episode of its pair: it keeps its kind, front and claim, takes its deal if it is a
+    trade, and its events carry no episode index (they read the relation).
+    """
+    world, config, seed, span = timeline.world, timeline.config, timeline.seed, timeline.span
+    supply = realm_supply(world, config)
+    fronts = diplomacy.power_fronts(world)
+    present = {(r.a, r.b): r for r in world.relations}
+    for pair in sorted(set(fronts) | set(present)):
+        relation = present.get(pair)
+        km, front = fronts.get(pair, (0.0, np.empty(0, dtype=np.int64)))
+        if relation is not None:
+            km = relation.border_km
+        strengths = (timeline.strength[(REALM, pair[0])], timeline.strength[(REALM, pair[1])])
+        for run in pair_timeline.plan_pair(world, config, seed, span, pair, relation, km, strengths, supply):
+            if run.present:
+                assert relation is not None
+                index = -1
+                if run.deal is not None:
+                    relation.deal, relation.goods = run.deal.name, list(run.deal.goods)
+                    relation.buyer, relation.volume = run.deal.buyer, run.deal.volume
+            else:
+                index = len(world.episodes)
+                _episode_of(world, config, seed, pair, run, km, front)
+            if run.kind == "war":
+                _plan_war(timeline, pair, run, relation, index, km, front)
+            else:
+                _plan_commerce(timeline, pair, run, index)
 
 
 def _plan_fallen_wars(timeline: _Timeline) -> None:
@@ -423,7 +549,7 @@ def derive(
     """
     timeline = _Timeline(world, config, seed, span, ledger, styles)
     timeline.secessions = secessions_made
-    _plan_relations(timeline)
+    _plan_episodes(timeline)
     _plan_fallen_wars(timeline)
     _plan_offshoots(timeline, offshoots or {})
     _plan_defections(timeline, defections or {})

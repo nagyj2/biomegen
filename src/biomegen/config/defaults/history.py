@@ -51,11 +51,8 @@ VALUES: Dict[str, Any] = {
     "min_gap_years": 20,  # least time between a realm existing and its next event (conquest, war, treaty)
     "conquest_war_years": [3, 25],  # the war that wins a vassal lasts this long (a conquest ends it)
     "first_founding_year": 10,  # the oldest realm is founded this year; every founding is shifted to match
-    # Relations. A pair sharing a border may have had an older war first (``past_war_chance``, lasting
-    # ``past_war_years``) that ended in peace; the relation itself then begins at any later year. A war's front sees
-    # ``battles_per_100km_front`` battles per 100 km of border (at least one for an older war).
-    "past_war_chance": 0.15,
-    "past_war_years": [5, 60],
+    # A war's front sees ``battles_per_100km_front`` battles per 100 km of border (at least one when the pair has a
+    # front and the rate is above 0; see ``episodes`` below for the wars themselves).
     "battles_per_100km_front": 0.1,
     # Strength of a faction (the odds of a battle): a realm starts at its area over the mean realm area, within
     # ``start_strength_range``; a fallen realm draws from ``fallen_strength``. A victory multiplies it by

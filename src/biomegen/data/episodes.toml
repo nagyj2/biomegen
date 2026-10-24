@@ -28,8 +28,8 @@
 
 [episode_kinds.war]
 years = [4, 40]
-present_age = [2, 60]
-weight_scale = 0.55
+present_age = [5, 80]
+weight_scale = 1.5
 traits = { aggression = 1.2, expansionism = 0.8, caution = -1.0, trust = -0.6 }
 length_traits = { aggression = 0.8, caution = -0.8 }
 salience = "major"
@@ -38,7 +38,7 @@ end_salience = "major"
 [episode_kinds.rivalry]
 years = [20, 160]
 present_age = [10, 140]
-weight_scale = 1.0
+weight_scale = 0.6
 traits = { aggression = 0.6, trust = -0.8, greed = 0.3 }
 length_traits = { trust = -0.6 }
 salience = "major"
@@ -47,7 +47,7 @@ end_salience = "minor"
 [episode_kinds.alliance]
 years = [30, 220]
 present_age = [10, 250]
-weight_scale = 1.0
+weight_scale = 0.7
 traits = { trust = 1.2, aggression = -0.6, caution = 0.3 }
 length_traits = { trust = 0.8 }
 salience = "major"

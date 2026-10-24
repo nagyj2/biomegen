@@ -30,9 +30,13 @@ def world(request: pytest.FixtureRequest, cfg: Config) -> World:
 
 @pytest.fixture(scope="module", params=SEEDS)
 def busy(request: pytest.FixtureRequest) -> World:
-    """A world with many older wars and hard-pressed fallen realms, so those events are always there to check."""
+    """A world with many episodes and hard-pressed fallen realms, so those events are always there to check."""
     config = load_config(None)
-    config.data["history"].update(past_war_chance=0.8, fallen_wars=[2, 4], fall_strength=0.9)
+    config.data["history"].update(fallen_wars=[2, 4], fall_strength=0.9)
+    config.data["history"]["episodes"].update(
+        first_chance=1.0, more_chance=0.95, decay=0.9, max_per_pair=6, max_wars_per_pair=3
+    )
+    config.data["tables"]["episode_kinds"]["war"]["weight_scale"] = 5.0
     return pipeline.generate(config, request.param)
 
 
@@ -41,7 +45,13 @@ def _events(world: World, kind: str, *tags: str) -> list[ChronicleEvent]:
 
 
 def _pairs(world: World) -> dict[frozenset[int], object]:
-    return {frozenset((r.a, r.b)): r for r in world.relations}
+    """The pairs a relation or an ended episode joins."""
+    return {frozenset((r.a, r.b)): r for r in [*world.relations, *world.episodes]}
+
+
+def _present(world: World, kind: str) -> list[ChronicleEvent]:
+    """The starting events of today's relations of ``kind`` (none belongs to an ended episode)."""
+    return [e for e in world.chronicle if e.kind == kind and e.episode < 0 and "ended" not in e.tags]
 
 
 # --- relations ------------------------------------------------------------------------------------
@@ -52,13 +62,13 @@ def test_every_war_relation_is_one_ongoing_war(world: World) -> None:
     assert wars and len(_events(world, "war", "ongoing")) == len(wars)
 
 
-def test_every_rivalry_is_one_event(world: World) -> None:
-    assert len(_events(world, "rivalry")) == sum(1 for r in world.relations if r.kind == "rivalry")
+def test_every_rivalry_relation_is_one_rivalry_event(world: World) -> None:
+    assert len(_present(world, "rivalry")) == sum(1 for r in world.relations if r.kind == "rivalry")
 
 
-def test_every_pact_is_one_treaty_tagged_with_its_kind(world: World) -> None:
+def test_every_pact_relation_is_one_treaty_tagged_with_its_kind(world: World) -> None:
     pacts = sorted(r.kind for r in world.relations if r.kind in ("alliance", "trade"))
-    assert pacts and pacts == sorted(e.tags[0] for e in _events(world, "treaty"))
+    assert pacts and pacts == sorted(e.tags[0] for e in _present(world, "treaty"))
 
 
 def test_an_ongoing_war_names_the_attacker_first(world: World) -> None:
@@ -75,19 +85,22 @@ def test_an_ongoing_war_carries_the_claimed_town(world: World) -> None:
 
 
 def test_wars_join_independent_neighbours(world: World) -> None:
-    wars = [r for r in world.relations if r.kind == "war"]
+    wars = [*(r for r in world.relations if r.kind == "war"), *(r for r in world.episodes if r.kind == "war")]
     assert all(world.realms[i].liege < 0 for r in wars for i in (r.a, r.b)) and all(r.border_km > 0 for r in wars)
 
 
-def test_a_relation_begins_after_both_powers_exist(world: World, cfg: Config) -> None:
+def test_an_episode_begins_after_both_powers_exist(world: World, cfg: Config) -> None:
     gap = cfg.get("history.min_gap_years")
-    for event in _events(world, "war", "ongoing") + _events(world, "rivalry") + _events(world, "treaty"):
+    starts = [e for e in world.chronicle if e.kind in ("war", "rivalry", "treaty") and not e.fallen_ids]
+    for event in starts:
+        if "conquest" in event.tags:
+            continue
         first = min(max(world.realms[i].founded for i in event.realm_ids) + gap, world.year)
         assert event.year >= first
 
 
 def test_relations_are_not_confined_to_one_period() -> None:
-    # Wars and pacts start anywhere between the realms' foundings and the present: over two worlds they span centuries.
+    # Episodes start anywhere between the realms' foundings and the present: over two worlds they span centuries.
     config = load_config(None)
     years = []
     for seed in SEEDS:
@@ -96,19 +109,43 @@ def test_relations_are_not_confined_to_one_period() -> None:
     assert max(years) - min(years) > 600
 
 
-# --- older wars and peace -------------------------------------------------------------------------
+# --- episodes -------------------------------------------------------------------------------------
 
 
-def test_an_older_war_ends_in_one_peace(busy: World) -> None:
-    ended = _events(busy, "war", "ended")
-    realm_wars = [e for e in ended if not e.fallen_ids]
-    assert realm_wars and len(_events(busy, "peace")) == len(realm_wars)
+def test_a_present_relation_is_no_older_than_its_kinds_age_range(world: World, cfg: Config) -> None:
+    oldest = max(
+        int(cfg.get(f"tables.episode_kinds.{k}.present_age")[1]) for k in ("war", "rivalry", "alliance", "trade")
+    )
+    assert all(world.year - e.year <= oldest for e in _events(world, "war", "ongoing") + _present(world, "treaty"))
+
+
+def test_a_pairs_episodes_never_overlap(busy: World) -> None:
+    for pair in {frozenset((e.a, e.b)) for e in busy.episodes}:
+        runs = sorted((e.start, e.end) for e in busy.episodes if frozenset((e.a, e.b)) == pair)
+        assert all(before[1] < after[0] for before, after in zip(runs, runs[1:], strict=False))
+
+
+def test_an_ended_episode_comes_before_the_present_relation_of_its_pair(busy: World) -> None:
+    present = {
+        frozenset((r.a, r.b)): e.year
+        for r in busy.relations
+        for e in _present(busy, r.kind)
+        if frozenset(e.realm_ids) == frozenset((r.a, r.b))
+    }
+    ended = [e for e in busy.episodes if frozenset((e.a, e.b)) in present]
+    assert ended and all(e.end < present[frozenset((e.a, e.b))] for e in ended)
+
+
+def test_a_war_episode_ends_in_one_peace(busy: World) -> None:
+    wars = [i for i, e in enumerate(busy.episodes) if e.kind == "war"]
+    peaces = [e.episode for e in _events(busy, "peace")]
+    assert wars and sorted(peaces) == wars
 
 
 def test_a_peace_follows_its_war(busy: World) -> None:
-    starts = {frozenset(e.realm_ids): e.year for e in _events(busy, "war", "ended") if not e.fallen_ids}
+    starts = {e.episode: e.year for e in _events(busy, "war", "ended") if e.episode >= 0}
     peaces = _events(busy, "peace")
-    assert peaces and all(e.year > starts[frozenset(e.realm_ids)] for e in peaces)
+    assert peaces and all(e.year > starts[e.episode] for e in peaces)
 
 
 def test_a_peace_names_the_winner_then_the_loser(world: World) -> None:
@@ -116,21 +153,86 @@ def test_a_peace_names_the_winner_then_the_loser(world: World) -> None:
     assert all(frozenset(e.realm_ids) in pairs for e in _events(world, "peace"))
 
 
-def test_a_relation_that_follows_an_older_war_comes_after_its_peace(busy: World, cfg: Config) -> None:
-    gap = cfg.get("history.min_gap_years")
-    peace = {frozenset(e.realm_ids): e.year for e in _events(busy, "peace")}
-    later = _events(busy, "war", "ongoing") + _events(busy, "rivalry") + _events(busy, "treaty")
-    checked = [e for e in later if frozenset(e.realm_ids) in peace]
-    assert checked and all(e.year >= min(peace[frozenset(e.realm_ids)] + gap, busy.year) for e in checked)
+def _war_of(world: World, peace: ChronicleEvent) -> ChronicleEvent:
+    """The war a peace ends."""
+    return next(e for e in world.chronicle if e.kind == "war" and e.episode == peace.episode)
 
 
-def test_no_older_wars_at_chance_zero() -> None:
+def test_a_peace_takes_the_salience_of_its_war(busy: World) -> None:
+    peaces = _events(busy, "peace")
+    assert peaces and all(e.salience == _war_of(busy, e).salience for e in peaces)
+
+
+def test_a_truce_is_worded_by_the_truce_row(busy: World, cfg: Config) -> None:
+    truces = _events(busy, "peace", "truce")
+    assert truces and all(e.template in cfg.get("tables.chronicle.peace_truce.templates") for e in truces)
+
+
+def test_no_ended_wars_with_no_wars_allowed() -> None:
     config = load_config(None)
-    config.data["history"]["past_war_chance"] = 0.0
+    config.data["history"]["episodes"]["max_wars_per_pair"] = 0
     world = pipeline.generate(config, 42)
-    assert _events(world, "peace") == [] and not [
-        e for e in _events(world, "war") if not e.fallen_ids and "ended" in e.tags
-    ]
+    assert _events(world, "peace") == [] and not [e for e in world.episodes if e.kind == "war"]
+
+
+def test_no_episodes_at_chance_zero() -> None:
+    config = load_config(None)
+    config.data["history"]["episodes"]["first_chance"] = 0.0
+    config.data["history"]["episodes"]["more_chance"] = 0.0
+    assert pipeline.generate(config, 42).episodes == []
+
+
+def test_an_ended_trade_or_alliance_ends_minor(busy: World) -> None:
+    ended = [e for e in busy.chronicle if e.kind == "treaty" and "ended" in e.tags]
+    assert ended and all(e.salience == "minor" for e in ended)
+
+
+def test_a_trade_event_is_minor(busy: World) -> None:
+    trades = [e for e in busy.chronicle if e.kind == "treaty" and "trade" in e.tags]
+    assert trades and all(e.salience == "minor" for e in trades)
+
+
+def test_an_alliance_event_is_major(busy: World) -> None:
+    allies = [e for e in busy.chronicle if e.kind == "treaty" and "alliance" in e.tags and "ended" not in e.tags]
+    assert allies and all(e.salience == "major" for e in allies)
+
+
+def test_a_purchase_is_paid_in_money_by_a_realm_of_the_pair(busy: World) -> None:
+    buys = [e for e in busy.episodes if e.deal in ("buy_once", "buy_ongoing")]
+    assert buys and all(e.buyer in (e.a, e.b) and len(e.goods) == 1 for e in buys)
+
+
+def test_a_swap_gives_two_different_resources_and_never_money(busy: World) -> None:
+    swaps = [e for e in busy.episodes if e.deal == "swap"]
+    assert swaps and all(len(e.goods) == 2 and e.goods[0] != e.goods[1] and "money" not in e.goods for e in swaps)
+
+
+def test_a_one_off_purchase_has_no_end_event(busy: World) -> None:
+    once = [i for i, e in enumerate(busy.episodes) if e.deal == "buy_once"]
+    ends = [e for e in busy.chronicle if e.kind == "treaty" and "ended" in e.tags and e.episode in once]
+    assert once and ends == []
+
+
+def test_every_trade_has_a_volume(busy: World) -> None:
+    trades = [r for r in [*busy.relations, *busy.episodes] if r.kind == "trade"]
+    assert trades and all(r.volume in ("small", "steady", "large") for r in trades)
+
+
+def test_only_a_war_between_small_powers_is_minor(busy: World, cfg: Config) -> None:
+    small = set(cfg.get("history.episodes.minor_war_kinds"))
+    wars = [e for e in busy.chronicle if e.kind == "war" and not e.fallen_ids and "conquest" not in e.tags]
+    assert all((e.salience == "minor") == all(busy.realms[i].kind in small for i in e.realm_ids) for e in wars)
+
+
+def test_only_a_decisive_battle_of_a_major_war_is_major(busy: World) -> None:
+    fronts = _events(busy, "battle", "front")
+    assert fronts and all(e.salience == "minor" for e in fronts if "decisive" not in e.tags)
+
+
+def test_an_ended_war_has_one_decisive_battle(busy: World) -> None:
+    for index in [i for i, e in enumerate(busy.episodes) if e.kind == "war"]:
+        battles = [e for e in _events(busy, "battle", "front") if e.episode == index]
+        assert len([e for e in battles if "decisive" in e.tags]) <= 1
 
 
 # --- battles --------------------------------------------------------------------------------------
