@@ -249,6 +249,14 @@ _GEO_NAME_ROW = {
     "syllables": "range",
 }
 
+_SETTLEMENT_NAME_ROW = {
+    "chance": "unit",
+    "forms": "forms",
+    "tags": "text_list",
+    "reliefs": "text_list",
+    "biomes": "text_list",
+}
+
 _REALM_KIND_ROW = {
     "label": "text",
     "strength": "span",
@@ -484,6 +492,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     ),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
+    "settlement_names": (_SETTLEMENT_NAME_ROW, frozenset({"tags", "reliefs", "biomes"})),
     "sites": (
         _SITE_ROW,
         frozenset(

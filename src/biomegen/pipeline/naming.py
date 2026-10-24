@@ -13,7 +13,7 @@ order. Names live on the entity objects (not the numpy arrays), so this stage do
 from __future__ import annotations
 
 from ..config.model import Config
-from ..naming import chronicle, cultures, forge, hooks, polity
+from ..naming import chronicle, cultures, forge, hooks, polity, setting
 from ..world.entities import POI, FallenRealm
 from ..world.world import World
 from .story.places import nearest_settlement
@@ -67,6 +67,7 @@ def run(world: World, config: Config, seed: int) -> None:
         if row and fallen is not None and "names_fallen" in row:
             name = fallen.name
             forms, extra = row["names_fallen"], {"fallen": "the " + name[4:] if name.startswith("The ") else name}
+        setting_row = setting.setting_row(world, config, poi) if poi.civilized and forms is None else None
         poi.name = forge.name_entity(
             seed,
             "poi",
@@ -77,6 +78,8 @@ def run(world: World, config: Config, seed: int) -> None:
             forms=forms,
             extra=extra,
             civilized=poi.civilized,
+            setting_forms=setting_row["forms"] if setting_row else None,
+            setting_chance=float(setting_row["chance"]) if setting_row else 0.0,
         )
 
     # 4. Name rivers and lakes by the culture of the realm they traverse.

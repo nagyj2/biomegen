@@ -3,8 +3,8 @@
 Each data file contributes its top-level tables (``biomes`` and ``relief`` from ``biomes.toml``, ``detail`` and
 ``detail_relief`` from ``detail.toml``, ``tiers`` from ``tiers.toml``, ``styles`` from ``terrain.toml``,
 ``buildings`` from ``buildings.toml``, ``dress`` from ``dress.toml``, ``geo_names``
-from ``geography.toml``, ``sites`` from ``sites.toml``, ``pois``, ``poi_fates``, ``poi_sites``, ``poi_styles`` and
-``free_fates`` from ``pois.toml``,
+and ``settlement_names`` from ``geography.toml``, ``sites`` from ``sites.toml``, ``pois``, ``poi_fates``,
+``poi_sites``, ``poi_styles`` and ``free_fates`` from ``pois.toml``,
 ``furniture`` from ``furniture.toml``, ``realm_kinds``, ``realm_forms``, ``relation_weights`` and ``realm_colors`` from
 ``polity.toml``, ``reasons`` and ``reason_tokens`` from ``reasons.toml``, ``ruling_styles`` from ``rulers.toml``,
 ``chronicle`` from ``chronicle.toml``, ``secession_terms``, ``secession_relations`` and ``secession_forms`` from

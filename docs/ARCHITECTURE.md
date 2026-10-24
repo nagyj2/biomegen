@@ -117,6 +117,7 @@ src/biomegen/
     polity.py           Realm names, ruler styles and the wording of relation reasons
     chronicle.py        Fallen-realm names and cultures; renders every chronicle event's text
     hooks.py            POI.hook / hook_refs: an event's text or a row template, with its name spans
+    setting.py          The tables.settlement_names row a settlement's tags, relief and biome match
   sampling/             How a grid cell reads the world, shared by render and the site plans
     sampler.py          Sampler: one cell per tile, or a strided viewport
     detail.py           DetailSampler: magnified scales, warped continuous lookup; camera helpers
@@ -584,6 +585,9 @@ Assigns names to all entities; region lore is gone, and the chronicle's text is 
   `(master_seed, "naming.culture", "realm", realm_id)`; a vassal keeps its own. POIs, rivers, lakes and features take the
   culture of the realm holding them, wild land and open water `common`. A POI's name is a pattern from its kind's `names`
   (`names_fallen` for a fallen realm's capital ruin, which takes the realm's name; a homestead's from its style's `names`). The island name uses the largest realm's culture.
+  A settlement's name is its culture's root + suffix; with the `chance` of the first `tables.settlement_names` row its tags
+  (`port`, `river`, `lake`), relief or biome match (`naming/setting.py`), it takes one of that row's forms instead
+  (`X Port`, `X Bridge`, `X Peak`, ...). The plain name is drawn first, so a settlement that stays plain keeps its old name.
 - **Realms and relations** (`naming/polity.py`): a realm's form (name pattern and ruler styles) is a weighted draw among its
   kind's `tables.realm_forms` rows, favoured by the habitat of its land; its base word and ruler's name are made in its
   culture. A city-state is short-named after its seat. Last, each relation's reason template gets its tokens: the claimed

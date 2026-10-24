@@ -25,3 +25,57 @@ syllables = [1, 2]
 [geo_names.sea]
 forms = ["Sea of {n}", "The {n} Ocean", "The {n} Deep", "{n} Sea", "Gulf of {n}"]
 syllables = [1, 2]
+
+# Settlement name forms by setting. Loaded as `tables.settlement_names`; rows are tried in file order and the first whose
+# setting matches the settlement wins (a settlement that matches none keeps its culture's plain name).
+#
+# A civilized POI is named `root` + a culture suffix (naming/cultures.py). With chance `chance`, a settlement in a matching
+# setting takes one of `forms` instead, `{n}` being the bare root. The chance is the share of such settlements that
+# read their setting in the name, so most of them stay plain.
+#
+# Keys:
+#   chance   [0, 1] share of matching settlements named from `forms`
+#   forms    name patterns, each containing {n} exactly once
+#   tags     (optional) POI tags that match: port, river, lake
+#   reliefs  (optional) relief names that match (lower-case `Relief` members)
+#   biomes   (optional) biome names that match (lower-case `Biome` members)
+
+[settlement_names.port]
+chance = 0.55
+forms = ["{n} Port", "Port {n}", "{n}mouth", "{n} Haven", "{n} Landing"]
+tags = ["port"]
+
+[settlement_names.lake]
+chance = 0.45
+forms = ["{n} Mere", "{n} Shore", "Lakeside {n}"]
+tags = ["lake"]
+
+[settlement_names.river]
+chance = 0.45
+forms = ["{n} Bridge", "{n} Ford", "{n} Crossing", "{n}water"]
+tags = ["river"]
+
+[settlement_names.mountain]
+chance = 0.5
+forms = ["{n} Peak", "High {n}", "{n} Crag", "{n} Hold"]
+reliefs = ["mountain", "peak", "volcano"]
+
+[settlement_names.hill]
+chance = 0.45
+forms = ["{n} Hill", "{n} Knoll", "{n} Heights"]
+reliefs = ["hills"]
+
+[settlement_names.desert]
+chance = 0.45
+forms = ["{n} Oasis", "{n} Sands", "{n} Dunes"]
+biomes = ["desert", "savanna"]
+
+[settlement_names.cold]
+chance = 0.45
+forms = ["{n} Frost", "Frostmere {n}", "{n} Rime"]
+biomes = ["tundra", "snow", "taiga"]
+
+[settlement_names.forest]
+chance = 0.45
+forms = ["{n} Wood", "{n} Glade", "{n} Weald"]
+biomes = ["forest", "jungle", "swamp"]

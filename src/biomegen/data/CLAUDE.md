@@ -9,7 +9,7 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 - `config/defaults/tables.py` reads every file in `DATA_FILES` with `tomllib` and puts each top-level
   table under the `tables` config section (`tables.biomes`, `tables.relief` from `biomes.toml`;
   `tables.detail`, `tables.detail_relief` from `detail.toml`; `tables.tiers`; `tables.styles` from `terrain.toml`;
-  `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.buildings` from `buildings.toml`; `tables.dress` from `dress.toml`; `tables.pois`, `tables.poi_fates`, `tables.poi_sites` and `tables.poi_styles` from `pois.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
+  `tables.geo_names` and `tables.settlement_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.buildings` from `buildings.toml`; `tables.dress` from `dress.toml`; `tables.pois`, `tables.poi_fates`, `tables.poi_sites` and `tables.poi_styles` from `pois.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
   `tables.relation_weights` and `tables.realm_colors` from `polity.toml`; `tables.reasons` and `tables.reason_tokens` from
   `reasons.toml`; `tables.ruling_styles` from `rulers.toml`; `tables.chronicle` from `chronicle.toml`; `tables.secession_terms`,
   `tables.secession_relations` and `tables.secession_forms` from `secession.toml`; `tables.free_fates` from `pois.toml`; `tables.resources` from `resources.toml`; `tables.episode_kinds` and `tables.deals` from `episodes.toml`).

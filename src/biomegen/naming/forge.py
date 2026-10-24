@@ -85,6 +85,8 @@ def name_entity(
     forms: Optional[Sequence[str]] = None,
     extra: Optional[Mapping[str, str]] = None,
     civilized: bool = False,
+    setting_forms: Optional[Sequence[str]] = None,
+    setting_chance: float = 0.0,
 ) -> str:
     """Return a finished name for one entity.
 
@@ -95,6 +97,8 @@ def name_entity(
     forms    : for a wild POI, its kind's name patterns (``tables.pois.<kind>.names``): ``{n}`` is the root and
                ``{fort}`` a fort word of the culture; without them the bare root is the name.
     extra    : more tokens for the patterns (a fallen realm's ruin names ``{fallen}``).
+    setting_forms, setting_chance : for a civilized POI, the name patterns of its setting
+               (``tables.settlement_names``) and the chance it takes one of them instead of its culture's plain name.
     """
     r = rng.derive(seed, "naming", category, *key)
     profile = CULTURES.get(culture_name, CULTURES["common"])
@@ -115,7 +119,10 @@ def name_entity(
 
     # POIs.
     if civilized:
-        return f"{root}{r.choice(profile.settlement)}".capitalize()
+        plain = f"{root}{r.choice(profile.settlement)}".capitalize()
+        if setting_forms and r.random() < setting_chance:
+            return str(r.choice(list(setting_forms))).format(n=root.capitalize())
+        return plain
     if forms:
         tokens = {"n": root, "fort": r.choice(profile.fort), **(extra or {})}
         return str(r.choice(list(forms))).format(**tokens)
