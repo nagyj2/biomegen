@@ -59,8 +59,9 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
 - **One roof system.** Every roof is a building kind's (`kinds.lay_roof(config, outside, kind, rect, footprint)`: stamps the
   kind's roof cell and returns the `SiteBuilding` the layout lists). A layout draws no roof cell of its own; a tower and a
   watchtower roof as their own kind, a dungeon's gatehouse as `gatehouse`, a ruin's standing rooms as `ruin`, a camp's tents as
-  `tent`, a boat's deckhouse as `deckhouse` (`function = "structure"` rows). What is under a roof must suit it: a tent is bedrolls
-  with the doorway toward the fire, the deckhouse is a cabin on the deck.
+  `tent`, a boat's deckhouse as `deckhouse` (`function = "structure"` rows). What is under a roof must suit it: a tent is a patch of bedrolls set in
+  from every side (`sites.camp.tent_bedding`, a random share of the room, never reaching the edge) with bare floor round it and
+  gear on that floor by chance (`tent_gear`, the `tent` role of the camp's furniture family); the deckhouse is a cabin on the deck.
 
 ## Archetypes
 

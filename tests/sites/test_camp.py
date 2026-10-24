@@ -58,13 +58,55 @@ def test_a_camp_is_open_air_but_for_its_tents(config: Config) -> None:
     ).all()
 
 
-def test_under_a_tent_roof_are_bedrolls_and_a_doorway(config: Config) -> None:
-    # The view under a tent makes sense for a tent: no walls, bedrolls filling it and bare floor where it opens.
-    _poi, _world, plan = _camp(config)
-    under = plan.cells[plan.outside == roof_cell(config, "tent")]
-    assert (
-        (under == BED).any() and (under == int(Cell.FLOOR)).any() and not np.isin(under, [VOID, int(Cell.WALL)]).any()
+def _founding_camp(config: Config, seed: int):
+    """A founding camp (one tent) for a seed: its plan, so the bedding of a single tent can be read on its own."""
+    world = flat_world(14, 10)
+    poi = add_poi(world, "camp", 7, 5, purpose="founding", interior_seed=seed)
+    plan = site_plan(poi, 0, config, world)
+    assert plan is not None and len(plan.buildings) == 1
+    return plan
+
+
+def _bedding_box(plan) -> tuple[int, int, int, int, int, int]:
+    """Return ``(tent width, tent height, bedding left, top, width, height)`` of the plan's one tent."""
+    tent = plan.buildings[0]
+    bed = plan.cells[tent.y : tent.y + tent.height, tent.x : tent.x + tent.width] == BED
+    ys, xs = np.nonzero(bed)
+    return (
+        tent.width,
+        tent.height,
+        int(xs.min()),
+        int(ys.min()),
+        int(xs.max() - xs.min() + 1),
+        int(ys.max() - ys.min() + 1),
     )
+
+
+def test_the_bedding_of_a_tent_never_reaches_its_edge(config: Config) -> None:
+    # A margin of at least one cell is left on every side between the bedrolls and the tent's edge.
+    for seed in range(12):
+        width, height, left, top, bed_w, bed_h = _bedding_box(_founding_camp(config, seed))
+        assert left >= 1 and top >= 1 and left + bed_w <= width - 1 and top + bed_h <= height - 1
+
+
+def test_the_bedding_is_not_always_one_smaller_than_the_tent(config: Config) -> None:
+    # Its size varies: across seeds the room left round it takes more than one value.
+    margins = set()
+    for seed in range(12):
+        width, height, _left, _top, bed_w, bed_h = _bedding_box(_founding_camp(config, seed))
+        margins.add((width - bed_w, height - bed_h))
+    assert len(margins) > 1
+
+
+def test_gear_lies_on_the_bare_floor_of_a_tent(config: Config) -> None:
+    # Some gear lies under a roof, and every cell under a tent roof is bedding, floor or gear.
+    world = flat_world(14, 10)
+    poi = add_poi(world, "camp", 7, 5, purpose="army", interior_seed=9)
+    plan = site_plan(poi, 0, config, world)
+    assert plan is not None
+    under = plan.cells[plan.outside == roof_cell(config, "tent")]
+    gear = [int(Cell.CHEST), int(Cell.CRATE), int(Cell.BARREL), int(Cell.SHELF)]
+    assert np.isin(under, gear).any() and np.isin(under, [BED, int(Cell.FLOOR), *gear]).all()
 
 
 def test_a_camp_has_a_roof_level_that_shows_its_tents_as_roofs(config: Config) -> None:

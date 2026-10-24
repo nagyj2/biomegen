@@ -142,7 +142,7 @@ def test_a_boat_floats_on_water() -> None:
 
 
 def test_an_overlay_edit_shows_in_the_drawing() -> None:
-    # Chests placed over every floor cell of a camp appear (the plan is finer than the view, so one cell may not);
+    # Graves placed over every floor cell of a camp appear (the plan is finer than the view, so one cell may not);
     # the camp has none of its own.
     world = _world("camp")
     config = _crisp_config()
@@ -150,11 +150,11 @@ def test_an_overlay_edit_shows_in_the_drawing() -> None:
     assert plan is not None
     overlay = Overlay()
     for y, x in np.argwhere(plan.cells == int(Cell.FLOOR)).tolist():
-        overlay.set_interior(11, 0, x, y, int(Cell.CHEST))
-    chest = config.get("render.interior_glyphs.chest")
+        overlay.set_interior(11, 0, x, y, int(Cell.GRAVE))
+    grave = config.get("render.interior_glyphs.grave")
     edited, _, _ = _draw_inside(world, config=config, overlay=overlay)
     plain, _, _ = _draw_inside(world, config=config)
-    assert (chest in edited.glyph, chest in plain.glyph) == (True, False)
+    assert (grave in edited.glyph, grave in plain.glyph) == (True, False)
 
 
 def test_the_overlay_does_not_change_the_cached_plan() -> None:

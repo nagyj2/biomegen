@@ -90,13 +90,15 @@ VALUES: Dict[str, Any] = {
     "camp": {
         "clearing": 0.42,  # clearing radius as a share of the plan height (the width follows the cell aspect)
         "min_tents": 3,
-        "tent_area_cells": 90,  # one more tent per this many cleared cells
-        "tent_cells": [[4, 2], [6, 2], [4, 3]],  # tent sizes [columns, rows]
+        "tent_area_cells": 200,  # one more tent per this many cleared cells
+        "tent_cells": [[6, 3], [8, 3], [6, 4]],  # tent sizes [columns, rows]; at least 3 by 3, so bedding fits inside
+        "tent_bedding": [0.5, 1.0],  # the bedding is this share (drawn per side) of the room inside a tent's edge cells
+        "tent_gear": 0.2,  # chance a bare floor cell of a tent holds a piece of gear
     },
     # A camp's purpose (POI.purpose) overrides keys of ``camp`` with ``camp_<purpose>``: builders keep few tents
     # and a yard of timber and crates, an army camp is a field of tents, bandits keep the plain camp.
-    "camp_founding": {"clearing": 0.38, "min_tents": 1, "tent_area_cells": 200, "tent_cells": [[4, 2]]},
-    "camp_army": {"clearing": 0.46, "min_tents": 7, "tent_area_cells": 55},
+    "camp_founding": {"clearing": 0.38, "min_tents": 1, "tent_area_cells": 200, "tent_cells": [[6, 3]]},
+    "camp_army": {"clearing": 0.46, "min_tents": 5, "tent_area_cells": 120},
     # A battlefield: a trampled field (``clearing`` of the plan height) with a standard at each end, debris thickest
     # at the centre (``debris_density`` at the rim), ``wagons`` [min, max] wrecked carts, ``graves`` [min, max] mounds.
     "battlefield": {

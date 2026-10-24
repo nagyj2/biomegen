@@ -5,7 +5,7 @@
 #
 # Roles a layout uses: homes `hall` (the largest room), `kitchen`, `bedroom`, `storage`; dungeons `hall`, `cell`, `vault`,
 # `passage` (corridors: rubble only); towers `study`, `bedroom`, `storage`, `lookout`; ruins `hall`, `debris`; boats
-# `deck`, `cabin`; camps `supplies`; battlefields `debris`; shrines `altar`; watchtowers the tower roles; the centre buildings of
+# `deck`, `cabin`; camps `supplies` and `tent` (the gear on a tent's bare floor); battlefields `debris`; shrines `altar`; watchtowers the tower roles; the centre buildings of
 # data/buildings.toml the roles their `roles` list names (a family per civic kind). A role that is missing leaves its rooms bare.
 # Dungeons add depth-scaled chest weight to every role that has `chest` (sites.furnish.chest_depth_gain).
 
@@ -108,16 +108,31 @@ barrel = 5.0
 crate = 4.0
 rock = 2.0
 
+[furniture.camp.tent]
+chest = 3.0
+crate = 3.0
+barrel = 2.0
+
 [furniture.camp_founding.supplies]
 crate = 6.0
 barrel = 3.0
 rock = 3.0
 shelf = 1.0
 
+[furniture.camp_founding.tent]
+crate = 4.0
+shelf = 2.0
+chest = 2.0
+
 [furniture.camp_army.supplies]
 barrel = 5.0
 crate = 5.0
 chest = 1.0
+
+[furniture.camp_army.tent]
+chest = 3.0
+crate = 3.0
+barrel = 2.0
 
 [furniture.battlefield.debris]
 rubble = 5.0

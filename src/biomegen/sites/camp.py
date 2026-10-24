@@ -1,12 +1,14 @@
 """Camps: a trampled clearing with a fire, tents round it, a wagon and scattered supplies.
 
-Seen from outside (and at the roof level) a tent is a ``tent`` roof. Under it the inside is bedrolls filling the tent,
-with the doorway at the end that faces the fire left as bare floor.
+Seen from outside (and at the roof level) a tent is a ``tent`` roof. Under it is a patch of bedrolls set in from every
+side (a random share of the room, ``sites.camp.tent_bedding``), bare floor round it and, by chance
+(``sites.camp.tent_gear``), a piece of gear on that floor.
 """
 
 from __future__ import annotations
 
 import math
+import random
 from typing import Optional
 
 import numpy as np
@@ -14,7 +16,7 @@ import numpy as np
 from ..util import rng
 from ..world.tile import Cell
 from .carve import nearest_true
-from .furnish import free_floor, scatter, weighted_choice
+from .furnish import Weights, free_floor, scatter, weighted_choice
 from .kinds import lay_roof
 from .layout import SiteBuilding, SiteContext, layout
 from .streets import lay_roads
@@ -29,6 +31,39 @@ def _roof_tent(ctx: SiteContext, outside: np.ndarray, pitch: tuple[slice, slice]
     return lay_roof(
         ctx.config, outside, "tent", (cols.start, rows.start, cols.stop - cols.start, rows.stop - rows.start), canvas
     )
+
+
+def _lay_tent(
+    grid: np.ndarray,
+    pitch: tuple[slice, slice],
+    pitched: np.ndarray,
+    stream: random.Random,
+    bedding: tuple[float, float],
+    gear_chance: float,
+    gear: Weights,
+) -> None:
+    """Lay the inside of one tent on its ``pitch``: bedrolls set in from every side, floor round them, gear on it.
+
+    ``pitched`` marks the cells of the pitch the tent holds (the road keeps its way). The bedding is a random share of
+    the room inside the edge cells, so it never reaches an edge and is not always one cell smaller than the tent.
+    """
+    height, width = pitched.shape
+    floor = pitched.copy()
+    room_h, room_w = height - 2, width - 2
+    if room_h >= 1 and room_w >= 1:
+        bed_h = max(1, round(room_h * stream.uniform(*bedding)))
+        bed_w = max(1, round(room_w * stream.uniform(*bedding)))
+        top, left = 1 + stream.randint(0, room_h - bed_h), 1 + stream.randint(0, room_w - bed_w)
+        bed = np.zeros_like(pitched)
+        bed[top : top + bed_h, left : left + bed_w] = True
+        bed &= pitched
+        grid[pitch][bed] = int(Cell.BED)
+        floor &= ~bed
+    grid[pitch][floor] = _FLOOR
+    if gear:
+        for y, x in np.argwhere(floor).tolist():
+            if stream.random() < gear_chance:
+                grid[pitch[0].start + y, pitch[1].start + x] = int(weighted_choice(stream, gear))
 
 
 @layout("camp")
@@ -54,6 +89,8 @@ def build_camp(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray, tuple
     tents = int(settings["min_tents"]) + int(clearing.sum()) // int(settings["tent_area_cells"])
     under_canvas = np.zeros(grid.shape, dtype=bool)
     pitches: list[tuple[slice, slice]] = []
+    tent_stream = rng.derive(ctx.seed, "site.layout", ctx.floor, "tent")
+    bedding = (float(settings["tent_bedding"][0]), float(settings["tent_bedding"][1]))
     for index in range(tents):
         angle = index / max(1, tents) * 2.0 * math.pi + stream.uniform(-0.3, 0.3)
         distance = stream.uniform(0.55, 0.8)
@@ -65,10 +102,7 @@ def build_camp(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray, tuple
         pitched = ~ctx.patch.road[pitch]  # the road keeps its way through
         if pitched.size == 0:
             continue
-        grid[pitch][pitched] = int(Cell.BED)
-        door_column = pitch[1].start if cx < (pitch[1].start + pitch[1].stop) / 2 else pitch[1].stop - 1
-        door = pitched[:, door_column - pitch[1].start]  # the end that faces the fire is open
-        grid[pitch[0], door_column][door] = _FLOOR
+        _lay_tent(grid, pitch, pitched, tent_stream, bedding, float(settings["tent_gear"]), ctx.weights("tent"))
         under_canvas[pitch] |= pitched
         pitches.append(pitch)
     angle = stream.uniform(0.0, 2.0 * math.pi)
@@ -79,7 +113,8 @@ def build_camp(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray, tuple
     density = max(0.04, float(ctx.setting("clutter_density")) * float(ctx.config.get("sites.furnish.supply_density")))
     table = ctx.weights("supplies")
     furnish = rng.derive(ctx.seed, "site.furnish", ctx.floor)
-    scatter(grid, furnish, free_floor(grid), density, lambda r, _x, _y: weighted_choice(r, table))
+    in_tents = [(int(x), int(y)) for y, x in np.argwhere(under_canvas).tolist()]  # a tent's gear is its own
+    scatter(grid, furnish, free_floor(grid, in_tents), density, lambda r, _x, _y: weighted_choice(r, table))
     grid[~dry] = _VOID  # a tent or wagon that landed on water is gone
     grid[cy, cx] = int(Cell.CAMPFIRE)
     lay_roads(grid, ctx.patch, (_VOID, _FLOOR))  # the road runs through the clearing to the fire
