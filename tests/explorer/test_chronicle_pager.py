@@ -142,8 +142,8 @@ def test_the_first_frame_shows_the_title_and_the_first_events(cfg: Config) -> No
     screen = _screen(_world(), cfg, PagerState())
     assert [screen[0], screen[1].split(), screen[9].split()] == [
         "The Chronicle of Testisle (seed 9, year 500)",
-        ["100", "war", "Event", "0", "happens."],
-        ["180", "war", "Event", "8", "happens."],
+        ["100/01", "war", "Event", "0", "happens."],
+        ["180/01", "war", "Event", "8", "happens."],
     ]
 
 
@@ -158,7 +158,7 @@ def test_the_hint_line_shows_the_bound_keys(cfg: Config) -> None:
 def test_scrolling_down_moves_the_view_one_line(cfg: Config) -> None:
     state = PagerState()
     _press(_world(), cfg, state, "down")
-    assert _screen(_world(), cfg, state)[1].split()[:2] == ["110", "peace"]
+    assert _screen(_world(), cfg, state)[1].split()[:2] == ["110/01", "peace"]
 
 
 def test_scrolling_up_at_the_top_stays_at_the_top(cfg: Config) -> None:
@@ -178,7 +178,7 @@ def test_the_end_shows_the_present_under_the_last_event(cfg: Config) -> None:
     state = PagerState()
     _press(_world(), cfg, state, "end")
     screen = _screen(_world(), cfg, state)
-    assert screen[9].split()[:2] == ["500", "the"] and screen[8].split()[:2] == ["390", "peace"]
+    assert screen[9].split()[:2] == ["500", "the"] and screen[8].split()[:2] == ["390/01", "peace"]
 
 
 def test_scrolling_past_the_end_is_clamped(cfg: Config) -> None:
@@ -345,7 +345,7 @@ def test_the_loop_draws_then_quits_on_q(cfg: Config) -> None:
 
 def test_the_loop_scrolls_with_the_keys(cfg: Config) -> None:
     out = _run(cfg, "j", "j", "j")
-    assert out.frames[-1][1].split()[:2] == ["130", "peace"]
+    assert out.frames[-1][1].split()[:2] == ["130/01", "peace"]
 
 
 def test_the_loop_starts_from_the_given_filter(cfg: Config) -> None:
@@ -374,7 +374,7 @@ def test_the_loop_restores_the_screen_on_quit(cfg: Config) -> None:
 
 def test_the_loop_survives_a_resize_token(cfg: Config) -> None:
     out = _run(cfg, "resize", "j")
-    assert out.frames[-1][1].split()[:2] == ["110", "peace"]
+    assert out.frames[-1][1].split()[:2] == ["110/01", "peace"]
 
 
 def _named_world() -> World:
@@ -491,7 +491,7 @@ def test_the_current_match_has_its_own_background(cfg: Config) -> None:
     _press(_world(), cfg, state, "/", *"event 2", "\r", "n")
     grid = compose_pager_frame(_world(), cfg, state, SIZE)
     shown = _screen(_world(), cfg, state)
-    row = next(i for i, line in enumerate(shown) if line.split()[:1] == ["300"])
+    row = next(i for i, line in enumerate(shown) if line.split()[:1] == ["300/01"])
     assert tuple(grid.bg[row, shown[row].index("Event 2")]) == tuple(cfg.get("history.colors.match_current"))
 
 

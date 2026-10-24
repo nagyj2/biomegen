@@ -9,7 +9,7 @@ from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.render.backends.plain import to_plain
 from biomegen.render.chronicle import chronicle_document, layout_events
-from biomegen.world.chronicle import KIND_WIDTH, chronicle_text
+from biomegen.world.chronicle import KIND_WIDTH, WHEN_WIDTH, chronicle_text
 from biomegen.world.entities import POI, ChronicleEvent, FallenRealm, Realm, Ruler
 from biomegen.world.world import World
 
@@ -43,9 +43,9 @@ def test_the_plain_text_of_the_document_is_the_plain_output(generated: World, cf
     assert to_plain(chronicle_document(generated, cfg)) == chronicle_text(generated).rstrip()
 
 
-def test_the_year_column_is_right_aligned_to_five(cfg: Config) -> None:
+def test_the_when_column_is_year_right_aligned_to_five_and_month(cfg: Config) -> None:
     row = chronicle_document(_tiny(), cfg)[2]
-    assert row[0].text == "  100"
+    assert row[0].text == "  100/01"
 
 
 def test_the_kind_has_its_colour(cfg: Config) -> None:
@@ -142,7 +142,7 @@ def test_a_document_of_chosen_events_lists_only_them(cfg: Config) -> None:
     world = _tiny()
     world.chronicle.append(ChronicleEvent(1, 150, "war", [0], text="A fights."))
     assert to_plain(chronicle_document(world, cfg, [world.chronicle[1]])).splitlines()[2:] == [
-        "  150  war         A fights."
+        "  150/01  war         A fights."
     ]
 
 
@@ -153,7 +153,7 @@ def test_layout_wraps_lines_to_the_width(cfg: Config) -> None:
 
 def test_layout_indents_continuation_lines_under_the_text(cfg: Config) -> None:
     lines, _, _ = layout_events(_long(), cfg, _long().chronicle, 50)
-    indent = 5 + 2 + KIND_WIDTH + 2  # year, gap, kind column, gap
+    indent = WHEN_WIDTH + 2 + KIND_WIDTH + 2  # year/month, gap, kind column, gap
     assert lines[1][0].text[:indent] == " " * indent
 
 
@@ -161,7 +161,7 @@ def test_layout_keeps_every_word(cfg: Config) -> None:
     world = _long()
     lines, _, _ = layout_events(world, cfg, world.chronicle, 50)
     words = " ".join("".join(span.text for span in line) for line in lines).split()
-    assert words == f"  100  founding    {world.chronicle[0].text}".split()
+    assert words == f"  100/01  founding    {world.chronicle[0].text}".split()
 
 
 def test_layout_marks_where_a_line_starts_per_event(cfg: Config) -> None:

@@ -1,4 +1,4 @@
-"""The chronicle as a coloured document: year, event type and text in three columns.
+"""The chronicle as a coloured document: year/month, event type and text in three columns.
 
 The event type takes its colour from ``history.colors``. A name in the text is coloured by what it names, with the same
 colours as the political map: a realm, its ruler and its settlements in the realm's own colour, a fallen realm in its
@@ -13,7 +13,15 @@ from __future__ import annotations
 from typing import Optional, Sequence
 
 from ..config.model import Config
-from ..world.chronicle import KIND_WIDTH, chronicle_title, expression_terms, matches_expression, parse_expression
+from ..world.chronicle import (
+    KIND_WIDTH,
+    WHEN_WIDTH,
+    chronicle_title,
+    event_when,
+    expression_terms,
+    matches_expression,
+    parse_expression,
+)
 from ..world.entities import REF_FALLEN, REF_FEATURE, REF_POI, REF_PREDECESSOR, REF_REALM, REF_RULER, ChronicleEvent
 from ..world.world import World
 from .grid import RGB, Document, Span
@@ -73,7 +81,7 @@ def event_row(
     """Return one event as styled spans: its year, its kind, then its text with every name in its colour."""
     palette = palette if palette is not None else _palette(config)
     return [
-        Span(f"{event.year:>5}", palette["year"]),
+        Span(event_when(event), palette["year"]),
         Span("  "),
         Span(f"{event.kind:<{KIND_WIDTH}}", palette[event.kind], bold=True),
         Span("  "),
@@ -152,7 +160,7 @@ def layout_events(
     palette = _palette(config)
     groups = parse_expression(query)
     terms = expression_terms(groups)
-    indent = 5 + 2 + KIND_WIDTH + 2
+    indent = WHEN_WIDTH + 2 + KIND_WIDTH + 2
     lines: Document = []
     starts: list[int] = []
     matches: list[int] = []

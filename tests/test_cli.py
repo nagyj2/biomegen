@@ -302,7 +302,7 @@ def _chronicle(capsys, *args: str) -> tuple[str, str]:
 
 def test_chronicle_prints_a_title_and_dated_events(capsys):
     out, _ = _chronicle(capsys)
-    assert out.startswith("The Chronicle of ") and re.search(r"^\s*\d+  \S", out, re.MULTILINE)
+    assert out.startswith("The Chronicle of ") and re.search(r"^\s*\d+/\d\d  \S", out, re.MULTILINE)
 
 
 def test_chronicle_leaves_no_token_in_the_text(capsys):
@@ -333,7 +333,7 @@ def test_unknown_chronicle_format_is_rejected(capsys):
 def test_chronicle_text_has_three_columns(capsys):
     out, _ = _chronicle(capsys)
     lines = out.splitlines()[2:]
-    assert lines and all(re.fullmatch(r" *\d+  [a-z]+ {2,}\S.*", line) for line in lines)
+    assert lines and all(re.fullmatch(r" *\d+/\d\d  [a-z]+ {2,}\S.*", line) for line in lines)
 
 
 def test_forced_colour_colours_the_chronicle(capsys):
@@ -373,7 +373,7 @@ def test_kind_may_be_repeated(capsys):
 
 def test_the_year_range_limits_the_events(capsys):
     out, _ = _chronicle(capsys, "--color", "none", "--from-year", "300", "--to-year", "400")
-    years = [int(line.split()[0]) for line in out.splitlines()[2:]]
+    years = [int(line.split()[0].split("/")[0]) for line in out.splitlines()[2:]]
     assert years and all(300 <= year <= 400 for year in years)
 
 

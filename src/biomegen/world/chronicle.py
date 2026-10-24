@@ -17,6 +17,14 @@ from .world import World
 #: Width of the event-type column of the text output.
 KIND_WIDTH = max(len(kind) for kind in EVENT_KINDS)
 
+#: Width of the time column: the year right-aligned in five, ``/``, the two-digit month.
+WHEN_WIDTH = 8
+
+
+def event_when(event: ChronicleEvent) -> str:
+    """Return the event's moment as ``year/month`` padded to :data:`WHEN_WIDTH` (``  150/03``)."""
+    return f"{event.year:>5}/{event.month:02d}"
+
 
 @dataclass(frozen=True)
 class ChronicleFilter:
@@ -160,13 +168,13 @@ def chronicle_title(world: World) -> str:
 
 
 def chronicle_text(world: World, events: Optional[Sequence[ChronicleEvent]] = None) -> str:
-    """Return the chronicle as text in three columns, ``year  kind  text`` per event, oldest first, under a title.
+    """Return the chronicle as text in three columns, ``year/month  kind  text`` per event, oldest first, under a title.
 
     ``events`` (default: every event) is the part of the chronicle to list, e.g. from :func:`filter_events`.
     """
     shown = world.chronicle if events is None else events
     lines = [chronicle_title(world), ""]
-    lines += [f"{event.year:>5}  {event.kind:<{KIND_WIDTH}}  {event.text}" for event in shown]
+    lines += [f"{event_when(event)}  {event.kind:<{KIND_WIDTH}}  {event.text}" for event in shown]
     if events is not None and not shown:
         lines.append("(no matching events)")
     return "\n".join(lines)

@@ -127,7 +127,7 @@ src/biomegen/
     views.py            View: layer lists per scale family + tint (a ramp or the realm tint), from render.views
     colors.py           Colour maths and per-biome / relief / detail / interior lookup arrays from the tables
     scatter.py          Stable per-cell decoration keyed on tile and sub-cell
-    chronicle.py        chronicle_document(): the history as a coloured year / kind / text document; layout_events() wraps it and marks search matches
+    chronicle.py        chronicle_document(): the history as a coloured year/month / kind / text document; layout_events() wraps it and marks search matches
     static.py           render_static (framed map + legend) and render_detail (zoom/local grid)
     colortest.py        --color-test swatches
     layers/             terrain relief tint water clutter borders roads sites markers names(labels) compass
@@ -455,7 +455,7 @@ and every draw is a `history` sub-stream keyed on the entity.
 An event holds a raw template from `tables.chronicle` (`templates_near` only when `places.nearest_settlement` finds a
 settlement on the same landmass within `history.near_km`); naming renders `text` and the `refs` (the span, kind and id of
 every name in it). The ledger sorts events by `(year, kind order, creation order)` and numbers them, dealing each event a month, its `tick` and `derived = True`.
-`--chronicle [--chronicle-format json]` prints them as three columns (year, event type, text), coloured by `--color` or
+`--chronicle [--chronicle-format json]` prints them as three columns (year/month, event type, text), coloured by `--color` or
 the terminal (`render/chronicle.py`): a realm, its ruler and its settlements are in the realm's map colour (`Realm.color`),
 a fallen realm in its own (`FallenRealm.color`), the old realm of a split in its own (`Predecessor.color`); a settlement is in its realm's colour from its first mention (the neutral `history.colors.settlement` only when no realm holds it), a bandit tower or dungeon in `hideout`,
 a river, range, sea or other named land in the neutral `place`; the kinds and the year

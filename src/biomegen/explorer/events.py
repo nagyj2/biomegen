@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Optional, Protocol
 
+from ..world.chronicle import event_when
 from ..world.entities import ChronicleEvent
 from ..world.ledger import EventLog
 from ..world.world import World
@@ -48,5 +49,5 @@ class ChronicleReader:
 
 
 def event_line(event: ChronicleEvent) -> str:
-    """One event as ``year  kind  text`` (what the panel lists)."""
-    return f"{event.year:>5}  {event.kind:<9}  {event.text}"
+    """One event as ``year/month  kind  text`` (what the panel lists)."""
+    return f"{event_when(event)}  {event.kind:<9}  {event.text}"

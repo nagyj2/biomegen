@@ -48,15 +48,22 @@ def test_text_has_a_title_with_the_present() -> None:
 
 def test_text_lists_one_line_per_event() -> None:
     assert chronicle_text(_tiny()).splitlines()[2:] == [
-        "  100  founding    A is founded.",
-        "   90  fall        Old Realm falls.",
+        "  100/01  founding    A is founded.",
+        "   90/01  fall        Old Realm falls.",
     ]
 
 
-def test_text_has_year_kind_and_text_columns(generated: World) -> None:
-    # Every event line is a right-aligned year, a padded event type, then the text.
+def test_text_has_when_kind_and_text_columns(generated: World) -> None:
+    # Every event line is a right-aligned year/month, a padded event type, then the text.
     lines = chronicle_text(generated).splitlines()[2:]
-    assert lines and all(re.fullmatch(r" *\d+  [a-z]+ {2,}\S.*", line) for line in lines)
+    assert lines and all(re.fullmatch(r" *\d+/\d\d  [a-z]+ {2,}\S.*", line) for line in lines)
+
+
+def test_text_shows_the_month_of_the_event() -> None:
+    # The time column reads year/month with a two-digit month.
+    world = _tiny()
+    world.chronicle[0].month = 3
+    assert chronicle_text(world).splitlines()[2] == "  100/03  founding    A is founded."
 
 
 def test_json_events_list_the_spans_of_their_names() -> None:
@@ -235,7 +242,7 @@ def test_filters_combine_with_and() -> None:
 def test_text_of_filtered_events_lists_only_them() -> None:
     world = _tiny()
     events = filter_events(world, ChronicleFilter(kinds=("fall",)))
-    assert chronicle_text(world, events).splitlines()[2:] == ["   90  fall        Old Realm falls."]
+    assert chronicle_text(world, events).splitlines()[2:] == ["   90/01  fall        Old Realm falls."]
 
 
 def test_text_of_no_events_says_so() -> None:
