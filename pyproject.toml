@@ -68,6 +68,7 @@ files = [
     "src/biomegen/world",
     "src/biomegen/sampling",
     "src/biomegen/sites",
+    "src/biomegen/sim",
     "src/biomegen/render",
     "src/biomegen/explorer",
 ]
