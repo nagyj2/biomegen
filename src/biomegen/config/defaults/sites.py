@@ -94,6 +94,9 @@ VALUES: Dict[str, Any] = {
         "tent_cells": [[6, 3], [8, 3], [6, 4]],  # tent sizes [columns, rows]; at least 3 by 3, so bedding fits inside
         "tent_bedding": [0.5, 1.0],  # the bedding is this share (drawn per side) of the room inside a tent's edge cells
         "tent_gear": 0.2,  # chance a bare floor cell of a tent holds a piece of gear
+        "tent_tarp_sides": [1, 3, 3, 2],  # weights of a tent having 0, 1, 2 or 3 sides as a tarp down to the ground
+        "tent_taper": 0.5,  # chance a tarp's end runs on as a half-touching cell, where the canopy lifts off the ground
+        "tent_post_gap": 5,  # most open cells between two supports; a stretch with tarp at both ends also gets a post
     },
     # A camp's purpose (POI.purpose) overrides keys of ``camp`` with ``camp_<purpose>``: builders keep few tents
     # and a yard of timber and crates, an army camp is a field of tents, bandits keep the plain camp.

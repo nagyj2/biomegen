@@ -99,14 +99,15 @@ def test_the_bedding_is_not_always_one_smaller_than_the_tent(config: Config) -> 
 
 
 def test_gear_lies_on_the_bare_floor_of_a_tent(config: Config) -> None:
-    # Some gear lies under a roof, and every cell under a tent roof is bedding, floor or gear.
+    # Some gear lies under a roof, and every cell under a tent roof is a support, bedding, floor or gear.
     world = flat_world(14, 10)
     poi = add_poi(world, "camp", 7, 5, purpose="army", interior_seed=9)
     plan = site_plan(poi, 0, config, world)
     assert plan is not None
     under = plan.cells[plan.outside == roof_cell(config, "tent")]
     gear = [int(Cell.CHEST), int(Cell.CRATE), int(Cell.BARREL), int(Cell.SHELF)]
-    assert np.isin(under, gear).any() and np.isin(under, [BED, int(Cell.FLOOR), *gear]).all()
+    supports = [int(Cell.POST), int(Cell.TARP), int(Cell.TARP_LIFT)]
+    assert np.isin(under, gear).any() and np.isin(under, [BED, int(Cell.FLOOR), *supports, *gear]).all()
 
 
 def test_a_camp_has_a_roof_level_that_shows_its_tents_as_roofs(config: Config) -> None:
@@ -192,3 +193,143 @@ def test_a_founding_camp_keeps_fewer_tents_than_a_bandit_camp(config: Config) ->
         world.poi_index[5, 7] = -1
         world.pois.pop()
     assert counts["founding"] < counts["bandit"]
+
+
+# --- how a tent's canopy meets the ground -----------------------------------------------------------------------
+
+
+def _supports_of(height: int, width: int, seed: int = 0, **settings):
+    """The ``(posts, tarp, lift)`` masks of a tent, from the default camp settings with ``settings`` overriding."""
+    import random
+
+    from biomegen.config import load_config
+    from biomegen.sites.camp import _supports
+
+    merged = {**load_config(None).get("sites.camp"), **settings}
+    return _supports(height, width, random.Random(seed), merged)
+
+
+def _ring_labels(height: int, width: int, masks) -> str:
+    """Label the edge cells clockwise: T tarp, L lift, P post, O open."""
+    from biomegen.sites.camp import _ring
+
+    posts, tarp, lift = masks
+    return "".join("P" if posts[c] else "T" if tarp[c] else "L" if lift[c] else "O" for c in _ring(height, width))
+
+
+TENTS = ((3, 6), (4, 6), (3, 8), (4, 8))
+
+
+def _open_runs(labels: str) -> list[tuple[str, int, str]]:
+    """Return ``(label before, length, label after)`` of each run of open cells round the edge."""
+    start = next(index for index, label in enumerate(labels) if label != "O")
+    turned = labels[start:] + labels[:start]
+    runs, index = [], 0
+    while index < len(turned):
+        if turned[index] != "O":
+            index += 1
+            continue
+        end = index
+        while end < len(turned) and turned[end] == "O":
+            end += 1
+        runs.append((turned[index - 1], end - index, turned[end % len(turned)]))
+        index = end
+    return runs
+
+
+def test_a_tent_with_no_tarp_hangs_from_posts_at_its_corners() -> None:
+    # Roof only: every side is open, so each corner has a pole and nothing touches the ground.
+    posts, tarp, lift = _supports_of(3, 6, tent_tarp_sides=[1, 0, 0, 0])
+    assert not (tarp | lift).any() and posts[0, 0] and posts[0, 5] and posts[2, 0] and posts[2, 5]
+
+
+def test_one_tarp_side_needs_only_two_poles() -> None:
+    # A lean-to: the tarp side and its two corners touch the ground, so only the far corners hold the canopy up.
+    for seed in range(10):
+        posts, tarp, _lift = _supports_of(3, 6, seed, tent_tarp_sides=[0, 1, 0, 0], tent_taper=0.0)
+        assert int(posts.sum()) == 2 and int(tarp.sum()) in (6, 3)
+
+
+def test_a_tarp_never_touches_all_four_sides() -> None:
+    # A tent keeps an open side, so a pole holds the canopy up; with up to three sides it still has a tarp.
+    for seed in range(40):
+        for height, width in TENTS:
+            labels = _ring_labels(height, width, _supports_of(height, width, seed, tent_tarp_sides=[0, 1, 1, 1]))
+            assert "T" in labels and "P" in labels
+
+
+def test_every_tent_has_a_post() -> None:
+    assert all(_supports_of(h, w, seed)[0].any() for seed in range(60) for h, w in TENTS)
+
+
+def test_a_tarp_side_runs_the_whole_side_when_it_is_not_tapered() -> None:
+    # A tarp touches the ground over several cells, not at a point: a side is wholly tarp or has none.
+    for seed in range(30):
+        _posts, tarp, _lift = _supports_of(3, 8, seed, tent_taper=0.0)
+        for row in (0, 2):
+            run = tarp[row, 1:-1]
+            assert run.all() or not run.any()
+
+
+def test_a_post_corner_has_no_tarp_beside_it() -> None:
+    # A corner is a post only between two open sides, so no tarp touches it.
+    for seed in range(40):
+        posts, tarp, lift = _supports_of(4, 6, seed)
+        for (y, x), (ny, nx) in (((0, 0), (0, 1)), ((0, 5), (0, 4)), ((3, 0), (3, 1)), ((3, 5), (3, 4))):
+            if posts[y, x]:
+                assert not (tarp[y, x] or tarp[ny, nx] or lift[ny, nx])
+
+
+def test_an_open_stretch_held_by_the_ground_at_both_ends_gets_a_pole() -> None:
+    # Poles make sense: a run of open cells with tarp (or a lifted end) at each end would hang from nothing.
+    for seed in range(60):
+        for height, width in TENTS:
+            runs = _open_runs(_ring_labels(height, width, _supports_of(height, width, seed)))
+            assert not any(before in "TL" and after in "TL" for before, _length, after in runs)
+
+
+def test_no_open_stretch_is_longer_than_the_post_gap() -> None:
+    for seed in range(60):
+        for height, width in TENTS:
+            runs = _open_runs(_ring_labels(height, width, _supports_of(height, width, seed)))
+            assert all(length <= 5 for _before, length, _after in runs)
+
+
+def test_a_tarp_end_can_lift_off_the_ground() -> None:
+    # With the taper certain, the end of a tarp that meets a long enough open side runs on as a half-touching cell.
+    lifted = [
+        bool(_supports_of(3, 8, seed, tent_tarp_sides=[0, 0, 1, 0], tent_taper=1.0)[2].any()) for seed in range(20)
+    ]
+    assert any(lifted)
+
+
+def test_a_lift_is_beside_a_tarp_and_never_the_last_open_cell() -> None:
+    # The lift sits on the end of a tarp, and the stretch it shortens keeps a pole.
+    for seed in range(60):
+        for height, width in TENTS:
+            posts, tarp, lift = _supports_of(height, width, seed, tent_taper=1.0)
+            from biomegen.sites.camp import _ring
+
+            ring = _ring(height, width)
+            for index, cell in enumerate(ring):
+                if lift[cell]:
+                    neighbours = (ring[index - 1], ring[(index + 1) % len(ring)])
+                    assert any(tarp[n] for n in neighbours)
+            assert posts.any()
+
+
+def test_a_long_open_side_gets_a_post_between_its_corners() -> None:
+    # Open sides longer than the gap are not left to hang from just their ends.
+    posts, _tarp, _lift = _supports_of(3, 9, tent_tarp_sides=[1, 0, 0, 0], tent_post_gap=5)
+    assert int(posts[0].sum()) > 2
+
+
+def test_posts_and_tarp_show_on_the_ground_view_under_the_tent_roof(config: Config) -> None:
+    # Across a field of tents, both supports appear on the inside, only under tent roofs.
+    world = flat_world(14, 10)
+    poi = add_poi(world, "camp", 7, 5, purpose="army", interior_seed=9)
+    plan = site_plan(poi, 0, config, world)
+    assert plan is not None
+    roofed = plan.outside == roof_cell(config, "tent")
+    posts, tarp, lift = (plan.cells == int(c) for c in (Cell.POST, Cell.TARP, Cell.TARP_LIFT))
+    assert posts.any() and tarp.any() and lift.any() and not ((posts | tarp | lift) & ~roofed).any()

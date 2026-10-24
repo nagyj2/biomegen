@@ -397,6 +397,9 @@ VALUES: Dict[str, Any] = {
         "bones": "x",
         "wheat": '"',
         "log": "=",
+        "post": "●",
+        "tarp": "^",
+        "tarp_lift": "~",
     },
     # ASCII output replaces any interior glyph that is not 7-bit with the entry here.
     "interior_glyphs_ascii": {
@@ -406,6 +409,7 @@ VALUES: Dict[str, Any] = {
         "axle_v": "|",
         "grave": "n",
         "banner": "P",
+        "post": "!",
     },
     # Thin walls: a wall cell draws the line glyph for which of its four neighbours (north 1, east 2, south 4, west 8)
     # are also wall or door, so adjoining walls join into box-drawing lines.
@@ -458,5 +462,8 @@ VALUES: Dict[str, Any] = {
         "bones": [206, 200, 184],
         "wheat": [214, 184, 70],
         "log": [140, 100, 62],
+        "post": [112, 78, 48],
+        "tarp": [196, 184, 140],
+        "tarp_lift": [168, 156, 114],
     },
 }

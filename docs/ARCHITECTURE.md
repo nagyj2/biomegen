@@ -774,7 +774,7 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   cut away shows its kind roof; the stairs stand on a free floor cell of both floors. A site whose layout is in `sites.roof_layouts`
   has one more level than its storeys, the roof level (`geometry.site_roof_floor`), where every building shows as its roof
   (a settlement lays it itself; every other layout is built on its ground floor and the roof level shows that plan's `outside`,
-  `plan._roof_view`). Camps (tent roofs over inset bedrolls, bare floor and a little gear) and boats (the deckhouse roof over the cabin) have
+  `plan._roof_view`). Camps (tent roofs; underneath the tent's tarp, lifted tarp ends and posts, then inset bedrolls, bare floor and a little gear) and boats (the deckhouse roof over the cabin) have
   one; a battlefield builds nothing and has none.
   `<` / `>` cycle floors inside a site or on its tiles; entering starts at floor 0.
 - **Cache and overlay.** Plans are memoised per world and config in a bounded cache (`sites.cache_size`), read-only.
