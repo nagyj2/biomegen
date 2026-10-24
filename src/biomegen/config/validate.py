@@ -214,6 +214,53 @@ def _validate_render_views(render: Dict[str, Any], errors: List[str]) -> None:
             errors.append(f"{where}.tint {tint!r} is not a render.ramps entry or {REALM_TINT!r}")
 
 
+def _whole(value: Any, minimum: int) -> int | None:
+    """Return ``value`` when it is an integer (not a bool) of at least ``minimum``, else None."""
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= minimum else None
+
+
+def _positive(value: Any) -> bool:
+    """Whether ``value`` is a number (not a bool) above zero."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+
+
+def _validate_sim(sim: Dict[str, Any], errors: List[str]) -> None:
+    """Check the ``sim`` section: the time base and cadences the schedule divides by, and the playback speeds."""
+    ticks = _whole(sim.get("ticks_per_month"), 1)
+    if "ticks_per_month" in sim and ticks is None:
+        errors.append(f"sim.ticks_per_month must be a whole number of at least 1, got {sim['ticks_per_month']!r}")
+    cadence = sim.get("cadence")
+    if cadence is not None:
+        if not isinstance(cadence, dict) or not cadence:
+            errors.append("sim.cadence must be a table with a row for each cadence")
+        else:
+            for name, row in sorted(cadence.items()):
+                months = _whole(row.get("months"), 1) if isinstance(row, dict) else None
+                jitter = _whole(row.get("jitter_ticks"), 0) if isinstance(row, dict) else None
+                if months is None or jitter is None:
+                    errors.append(
+                        f"sim.cadence.{name} needs whole numbers: months of at least 1, jitter_ticks of at least 0"
+                    )
+                elif ticks is not None and jitter >= months * ticks:
+                    errors.append(
+                        f"sim.cadence.{name}.jitter_ticks must be shorter than its period ({months * ticks} ticks)"
+                    )
+    share = sim.get("max_check_share")
+    if share is not None and not (_positive(share) and share <= 1):
+        errors.append(f"sim.max_check_share must be above 0 and at most 1, got {share!r}")
+    playback = sim.get("playback")
+    if playback is not None:
+        if not isinstance(playback, dict):
+            errors.append("sim.playback must be a table")
+        else:
+            for key in ("ticks_per_second", "max_frame_seconds"):
+                if key in playback and not _positive(playback[key]):
+                    errors.append(f"sim.playback.{key} must be a number above 0, got {playback[key]!r}")
+    series = sim.get("series")
+    if isinstance(series, dict) and "every_years" in series and _whole(series["every_years"], 1) is None:
+        errors.append(f"sim.series.every_years must be a whole number of at least 1, got {series['every_years']!r}")
+
+
 def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Validate and coerce ``cfg`` in place, returning it. Raise :class:`ConfigError` on any problem."""
     errors: List[str] = []
@@ -227,6 +274,7 @@ def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
     _validate_history(cfg.get("history", {}), errors)
     _validate_render_views(cfg.get("render", {}), errors)
+    _validate_sim(cfg.get("sim", {}), errors)
     if cfg.get("controls", {}).get("pan") not in (None, "edge", "centre"):
         errors.append("controls.pan must be 'edge' or 'centre'")
 

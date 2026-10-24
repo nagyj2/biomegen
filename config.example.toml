@@ -168,6 +168,12 @@ bottom = "G"
 fast_step = 8             # tiles moved per Shift+arrow (or capital WASD/HJKL)
 pan = "edge"              # at the screen edge: "centre" re-centres on the cursor (half a screen), "edge" steps
 
+[sim]
+ticks_per_month = 30      # integer ticks in a month: the simulation's time base
+
+[sim.playback]
+ticks_per_second = 10.0   # ticks the explorer runs per second at normal speed (--sim)
+
 # [tables.*] holds per-name attribute tables (biomes, relief, settlement tiers) read from
 # src/biomegen/data/*.toml. Override any attribute of one row; the rest of the row is kept:
 # [tables.biomes.desert]

@@ -1,6 +1,6 @@
 """Tests for the package layering: a lower layer never imports a higher one.
 
-The order is ``util -> config -> world -> sampling -> sites, naming -> pipeline -> (sim) -> render -> explorer -> cli``
+The order is ``util -> config -> world -> sampling -> sites, naming -> pipeline -> sim -> render -> explorer -> cli``
 (``registry`` is a leaf under them all). The imports are read from the source with ``ast``, so a violation fails here
 before it can become a cycle.
 """
@@ -22,7 +22,7 @@ RANKS = {
     "sites": 5,
     "naming": 5,
     "pipeline": 6,
-    "sim": 7,  # a later simulation sits between the pipeline and the renderer
+    "sim": 7,  # the simulation sits between the pipeline and the renderer
     "render": 8,
     "explorer": 9,
     "cli": 10,
@@ -103,8 +103,13 @@ def test_sites_never_import_a_simulation_package() -> None:
     assert bad == []
 
 
-def test_a_simulation_package_would_sit_between_the_pipeline_and_the_renderer() -> None:
+def test_the_simulation_package_sits_between_the_pipeline_and_the_renderer() -> None:
     assert RANKS["pipeline"] < RANKS["sim"] < RANKS["render"]
+
+
+def test_the_simulation_package_is_checked_by_the_layering_test() -> None:
+    # An empty folder would pass every check above for nothing: its modules must be among the ones scanned.
+    assert any(_layer_of(path) == "sim" for path in _modules())
 
 
 def test_every_allowed_upward_import_still_exists() -> None:

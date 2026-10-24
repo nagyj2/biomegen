@@ -5,7 +5,7 @@ Run with `scripts/test.sh [pytest args]` (or `uv run pytest -q`). `scripts/check
 ## Rules
 
 - Mirror `src/biomegen/`: `config/`, `util/`, `world/`, `pipeline/` (with `physical/`, `civilization/`),
-  `sampling/`, `sites/`, `naming/`, `render/`, `explorer/`. `widget.py` is tested in `test_widget.py`; each folder has an `__init__.py`.
+  `sampling/`, `sites/`, `naming/`, `sim/`, `render/`, `explorer/`. `widget.py` is tested in `test_widget.py`; each folder has an `__init__.py`.
   Two files sit at the top: `test_layering.py` (every package imports only a lower layer; `world/` only `util` and `config`) and
   `test_scripts.py` (the measuring scripts run).
 - One assertion concept per test (all assertions relate to one behaviour). Put a comment at the top of the

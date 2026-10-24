@@ -78,6 +78,7 @@ LABELS: frozenset[str] = frozenset(
         "history",  # the derived chronicle (per-event streams are suffixed)
         "pois",  # config-driven POI kinds placed from chronicle events
         "render",  # view-only scatter (sparse glyphs, sea sparkle); never changes the world
+        "sim",  # the tick simulation: cadence phases and jitter, then per-tick draws keyed on tick, faction and kind
     }
 )
 
