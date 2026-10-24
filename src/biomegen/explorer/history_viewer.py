@@ -37,9 +37,11 @@ from ..world.territory import (
     TerritoryChange,
     at_end,
     fallen_id_of,
+    fallen_owner,
     is_fallen_owner,
     is_predecessor_owner,
     predecessor_id_of,
+    predecessor_owner,
 )
 from ..world.world import World
 from .input import Action, KeyReader, make_reader
@@ -344,7 +346,7 @@ def _map_grid(world: World, config: Config, state: HistoryState, area: Size, col
     Drawn again only when something changed.
     """
     shown = state.selected if state.highlight else None
-    key = (area, state.at, state.minor, state.tile, shown, color, ascii_only)
+    key = (area, state.at, state.minor, state.tile, shown, state.focus, color, ascii_only)
     if state._map is None or state._map[0] != key:
         sampler = FitSampler(world, config, area[0], area[1])
         view = resolve_view(config, "political")
@@ -352,6 +354,7 @@ def _map_grid(world: World, config: Config, state: HistoryState, area: Size, col
         _draw_markers(grid, world, config, state, sampler)
         _mark_tile(grid, state, sampler)
         _show_power(grid, world, state, sampler)
+        _show_event(grid, world, config, state, sampler)
         state._map = (key, grid)
     return state._map[1]
 
@@ -376,6 +379,54 @@ def _show_power(grid: CellGrid, world: World, state: HistoryState, sampler: FitS
     grid.bg[mine] = mix_colors(grid.bg[mine], (255, 255, 255), 0.45)
     grid.bg[~mine] = mix_colors(grid.bg[~mine], (0, 0, 0), 0.55)
     grid.fg[~mine] = mix_colors(grid.fg[~mine], (0, 0, 0), 0.55)
+
+
+def event_focus(world: World, state: HistoryState) -> tuple[np.ndarray, set[int]]:
+    """Return ``(cells, owners)`` the events at ``state.at`` are about.
+
+    ``cells`` are flat tile indices: an event's location, its points of interest, the road it laid and the land its
+    territory changes moved. An event with none of those (a war, a trade deal, a peace) is about its realms, so
+    ``owners`` holds their territory owner values; an event with a place leaves its realms out.
+    """
+    cells: list[int] = []
+    owners: set[int] = set()
+    here = [e for e in world.chronicle if _event_stop(e) == state.at]
+    for event in here:
+        found = [] if event.location == NO_LOCATION else [event.location[1] * world.width + event.location[0]]
+        found += [world.pois[i].y * world.width + world.pois[i].x for i in event.poi_ids]
+        for link in world.road_links:
+            if link.event_id == event.id:
+                found += link.cells.tolist()
+        if found:
+            cells += found
+        else:
+            owners |= set(event.realm_ids)
+            owners |= {fallen_owner(i) for i in event.fallen_ids}
+            owners |= {predecessor_owner(i) for i in event.predecessor_ids}
+    for change in world.territory:
+        if change.key == state.at:
+            cells += change.cells.tolist()
+    return np.array(sorted(set(cells)), dtype=np.int64), owners
+
+
+def _show_event(grid: CellGrid, world: World, config: Config, state: HistoryState, sampler: FitSampler) -> None:
+    """Brighten what the current moment's events are about (their tiles, or the land of their realms when they have no
+    place) and dim the rest, as the powers list does for a power. Off while the powers list has the focus."""
+    settings = config.get("history.viewer.event_highlight")
+    if not settings["enabled"] or state.focus != "time":
+        return
+    cells, owners = event_focus(world, state)
+    lit = np.zeros((grid.rows, grid.cols), dtype=bool)
+    if owners:
+        lit |= np.isin(sampler.nearest(world.owners_at(*state.at)), sorted(owners))
+    if cells.size:
+        cols, rows = (cells % world.width) // sampler.block_w, (cells // world.width) // sampler.block_h
+        lit[rows, cols] = True
+    if not lit.any():
+        return
+    grid.bg[lit] = mix_colors(grid.bg[lit], (255, 255, 255), float(settings["lift"]))
+    grid.bg[~lit] = mix_colors(grid.bg[~lit], (0, 0, 0), float(settings["dim"]))
+    grid.fg[~lit] = mix_colors(grid.fg[~lit], (0, 0, 0), float(settings["dim"]))
 
 
 def _draw_markers(grid: CellGrid, world: World, config: Config, state: HistoryState, sampler: FitSampler) -> None:
@@ -586,6 +637,7 @@ def _help_lines(config: Config, tile: bool) -> tuple[str, ...]:
         "Marks on the map: events that had a place",
         f"  {marks}",
         f"  bold: this moment's events; faded: those of the last {years} years",
+        "  lit land: what this moment's events are about (their tiles, or their realms' land for a war or a deal)",
         "Powers list: the swatch is the power's colour on the map; (vassal of X): it had bowed to X by then.",
         "  {history_focus}: examine a power; up / down choose; Space shows its land on the map, Space again hides it",
         _HISTORY_HELP[-1],

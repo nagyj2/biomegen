@@ -277,6 +277,7 @@ shows the political map at moments of the past.
 | `territory.strips` | see `config/defaults/history.py` | Land a battle or peace moves along a front |
 | `viewer.map_share` | `0.6` | Share of the width the viewer's map takes |
 | `viewer.marker_years` | `30` | Events this many years back are marked (faded) on the viewer's map |
+| `viewer.event_highlight` | `enabled = true`, `lift = 0.45`, `dim = 0.55` | The viewer's map lights what the current events are about (their tiles, or their realms' land when they have no place) and dims the rest |
 
 #### `[keys]`
 | Key | Default | Description |

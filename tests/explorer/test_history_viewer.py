@@ -13,6 +13,7 @@ from biomegen.explorer.history_viewer import (
     apply_history_action,
     change_moments,
     compose_history_frame,
+    event_focus,
     initial_state,
     moment_summary,
     resolve_history_action,
@@ -688,3 +689,31 @@ def test_the_status_line_colours_the_powers_it_names(world: World, cfg: Config) 
     colors = {color for text, color in moment_segments(world, cfg, change.key) if color is not None}
     realm = world.realms[change.to_owner] if change.to_owner >= 0 else None
     assert colors and (realm is None or realm.color in colors)
+
+
+def _map_bg(world: World, cfg: Config, state: HistoryState) -> np.ndarray:
+    return compose_history_frame(world, cfg, state, SIZE).bg[1:12, :70].copy()
+
+
+def test_a_placed_event_lights_its_tile(world: World, cfg: Config) -> None:
+    # A stop whose event has a location focuses on cells, not on realms
+    event = next(e for e in world.chronicle if e.salience == "major" and e.location != (-1, -1) and e.kind != "war")
+    state = initial_state(world, cfg, (event.year, event.month, event.id))
+    cells, _ = event_focus(world, state)
+    assert event.location[1] * world.width + event.location[0] in cells
+
+
+def test_an_event_with_no_place_lights_its_realms(world: World, cfg: Config) -> None:
+    # A war has no tile, so the focus is its realms' land
+    event = next(e for e in world.chronicle if e.kind == "war" and e.location == (-1, -1) and e.realm_ids)
+    state = initial_state(world, cfg, (event.year, event.month, event.id))
+    _, owners = event_focus(world, state)
+    assert set(event.realm_ids) <= owners
+
+
+def test_the_event_highlight_is_off_in_the_powers_focus(world: World, cfg: Config) -> None:
+    event = next(e for e in world.chronicle if e.kind == "war" and e.location == (-1, -1) and e.realm_ids)
+    state = initial_state(world, cfg, (event.year, event.month, event.id))
+    lit = _map_bg(world, cfg, state)
+    _press(world, cfg, state, "\t")
+    assert (lit != _map_bg(world, cfg, state)).any()

@@ -197,6 +197,9 @@ VALUES: Dict[str, Any] = {
         # ``marker_years`` years before it faded by ``marker_fade``. Each kind has a glyph (ASCII).
         "marker_years": 30,
         "marker_fade": 0.55,
+        # What the events of the current moment are about is lit on the map and the rest dimmed (as a selected power
+        # is): their tiles, or the land of their realms for an event with no place (war, trade, peace).
+        "event_highlight": {"enabled": True, "lift": 0.45, "dim": 0.55},
         "glyphs": {
             "founding": "o",
             "secession": "/",
