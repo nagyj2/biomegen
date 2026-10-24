@@ -115,11 +115,11 @@ def _realm_labels(ctx: LayerContext, placer: _Placer, cfg: dict) -> None:
     smallest = float(cfg["realm_min_area_km2"])
     cell_km2 = world.scale.cell_area_km2
     # (owner value, text, colour): the realms; at a past moment fallen realms and predecessors are named too.
-    named = [(r.id, r.short, r.color) for r in world.realms if r.short and r.kind in kinds]
+    named = [(r.id, r.short, r.color) for r in ctx.realms if r.short and r.kind in kinds]
     if ctx.moment is not None:
         named += [(fallen_owner(f.id), f.name, f.color) for f in world.fallen_realms if f.name]
-        named += [(predecessor_owner(p.id), p.name, p.color) for p in world.predecessors if p.name]
-    stored = {r.id: r.area_km2 for r in world.realms}
+        named += [(predecessor_owner(p.id), p.name, p.color) for p in ctx.predecessors if p.name]
+    stored = {r.id: r.area_km2 for r in ctx.realms}
 
     def area(owner: int) -> float:
         """Today the realm's stored area; at a past moment what the owner held then."""

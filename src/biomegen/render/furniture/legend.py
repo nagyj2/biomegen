@@ -9,6 +9,7 @@ import numpy as np
 
 from ...config.model import Config
 from ...world.entities import Realm
+from ...world.reader import WorldReader
 from ...world.tile import BIOME_NAME, WaterType
 from ...world.world import World
 from ..colors import biome_style, mix_colors
@@ -101,7 +102,7 @@ def _area(km2: float, ascii_only: bool) -> str:
     return f"{km2:,.0f} {unit}"
 
 
-def _swatches(world: World, config: Config, view: View, ascii_only: bool) -> list[_Swatch]:
+def _swatches(world: World, config: Config, view: View, ascii_only: bool, reader: WorldReader) -> list[_Swatch]:
     """Return the legend swatches for what this view of this world actually shows."""
     items: list[_Swatch] = []
     biome_rows = config.get("tables.biomes")
@@ -134,10 +135,10 @@ def _swatches(world: World, config: Config, view: View, ascii_only: bool) -> lis
     if world.road.any():
         roads = config.get("render.roads")
         items.append((roads["ascii" if ascii_only else "glyphs"][10], _color(roads["fg"]), None, "Road"))
-    for kind in sorted({poi.kind for poi in world.pois}):
+    for kind in sorted({poi.kind for poi in reader.pois}):
         glyph, fg, bg = poi_marker(config, kind, ascii_only)
         items.append((glyph, fg, bg, kind.title()))
-    free = {poi.kind for poi in world.pois if poi.free}
+    free = {poi.kind for poi in reader.pois if poi.free}
     if free:  # one swatch for the colour a settlement no realm holds is drawn in, shown on its biggest tier
         biggest = min(free, key=lambda kind: int(config.get(f"tables.tiers.{kind}.rank")))
         glyph, fg, bg = poi_marker(config, biggest, ascii_only, True)
@@ -208,24 +209,25 @@ def _population(count: int) -> str:
     return f"{count / 1e6:.1f} million" if count >= 1_000_000 else f"{count:,}"
 
 
-def _origin(world: World, realm: Realm) -> str:
+def _origin(reader: WorldReader, realm: Realm) -> str:
     """The sentence on how a realm began, when it came of a secession (``""`` for a realm founded outright)."""
     if realm.origin == "offshoot":
-        return f" Broke from {world.realms[realm.parent].name} in year {realm.founded}."
+        return f" Broke from {reader.realms[realm.parent].name} in year {realm.founded}."
     if realm.origin == "split":
-        return f" Came of the split of {world.predecessors[realm.predecessor].name} in year {realm.founded}."
+        return f" Came of the split of {reader.predecessors[realm.predecessor].name} in year {realm.founded}."
     return ""
 
 
-def _realms(text: _Text, world: World, config: Config, ascii_only: bool) -> None:
+def _realms(text: _Text, world: World, config: Config, ascii_only: bool, reader: WorldReader) -> None:
     """The REALMS section: every independent realm with its vassals nested below, then the unclaimed land."""
-    if not world.realms:
+    realms = reader.realms
+    if not realms:
         return
     cfg = config.get("render.legend")
     swatch = cfg["realm_swatch_ascii" if ascii_only else "realm_swatch"]
-    members = {realm.id: 0 for realm in world.realms}
+    members = {realm.id: 0 for realm in realms}
     free = 0
-    for poi in world.pois:
+    for poi in reader.pois:
         if not poi.civilized or not config.get(f"tables.tiers.{poi.kind}.near_target", True):
             continue  # a hamlet is too small to count among a realm's settlements
         if poi.realm_id >= 0:
@@ -235,11 +237,11 @@ def _realms(text: _Text, world: World, config: Config, ascii_only: bool) -> None
     text.header("REALMS")
 
     def entry(realm_id: int, depth: int) -> None:
-        realm = world.realms[realm_id]
+        realm = realms[realm_id]
         pad = "  " + "    " * depth
         label = config.get(f"tables.realm_kinds.{realm.kind}.label")
         tag = f"vassal {label}" if realm.liege >= 0 else label
-        seat_poi = world.pois[realm.seat_poi] if realm.seat_poi >= 0 else None
+        seat_poi = reader.place(realm.seat_poi) if realm.seat_poi >= 0 else None
         count = members[realm.id]
         text.lines.append(
             [Span(pad), Span(swatch, realm.color, None, True), Span(f" {realm.name}", realm.color, None, True)]
@@ -262,34 +264,34 @@ def _realms(text: _Text, world: World, config: Config, ascii_only: bool) -> None
                 *where,
                 (
                     f". {_area(realm.area_km2, ascii_only)}, pop. ~{_population(realm.pop)}, "
-                    f"{count} settlement{'' if count == 1 else 's'}.{_origin(world, realm)}",
+                    f"{count} settlement{'' if count == 1 else 's'}.{_origin(reader, realm)}",
                     None,
                 ),
             ],
             text.dim_fg,
             len(pad) + 2,
         )
-        for vassal in sorted(realm.vassals, key=lambda v: (-world.realms[v].area_km2, v)):
+        for vassal in sorted(realm.vassals, key=lambda v: (-realms[v].area_km2, v)):
             entry(vassal, depth + 1)
 
-    for realm in sorted((r for r in world.realms if r.liege < 0), key=lambda r: (-r.area_km2, r.id)):
+    for realm in sorted((r for r in realms if r.liege < 0), key=lambda r: (-r.area_km2, r.id)):
         entry(realm.id, 0)
     land = ~biome_style(config).water[world.biome]
-    wild_km2 = float((land & (world.realm_id < 0)).sum()) * world.scale.cell_area_km2
+    wild_km2 = float((land & (reader.owners < 0)).sum()) * world.scale.cell_area_km2
     holding = f", holding {free} free settlement{'' if free == 1 else 's'}." if free else "."
     text.para(f"Unclaimed wilds: {_area(wild_km2, ascii_only)}{holding}", text.dim_fg)
 
 
-def _diplomacy(text: _Text, world: World, config: Config, ascii_only: bool) -> None:
+def _diplomacy(text: _Text, world: World, config: Config, ascii_only: bool, reader: WorldReader) -> None:
     """The DIPLOMACY section: wars first, then rivalries, alliances and trade pacts."""
-    if not world.relations:
+    if not reader.relations:
         return
     cfg = config.get("render.legend")
     kinds = list(cfg["relations"])
-    realms = world.realms
+    realms = reader.realms
     width = int(cfg["relation_tag_width"])
     text.header("DIPLOMACY")
-    for relation in sorted(world.relations, key=lambda r: (kinds.index(r.kind), -r.border_km, r.a, r.b)):
+    for relation in sorted(reader.relations, key=lambda r: (kinds.index(r.kind), -r.border_km, r.a, r.b)):
         style = cfg["relations"][relation.kind]
         tag_fg = _color(style["fg"])
         a, b = realms[relation.a], realms[relation.b]
@@ -304,8 +306,8 @@ def _diplomacy(text: _Text, world: World, config: Config, ascii_only: bool) -> N
                 (f" over {relation.why}; front {relation.border_km:,.0f} km.", None),
             ]
             if relation.claim_poi >= 0:
-                claimed = world.pois[relation.claim_poi]
-                holder = world.realms[claimed.realm_id].color if claimed.realm_id >= 0 else None
+                claimed = reader.place(relation.claim_poi)
+                holder = realms[claimed.realm_id].color if claimed.realm_id >= 0 else None
                 body += [
                     (" ", None),
                     (attacker.short, attacker.color),
@@ -360,13 +362,24 @@ def _climate(text: _Text, world: World, config: Config, ascii_only: bool) -> Non
     )
 
 
-def build_legend(world: World, config: Config, view: View, width: int, ascii_only: bool = False) -> Document:
-    """Return the legend and gazetteer for ``view`` of ``world``, wrapped to ``width`` columns."""
+def build_legend(
+    world: World,
+    config: Config,
+    view: View,
+    width: int,
+    ascii_only: bool = False,
+    reader: Optional[WorldReader] = None,
+) -> Document:
+    """Return the legend and gazetteer for ``view`` of ``world``, wrapped to ``width`` columns.
+
+    Realms, settlements and relations are read through ``reader`` (default: the world as generated).
+    """
+    reader = reader if reader is not None else WorldReader(world)
     text = _Text(config, width)
     text.header("LEGEND")
     column = int(config.get("render.legend.column_width"))
     per_line = max(1, width // column)
-    swatches = _swatches(world, config, view, ascii_only)
+    swatches = _swatches(world, config, view, ascii_only, reader)
     for start in range(0, len(swatches), per_line):
         line: list[Span] = []
         for glyph, fg, bg, label in swatches[start : start + per_line]:
@@ -377,6 +390,6 @@ def build_legend(world: World, config: Config, view: View, width: int, ascii_onl
     _geography(text, world, config, ascii_only)
     _climate(text, world, config, ascii_only)
     if view.political:
-        _realms(text, world, config, ascii_only)
-        _diplomacy(text, world, config, ascii_only)
+        _realms(text, world, config, ascii_only, reader)
+        _diplomacy(text, world, config, ascii_only, reader)
     return text.lines

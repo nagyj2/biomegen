@@ -176,6 +176,11 @@ class WorldReader:
         return every
 
     @property
+    def pois(self) -> list[POI]:
+        """The POIs that stand, in index order (the vanished are left out, so a position here is not a POI index)."""
+        return self._memo("pois", lambda: [poi for poi, here in zip(self.places, self.standing, strict=True) if here])
+
+    @property
     def standing(self) -> np.ndarray:
         """A bool per place: whether it stands (the POIs and the minted ones do, the vanished do not)."""
         return self._memo("standing", self._build_standing)

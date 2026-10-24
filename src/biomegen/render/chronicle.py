@@ -23,6 +23,7 @@ from ..world.chronicle import (
     parse_expression,
 )
 from ..world.entities import REF_FALLEN, REF_FEATURE, REF_POI, REF_PREDECESSOR, REF_REALM, REF_RULER, ChronicleEvent
+from ..world.reader import WorldReader
 from ..world.world import World
 from .grid import RGB, Document, Span
 
@@ -32,26 +33,39 @@ def _palette(config: Config) -> dict[str, RGB]:
     return {name: (int(c[0]), int(c[1]), int(c[2])) for name, c in config.get("history.colors").items()}
 
 
-def name_color(world: World, config: Config, kind: str, ref: int, palette: Optional[dict[str, RGB]] = None) -> RGB:
+def name_color(
+    world: World,
+    config: Config,
+    kind: str,
+    ref: int,
+    palette: Optional[dict[str, RGB]] = None,
+    reader: Optional[WorldReader] = None,
+) -> RGB:
     """Return the colour of a name in a text: a realm, its ruler and every place it holds in the realm's colour (a
     fallen or old realm in its own), a bandit tower or dungeon in the ``hideout`` colour, and the places no realm holds
-    and the named land (rivers, ranges, seas) in the neutral ``settlement`` and ``place`` colours."""
+    and the named land (rivers, ranges, seas) in the neutral ``settlement`` and ``place`` colours.
+
+    With a ``reader`` the names are the simulation's too (a realm, ruler or POI it made, a place that changed hands);
+    without one they are the generated world's.
+    """
     palette = palette if palette is not None else _palette(config)
+    realms = reader.realms if reader is not None else world.realms
     if kind == REF_REALM:
-        return world.realms[ref].color
+        return realms[ref].color
     if kind == REF_RULER:  # a ruler is coloured as their realm
-        return world.realms[world.rulers[ref].realm_id].color
+        rulers = reader.rulers if reader is not None else world.rulers
+        return realms[rulers[ref].realm_id].color
     if kind == REF_FALLEN:
         return world.fallen_realms[ref].color
     if kind == REF_PREDECESSOR:
-        return world.predecessors[ref].color
+        return (reader.predecessors if reader is not None else world.predecessors)[ref].color
     if kind == REF_FEATURE:
         return palette["place"]
     assert kind == REF_POI
-    poi = world.place(ref)
+    poi = reader.place(ref) if reader is not None else world.place(ref)
     if config.get(f"tables.pois.{poi.kind}.bandit_strength", 0):  # a bandit tower or dungeon is its own colour
         return palette["hideout"]
-    return world.realms[poi.realm_id].color if poi.civilized and poi.realm_id >= 0 else palette["settlement"]
+    return realms[poi.realm_id].color if poi.civilized and poi.realm_id >= 0 else palette["settlement"]
 
 
 def colored_text(
@@ -60,6 +74,7 @@ def colored_text(
     text: str,
     refs: Sequence[tuple[int, int, str, int]],
     palette: Optional[dict[str, RGB]] = None,
+    reader: Optional[WorldReader] = None,
 ) -> list[Span]:
     """Return ``text`` as spans, each name of ``refs`` (start, end, kind, id) bold in its colour (``name_color``)."""
     palette = palette if palette is not None else _palette(config)
@@ -68,7 +83,7 @@ def colored_text(
     for start, end, kind, ref in sorted(refs):
         if start > pos:
             spans.append(Span(text[pos:start]))
-        spans.append(Span(text[start:end], name_color(world, config, kind, ref, palette), bold=True))
+        spans.append(Span(text[start:end], name_color(world, config, kind, ref, palette, reader), bold=True))
         pos = end
     if pos < len(text):
         spans.append(Span(text[pos:]))
@@ -76,7 +91,11 @@ def colored_text(
 
 
 def event_row(
-    world: World, config: Config, event: ChronicleEvent, palette: Optional[dict[str, RGB]] = None
+    world: World,
+    config: Config,
+    event: ChronicleEvent,
+    palette: Optional[dict[str, RGB]] = None,
+    reader: Optional[WorldReader] = None,
 ) -> list[Span]:
     """Return one event as styled spans: its year, its kind, then its text with every name in its colour."""
     palette = palette if palette is not None else _palette(config)
@@ -85,7 +104,7 @@ def event_row(
         Span("  "),
         Span(f"{event.kind:<{KIND_WIDTH}}", palette[event.kind], bold=True),
         Span("  "),
-        *colored_text(world, config, event.text, event.refs, palette),
+        *colored_text(world, config, event.text, event.refs, palette, reader),
     ]
 
 

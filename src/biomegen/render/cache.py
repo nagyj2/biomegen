@@ -13,8 +13,10 @@ camera is. At the map scales a whole frame is reused while nothing that draws it
 with the cursor).
 
 What invalidates: a different world or config resets the cache; an :class:`~biomegen.world.overlay.Overlay` edit (its
-``revision``) drops everything drawn; :meth:`RenderCache.invalidate` drops what lies in a box of tiles, for a caller
-that changes the world's surface some other way (a future simulation). At most ``render.cache.max_cells`` cells are
+``revision``) or a change of the simulation's state (the :class:`~biomegen.world.reader.WorldReader`'s revision, or a
+new state) drops everything drawn; :meth:`RenderCache.invalidate` drops what lies in a box of tiles, for a caller
+that changes the world's surface some other way (a simulation step that moves a few tiles will use it). At most
+``render.cache.max_cells`` cells are
 kept, the least recently shown chunks dropped first.
 """
 
@@ -31,6 +33,8 @@ from ..config.model import Config
 from ..sampling.detail import SCALE_SITE, DetailSampler
 from ..sampling.sampler import Sampler
 from ..world.overlay import Overlay
+from ..world.reader import WorldReader
+from ..world.sim_state import SimState
 from ..world.world import World
 from .grid import CellGrid
 from .layers import CACHEABLE, LAYERS, LayerContext, Seen, build_grid
@@ -128,6 +132,9 @@ class RenderCache:
         self._config: Optional[Config] = None
         self._overlay: Optional[Overlay] = None
         self._revision = -1
+        self._reader: Optional[WorldReader] = None  # the simulation's view for the draw in progress
+        self._state: Optional[SimState] = None  # its state and revision at the last check: a change drops the cache
+        self._sim_revision = 0
 
     @property
     def cells(self) -> int:
@@ -162,18 +169,27 @@ class RenderCache:
         labels: str = "all",
         floor: int = 0,
         seen: Optional[Seen] = None,
+        reader: Optional[WorldReader] = None,
     ) -> CellGrid:
-        """Draw ``view`` through ``sampler`` exactly as ``build_grid`` would, from cached chunks where they exist."""
+        """Draw ``view`` through ``sampler`` exactly as ``build_grid`` would, from cached chunks where they exist.
+
+        ``reader`` is the simulation's view of the world: whatever it changes (its revision) drops everything drawn.
+        """
         seen = seen if seen is not None else Seen()
-        self._check(world, config, overlay)
+        self._check(world, config, overlay, reader)
         if isinstance(sampler, DetailSampler):
             return self._draw_detail(world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen)
         return self._draw_map(world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen)
 
     # ------------------------------------------------------------------ validity
 
-    def _check(self, world: World, config: Config, overlay: Optional[Overlay]) -> None:
-        """Reset for a new world or config, and drop what an overlay edit could have changed."""
+    def _check(
+        self, world: World, config: Config, overlay: Optional[Overlay], reader: Optional[WorldReader] = None
+    ) -> None:
+        """Reset for a new world or config, and drop what an overlay edit or a simulation's change could have changed.
+
+        The reader is kept for the draw that follows, which hands it to every layer.
+        """
         if world is not self._world or config is not self._config:
             self.invalidate()
             self._world, self._config = world, config
@@ -181,6 +197,11 @@ class RenderCache:
         if overlay is not self._overlay or revision != self._revision:
             self.invalidate()
             self._overlay, self._revision = overlay, revision
+        state, sim_revision = (reader.state, reader.revision) if reader is not None else (None, 0)
+        if state is not self._state or sim_revision != self._sim_revision:
+            self.invalidate()
+            self._state, self._sim_revision = state, sim_revision
+        self._reader = reader
 
     def _read_reach(self) -> int:
         """Tiles past its own that a cell's colour can depend on (warp, road bed, bilinear and shade reads)."""
@@ -219,12 +240,16 @@ class RenderCache:
     ) -> CellGrid:
         signature = sampler.signature
         if signature is None or self.map_frames == 0:
-            return build_grid(world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen)
+            return build_grid(
+                world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen, reader=self._reader
+            )
         key = (view.name, signature, ascii_only, color, labels, floor)
         frame = self._maps.get(key)
         if frame is None:
             drawn = Seen()
-            grid = build_grid(world, config, view, sampler, overlay, ascii_only, color, labels, floor, drawn)
+            grid = build_grid(
+                world, config, view, sampler, overlay, ascii_only, color, labels, floor, drawn, reader=self._reader
+            )
             frame = _MapFrame(grid, drawn)
             self._maps[key] = frame
             while len(self._maps) > self.map_frames:
@@ -277,7 +302,9 @@ class RenderCache:
     ) -> CellGrid:
         cached, per_frame = split_layers(view.layers_for(True))
         if not cached:
-            return build_grid(world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen)
+            return build_grid(
+                world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen, reader=self._reader
+            )
         layers = [LAYERS.get(name) for name in per_frame]  # resolve first so a typo fails before any work
         surface = self._surface(world, view, sampler, ascii_only, color, floor)
         # The sampler's cells within the surface's grid.
@@ -295,7 +322,9 @@ class RenderCache:
             drawn = cell_map[cell_map >= 0]
             seen.cells.update(np.unique(drawn).tolist())
             seen.cell_map = cell_map
-        context = LayerContext(world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen)
+        context = LayerContext(
+            world, config, view, sampler, overlay, ascii_only, color, labels, floor, seen, reader=self._reader
+        )
         context.__dict__["biome"] = biome  # the cached biome stands in for the sampler's lookup (a cached_property)
         for layer in layers:
             layer(context, grid)
@@ -311,6 +340,7 @@ class RenderCache:
         ascii_only: bool = False,
         color: bool = True,
         floor: int = 0,
+        reader: Optional[WorldReader] = None,
     ) -> Iterator[None]:
         """Draw the missing chunks round ``sampler``'s screen, nearest first, one per step of the iterator.
 
@@ -323,7 +353,7 @@ class RenderCache:
         cached, _ = split_layers(view.layers_for(True))
         if not isinstance(sampler, DetailSampler) or not cached or screens == 0.0:
             return
-        self._check(world, config, overlay)
+        self._check(world, config, overlay, reader)
         surface = self._surface(world, view, sampler, ascii_only, color, floor)
         col0, row0, cols, rows = self._rect(surface, sampler)
         pad_cols, pad_rows = round(cols * screens), round(rows * screens)
@@ -403,7 +433,9 @@ class RenderCache:
             origin,
             shape,
         )
-        context = LayerContext(world, config, view, sampler, overlay, ascii_only, color, labels, floor, Seen())
+        context = LayerContext(
+            world, config, view, sampler, overlay, ascii_only, color, labels, floor, Seen(), reader=self._reader
+        )
         grid = CellGrid(sampler.rows, sampler.cols)
         for name in names:
             LAYERS.get(name)(context, grid)

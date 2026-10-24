@@ -22,10 +22,11 @@ def markers_layer(ctx: LayerContext, grid: CellGrid) -> None:
     """
     world = ctx.world
     places, kinds, standing = ctx.places, ctx.place_kinds, ctx.visible_pois
-    stamped = world.poi_index
-    if len(places) > len(world.pois) and standing[len(world.pois) :].any():  # a vanished POI stands on a free cell
-        stamped = world.poi_index.copy()
-        for index in range(len(world.pois), len(places)):
+    stamped = ctx.poi_index
+    vanished = range(len(world.pois), len(world.pois) + len(world.vanished))
+    if any(standing[index] for index in vanished):  # a vanished POI stands on a free cell (a past moment)
+        stamped = stamped.copy()
+        for index in vanished:
             if standing[index] and stamped[places[index].y, places[index].x] < 0:
                 stamped[places[index].y, places[index].x] = index
     poi_index = ctx.sampler.nearest(stamped)

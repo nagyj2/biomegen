@@ -20,6 +20,7 @@ from ...sampling.terrain import land_mask, river_mask
 from ...util import rng
 from ...world.lifespans import poi_kind_at, visible_pois, visible_roads
 from ...world.overlay import Overlay
+from ...world.reader import WorldReader
 from ...world.territory import FALLEN_OWNER_BASE, PREDECESSOR_OWNER_BASE, WILD
 from ...world.tile import Biome
 from ...world.wars import wars_at
@@ -72,6 +73,8 @@ class LayerContext:
         moment: A ``(year, month[, event id])`` to draw the map at (``World.owners_at``); ``None`` is the present.
         color: Whether the output is coloured. Without colour the glyphs must carry the information, so
             sparse biomes show their glyph on every cell and the sea sparkle is off.
+        reader: The simulation's view of the world (:class:`~biomegen.world.reader.WorldReader`); ``None`` draws the
+            world as generated. Realms, owners, places and relations are read through :attr:`live`, not from ``world``.
     """
 
     world: World
@@ -85,6 +88,28 @@ class LayerContext:
     floor: int = 0
     seen: Seen = field(default_factory=Seen)
     moment: Optional[tuple[int, ...]] = None
+    reader: Optional[WorldReader] = None
+
+    @cached_property
+    def live(self) -> WorldReader:
+        """What realms, owners and POIs are read through: the reader given, else the world as generated. A map of a
+        past moment is the generated world's, so it ignores any reader."""
+        return self.reader if self.reader is not None and self.moment is None else WorldReader(self.world)
+
+    @cached_property
+    def realms(self) -> list:
+        """Every realm to draw (the simulation's changes applied, the realms it made last)."""
+        return self.live.realms
+
+    @cached_property
+    def predecessors(self) -> list:
+        """Every predecessor to draw (the generated ones, then the simulation's)."""
+        return self.live.predecessors
+
+    @cached_property
+    def poi_index(self) -> np.ndarray:
+        """The ``[y, x]`` grid of the POI index at each tile (the minted POIs included)."""
+        return self.live.poi_index
 
     @cached_property
     def biome_style(self) -> BiomeStyle:
@@ -140,8 +165,9 @@ class LayerContext:
 
     @cached_property
     def owners(self) -> np.ndarray:
-        """The ``[y, x]`` owner grid being drawn: ``World.realm_id``, or the owners at :attr:`moment`."""
-        return self.world.realm_id if self.moment is None else self.world.owners_at(*self.moment)
+        """The ``[y, x]`` owner grid being drawn: the reader's (``World.realm_id`` as generated), or the owners at
+        :attr:`moment`."""
+        return self.live.owners if self.moment is None else self.world.owners_at(*self.moment)
 
     @cached_property
     def realm(self) -> np.ndarray:
@@ -155,7 +181,7 @@ class LayerContext:
         owners = self.owners
         codes = self.sampler.blended(owners).astype(np.int64)
         codes = np.where((codes < 0) & self.land, self.sampler.nearest(owners), codes)
-        return np.where(self.land, owner_palette_index(self.world, codes), -1)
+        return np.where(self.land, owner_palette_index(self.world, codes, len(self.realms)), -1)
 
     @cached_property
     def tops(self) -> np.ndarray:
@@ -163,25 +189,26 @@ class LayerContext:
 
         At a past moment a vassal tie counts only from its conquest.
         """
-        world = self.world
+        world, realms = self.world, self.realms
         if self.moment is None:
-            tops = [world.top_realm(r.id) for r in world.realms]
+            tops = [self.live.top_realm(r.id) for r in realms]
         else:
-            tops = [world.top_realm_at(r.id, *self.moment) for r in world.realms]
-        extra = range(len(world.realms), len(world.realms) + len(world.fallen_realms) + len(world.predecessors))
+            tops = [world.top_realm_at(r.id, *self.moment) for r in realms]
+        extra = range(len(realms), len(realms) + len(world.fallen_realms) + len(self.predecessors))
         return np.array(tops + list(extra) + [-1])
 
     @cached_property
     def places(self) -> list:
-        """Every POI there is to draw: the ones that stand today, then the vanished (see :meth:`World.place`)."""
-        return [*self.world.pois, *self.world.vanished]
+        """Every POI there is to draw, by index (see :meth:`World.place`): the ones that stand today, the vanished,
+        then the ones the simulation minted."""
+        return self.live.places
 
     @cached_property
     def visible_pois(self) -> np.ndarray:
-        """A bool per place: whether it stands. Today the POIs do and the vanished do not; at a past moment those whose
-        life covers it (founded by then, and not yet dismantled)."""
+        """A bool per place: whether it stands. Today the POIs and the minted ones do and the vanished do not; at a past
+        moment those whose life covers it (founded by then, and not yet dismantled)."""
         if self.moment is None:
-            return np.arange(len(self.places)) < len(self.world.pois)
+            return self.live.standing
         return visible_pois(self.world, self.config, self.moment)
 
     @cached_property
@@ -245,10 +272,12 @@ class LayerContext:
         return np.isin(self.biome, [int(b) for b in biomes])
 
 
-def owner_palette_index(world: World, codes: np.ndarray) -> np.ndarray:
+def owner_palette_index(world: World, codes: np.ndarray, realms: Optional[int] = None) -> np.ndarray:
     """Map owner values to palette indices: a realm is its id, wild land -1, a fallen realm ``n + id`` and a predecessor
-    ``n + fallen realms + id`` (``n`` realms), so one colour table serves every owner."""
-    realms, fallen = len(world.realms), len(world.fallen_realms)
+    ``n + fallen realms + id`` (``n`` realms: the world's, or ``realms`` when a simulation has made more), so one colour
+    table serves every owner."""
+    realms = len(world.realms) if realms is None else realms
+    fallen = len(world.fallen_realms)
     index = codes.copy()
     is_fallen = (codes <= FALLEN_OWNER_BASE) & (codes > PREDECESSOR_OWNER_BASE)
     is_predecessor = codes <= PREDECESSOR_OWNER_BASE
@@ -279,8 +308,13 @@ def build_grid(
     floor: int = 0,
     seen: Optional[Seen] = None,
     moment: Optional[tuple[int, ...]] = None,
+    reader: Optional[WorldReader] = None,
 ) -> CellGrid:
-    """Draw ``view`` of ``world`` through ``sampler`` and return the finished grid."""
+    """Draw ``view`` of ``world`` through ``sampler`` and return the finished grid.
+
+    ``reader`` is the simulation's view of the world (the present only: a ``moment`` is the generated past); without it
+    the world is drawn as generated.
+    """
     # resolve first so a typo fails before any work
     layers = [LAYERS.get(name) for name in view.layers_for(sampler.detailed)]
     context = LayerContext(
@@ -295,6 +329,7 @@ def build_grid(
         floor,
         seen if seen is not None else Seen(),
         moment,
+        reader,
     )
     grid = CellGrid(sampler.rows, sampler.cols)
     for layer in layers:

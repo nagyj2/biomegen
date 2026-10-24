@@ -16,11 +16,10 @@ def borders_layer(ctx: LayerContext, grid: CellGrid) -> None:
     Only the cell of the pair with the larger realm id is marked (wild land counts as -1), so a border is one cell
     wide at every scale. Realms are read through :attr:`LayerContext.realm`, warped like the biome blend, so the line
     wobbles identically at the zoom and local scales. A border between a vassal and its own overlord is fainter; where a
-    war is on (``World.front`` today, the wars of the moment at a past moment) the line is red. Cells on the grid's edge
-    are compared only with the neighbours inside it.
+    war is on (the reader's front today, the wars of the moment at a past moment) the line is red. Cells on the grid's
+    edge are compared only with the neighbours inside it.
     """
-    world = ctx.world
-    if not world.realms:
+    if not ctx.realms:
         return
     cfg = ctx.config.get("render.borders")
     realm = ctx.realm
@@ -43,7 +42,7 @@ def borders_layer(ctx: LayerContext, grid: CellGrid) -> None:
             target[first] |= mask & larger_is_first
             target[second] |= mask & ~larger_is_first
     soft &= ~hard
-    front = (war if ctx.moment is not None else ctx.sampler.blended(world.front)) & hard
+    front = (war if ctx.moment is not None else ctx.sampler.blended(ctx.live.front)) & hard
     # Each line colour is mixed on its own cells only, from the fill the earlier layers left there.
     fill = grid.bg
     lines = {

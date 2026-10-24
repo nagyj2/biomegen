@@ -13,8 +13,9 @@ from typing import Optional
 from ..config.model import Config
 from ..sampling.detail import SCALE_SITE, centred_detail_sampler
 from ..sampling.sampler import Sampler
-from ..sites import site_at, site_floor_range, site_geometry, site_pois, window_sampler
+from ..sites import site_at, site_floor_range, site_geometry, site_places, window_sampler
 from ..world.overlay import Overlay
+from ..world.reader import WorldReader
 from ..world.world import World
 from .furniture.frame import build_frame
 from .furniture.legend import build_legend
@@ -48,6 +49,7 @@ def render_static(
     color: bool = True,
     legend: bool = True,
     overlay: Optional[Overlay] = None,
+    reader: Optional[WorldReader] = None,
 ) -> StaticRender:
     """Render view ``view_name`` of the whole ``world``.
 
@@ -60,14 +62,15 @@ def render_static(
         color: Whether the output is coloured; without colour sparse biomes draw on every cell.
         legend: Append the legend and gazetteer.
         overlay: Runtime edits to composite, or ``None``.
+        reader: The simulation's view of the world; ``None`` renders the world as generated.
     """
     view = resolve_view(config, view_name)
     sampler = Sampler.viewport(world, world.height, world.width)
-    grid = build_grid(world, config, view, sampler, overlay, ascii_only, color, labels)
+    grid = build_grid(world, config, view, sampler, overlay, ascii_only, color, labels, reader=reader)
     document = build_frame(world, config, grid, ascii_only)
     if legend:
         width = int(config.get("render.furniture.margin")) + grid.cols + 2
-        document += build_legend(world, config, view, width, ascii_only)
+        document += build_legend(world, config, view, width, ascii_only, reader)
     return StaticRender(grid, document)
 
 
@@ -83,6 +86,7 @@ def render_detail(
     color: bool = True,
     floor: int = 0,
     overlay: Optional[Overlay] = None,
+    reader: Optional[WorldReader] = None,
 ) -> StaticRender:
     """Render a magnified part of the world: the zoom or local scale centred on one tile, or the site view of a POI.
 
@@ -98,14 +102,16 @@ def render_detail(
         color: Whether the output is coloured.
         floor: The floor of multi-floor interiors to draw.
         overlay: Runtime edits to composite, or ``None``.
+        reader: The simulation's view of the world; ``None`` renders the world as generated.
     """
     view = resolve_view(config, view_name)
     centre = at if at is not None else (world.width // 2, world.height // 2)
     if scale == SCALE_SITE:
-        poi = site_at(world, config, centre[0], centre[1])
+        poi = site_at(world, config, centre[0], centre[1], reader)
         geometry = site_geometry(poi, config) if poi is not None else None
         if poi is None or geometry is None:
-            raise ValueError(f"no site at tile {centre[0]},{centre[1]}{_nearest_site(world, config, centre)}")
+            hint = _nearest_site(world, config, centre, reader)
+            raise ValueError(f"no site at tile {centre[0]},{centre[1]}{hint}")
         col, row = geometry.cell_at(float(centre[0]), float(centre[1]))
         cols, rows = min(area[0], geometry.cols), min(area[1], geometry.rows)
         origin = (_camera(col, cols, geometry.cols), _camera(row, rows, geometry.rows))
@@ -114,7 +120,7 @@ def render_detail(
         floor = max(lowest, min(floor, highest))
     else:
         sampler = centred_detail_sampler(world, config, scale, area[0], area[1], centre)
-    grid = build_grid(world, config, view, sampler, overlay, ascii_only, color, floor=floor)
+    grid = build_grid(world, config, view, sampler, overlay, ascii_only, color, floor=floor, reader=reader)
     return StaticRender(grid, grid.to_document())
 
 
@@ -123,9 +129,10 @@ def _camera(cell: int, size: int, total: int) -> int:
     return max(0, min(cell - size // 2, total - size))
 
 
-def _nearest_site(world: World, config: Config, tile: tuple[int, int]) -> str:
+def _nearest_site(world: World, config: Config, tile: tuple[int, int], reader: Optional[WorldReader] = None) -> str:
     """A hint for a tile with no site: the point of interest with a site nearest to it (empty when there is none)."""
-    found = [(math.hypot(poi.x - tile[0], poi.y - tile[1]), poi) for poi, _g in site_pois(world, config)]
+    places = site_places(reader if reader is not None else WorldReader(world), config)
+    found = [(math.hypot(poi.x - tile[0], poi.y - tile[1]), poi) for _i, poi, _g in places]
     if not found:
         return ""
     _distance, poi = min(found, key=lambda item: (item[0], item[1].y, item[1].x))

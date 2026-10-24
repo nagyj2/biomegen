@@ -15,7 +15,7 @@ import math
 import numpy as np
 
 from ...sampling.detail import SCALE_SITE, DetailSampler
-from ...sites import NO_WALL, OUTSIDE_PRIORITY, SiteGeometry, site_floor_range, site_plan, site_pois, wall_index
+from ...sites import NO_WALL, OUTSIDE_PRIORITY, SiteGeometry, site_floor_range, site_places, site_plan, wall_index
 from ...sites.blit import sample_rect
 from ...world.entities import POI
 from ...world.tile import Cell
@@ -37,12 +37,16 @@ def _record(ctx: LayerContext, grid: CellGrid, rows: slice, cols: slice, cells: 
     ctx.seen.cell_map[rows, cols][draw] = cells[draw]
 
 
-def _plan_of(ctx: LayerContext, poi: POI, floor: int, inside: bool) -> tuple[np.ndarray, np.ndarray | None] | None:
+def _plan_of(
+    ctx: LayerContext, index: int, poi: POI, floor: int, inside: bool
+) -> tuple[np.ndarray, np.ndarray | None] | None:
     """Return ``poi``'s plan cells (and, inside, the wall line index of each) for ``floor``, or None if it has no plan.
 
-    Inside, the overlay's edits are applied; outside is the surface and ignores both the floor and the overlay.
+    ``index`` is the POI's place in the reader, which holds the manifest of what stands (none: read by tier and
+    population). Inside, the overlay's edits are applied; outside is the surface and ignores both the floor and the
+    overlay.
     """
-    plan = site_plan(poi, floor, ctx.config, ctx.world)
+    plan = site_plan(poi, floor, ctx.config, ctx.world, ctx.live.manifest_of(index))
     if plan is None:
         return None
     if not inside:
@@ -102,7 +106,7 @@ def sites_layer(ctx: LayerContext, grid: CellGrid) -> None:
         if ctx.moment is None
         else {id(p) for p, here in zip(ctx.world.pois, ctx.visible_pois, strict=False) if here}
     )
-    for poi, geometry in site_pois(ctx.world, ctx.config):
+    for index, poi, geometry in site_places(ctx.live, ctx.config):
         if standing is not None and id(poi) not in standing:
             continue
         row0, col0, span_rows, span_cols = _extent_cells(sampler, geometry)
@@ -110,7 +114,7 @@ def sites_layer(ctx: LayerContext, grid: CellGrid) -> None:
             continue
         lowest, highest = site_floor_range(poi, ctx.config)
         floor = max(lowest, min(int(ctx.floor), highest)) if inside else 0
-        found = _plan_of(ctx, poi, floor, inside)
+        found = _plan_of(ctx, index, poi, floor, inside)
         if found is None:
             continue
         cells, walls = found
