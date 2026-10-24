@@ -20,8 +20,9 @@ import numpy as np
 from ..config.model import Config
 from ..render.fit import tile_priority
 from ..sampling.detail import SCALE_LOCAL, SCALE_MAP, SCALE_SITE, SCALE_ZOOM
-from ..sites import site_at, site_floor_range, site_geometry, site_plan, site_roof_floor
+from ..sites import site_floor_range, site_geometry, site_place_at, site_plan, site_roof_floor
 from ..world.entities import POI
+from ..world.reader import WorldReader
 from ..world.tile import WaterType
 from ..world.world import World
 
@@ -96,6 +97,8 @@ class ViewState:
         cam_y: Viewport top-left tile row.
         floor: Current floor when the cursor is on a multi-floor structure.
         poi: The POI whose site is open at the site scale (``None`` otherwise).
+        poi_index: Its index in the reader's places (-1 when unknown): the site is found again by index, since the
+            reader's POI object is replaced whenever the simulation changes it.
         px: Cursor column in the open site's window, in plan cells.
         py: Cursor row in the open site's window.
         site_cam_x: First window column shown at the site scale.
@@ -115,6 +118,7 @@ class ViewState:
     cam_y: int = 0
     floor: int = 0
     poi: Optional[POI] = None
+    poi_index: int = -1
     px: int = 0
     py: int = 0
     site_cam_x: int = 0
@@ -140,7 +144,7 @@ class ViewState:
             self.messages.pop(0)
 
 
-def initial_cursor(world: World, config: Config) -> tuple[int, int]:
+def initial_cursor(world: World, config: Config, reader: Optional[WorldReader] = None) -> tuple[int, int]:
     """Return the land tile with the most salient feature, nearest the land's centre (the map centre if no land).
 
     Salience is the fit-map priority (point of interest, road, river, notable terrain), restricted to land so the
@@ -149,7 +153,7 @@ def initial_cursor(world: World, config: Config) -> tuple[int, int]:
     land = world.water_type == int(WaterType.NONE)
     if not land.any():
         return world.width // 2, world.height // 2
-    priority = np.where(land, tile_priority(world, config), -1)
+    priority = np.where(land, tile_priority(world, config, reader), -1)
     candidates_y, candidates_x = np.nonzero(priority == priority.max())
     land_y, land_x = np.nonzero(land)
     centre_x, centre_y = float(land_x.mean()), float(land_y.mean())
@@ -157,25 +161,44 @@ def initial_cursor(world: World, config: Config) -> tuple[int, int]:
     return int(candidates_x[nearest]), int(candidates_y[nearest])
 
 
-def poi_under_cursor(world: World, config: Config, state: ViewState) -> Optional[POI]:
-    """Return the POI whose site the cursor is in: the open site, or the one covering the cursor's tile."""
+def place_under_cursor(
+    world: World, config: Config, state: ViewState, reader: Optional[WorldReader] = None
+) -> Optional[tuple[int, POI]]:
+    """Return ``(index, poi)`` of the POI whose site the cursor is in: the open site, or the one covering the cursor's
+    tile. The index is the POI's place in the reader (-1 for an open site that was never found by index), and the POI
+    is the reader's current object for it."""
+    live = reader if reader is not None else WorldReader(world)
     if state.scale == SCALE_SITE and state.poi is not None:
-        return state.poi
-    return site_at(world, config, state.cx, state.cy)
+        index = state.poi_index
+        if index < 0:
+            index = next((i for i, place in enumerate(live.places) if place is state.poi), -1)
+        return (index, live.place(index)) if index >= 0 else (-1, state.poi)
+    return site_place_at(live, config, state.cx, state.cy)
 
 
-def sync_floor(world: World, config: Config, state: ViewState, previous: object) -> object:
+def poi_under_cursor(
+    world: World, config: Config, state: ViewState, reader: Optional[WorldReader] = None
+) -> Optional[POI]:
+    """Return the POI whose site the cursor is in: the open site, or the one covering the cursor's tile."""
+    found = place_under_cursor(world, config, state, reader)
+    return found[1] if found is not None else None
+
+
+def sync_floor(
+    world: World, config: Config, state: ViewState, previous: object, reader: Optional[WorldReader] = None
+) -> object:
     """Keep ``state.floor`` valid for the structure under the cursor and return the new tracking id.
 
     Entering a structure starts at its ground floor (0); moving within it keeps and clamps the chosen floor;
-    leaving every structure resets to 0.
+    leaving every structure resets to 0. A structure is tracked by its index, so the simulation replacing the POI
+    object (a new owner, new people) does not look like leaving it.
     """
-    poi = poi_under_cursor(world, config, state)
-    current = id(poi) if poi is not None else None
+    found = place_under_cursor(world, config, state, reader)
+    current = None if found is None else (found[0] if found[0] >= 0 else id(found[1]))
     if current != previous:
         state.floor = 0
-    elif poi is not None:
-        state.floor = clamp(state.floor, *site_floor_range(poi, config))
+    elif found is not None:
+        state.floor = clamp(state.floor, *site_floor_range(found[1], config))
     return current
 
 
@@ -186,9 +209,11 @@ def floor_label(poi: POI, config: Config, floor: int) -> str:
     return "roofs" if floor == site_roof_floor(poi, config) else str(floor)
 
 
-def cycle_floor(world: World, config: Config, state: ViewState, delta: int) -> None:
+def cycle_floor(
+    world: World, config: Config, state: ViewState, delta: int, reader: Optional[WorldReader] = None
+) -> None:
     """Move up or down a floor on the structure under the cursor, or say why it cannot."""
-    poi = poi_under_cursor(world, config, state)
+    poi = poi_under_cursor(world, config, state, reader)
     if poi is None:
         state.notify("no interior here - move onto a structure to cycle floors")
         return
@@ -213,13 +238,17 @@ def step_out(state: ViewState) -> None:
     state.recenter = True
 
 
-def _enter_site(world: World, config: Config, state: ViewState, poi: POI) -> bool:
-    """Open ``poi``'s site with the cursor on its anchor; False if it has no plan to show."""
+def _enter_site(
+    world: World, config: Config, state: ViewState, poi: POI, index: int = -1, reader: Optional[WorldReader] = None
+) -> bool:
+    """Open ``poi``'s site (the reader's POI at ``index``) with the cursor on its anchor; False if it has no plan."""
     geometry = site_geometry(poi, config)
-    if geometry is None or site_plan(poi, 0, config, world) is None:
+    manifest = reader.manifest_of(index) if reader is not None and index >= 0 else None
+    if geometry is None or site_plan(poi, 0, config, world, manifest) is None:
         return False
     state.scale = SCALE_SITE
     state.poi = poi
+    state.poi_index = index
     state.px, state.py = geometry.cell_at(poi.x, poi.y)
     state.floor = 0
     state.recenter = True
@@ -231,10 +260,11 @@ def _leave_site(state: ViewState, scale: str) -> None:
     """Close the open site and show ``scale`` centred on the cursor's tile."""
     state.scale = scale
     state.poi = None
+    state.poi_index = -1
     state.recenter = True
 
 
-def step_in(world: World, config: Config, state: ViewState) -> None:
+def step_in(world: World, config: Config, state: ViewState, reader: Optional[WorldReader] = None) -> None:
     """The local key steps in: map to zoom; zoom to the site of the POI under the cursor, else local.
 
     From local, the key opens the site of a POI under the cursor; it does nothing elsewhere or inside a site.
@@ -243,13 +273,13 @@ def step_in(world: World, config: Config, state: ViewState) -> None:
         state.scale = SCALE_ZOOM
         state.recenter = True
         return
-    poi = site_at(world, config, state.cx, state.cy)
+    found = site_place_at(reader if reader is not None else WorldReader(world), config, state.cx, state.cy)
     if state.scale == SCALE_ZOOM:
-        if poi is None or not _enter_site(world, config, state, poi):
+        if found is None or not _enter_site(world, config, state, found[1], found[0], reader):
             state.scale = SCALE_LOCAL
             state.recenter = True
-    elif state.scale == SCALE_LOCAL and poi is not None:
-        _enter_site(world, config, state, poi)
+    elif state.scale == SCALE_LOCAL and found is not None:
+        _enter_site(world, config, state, found[1], found[0], reader)
 
 
 def toggle_mode(state: ViewState) -> None:

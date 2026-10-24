@@ -26,6 +26,7 @@ from ..sampling.detail import SCALE_SITE, DetailSampler, centre_camera, detail_c
 from ..sampling.sampler import Sampler
 from ..sites import SiteGeometry, site_geometry, window_sampler
 from ..world.overlay import Overlay
+from ..world.reader import WorldReader
 from ..world.world import World
 from .exports import export_screen, export_world
 from .history_viewer import Stop, history_loop, initial_state, present_moment
@@ -82,11 +83,14 @@ def _draw(
     color: bool,
     floor: int,
     seen: Seen,
+    reader: Optional[WorldReader] = None,
 ) -> CellGrid:
     """Draw the map through ``sampler``: from the render cache when the explorer keeps one, else from scratch."""
     if cache is None:
-        return build_grid(world, config, view, sampler, overlay, ascii_only, color, floor=floor, seen=seen)
-    return cache.draw(world, config, view, sampler, overlay, ascii_only, color, floor=floor, seen=seen)
+        return build_grid(
+            world, config, view, sampler, overlay, ascii_only, color, floor=floor, seen=seen, reader=reader
+        )
+    return cache.draw(world, config, view, sampler, overlay, ascii_only, color, floor=floor, seen=seen, reader=reader)
 
 
 def _paste(screen: CellGrid, grid: CellGrid, top: int) -> None:
@@ -112,7 +116,9 @@ def _apply_pan(state: ViewState, world: World, view_w: int, view_h: int) -> None
     state.cam_y, state.cy = pan_viewport(state.cam_y, state.cy, view_h, world.height, 1, state.pan_y)
 
 
-def _map_sampler(world: World, config: Config, state: ViewState, area: Size) -> Sampler:
+def _map_sampler(
+    world: World, config: Config, state: ViewState, area: Size, reader: Optional[WorldReader] = None
+) -> Sampler:
     """Return the sampler for the current scale and mode, moving the camera as the cursor needs."""
     cols, rows = area
     mode = str(config.get("controls.pan"))
@@ -142,7 +148,7 @@ def _map_sampler(world: World, config: Config, state: ViewState, area: Size) -> 
         return Sampler.viewport(world, rows, cols, x0=float(state.cam_x), y0=float(state.cam_y))
     state.recenter = False
     state.pan_x = state.pan_y = 0
-    return FitSampler(world, config, cols, rows)
+    return FitSampler(world, config, cols, rows, reader)
 
 
 def _highlight_cursor(grid: CellGrid, sampler: Sampler, state: ViewState) -> None:
@@ -181,6 +187,7 @@ def _site_view(
     color: bool,
     ascii_only: bool,
     cache: Optional[RenderCache] = None,
+    reader: Optional[WorldReader] = None,
 ) -> tuple[CellGrid, CellGrid, Optional[Sampler]]:
     """Draw the part of the open site's window that fits ``area``; return ``(map grid, shown grid, sampler)``.
 
@@ -225,6 +232,7 @@ def _site_view(
             color,
             state.floor,
             seen,
+            reader,
         )
         for name in ("glyph", "fg", "bg", "bold"):
             getattr(view, name)[dst_rows, dst_cols] = getattr(part, name)
@@ -247,10 +255,12 @@ def compose_frame(
     ascii_only: bool = False,
     help_open: bool = False,
     cache: Optional[RenderCache] = None,
+    reader: Optional[WorldReader] = None,
 ) -> Frame:
     """Compose one terminal-sized frame for ``state``: the map with its cursor, the panel, and the help overlay.
 
-    With a ``cache`` (the explorer keeps one) the map reuses what earlier frames drew; the frame is the same.
+    With a ``cache`` (the explorer keeps one) the map reuses what earlier frames drew; the frame is the same. The
+    realms, owners, places and manifests are read through ``reader`` (default: the world as generated).
     """
     cols, rows = size
     names = view_names(config)
@@ -266,10 +276,10 @@ def compose_frame(
     geometry = site_geometry(state.poi, config) if state.scale == SCALE_SITE and state.poi is not None else None
     if geometry is not None:
         map_grid, shown, sampler = _site_view(
-            world, config, view_name, state, overlay, (cols, map_rows), seen, geometry, color, ascii_only, cache
+            world, config, view_name, state, overlay, (cols, map_rows), seen, geometry, color, ascii_only, cache, reader
         )
     else:
-        sampler = _map_sampler(world, config, state, (cols, map_rows))
+        sampler = _map_sampler(world, config, state, (cols, map_rows), reader)
         map_grid = _draw(
             cache,
             world,
@@ -281,23 +291,33 @@ def compose_frame(
             color,
             state.floor,
             seen,
+            reader,
         )
         shown = CellGrid(map_grid.rows, map_grid.cols)
         for name in ("glyph", "fg", "bg", "bold"):
             getattr(shown, name)[...] = getattr(map_grid, name)
         _highlight_cursor(shown, sampler, state)
     _paste(screen, shown, 0)
-    _paste(screen, build_panel(world, config, state, view_name, seen, cols, panel_height, ascii_only), map_rows)
+    panel = build_panel(world, config, state, view_name, seen, cols, panel_height, ascii_only, reader=reader)
+    _paste(screen, panel, map_rows)
     if help_open:
         draw_help(screen, config)
     return Frame(screen, map_grid, view_name, sampler)
 
 
-def _export(world: World, config: Config, state: ViewState, overlay: Overlay, frame: Frame, target: str) -> None:
+def _export(
+    world: World,
+    config: Config,
+    state: ViewState,
+    overlay: Overlay,
+    frame: Frame,
+    target: str,
+    reader: Optional[WorldReader] = None,
+) -> None:
     """Write the screen's map (``view``) or the whole world (``world``); failures go to the panel, not a crash."""
     try:
         if target == "world":
-            paths = export_world(world, config, frame.view_name, overlay)
+            paths = export_world(world, config, frame.view_name, overlay, reader)
         else:
             paths = export_screen(world, config, frame.map_grid, state.scale, frame.view_name)
     except Exception as error:  # never let an export error kill the explorer
@@ -308,13 +328,15 @@ def _export(world: World, config: Config, state: ViewState, overlay: Overlay, fr
     state.notify(f"exported {names}{suffix}")
 
 
-def _view_action(world: World, config: Config, state: ViewState, name: str) -> None:
+def _view_action(
+    world: World, config: Config, state: ViewState, name: str, reader: Optional[WorldReader] = None
+) -> None:
     """Apply a zoom, local, fit-toggle or view-cycle key to the view state and say what changed."""
     if name == "zoom":
         step_out(state)
         state.notify(f"scale: {state.scale}")
     elif name == "local":
-        step_in(world, config, state)
+        step_in(world, config, state, reader)
         state.notify(f"scale: {state.scale}")
     elif name == "toggle_scale":
         toggle_mode(state)
@@ -418,15 +440,16 @@ def run(
     help_open = False
     queued: Optional[Action] = None  # an action read while draining moves, handled after the frame they lead to
     source: TickSource = ticks if ticks is not None else NoTicks()
+    live = WorldReader(world, getattr(source, "state", None))  # the world as the simulation (if any) has changed it
     clock = Clock.from_config(config)
     poll_seconds = float(config.get("controls.tick_poll_seconds"))
     with reader:
         writer.enter()
         try:
             while True:
-                tracking = sync_floor(world, config, state, tracking)
+                tracking = sync_floor(world, config, state, tracking, live)
                 frame = compose_frame(
-                    world, config, state, overlay, size_of(), color_mode != "none", ascii_only, help_open, cache
+                    world, config, state, overlay, size_of(), color_mode != "none", ascii_only, help_open, cache, live
                 )
                 writer.draw(frame.screen)
                 if queued is None:  # nothing to do yet: prepare the next frames until a key arrives
@@ -440,6 +463,7 @@ def run(
                         overlay,
                         color_mode != "none",
                         ascii_only,
+                        live,
                     )
                     for _ in work:
                         if reader.pending():
@@ -460,15 +484,25 @@ def run(
                     state.notify(f"restarting from seed {world.master_seed}...")
                     writer.draw(
                         compose_frame(
-                            world, config, state, overlay, size_of(), color_mode != "none", ascii_only, False, cache
+                            world,
+                            config,
+                            state,
+                            overlay,
+                            size_of(),
+                            color_mode != "none",
+                            ascii_only,
+                            False,
+                            cache,
+                            live,
                         ).screen
                     )
                     world, overlay, cache, state = _restart(world, config, source, clock, regenerate)
+                    live = WorldReader(world, getattr(source, "state", None))
                     tracking = None
                 elif name in ("zoom", "local", "toggle_scale", "cycle_view"):
-                    _view_action(world, config, state, name)
+                    _view_action(world, config, state, name, live)
                 elif name == "floor":
-                    cycle_floor(world, config, state, action[1])
+                    cycle_floor(world, config, state, action[1], live)
                 elif name == "history":
                     history_loop(
                         world,
@@ -482,7 +516,7 @@ def run(
                     )
                     writer.invalidate()  # the viewer drew the whole screen
                 elif name == "export":
-                    _export(world, config, state, overlay, frame, action[1])
+                    _export(world, config, state, overlay, frame, action[1], live)
                 elif name in ("pause", "speed"):
                     state.notify(_clock_message(source, clock, name, action))
                 elif name == "help":

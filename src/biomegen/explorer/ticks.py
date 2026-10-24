@@ -10,17 +10,22 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Callable, Optional, Protocol
 
 from ..config.model import Config
+from ..world.sim_state import SimState
 from ..world.world import World
 from .input import KeyReader
 
 
 class TickSource(Protocol):
-    """Something that advances while the explorer is open (a simulation)."""
+    """Something that advances while the explorer is open (a simulation).
+
+    ``state`` is the simulation's state, which the explorer reads the world through (``None`` for a source with none).
+    """
 
     active: bool
+    state: Optional[SimState]
 
     def due(self, now: float, speed: float) -> int:
         """Return how many ticks are due at time ``now`` (seconds) when running at ``speed`` times its normal rate."""
@@ -39,6 +44,7 @@ class NoTicks:
     """The default source: it never ticks, so the loop waits on keys alone."""
 
     active = False
+    state: Optional[SimState] = None
 
     def due(self, now: float, speed: float) -> int:
         return 0

@@ -15,6 +15,7 @@ from ..render.backends.svg import render_svg
 from ..render.grid import RGB, CellGrid
 from ..render.static import render_static
 from ..world.overlay import Overlay
+from ..world.reader import WorldReader
 from ..world.world import World
 
 
@@ -64,9 +65,13 @@ def export_screen(world: World, config: Config, grid: CellGrid, scale: str, view
 
 
 def export_world(
-    world: World, config: Config, view_name: str = "terrain", overlay: Optional[Overlay] = None
+    world: World,
+    config: Config,
+    view_name: str = "terrain",
+    overlay: Optional[Overlay] = None,
+    reader: Optional[WorldReader] = None,
 ) -> list[str]:
-    """Export the whole world at one cell per tile, in the named view."""
-    grid = render_static(world, config, view_name, legend=False, overlay=overlay).grid
+    """Export the whole world at one cell per tile, in the named view (as the simulation's ``reader`` sees it)."""
+    grid = render_static(world, config, view_name, legend=False, overlay=overlay, reader=reader).grid
     label = "world" if view_name == "terrain" else f"world-{view_name}"
     return write_grid(grid, config, world, label)

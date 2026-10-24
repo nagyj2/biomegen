@@ -20,10 +20,12 @@ from ..sampling.detail import SCALE_MAP, SCALE_SITE
 from ..sites import site_plan
 from ..sites.kinds import building_at, building_counts, cell_name
 from ..world.entities import POI, REF_POI, Realm
+from ..world.manifest import SiteManifest
+from ..world.reader import WorldReader
 from ..world.tile import BIOME_NAME, Cell
 from ..world.world import World
 from .events import ChronicleReader, EventReader
-from .state import MODE_ONE_TO_ONE, ViewState, floor_label, poi_under_cursor
+from .state import MODE_ONE_TO_ONE, ViewState, floor_label, place_under_cursor
 
 _LEGEND_INDENT = 9
 
@@ -69,14 +71,17 @@ def view_label(state: ViewState) -> str:
     return "1:1" if state.mode == MODE_ONE_TO_ONE else "FIT"
 
 
-def _buildings_line(world: World, config: Config, state: ViewState, poi: Optional[POI]) -> str:
+def _buildings_line(
+    world: World, config: Config, state: ViewState, poi: Optional[POI], manifest: Optional[SiteManifest] = None
+) -> str:
     """In an open site, the buildings that stand there (``Hall, Farmhouse, House x9``) and the one under the cursor.
 
-    Empty outside a site view or for a site with no buildings. A building shows by its kind's label.
+    Empty outside a site view or for a site with no buildings. A building shows by its kind's label. ``manifest`` is
+    what the simulation says stands (none: what the settlement's tier and population make).
     """
     if state.scale != SCALE_SITE or poi is None:
         return ""
-    plan = site_plan(poi, 0, config, world)
+    plan = site_plan(poi, 0, config, world, manifest)
     if plan is None or not plan.buildings:
         return ""
 
@@ -91,9 +96,11 @@ def _buildings_line(world: World, config: Config, state: ViewState, poi: Optiona
     return f"{line}   under cursor: {label(here)}" if here is not None else line
 
 
-def _poi_spans(world: World, config: Config, poi: Optional[POI]) -> list[Span]:
+def _poi_spans(
+    world: World, config: Config, poi: Optional[POI], index: int = -1, reader: Optional[WorldReader] = None
+) -> list[Span]:
     """The panel's POI line: name (in its realm's colour), kind, the style of a homestead or generated hamlet, and for
-    settlements the population and tags."""
+    settlements the population and tags. ``index`` is the POI's place in the reader (-1: found by search)."""
     if poi is None:
         return [Span(" POI: -")]
     detail = [poi.kind]
@@ -102,17 +109,18 @@ def _poi_spans(world: World, config: Config, poi: Optional[POI]) -> list[Span]:
     if poi.pop:
         detail.append(f"pop {poi.pop:,}")
     detail.extend(poi.tags)
-    index = next((i for i, other in enumerate(world.pois) if other is poi), -1)
+    if index < 0:
+        index = next((i for i, other in enumerate(world.pois) if other is poi), -1)
     name = poi.name or poi.kind
-    color = name_color(world, config, REF_POI, index) if index >= 0 else None
+    color = name_color(world, config, REF_POI, index, reader=reader) if index >= 0 else None
     return [Span(" POI: "), Span(name, color, bold=color is not None), Span(f" ({', '.join(detail)})")]
 
 
-def _hook_spans(world: World, config: Config, poi: Optional[POI]) -> list[Span]:
+def _hook_spans(world: World, config: Config, poi: Optional[POI], reader: Optional[WorldReader] = None) -> list[Span]:
     """The story text of the point of interest under the cursor, its names coloured, or no spans at all."""
     if poi is None or not poi.hook:
         return []
-    return [Span(" "), *colored_text(world, config, poi.hook, poi.hook_refs)]
+    return [Span(" "), *colored_text(world, config, poi.hook, poi.hook_refs, reader=reader)]
 
 
 def _event_limit(config: Config) -> int:
@@ -121,17 +129,23 @@ def _event_limit(config: Config) -> int:
 
 
 def _event_spans(
-    world: World, events: EventReader, config: Config, state: ViewState, realm: Optional[Realm], limit: int
+    world: World,
+    events: EventReader,
+    config: Config,
+    state: ViewState,
+    realm: Optional[Realm],
+    limit: int,
+    reader: Optional[WorldReader] = None,
 ) -> list[tuple[list[Span], bool]]:
     """List up to ``limit`` events as ``(spans, at the cursor)``: the latest at the cursor's tile (they stay while the
     cursor does), then the latest of the realm that holds it (plain text dimmed) to fill the rest. Every name is in its
     realm's colour."""
     here = events.at(state.cx, state.cy)[-limit:] if limit else []
-    lines = [(event_row(world, config, event), True) for event in here]
+    lines = [(event_row(world, config, event, reader=reader), True) for event in here]
     if realm is not None and len(lines) < limit:
         shown = {event.id for event in here}
         rest = [e for e in events.of_realm(realm.id) if e.id not in shown][-(limit - len(lines)) :]
-        lines += [(event_row(world, config, event), False) for event in rest]
+        lines += [(event_row(world, config, event, reader=reader), False) for event in rest]
     return lines
 
 
@@ -198,14 +212,19 @@ def build_panel(
     height: int,
     ascii_only: bool = False,
     events: Optional[EventReader] = None,
+    reader: Optional[WorldReader] = None,
 ) -> CellGrid:
     """Return the info panel as a ``height x width`` grid for the current cursor, view and what is on screen.
 
-    ``events`` is where the panel reads history from (default: the world's chronicle).
+    ``events`` is where the panel reads history from (default: the chronicle and a simulation's events, read through
+    ``reader``). ``reader`` is the simulation's view of the realms, places and manifests (default: the world as
+    generated).
     """
+    live = reader if reader is not None else WorldReader(world)
     canvas = _Canvas(height, width, panel_color(config, "fg"), panel_color(config, "bg"))
     dim, head = panel_color(config, "dim"), panel_color(config, "head")
-    poi = poi_under_cursor(world, config, state)
+    found = place_under_cursor(world, config, state, live)
+    index, poi = found if found is not None else (-1, None)
     canvas.text(0, 0, "-" * width, dim)
     island = world.island_name or "(unnamed isle)"
     floor_text = str(state.floor) if poi is None or state.floor == 0 else floor_label(poi, config, state.floor)
@@ -224,7 +243,7 @@ def build_panel(
         f" cursor ({state.cx},{state.cy})  biome {tile.biome_name}{relief}  water {tile.water_type.name.lower()}"
         f"  elev {tile.elevation_m:.0f} m  temp {tile.temperature_c:.1f} C  moist {tile.moisture:.2f}",
     )
-    realm = world.realm_at(state.cx, state.cy)
+    realm = live.realm_at(state.cx, state.cy)
     if realm is not None:
         kind = config.get(f"tables.realm_kinds.{realm.kind}.label")
         ruler = realm.ruler or "no one"
@@ -242,9 +261,9 @@ def build_panel(
         canvas.text(4, 1, f"{realm.area_km2:,.0f} km2, pop. ~{realm.pop:,}", dim)
     else:
         canvas.text(3, 0, " realm: open water" if tile.is_water else " realm: none (wild land)")
-    canvas.spans(5, 0, _poi_spans(world, config, poi))
+    canvas.spans(5, 0, _poi_spans(world, config, poi, index, live))
     # The hook's row is always reserved (blank when there is none), so nothing under it jumps as the cursor moves.
-    canvas.spans(6, 0, _hook_spans(world, config, poi), canvas.fg)
+    canvas.spans(6, 0, _hook_spans(world, config, poi, live), canvas.fg)
     # The legend has a fixed place and height (``render.legend_rows``); it grows only when what is on screen needs more.
     # Under it is the detail area: the buildings of an open site, then (in the political view only) the events. Other
     # views leave those rows for their own use, so what lies above never moves with the data.
@@ -255,14 +274,22 @@ def build_panel(
         drawn = _legend(canvas, config, seen, legend_top, last, ascii_only)
         legend_end = min(last, max(legend_top + int(config.get("render.legend_rows")), drawn))
     detail: list[tuple[list[Span], RGB]] = [
-        ([Span(line)], canvas.fg) for line in [_buildings_line(world, config, state, poi)] if line
+        ([Span(line)], canvas.fg)
+        for line in [_buildings_line(world, config, state, poi, live.manifest_of(index) if index >= 0 else None)]
+        if line
     ]
     if resolve_view(config, view_name).political:
         room = max(0, last - legend_end - len(detail))
         detail += [
             (spans, canvas.fg if at_cursor else dim)
             for spans, at_cursor in _event_spans(
-                world, events or ChronicleReader(world), config, state, realm, min(room, _event_limit(config))
+                world,
+                events or ChronicleReader(world, live.events),
+                config,
+                state,
+                realm,
+                min(room, _event_limit(config)),
+                live,
             )
         ]
     for offset, (spans, default) in enumerate(detail[: max(0, last - legend_end)]):

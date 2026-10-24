@@ -49,6 +49,20 @@ def site_pois(world: World, config: Config) -> list[tuple[POI, SiteGeometry]]:
     return [(poi, geometry) for _, poi, geometry in site_places(WorldReader(world), config)]
 
 
+def site_place_at(reader: WorldReader, config: Config, tile_x: int, tile_y: int) -> Optional[tuple[int, POI]]:
+    """Return ``(index, poi)`` of the POI whose site covers tile ``(tile_x, tile_y)``, or None.
+
+    The index is the POI's place in ``reader.places``; the nearest anchor wins an overlap.
+    """
+    best: Optional[tuple[float, int, POI]] = None
+    for index, poi, geometry in site_places(reader, config):
+        if geometry.covers_tile(tile_x, tile_y):
+            distance = (poi.x - tile_x) ** 2 + (poi.y - tile_y) ** 2
+            if best is None or distance < best[0]:
+                best = (distance, index, poi)
+    return (best[1], best[2]) if best is not None else None
+
+
 def site_at(
     world: World, config: Config, tile_x: int, tile_y: int, reader: Optional[WorldReader] = None
 ) -> Optional[POI]:
@@ -56,10 +70,5 @@ def site_at(
 
     With a ``reader`` the POIs are the simulation's (the ones it minted too); without one, the generated world's.
     """
-    best: Optional[tuple[float, POI]] = None
-    for _, poi, geometry in site_places(reader if reader is not None else WorldReader(world), config):
-        if geometry.covers_tile(tile_x, tile_y):
-            distance = (poi.x - tile_x) ** 2 + (poi.y - tile_y) ** 2
-            if best is None or distance < best[0]:
-                best = (distance, poi)
-    return best[1] if best is not None else None
+    found = site_place_at(reader if reader is not None else WorldReader(world), config, tile_x, tile_y)
+    return found[1] if found is not None else None
