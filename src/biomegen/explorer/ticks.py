@@ -1,9 +1,9 @@
 """The explorer's time seam: a tick source the loop polls, with speed and pause.
 
-Nothing ticks today (:class:`NoTicks`), so the loop blocks on keys exactly as before. A later simulation implements
-:class:`TickSource`; while it is ``active`` the loop polls it between keys (never blocking on the keyboard), runs the
-ticks that are due at the clock's speed and redraws. Pure apart from the injectable clock and sleep, so tests drive it
-with fake ones.
+By default nothing ticks (:class:`NoTicks`), so the loop blocks on keys exactly as before. With ``--sim`` the source is
+a :class:`SimTicks`, which runs a simulation: while a source is ``active`` the loop polls it between keys (never
+blocking on the keyboard), runs the ticks that are due at the clock's speed and redraws. Pure apart from the injectable
+clock and sleep, so tests drive it with fake ones.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional, Protocol
 
 from ..config.model import Config
+from ..sim.engine import Simulation
 from ..world.sim_state import SimState
 from ..world.world import World
 from .input import KeyReader
@@ -25,7 +26,9 @@ class TickSource(Protocol):
     """
 
     active: bool
-    state: Optional[SimState]
+
+    @property
+    def state(self) -> Optional[SimState]: ...
 
     def due(self, now: float, speed: float) -> int:
         """Return how many ticks are due at time ``now`` (seconds) when running at ``speed`` times its normal rate."""
@@ -54,6 +57,65 @@ class NoTicks:
 
     def reset(self, world: World) -> None:
         return None
+
+
+class SimTicks:
+    """A tick source that runs a :class:`~biomegen.sim.engine.Simulation`.
+
+    The time due is real time times the clock's speed times ``sim.playback.ticks_per_second``. One poll counts at most
+    ``sim.playback.max_frame_seconds`` of real time, so a pause (when the loop does not poll) or a slow frame never
+    makes a burst of catch-up ticks. Only whole ticks are run; the fraction is kept for the next poll.
+
+    Attributes:
+        active: Always True: the loop polls it between keys.
+        simulation: The simulation it advances (made again on :meth:`reset`).
+    """
+
+    active = True
+
+    def __init__(self, simulation: Simulation) -> None:
+        self.simulation = simulation
+        self._ticks_per_second = float(simulation.config.get("sim.playback.ticks_per_second"))
+        self._longest_poll = float(simulation.config.get("sim.playback.max_frame_seconds"))
+        self._last: Optional[float] = None
+        self._owed = 0.0
+
+    @classmethod
+    def start(cls, world: World, config: Config) -> "SimTicks":
+        """Return a source that simulates ``world`` from the present moment."""
+        return cls(Simulation(world, config, world.master_seed))
+
+    @property
+    def state(self) -> SimState:
+        return self.simulation.state
+
+    def due(self, now: float, speed: float) -> int:
+        last, self._last = self._last, now
+        if last is None:
+            return 0
+        elapsed = min(max(0.0, now - last), self._longest_poll)
+        self._owed += elapsed * speed * self._ticks_per_second
+        count = int(self._owed)
+        self._owed -= count
+        return count
+
+    def tick(self, count: int) -> bool:
+        return self.simulation.advance(count)
+
+    def reset(self, world: World) -> None:
+        self.simulation = Simulation(world, self.simulation.config, world.master_seed)
+        self._last, self._owed = None, 0.0
+
+
+def sim_status(source: TickSource, clock: "Clock", config: Config) -> str:
+    """The panel's sim field: ``sim 1201/03 +12/30 x1`` (year/month, ticks into the month, speed) or ``... paused``;
+    empty when no simulation runs."""
+    state = getattr(source, "state", None)  # a source with no state of its own (a test's) runs no simulation
+    if not source.active or state is None:
+        return ""
+    year, month = state.moment(int(config.get("history.months_per_year")))
+    speed = "paused" if clock.paused else f"x{clock.speed:g}"
+    return f"sim {year}/{month:02d} +{state.tick % state.ticks_per_month:02d}/{state.ticks_per_month} {speed}"
 
 
 @dataclass

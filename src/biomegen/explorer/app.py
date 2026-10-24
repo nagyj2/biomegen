@@ -49,7 +49,7 @@ from .state import (
     sync_floor,
     toggle_mode,
 )
-from .ticks import Clock, NoTicks, TickSource, next_token
+from .ticks import Clock, NoTicks, TickSource, next_token, sim_status
 from .writer import DiffWriter
 
 Size = tuple[int, int]  # (columns, rows)
@@ -256,11 +256,13 @@ def compose_frame(
     help_open: bool = False,
     cache: Optional[RenderCache] = None,
     reader: Optional[WorldReader] = None,
+    sim_status: str = "",
 ) -> Frame:
     """Compose one terminal-sized frame for ``state``: the map with its cursor, the panel, and the help overlay.
 
     With a ``cache`` (the explorer keeps one) the map reuses what earlier frames drew; the frame is the same. The
-    realms, owners, places and manifests are read through ``reader`` (default: the world as generated).
+    realms, owners, places and manifests are read through ``reader`` (default: the world as generated) and
+    ``sim_status`` is the simulation's clock for the panel (blank when none runs).
     """
     cols, rows = size
     names = view_names(config)
@@ -298,7 +300,9 @@ def compose_frame(
             getattr(shown, name)[...] = getattr(map_grid, name)
         _highlight_cursor(shown, sampler, state)
     _paste(screen, shown, 0)
-    panel = build_panel(world, config, state, view_name, seen, cols, panel_height, ascii_only, reader=reader)
+    panel = build_panel(
+        world, config, state, view_name, seen, cols, panel_height, ascii_only, reader=reader, sim_status=sim_status
+    )
     _paste(screen, panel, map_rows)
     if help_open:
         draw_help(screen, config)
@@ -449,7 +453,17 @@ def run(
             while True:
                 tracking = sync_floor(world, config, state, tracking, live)
                 frame = compose_frame(
-                    world, config, state, overlay, size_of(), color_mode != "none", ascii_only, help_open, cache, live
+                    world,
+                    config,
+                    state,
+                    overlay,
+                    size_of(),
+                    color_mode != "none",
+                    ascii_only,
+                    help_open,
+                    cache,
+                    live,
+                    sim_status(source, clock, config),
                 )
                 writer.draw(frame.screen)
                 if queued is None:  # nothing to do yet: prepare the next frames until a key arrives

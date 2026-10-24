@@ -28,6 +28,7 @@ from .events import ChronicleReader, EventReader
 from .state import MODE_ONE_TO_ONE, ViewState, floor_label, place_under_cursor
 
 _LEGEND_INDENT = 9
+_SIM_FIELD_WIDTH = 30  # columns of the simulation clock at the right end of the island line
 
 
 def panel_color(config: Config, key: str) -> RGB:
@@ -213,12 +214,14 @@ def build_panel(
     ascii_only: bool = False,
     events: Optional[EventReader] = None,
     reader: Optional[WorldReader] = None,
+    sim_status: str = "",
 ) -> CellGrid:
     """Return the info panel as a ``height x width`` grid for the current cursor, view and what is on screen.
 
     ``events`` is where the panel reads history from (default: the chronicle and a simulation's events, read through
     ``reader``). ``reader`` is the simulation's view of the realms, places and manifests (default: the world as
-    generated).
+    generated). ``sim_status`` is the simulation's clock (``ticks.sim_status``), drawn at the right end of the island
+    line in a field of fixed width (blank when there is none).
     """
     live = reader if reader is not None else WorldReader(world)
     canvas = _Canvas(height, width, panel_color(config, "fg"), panel_color(config, "bg"))
@@ -228,13 +231,12 @@ def build_panel(
     canvas.text(0, 0, "-" * width, dim)
     island = world.island_name or "(unnamed isle)"
     floor_text = str(state.floor) if poi is None or state.floor == 0 else floor_label(poi, config, state.floor)
-    canvas.text(
-        1,
-        0,
-        f" {island}   seed {world.seed}   view {view_label(state)} / {view_name}   floor {floor_text}",
-        head,
-        bold=True,
-    )
+    title = f" {island}   seed {world.seed}   view {view_label(state)} / {view_name}   floor {floor_text}"
+    canvas.text(1, 0, title, head, bold=True)
+    if sim_status:
+        # A field of fixed width at the right end, so its text starts on the same column whatever the speed says; the
+        # title keeps its place and only a very narrow panel clips the field.
+        canvas.text(1, max(len(title) + 2, width - _SIM_FIELD_WIDTH - 1), sim_status.ljust(_SIM_FIELD_WIDTH), head)
     tile = world.view(state.cx, state.cy)
     relief = f"  relief {tile.relief.name.lower()}" if tile.relief.value else ""
     canvas.text(
@@ -314,7 +316,8 @@ _HELP_LINES = (
     "{toggle_scale}   fit-to-screen <-> 1:1 (map only)",
     "{cycle_view}   next view (terrain, political, elevation, temperature, rainfall)",
     "{history}   history viewer, opened at the latest event at the cursor",
-    "{refresh}   restart from the seed (the same world, view and edits reset)",
+    "{refresh}   restart from the seed (the same world, view and edits reset; with --sim, the simulation too)",
+    "{tick_pause}   pause or resume the simulation      {tick_faster} / {tick_slower}   faster / slower (--sim)",
     "{floor_up} / {floor_down}   floor up / down on a structure",
     "{export_view} / {export_world}   export the view / the whole world",
     "{help}   this help      {quit} or Esc   quit",

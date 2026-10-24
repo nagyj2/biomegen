@@ -15,7 +15,7 @@ VALUES: Dict[str, Any] = {
     "toggle_scale": "f",  # toggle fit-to-screen <-> 1:1 panning
     "cycle_view": "v",  # cycle the render.views (terrain, elevation, ...)
     "history": "t",  # open the history viewer at the latest event at the cursor (the present when there is none)
-    "tick_pause": "p",  # pause or resume the simulation clock (nothing ticks until a simulation exists)
+    "tick_pause": "p",  # pause or resume the simulation clock (the simulation runs with --sim)
     "tick_faster": "+",  # run the clock faster
     "tick_slower": "-",  # run the clock slower
     "help": "?",  # show the key help and legend

@@ -493,3 +493,21 @@ def test_history_viewer_runs_in_a_pseudo_terminal(tmp_path):
             process.kill()
         os.close(master)
     assert sent_quit and code == 0
+
+
+def test_sim_is_a_flag_that_is_off_by_default():
+    from biomegen import cli
+
+    parser = cli._build_parser()
+    assert (parser.parse_args(["--sim"]).sim, parser.parse_args([]).sim) == (True, False)
+
+
+def test_sim_runs_only_in_the_explorer(capsys):
+    import pytest
+
+    from biomegen import cli
+
+    for other in (["--headless"], ["--view", "terrain"], ["--chronicle"], ["--scale", "zoom"]):
+        with pytest.raises(SystemExit):
+            cli.main(["--sim", *other])
+        assert "--sim runs in the explorer" in capsys.readouterr().err

@@ -58,6 +58,7 @@ uv run biomegen --seed 1 --headless                    # generate + print stats,
 uv run biomegen --seed 1 --chronicle                    # the world's history, one dated line per event
 uv run biomegen --seed 1 --chronicle --chronicle-format json   # the same as JSON, with the realms and places it names
 uv run biomegen --seed 1 --history 400                  # the history viewer: the political map at the end of year 400 (a terminal)
+uv run biomegen --seed 1 --sim                          # explore while the simulation runs from the present (a terminal; the sim date shows in the panel)
 uv run biomegen --seed 1 --start dawn --view terrain    # a young world at year 0: land only, nothing settled
 uv run biomegen --seed 1 --view terrain --color none    # static map with legend, no UI
 uv run biomegen --seed 1 --scale zoom --at 60,30        # a magnified part of the world (zoom or local)
@@ -89,8 +90,8 @@ tile coordinate — and an info panel under the map shows the tile, region, poin
 | `f` | Toggle fit-to-screen ↔ 1:1 panning (map only) |
 | `v` | Next view: terrain, elevation, temperature, rainfall |
 | `t` | History viewer, opened at the latest event at the cursor (`q` returns here) |
-| `r` | Restart from the seed (the same world, with the view reset) |
-| `p` · `+` · `-` | Pause · speed up · slow down the simulation clock (nothing ticks yet) |
+| `r` | Restart from the seed (the same world, with the view reset; with `--sim`, the simulation too) |
+| `p` · `+` · `-` | Pause · speed up · slow down the simulation clock (with `--sim`) |
 | `?` | Show the key help |
 | `<` / `>` | Cycle floors up / down when standing on a multi-floor structure (e.g. a dungeon) |
 | `e` / `E` | Export current view / whole island to `export.dir` (SVG always, PNG if Pillow present) |
@@ -287,7 +288,7 @@ shows the political map at moments of the past.
 | `toggle_scale` | `"f"` | Toggle fit-to-screen ↔ 1:1 |
 | `cycle_view` | `"v"` | Next view |
 | `history` | `"t"` | History viewer at the latest event at the cursor |
-| `tick_pause` · `tick_faster` · `tick_slower` | `"p"` · `"+"` · `"-"` | The simulation clock (inactive until a simulation exists) |
+| `tick_pause` · `tick_faster` · `tick_slower` | `"p"` · `"+"` · `"-"` | The simulation clock (`--sim`) |
 | `history_prev` · `history_next` | `"["` · `"]"` | History viewer: the previous / next change of the map |
 | `history_prev_tile` · `history_next_tile` | `"{"` · `"}"` | History viewer opened from the explorer: the previous / next event at the selected tile |
 | `history_goto` · `history_present` | `"g"` · `"\\"` | History viewer: go to a year / the present |
@@ -303,6 +304,15 @@ shows the political map at moments of the past.
 | `fast_step` | `8` | Tiles moved per Shift+arrow (capital WASD/HJKL) |
 | `tick_speeds` | `[0.25 … 8]` | The clock speeds the faster and slower keys step through |
 | `tick_poll_seconds` | `0.02` | How often the loop checks the keyboard while a simulation ticks |
+
+#### `[sim]`
+| Key | Default | Description |
+|-----|---------|-------------|
+| `ticks_per_month` | `30` | Integer ticks in a month: the simulation's time base |
+| `cadence.<name>.months` · `.jitter_ticks` | economy `1` · `3`, strategy `3` · `10` | How often each faction checks a cadence, and the most a seeded jitter moves a check (each faction has its own phase, so no two check together) |
+| `max_check_share` | `0.25` | The most checks of a cadence the factions may put on one tick of a period (what the schedule's tests hold it to) |
+| `playback.ticks_per_second` · `.max_frame_seconds` | `10` · `0.25` | The explorer's clock at normal speed, and the longest real time one poll counts (no catch-up burst after a pause) |
+| `series.years` · `.every_years` | `100` · `25` | What `scripts/simulate.sh` runs and how often it prints a row |
 
 #### `[tables]`
 Per-name attribute tables loaded from `src/biomegen/data/*.toml`: `tables.biomes` and `tables.relief`

@@ -8,7 +8,7 @@ Run the CLI application with::
                     [--labels {all,cities,none}]
                     [--color {auto,truecolor,256,none}] [--ascii] [--no-legend] [--save FILE] [--html FILE]
                     [--chronicle] [--chronicle-format {text,json}] [--kind KINDS] [--from-year Y] [--to-year Y]
-                    [--realm NAME] [--search TEXT] [--no-pager] [--start {present,dawn}] [--color-test]
+                    [--realm NAME] [--search TEXT] [--no-pager] [--start {present,dawn}] [--sim] [--color-test]
 
 This launcher wires together the three top-level concerns and nothing else:
     1. parse CLI arguments,
@@ -137,6 +137,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "Open the history viewer and exit: the political map at a moment of the past, the powers then and the "
             "chronicle beside it. It opens at the map at the end of YEAR (the first change when no year is given)."
+        ),
+    )
+    parser.add_argument(
+        "--sim",
+        action="store_true",
+        help=(
+            "Run the simulation from the present while exploring (explorer only): the sim date shows in the panel; "
+            "p pauses it, + and - change its speed, r restarts it from the seed."
         ),
     )
     parser.add_argument(
@@ -379,6 +387,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.color_test:
         _print_color_test(args.color)
         return 0
+    if args.sim and (
+        args.headless or args.chronicle or args.history is not None or args.view or args.scale or args.save or args.html
+    ):
+        parser.error(
+            "--sim runs in the explorer: leave out --headless, --chronicle, --history, --view, --scale, --save "
+            "and --html"
+        )
     config = load_config(args.config)
 
     _apply_overrides(args, config, parser)
@@ -417,9 +432,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         parser.error("the explorer needs a terminal; use --view, --scale, --save or --headless for scripted output")
 
     from biomegen.explorer import app
+    from biomegen.explorer.ticks import SimTicks
 
     mode = _detect_color() if args.color == "auto" else args.color
-    app.run(world, config, mode, args.ascii)
+    app.run(world, config, mode, args.ascii, ticks=SimTicks.start(world, config) if args.sim else None)
     return 0
 
 
