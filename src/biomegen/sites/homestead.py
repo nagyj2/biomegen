@@ -23,7 +23,7 @@ from ..util import rng
 from ..world.tile import Cell
 from .carve import nearest_true
 from .dress import lay_dress
-from .kinds import kind_row, lot_rows, lot_widths, roof_cell
+from .kinds import kind_row, lay_roof, lot_rows, lot_widths
 from .layout import SiteBuilding, SiteContext, layout
 from .settlement import Lot, _harbour, _mill, _spec, _try_house
 from .streets import lay_roads
@@ -142,5 +142,5 @@ def build_homestead(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray, 
     roofs[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width] |= lot.building.footprint
     lay_dress(ctx, grid, dry, roofs, (lot.x, lot.y, lot.width, lot.height), stream, condition="standing")
     outside = grid.copy()
-    outside[roofs] = roof_cell(ctx.config, kind)
-    return grid, outside, (SiteBuilding(kind, lot.x, lot.y, lot.width, lot.height, lot.building.footprint),)
+    rect = (lot.x, lot.y, lot.width, lot.height)
+    return grid, outside, (lay_roof(ctx.config, outside, kind, rect, lot.building.footprint),)

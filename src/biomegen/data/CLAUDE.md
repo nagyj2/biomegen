@@ -86,9 +86,10 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
 
 ## Buildings and dressings
 
-- `buildings.toml` has one row per building kind (the header documents every key): `function` is `housing`, `production` or `civic`
-  and decides the keys the row must have (`validate_tables` checks them). `rank` is unique below 64 and sets the kind's roof cell
-  (`KIND_ROOF_BASE + rank`); civic kinds rank last. `rows` and `width` size a lot, `shapes`, `roles` and `furniture` its rooms, `roof`
+- `buildings.toml` has one row per building kind (the header documents every key): `function` is `housing`, `production`, `civic` or
+  `structure` (a building a site layout draws itself: only `label`, `rank` and `roof`) and decides the keys the row must have
+  (`validate_tables` checks them). `rank` is unique below 64 and sets the kind's roof cell (`KIND_ROOF_BASE + rank`); civic kinds
+  rank last of the lot kinds. `rows` and `width` size a lot, `shapes`, `roles` and `furniture` its rooms, `roof`
   its look (`glyph`, `ascii`, `color`). A production kind's `suits` weights (`fertility`, `forest`, `roughness`, `fresh_water`,
   `coast`) feed `sites/surroundings.py`, with `needs_tag`, `min_score`, `max_per_kind`, `siting` (`river`, `shore`, `edge`, `any`),
   `tries` and a `dress` set. A `poi_styles` row's `building` names a production kind, a tier's `centre` a civic kind.

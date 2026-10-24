@@ -37,7 +37,8 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
 ## Plans
 
 - A `SitePlan` has `cells` (inside, drawn at the site scale) and `outside` (the sky view for map, zoom and local:
-  `ROOF`, `STONE`, streets). A layout returns both as `(cells, outside)`.
+  each building's kind roof, `STONE`, streets). A layout returns both as `(cells, outside)`, or with the `SiteBuilding`s that
+  stand as `(cells, outside, buildings)`.
 - Walls are one cell thick (`WALL`); the renderer joins them into line glyphs, so never draw a wall twice as thick.
   A door is a `DOOR` cell in a wall line. Buildings come from `building.build_building`.
 - Use `cells.OUTSIDE_PRIORITY` when scaling down, so thin walls survive.
@@ -46,18 +47,24 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
 - Streets meet the road without bare ground between: `_join_roads` runs a street that passes within
   `sites.settlement.road_join_rows` of the road into it, and `_close_slivers` paves a one-cell strip between two streets.
 - An upper floor of a settlement or tower is the ground view with the buildings replaced, the current floor laid over
-  all the lower ones: the storey of each building that reaches that floor, `ROOF` over each that does not (and over the
+  all the lower ones: the storey of each building that reaches that floor, its kind roof over each that does not (and over the
   outline of a lower, wider tower floor). Streets, trees, the wall and its gates stay as on the ground floor, undimmed.
 - A settlement's storeys are cut back as they rise (`_storey_rects`, drawn on `site.layout` `cut`, tunable in
   `sites.settlement.upper`): an L or T keeps its whole outline on the first upper storey (chance `whole`) and then one wing,
   the large or the small, so a tall building reads as a tower; a rectangle is shortened along its longer side. The cut part
   shows the roof of the storey below. The floor above the top storey (`geometry.site_roof_floor`) is the roof level: every
   building as its kind roof, so a roof hidden by a taller neighbour can be seen. Layouts in `sites.roof_layouts` (settlement,
-  homestead, dungeon, tower, ruin) have one; the others build it on floor 0 and show `outside` (`site_plan`'s `roof_view`).
+  homestead, dungeon, tower, ruin, shrine, camp, boat) have one; all but a settlement build it on floor 0 and show `outside`
+  (`plan._roof_view`). Only the battlefield, where nothing is built, has none.
+- **One roof system.** Every roof is a building kind's (`kinds.lay_roof(config, outside, kind, rect, footprint)`: stamps the
+  kind's roof cell and returns the `SiteBuilding` the layout lists). A layout draws no roof cell of its own; a tower and a
+  watchtower roof as their own kind, a dungeon's gatehouse as `gatehouse`, a ruin's standing rooms as `ruin`, a camp's tents as
+  `tent`, a boat's deckhouse as `deckhouse` (`function = "structure"` rows). What is under a roof must suit it: a tent is bedrolls
+  with the doorway toward the fire, the deckhouse is a cabin on the deck.
 
 ## Archetypes
 
-- **Tower** and **watchtower** share one layout (tapering single-room floors, aligned stairs, a lookout); the watchtower has
+- **Tower** and **watchtower** share one layout, each roofed as its own kind (tapering single-room floors, aligned stairs, a lookout); the watchtower has
   its own furniture family. **Dungeon**, **ruin**, **camp**, **boat** and **settlement** as above.
 - **Ruin** erosion grows with `age_years` from `sites.ruin_erosion_young` to `sites.ruin_erosion` over
   `sites.ruin_erosion_years`; an undated ruin (placed by location) is fully eroded. A ruin with a `ruin_of` is drawn from that
@@ -89,7 +96,7 @@ Lazy views built from a POI: the plan you see when you zoom into it. Sites are n
 - **Kinds** are rows of `data/buildings.toml` (`kinds.py`): a lot is a `Lot` with a `kind`. Size is the row's `rows` and
   `width`, rooms and furniture its `roles` and `furniture` family (`kinds.kind_spec`), the look from outside its `roof`. A kind's
   roof is a plan cell in a reserved block (`KIND_ROOF_BASE + rank`, constants in `world/tile.py`; `OUTSIDE_PRIORITY` treats it as a
-  roof, the higher id wins a tie so civic kinds rank last); `Cell.ROOF` stays for towers and the old ruin layout.
+  roof, the higher id wins a tie so civic kinds rank last); There is no plain roof cell.
 - **The centre** is the `centre` kind of the manifest's tier (`ctx.centre`), stamped first in the reserved plot: a paved square
   sized by the *potential's* centre kind plus the kind's `apron` (`_plot`, `_centre`). It is drawn on its own streams
   (`site.layout` `centre`), counted out of the `fill` ground, kept clear of trees, street anchors and lots, so swapping the

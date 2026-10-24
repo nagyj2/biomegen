@@ -1313,8 +1313,8 @@ def _hold(grid: np.ndarray, slots: list[tuple[bool, np.ndarray, np.ndarray]], ga
 
 
 def _roof_cells(ctx: SiteContext, shape: tuple[int, int], lots: list[Lot]) -> np.ndarray:
-    """Return the roof cell of every building cell: each lot's kind roof over its footprint (``ROOF`` elsewhere)."""
-    cells = np.full(shape, int(Cell.ROOF), dtype=np.uint8)
+    """Return the roof cell of every building cell: each lot's kind roof over its footprint (void elsewhere)."""
+    cells = np.full(shape, _VOID, dtype=np.uint8)
     for lot in lots:
         cells[lot.y : lot.y + lot.height, lot.x : lot.x + lot.width][lot.building.footprint] = roof_cell(
             ctx.config, lot.kind

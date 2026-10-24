@@ -66,7 +66,7 @@ def test_a_building_is_a_roof_seen_from_outside() -> None:
     world = _world()
     grid, sampler, config = _draw(world)
     # A dungeon's gatehouse is seen as its own roof, not a house roof.
-    assert config.get("render.interior_glyphs.dungeon_roof") in grid.glyph[_extent(sampler, world, config)]
+    assert config.get("tables.buildings.gatehouse.roof")["glyph"] in grid.glyph[_extent(sampler, world, config)]
 
 
 def test_cells_outside_the_extent_are_untouched() -> None:
@@ -172,7 +172,7 @@ def test_the_overlay_does_not_change_the_cached_plan() -> None:
 def test_the_fill_is_the_palette_colour() -> None:
     world = _world()
     grid, sampler, config = _draw(world)
-    roof = config.get("render.interior_palette.dungeon_roof")
+    roof = config.get("tables.buildings.gatehouse.roof")["color"]
     assert (grid.bg[_extent(sampler, world, config)] == np.asarray(roof, dtype=np.uint8)).all(axis=-1).any()
 
 

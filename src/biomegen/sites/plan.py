@@ -135,6 +135,16 @@ def _grown_lot(poi: POI, manifest: SiteManifest, config: Config, world: World, g
     return replace(lot, x=lot.x + dx, y=lot.y + dy)
 
 
+def _roof_view(poi: POI, config: Config, floor: int, layout: str) -> bool:
+    """Whether ``floor`` is a roof level that is the sky view of the ground floor, not a floor a layout builds.
+
+    Every layout in ``sites.roof_layouts`` has a roof level, where each building shows as its kind's roof. A settlement
+    builds it (it stacks storeys, and the roof level is the floor above the highest); any other layout is built on its
+    ground floor and the roof level shows that plan's ``outside``.
+    """
+    return floor == site_roof_floor(poi, config) and layout != "settlement"
+
+
 def site_plan(
     poi: POI, floor: int, config: Config, world: World, manifest: Optional[SiteManifest] = None
 ) -> Optional[SitePlan]:
@@ -172,8 +182,7 @@ def site_plan(
         return None
     row = config.get(f"tables.sites.{site_row_for(config, poi)}")
     age_years = None if poi.fell is None else max(0, world.year - poi.fell)
-    # Only a settlement lays its own roof level; any other layout is built on the ground floor and seen from outside.
-    roof_view = floor == site_roof_floor(poi, config) and row["layout"] != "settlement"
+    roof_view = _roof_view(poi, config, floor, row["layout"])
     settled = manifest if row["layout"] == "settlement" else None  # what stands, for a settlement layout only
     # A ruin falls as the tier it was (its own row's numbers), on the plan its potential draws.
     fallen_row = config.get(f"tables.sites.{poi.ruin_of}", row) if poi.kind == "ruin" and poi.ruin_of else row
@@ -203,8 +212,8 @@ def site_plan(
     )
     built = LAYOUTS[row["layout"]](context)
     if built is None and context.fall is not None:  # no room for the settlement: a single fallen building instead
-        roof_view = floor == site_roof_floor(poi, config)  # which is no settlement, so it has no roof level of its own
         ruin_row = config.get("tables.sites.ruin")
+        roof_view = _roof_view(poi, config, floor, ruin_row["layout"])
         built = LAYOUTS[ruin_row["layout"]](
             replace(
                 context,

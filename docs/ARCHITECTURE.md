@@ -708,10 +708,10 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   A layout lays the road into its grid (`streets.lay_roads`) to build round it and join doors to it, then hands it back
   (`streets.clear_roads`): the plan leaves the road's own cells void, so the one road is drawn the same inside and outside.
 - **Plan faces.** `SitePlan.cells` is the **inside** (one cell per terminal cell, drawn at the site scale);
-  `SitePlan.outside` is the **sky view** (map, zoom, local): roofs (`ROOF`), solid walls (`STONE`), streets, trees.
+  `SitePlan.outside` is the **sky view** (map, zoom, local): each building's roof (a building kind's roof cell), solid walls (`STONE`), streets, trees.
   Outside views ignore floor and overlay. Walls in the inside are one cell thick (`WALL`) and joined into box-drawing
   lines at draw time by the 4-neighbour mask (`cells.wall_index`, `render.interior_walls`); doors are gaps.
-- **Layouts** (`layout.py`, one per `layout` key; each returns `(cells, outside)`). `building.py` makes a rect, L or T
+- **Layouts** (`layout.py`, one per `layout` key; each returns `(cells, outside)` or `(cells, outside, buildings)`). `building.py` makes a rect, L or T
   footprint, subdivides it recursively with shared one-cell walls, joins rooms by a door spanning tree plus loops, adds a
   street door, assigns roles by size and furnishes them from `tables.furniture.<family>.<role>`. `settlement.py` grows an irregular town: a
   wobbling outline (stretched towards each road), a plaza, spokes from it to the outline, partial rings, lanes into any
@@ -734,9 +734,12 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   (tents, a trampled field with debris and wrecked wagons, hull); a camp's `purpose` picks its site row (`camp_<purpose>`).
 - **Building kinds** (`data/buildings.toml`, `kinds.py`). A lot holds a kind: `housing` (the house), `production`
   (farmhouse, mill, mine, lodge, fishery: the `building` of a `poi_styles` row) or `civic` (the centre of a tier). A row
-  gives its `rows` and `width`, shapes, room roles, furniture family and roof look. A kind's roof is a plan cell of its
+  gives its `rows` and `width`, shapes, room roles, furniture family and roof look. A `structure` is a building a layout draws
+  itself (tower, watchtower, gatehouse, ruin, tent, deckhouse): a label, a rank and a roof, no size. A kind's roof is a plan cell of its
   own in a reserved block (`KIND_ROOF_BASE + rank`, `world/tile.py`), so a plan stays one `uint8` array and the outside
-  view shows each kind in its colour; inside, a kind is told by its rooms and furniture.
+  view shows each kind in its colour; inside, a kind is told by its rooms and furniture. **Every roof in every site is a kind's:**
+  a layout roofs a building with `kinds.lay_roof`, which stamps the roof on the sky view and returns the `SiteBuilding` the
+  layout lists (the explorer names it); there is no plain roof cell.
 - **The centre** (`settlement._centre`, `_plot`). Every tier row names a `centre` kind (hamlet gathering point, village
   chapel, town hall, city cathedral, capital palace). The plaza is a paved square, the *reserved plot*, sized for the
   centre of the settlement's *potential* plus an apron; the centre of the manifest's tier stands in it at the plaza point,
@@ -770,7 +773,9 @@ stored in the `World`; a site is a pure function of the POI, the config and the 
   storey or only one wing (a tower on the building), a rectangle loses a share of its length at one end, and the part
   cut away shows its kind roof; the stairs stand on a free floor cell of both floors. A site whose layout is in `sites.roof_layouts`
   has one more level than its storeys, the roof level (`geometry.site_roof_floor`), where every building shows as its roof
-  (a settlement lays it itself; the others show their ground floor's `outside`; a dungeon's roof is `Cell.DUNGEON_ROOF`).
+  (a settlement lays it itself; every other layout is built on its ground floor and the roof level shows that plan's `outside`,
+  `plan._roof_view`). Camps (tent roofs over bedrolls, the doorway toward the fire) and boats (the deckhouse roof over the cabin) have
+  one; a battlefield builds nothing and has none.
   `<` / `>` cycle floors inside a site or on its tiles; entering starts at floor 0.
 - **Cache and overlay.** Plans are memoised per world and config in a bounded cache (`sites.cache_size`), read-only.
   Runtime edits compose on top via `Overlay.apply_interior` (copy-on-write), keyed by the site seed and floor.

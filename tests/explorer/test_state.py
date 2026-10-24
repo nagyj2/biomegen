@@ -351,7 +351,7 @@ def test_cycling_off_a_structure_explains_itself(site_config: Config) -> None:
 @pytest.mark.parametrize("delta", [1, -1])
 def test_single_floor_structure_cannot_change_floor(site_config: Config, delta: int) -> None:
     world = make_world(10, 10)
-    world.pois.append(POI(kind="camp", x=5, y=5, interior_seed=1, floor_count=1))
+    world.pois.append(POI(kind="battlefield", x=5, y=5, interior_seed=1, floor_count=1))
     state = ViewState(cx=5, cy=5)
     cycle_floor(world, site_config, state, delta)
     assert (state.floor, "single floor" in state.last_message) == (0, True)

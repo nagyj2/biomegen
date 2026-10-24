@@ -8,12 +8,13 @@ import numpy as np
 
 from biomegen.config.model import Config
 from biomegen.sites import site_plan
+from biomegen.sites.kinds import roof_cell
 from biomegen.world.tile import Cell
 from tests.sites.conftest import add_poi, flat_world
 
 VOID, FLOOR, WALL, DOOR = (int(c) for c in (Cell.VOID, Cell.FLOOR, Cell.WALL, Cell.DOOR))
-UP, DOWN, ROOF, STONE, RUBBLE, SOLID = (
-    int(c) for c in (Cell.STAIRS_UP, Cell.STAIRS_DOWN, Cell.ROOF, Cell.STONE, Cell.RUBBLE, Cell.SOLID)
+UP, DOWN, STONE, RUBBLE, SOLID = (
+    int(c) for c in (Cell.STAIRS_UP, Cell.STAIRS_DOWN, Cell.STONE, Cell.RUBBLE, Cell.SOLID)
 )
 
 
@@ -27,15 +28,15 @@ def _floor_plans(config: Config, kind: str, **fields):
     return poi, plans
 
 
-def _footprint(cells: np.ndarray) -> int:
-    """The cells of the floor's own room: not bare ground, not the roofs of the floors below."""
-    ground = [VOID, ROOF, int(Cell.PATH), int(Cell.TREE), int(Cell.BUSH)]
+def _footprint(cells: np.ndarray, roof: int) -> int:
+    """The cells of the floor's own room: not bare ground, not the ``roof`` of the floors below."""
+    ground = [VOID, roof, int(Cell.PATH), int(Cell.TREE), int(Cell.BUSH)]
     return int((~np.isin(cells, ground)).sum())
 
 
 def test_each_tower_floor_is_smaller_than_the_one_below(config: Config) -> None:
     _poi, plans = _floor_plans(config, "tower", floor_count=3)
-    sizes = [_footprint(plan.cells) for plan in plans]
+    sizes = [_footprint(plan.cells, roof_cell(config, "tower")) for plan in plans]
     assert sizes == sorted(sizes, reverse=True) and sizes[0] > sizes[-1]
 
 
@@ -64,7 +65,7 @@ def test_a_tower_is_a_single_room(config: Config) -> None:
 
 def test_a_tower_seen_from_outside_is_a_roof(config: Config) -> None:
     _poi, plans = _floor_plans(config, "tower", floor_count=2)
-    assert ROOF in plans[0].outside
+    assert roof_cell(config, "tower") in plans[0].outside
 
 
 def test_an_upper_tower_floor_is_hidden_from_outside(config: Config) -> None:
@@ -75,7 +76,7 @@ def test_an_upper_tower_floor_is_hidden_from_outside(config: Config) -> None:
 def test_a_ruin_has_standing_roofs_and_stone_walls_from_outside(config: Config) -> None:
     _poi, plans = _floor_plans(config, "ruin", floor_count=1)
     outside = plans[0].outside
-    assert ROOF in outside and STONE in outside
+    assert roof_cell(config, "ruin") in outside and STONE in outside
 
 
 def test_a_ruin_is_strewn_with_rubble(config: Config) -> None:
@@ -138,14 +139,15 @@ def test_no_tree_walls_a_ruin_door_in(config: Config) -> None:
 def test_an_upper_tower_floor_shows_the_floor_below_as_a_roof(config: Config) -> None:
     # Where the floor below is wider, its outline shows round the smaller floor as a roof.
     _poi, plans = _floor_plans(config, "tower", floor_count=3)
-    own = ~np.isin(plans[1].cells, [VOID, ROOF, int(Cell.PATH), int(Cell.TREE), int(Cell.BUSH)])
-    ring = (plans[0].outside == ROOF) & ~own
-    assert ring.any() and (plans[1].cells[ring] == ROOF).all()
+    roof = roof_cell(config, "tower")
+    own = ~np.isin(plans[1].cells, [VOID, roof, int(Cell.PATH), int(Cell.TREE), int(Cell.BUSH)])
+    ring = (plans[0].outside == roof) & ~own
+    assert ring.any() and (plans[1].cells[ring] == roof).all()
 
 
 def test_the_ground_floor_of_a_tower_has_no_roofs_inside(config: Config) -> None:
     _poi, plans = _floor_plans(config, "tower", floor_count=3)
-    assert ROOF not in plans[0].cells
+    assert roof_cell(config, "tower") not in plans[0].cells
 
 
 # --- ruin erosion by age ----------------------------------------------------------------------------------

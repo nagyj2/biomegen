@@ -710,12 +710,13 @@ def test_the_shipped_building_kinds() -> None:
     }
 
 
-def test_building_ranks_are_unique_and_civic_kinds_rank_last() -> None:
-    # A rank is a roof cell offset, and a tie between roofs goes to the higher id: civic kinds must outrank the rest.
+def test_building_ranks_are_unique_and_civic_kinds_rank_last_of_the_lot_kinds() -> None:
+    # A rank is a roof cell offset, and a tie between roofs goes to the higher id: civic kinds must outrank the other
+    # lot kinds (a structure never shares a plan with lots).
     rows = get_defaults()["tables"]["buildings"]
     ranks = [row["rank"] for row in rows.values()]
     civic = [row["rank"] for row in rows.values() if row["function"] == "civic"]
-    other = [row["rank"] for row in rows.values() if row["function"] != "civic"]
+    other = [row["rank"] for row in rows.values() if row["function"] in ("housing", "production")]
     assert len(ranks) == len(set(ranks)) and min(civic) > max(other)
 
 
@@ -768,6 +769,21 @@ def test_a_civic_kind_cannot_have_production_keys() -> None:
     cfg = get_defaults()
     cfg["tables"]["buildings"]["chapel"]["tries"] = 8
     with pytest.raises(ConfigError, match=r"tables\.buildings\.chapel\.tries: only a production kind has this key"):
+        validate(cfg)
+
+
+def test_a_structure_kind_has_no_lot_keys() -> None:
+    # A structure is sized by its layout, so a size on its row is a mistake.
+    cfg = get_defaults()
+    cfg["tables"]["buildings"]["tent"]["rows"] = [3, 4]
+    with pytest.raises(ConfigError, match=r"tables\.buildings\.tent\.rows: a structure is sized by its layout"):
+        validate(cfg)
+
+
+def test_a_lot_kind_needs_its_size() -> None:
+    cfg = get_defaults()
+    del cfg["tables"]["buildings"]["house"]["rows"]
+    with pytest.raises(ConfigError, match=r"tables\.buildings\.house: a housing kind needs 'rows'"):
         validate(cfg)
 
 

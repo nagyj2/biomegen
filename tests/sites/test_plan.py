@@ -9,6 +9,7 @@ import pytest
 
 from biomegen.config.model import Config
 from biomegen.sites import clear_cache, read_patch, site_geometry, site_plan
+from biomegen.sites.kinds import roof_cell
 from biomegen.world.tile import Biome, Cell, WaterType
 from tests.sites.conftest import add_poi, flat_world
 
@@ -93,7 +94,7 @@ def test_a_camp_has_a_campfire(config: Config) -> None:
 
 def test_a_camp_pitches_tents(config: Config) -> None:
     _poi, _world, plan = _plan(config, "camp")
-    assert plan is not None and int(Cell.TENT) in plan.cells
+    assert plan is not None and roof_cell(config, "tent") in plan.outside
 
 
 def test_a_village_has_buildings_with_doors(config: Config) -> None:

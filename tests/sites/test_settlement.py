@@ -8,6 +8,7 @@ from scipy import ndimage
 from biomegen.config import load_config
 from biomegen.config.model import Config
 from biomegen.sites import clear_cache, site_plan
+from biomegen.sites.kinds import kind_of_cell
 from biomegen.world.tile import Biome, Cell, WaterType
 from tests.sites.conftest import HOUSE_ROOF, add_poi, flat_world, roofs
 
@@ -576,15 +577,18 @@ def test_a_hamlet_builds_at_least_one_house(config: Config) -> None:
 # --- the housing kind -------------------------------------------------------------------------------------------------
 
 
-def test_a_settlement_draws_no_plain_roof_only_its_kinds(config: Config) -> None:
-    # Every building seen from outside is a roof of its kind: the plain ROOF cell (towers, old ruins) never appears.
+def test_a_settlement_draws_only_the_roofs_of_its_lot_kinds(config: Config) -> None:
+    # Every building seen from outside is a roof of a lot kind: a structure's roof (tower, tent, ...) never appears.
     plan = _plan(config, "town")
-    assert int(Cell.ROOF) not in plan.outside and HOUSE_ROOF in plan.outside
+    roofs = {kind_of_cell(config, int(cell)) for cell in np.unique(plan.outside)} - {None}
+    assert HOUSE_ROOF in plan.outside and all(
+        config.get(f"tables.buildings.{kind}.function") != "structure" for kind in roofs
+    )
 
 
-def test_an_upper_floor_shows_the_kind_roof_not_the_plain_one(config: Config) -> None:
+def test_the_roof_level_shows_the_kind_roofs(config: Config) -> None:
     plans = _floors(config, "city", 3, 12000)
-    assert int(Cell.ROOF) not in plans[2].cells and HOUSE_ROOF in plans[2].cells
+    assert HOUSE_ROOF in plans[2].cells
 
 
 def test_a_house_row_sets_the_height_of_a_settlement_lot(config: Config) -> None:
@@ -619,13 +623,15 @@ def test_a_settlement_has_a_roof_level_above_its_top_storey(config: Config) -> N
     assert (site_floor_range(poi, config), site_roof_floor(poi, config)) == ((0, 3), 3)
 
 
-def test_a_homestead_and_a_dungeon_have_a_roof_level_but_a_camp_has_none(config: Config) -> None:
+def test_a_homestead_dungeon_and_camp_have_a_roof_level_but_a_battlefield_has_none(config: Config) -> None:
     from biomegen.sites import site_roof_floor
 
     world = flat_world(16, 12)
     assert site_roof_floor(add_poi(world, "homestead", 7, 5), config) == 1
     assert site_roof_floor(add_poi(world, "dungeon", 3, 3, floor_count=2, lowest_floor=-1), config) == 1
-    assert site_roof_floor(add_poi(world, "camp", 5, 5), config) is None
+    assert site_roof_floor(add_poi(world, "camp", 5, 5), config) == 1
+    assert site_roof_floor(add_poi(world, "boat", 9, 5), config) == 1
+    assert site_roof_floor(add_poi(world, "battlefield", 12, 5), config) is None
 
 
 def test_the_roof_level_of_a_dungeon_is_its_surface_view(config: Config) -> None:

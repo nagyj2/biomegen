@@ -102,7 +102,6 @@ class Cell(IntEnum):
     CRATE = 14
     SHELF = 15
     RUBBLE = 16  # collapsed masonry (ruin)
-    TENT = 17
     CAMPFIRE = 18
     WAGON = 19
     TREE = 20  # outdoor vegetation clutter
@@ -113,7 +112,6 @@ class Cell(IntEnum):
     BRIDGE = 25  # interior bridge deck (settlement bridge over water)
     BRIDGE_WALL = 26  # interior bridge railing / wall
     SOLID = 27  # solid rock round the rooms of an underground floor
-    ROOF = 28  # the top of a building seen from outside
     STONE = 29  # a wall seen from outside (a city wall, a ruin's stub), drawn solid
     HULL = 30  # a boat's planked side
     WHEEL = 31  # the rim of a mill's water wheel, standing in the river
@@ -124,7 +122,6 @@ class Cell(IntEnum):
     BONES = 36  # the remains left on a field
     WHEAT = 37  # a sown field: open ground, never roofed
     LOG = 38  # a felled trunk lying in a lodge's working area
-    DUNGEON_ROOF = 39  # the top of a dungeon's gatehouse seen from outside
 
 
 # Plan cell values above the ``Cell`` enum are data driven, in two reserved blocks (a plan stays one ``uint8`` array):

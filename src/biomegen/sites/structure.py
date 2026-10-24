@@ -42,8 +42,8 @@ from .carve import (
 )
 from .circulation import floor_links, force_floor_access, stamp_stairs
 from .furnish import Weights, adjacent, keep_reachable, scatter, weighted_choice
-from .kinds import roof_cell
-from .layout import SiteContext, layout
+from .kinds import lay_roof, roof_cell
+from .layout import SiteBuilding, SiteContext, layout
 from .partition import bsp_rooms
 from .shapes import SHAPES
 from .streets import lay_roads, lay_street
@@ -54,10 +54,9 @@ _WALL = int(Cell.WALL)
 _DOOR = int(Cell.DOOR)
 _PATH = int(Cell.PATH)
 _SOLID = int(Cell.SOLID)
-_ROOF = int(Cell.ROOF)
-_DUNGEON_ROOF = int(Cell.DUNGEON_ROOF)
 _STONE = int(Cell.STONE)
 _RUBBLE = int(Cell.RUBBLE)
+Built = tuple[np.ndarray, np.ndarray, tuple[SiteBuilding, ...]]  # inside, sky view and the buildings that stand
 _MIN_STAIR_GAP = 4  # cells between two staircases, so they never touch
 
 
@@ -246,7 +245,7 @@ def _underground(ctx: SiteContext, links: list[Point], cave: bool, stream: rando
 
 
 @layout("dungeon")
-def build_dungeon(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+def build_dungeon(ctx: SiteContext) -> Optional[Built]:
     """A dungeon floor: the surface gatehouse at floor 0, rock with passages below."""
     stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
     house = _gatehouse(ctx)
@@ -258,7 +257,7 @@ def build_dungeon(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     if ctx.floor < 0:
         cave = ctx.floor_count >= 4 and ctx.floor == ctx.lowest_floor
         grid = _underground(ctx, links, cave, stream)
-        return grid, np.zeros_like(grid)
+        return grid, np.zeros_like(grid), ()
     x, y, w, h = house
     spec = _spec(ctx, ("hall",), float(ctx.setting("clutter_density")), shapes=("rect",), subdivide=False)
     building = build_building(h, w, stream, spec, _gate_target(ctx, house))
@@ -271,13 +270,12 @@ def build_dungeon(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     keep_reachable(grid, sorted(reserved | set((x + dx, y + dy) for dx, dy in building.doors)))
     _approach(ctx, grid, building, house)
     outside = grid.copy()
-    outside[y : y + h, x : x + w][building.footprint] = _DUNGEON_ROOF
-    return grid, outside
+    return grid, outside, (lay_roof(ctx.config, outside, "gatehouse", house, building.footprint),)
 
 
 # ----------------------------------------------------------------------------------------------------------- tower
 @layout("tower")
-def build_tower(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+def build_tower(ctx: SiteContext) -> Optional[Built]:
     """A tower floor: one room, each floor a little smaller than the one below, the stairs in a single column.
 
     An upper floor also shows the ground and the outline of each floor below it as a roof, under its own cells.
@@ -325,17 +323,19 @@ def build_tower(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     if ctx.floor == 0:
         _approach(ctx, grid, building, rect)
     outside = np.full_like(grid, _VOID)
+    buildings: tuple[SiteBuilding, ...] = ()
+    roof = roof_cell(ctx.config, ctx.kind)
     if ctx.floor == 0:
         outside = grid.copy()
-        outside[gy : gy + gh, gx : gx + gw][building.footprint] = _ROOF
+        buildings = (lay_roof(ctx.config, outside, ctx.kind, ground, building.footprint),)
     else:  # the ground view (approach, trees) with every lower floor's outline as a roof, this floor laid over them
         lowest = build_tower(replace(ctx, floor=ctx.lowest_floor))
         shown = lowest[0].copy() if lowest is not None else np.full_like(grid, _VOID)
         for lower_x, lower_y, lower_w, lower_h in rects[: ctx.floor - ctx.lowest_floor]:
-            shown[lower_y : lower_y + lower_h, lower_x : lower_x + lower_w] = _ROOF
+            shown[lower_y : lower_y + lower_h, lower_x : lower_x + lower_w] = roof
         shown[grid != _VOID] = grid[grid != _VOID]
         grid = shown
-    return grid, outside
+    return grid, outside, buildings
 
 
 # ------------------------------------------------------------------------------------------------------------ ruin
@@ -366,7 +366,7 @@ def _erosion(ctx: SiteContext) -> float:
 
 
 @layout("ruin")
-def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+def build_ruin(ctx: SiteContext) -> Optional[Built]:
     """A ruin: a building fallen in, with breaches, rubble, trees and the rooms that kept their roofs."""
     stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
     rows = max(9, round(ctx.rows * 0.85))
@@ -403,14 +403,16 @@ def build_ruin(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     _approach(ctx, grid, building, rect)
     outside = grid.copy()
     outside[outside == _WALL] = _STONE
+    covered = np.zeros((h, w), dtype=bool)
     for rx, ry, rw, rh in standing:
-        outside[y + ry : y + ry + rh, x + rx : x + rx + rw] = _ROOF
-    return grid, outside
+        covered[ry : ry + rh, rx : rx + rw] = True
+    buildings = (lay_roof(ctx.config, outside, "ruin", rect, covered),) if covered.any() else ()
+    return grid, outside, buildings
 
 
 # ---------------------------------------------------------------------------------------------------------- shrine
 @layout("shrine")
-def build_shrine(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+def build_shrine(ctx: SiteContext) -> Optional[Built]:
     """A shrine: one small walled room with its door to the road and an altar, its roof the shrine kind's own colour."""
     stream = rng.derive(ctx.seed, "site.layout", ctx.floor)
     rows = max(7, round(ctx.rows * 0.6))
@@ -430,5 +432,4 @@ def build_shrine(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     keep_reachable(grid, sorted((x + dx, y + dy) for dx, dy in building.doors))
     _approach(ctx, grid, building, rect)
     outside = grid.copy()
-    outside[y : y + h, x : x + w][building.footprint] = roof_cell(ctx.config, "shrine")
-    return grid, outside
+    return grid, outside, (lay_roof(ctx.config, outside, "shrine", rect, building.footprint),)

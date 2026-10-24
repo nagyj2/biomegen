@@ -91,7 +91,7 @@ _SITE_ROW = {
     "houses": "range",
 }
 
-BUILDING_FUNCTIONS = ("housing", "production", "civic")
+BUILDING_FUNCTIONS = ("housing", "production", "civic", "structure")
 BUILDING_SHAPES = ("rect", "L", "T")
 BUILDING_SITINGS = ("river", "shore", "edge", "any")
 SUIT_TERMS = ("fertility", "forest", "roughness", "fresh_water", "coast")
@@ -123,7 +123,10 @@ _BUILDING_KEYS = {
     "housing": frozenset({"capacity_pop", "storage"}),
     "production": frozenset({"suits", "min_score", "max_per_kind", "siting", "tries"}),
     "civic": frozenset({"apron"}),
+    "structure": frozenset(),
 }
+#: The keys of a lot: its size, rooms and furniture. A structure is sized by its layout, so it has none of them.
+_BUILDING_LOT_KEYS = frozenset({"rows", "width", "shapes", "roles", "furniture"})
 _BUILDING_PRODUCTION_OPTIONAL = frozenset({"needs_tag", "dress"})
 
 DRESS_CONDITIONS = ("standing", "ruin")  # what a dressing is drawn for: a site that stands, a ruin
@@ -447,7 +450,9 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "dress": (_DRESS_ROW, frozenset({"variants", "wear"})),
     "buildings": (
         _BUILDING_ROW,
-        frozenset(key for keys in _BUILDING_KEYS.values() for key in keys) | _BUILDING_PRODUCTION_OPTIONAL,
+        frozenset(key for keys in _BUILDING_KEYS.values() for key in keys)
+        | _BUILDING_PRODUCTION_OPTIONAL
+        | _BUILDING_LOT_KEYS,
     ),
     "styles": (_STYLE_ROW, frozenset()),
     "geo_names": (_GEO_NAME_ROW, frozenset()),
@@ -976,10 +981,18 @@ def _validate_poi_styles(tables: Dict[str, Any], errors: List[str]) -> None:
 
 
 def _validate_building_keys(where: str, row: Dict[str, Any], errors: List[str]) -> None:
-    """Check that a building row has exactly the keys of its function (production adds two optional ones)."""
+    """Check that a building row has exactly the keys of its function (production adds two optional ones).
+
+    A lot kind (any function but ``structure``) also needs a lot's keys; a structure may not have them.
+    """
     function = row.get("function")
     if function not in _BUILDING_KEYS:
         return
+    for key in sorted(_BUILDING_LOT_KEYS):
+        if function != "structure" and key not in row:
+            errors.append(f"{where}: a {function} kind needs {key!r}")
+        elif function == "structure" and key in row:
+            errors.append(f"{where}.{key}: a structure is sized by its layout and has no {key!r}")
     for owner, keys in _BUILDING_KEYS.items():
         for key in sorted(keys):
             if owner == function and key not in row:
@@ -1012,7 +1025,7 @@ def _validate_buildings(tables: Dict[str, Any], errors: List[str]) -> None:
 
     Ranks are unique and below ``KIND_ROOF_SLOTS`` (a rank is a roof cell id offset). A kind has exactly the keys of its
     function (a housing kind its population and storage, a production kind its suits, siting and counts, a civic kind
-    its apron).
+    its apron, a structure none).
     """
     from ..world.tile import KIND_ROOF_SLOTS
 
@@ -1037,7 +1050,7 @@ def _validate_buildings(tables: Dict[str, Any], errors: List[str]) -> None:
                 errors.append(f"{where}.rank: {rank} is also the rank of {ranks[rank]!r}")
             ranks[rank] = name
         _validate_building_keys(where, row, errors)
-        if isinstance(furniture, dict) and row.get("furniture") not in furniture:
+        if isinstance(furniture, dict) and "furniture" in row and row["furniture"] not in furniture:
             errors.append(f"{where}.furniture: no furniture family named {row.get('furniture')!r}")
     _validate_building_names(tables, kinds, errors)
 

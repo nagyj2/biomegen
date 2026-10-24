@@ -1,4 +1,6 @@
-"""Boats: a planked hull on the water with a deckhouse near the stern and cargo lashed to the deck."""
+"""Boats: a planked hull on the water with a deckhouse near the stern and cargo lashed to the deck.
+
+Seen from outside (and at the roof level) the deckhouse is a ``deckhouse`` roof over the deck; under it is the cabin."""
 
 from __future__ import annotations
 
@@ -11,8 +13,10 @@ from scipy import ndimage
 from ..util import rng
 from ..world.tile import Cell
 from .building import Spec, build_building
+from .carve import Rect
 from .furnish import free_floor, scatter, weighted_choice
-from .layout import SiteContext, layout
+from .kinds import lay_roof
+from .layout import SiteBuilding, SiteContext, layout
 
 _VOID = int(Cell.VOID)
 _FLOOR = int(Cell.FLOOR)
@@ -32,11 +36,14 @@ def _hull(rows: int, cols: int) -> np.ndarray:
     return hull
 
 
-def _deckhouse(grid: np.ndarray, ctx: SiteContext, share: float) -> None:
-    """Build a small thin-walled cabin in the stern half, wholly on deck, with a door onto the open deck."""
+def _deckhouse(grid: np.ndarray, ctx: SiteContext, share: float) -> Optional[tuple[Rect, np.ndarray]]:
+    """Build a small thin-walled cabin in the stern half, wholly on deck, with a door onto the open deck.
+
+    Returns the cabin's rectangle and the cells under its roof, or None when the deck has no room for one.
+    """
     ys, xs = np.nonzero(grid == _FLOOR)
     if len(xs) < _MIN_DECK:
-        return
+        return None
     min_x, max_x = int(xs.min()), int(xs.max())
     cols = max(8, round((max_x - min_x) * share))
     x0 = min_x + (max_x - min_x) // 4
@@ -45,18 +52,20 @@ def _deckhouse(grid: np.ndarray, ctx: SiteContext, share: float) -> None:
     height = int(deck.sum(axis=0).min())  # the shortest stretch of deck under the cabin
     rows = height - 2  # leave a walkway round it
     if rows < _MIN_CABIN_ROWS or x1 - x0 < _MIN_CABIN_ROWS:
-        return
+        return None
     ys_here = np.nonzero(deck.any(axis=1))[0]
     y0 = (int(ys_here.min()) + int(ys_here.max())) // 2 - rows // 2 + 1
     cols = x1 - x0
     window = grid[y0 : y0 + rows, x0:x1]
     if window.shape != (rows, cols) or not (window == _FLOOR).all():
-        return
+        return None
     spec = Spec(1, ctx.aspect, ("cabin",), {"cabin": ctx.weights("cabin")}, 0.12, ("rect",), False)
     building = build_building(rows, cols, rng.derive(ctx.seed, "site.layout", "cabin"), spec, (cols + 4, rows // 2))
-    if building is not None:
-        inside = building.cells != _VOID
-        window[inside] = building.cells[inside]
+    if building is None:
+        return None
+    inside = building.cells != _VOID
+    window[inside] = building.cells[inside]
+    return (x0, y0, cols, rows), building.footprint
 
 
 def moor_boat(grid: np.ndarray, water: np.ndarray, x: int, y: int, rows: int, cols: int, stream: random.Random) -> bool:
@@ -84,7 +93,7 @@ def moor_boat(grid: np.ndarray, water: np.ndarray, x: int, y: int, rows: int, co
 
 
 @layout("boat")
-def build_boat(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
+def build_boat(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray, tuple[SiteBuilding, ...]]]:
     """A boat floor: hull, deckhouse and cargo, kept to the water."""
     deck = _hull(ctx.rows, ctx.cols) & ctx.patch.water
     if int(deck.sum()) < _MIN_DECK:
@@ -92,9 +101,11 @@ def build_boat(ctx: SiteContext) -> Optional[tuple[np.ndarray, np.ndarray]]:
     grid = np.full((ctx.rows, ctx.cols), _VOID, dtype=np.uint8)
     grid[deck] = _FLOOR
     grid[ndimage.binary_dilation(deck, structure=np.ones((3, 3), bool)) & ~deck] = _HULL
-    _deckhouse(grid, ctx, float(ctx.config.get("sites.boat.cabin_share")))
+    cabin = _deckhouse(grid, ctx, float(ctx.config.get("sites.boat.cabin_share")))
     density = min(0.9, float(ctx.setting("clutter_density")) * float(ctx.config.get("sites.furnish.boat_density")))
     table = ctx.weights("deck")
     stream = rng.derive(ctx.seed, "site.furnish", ctx.floor)
     scatter(grid, stream, free_floor(grid), density, lambda r, _x, _y: weighted_choice(r, table))
-    return grid, grid.copy()
+    outside = grid.copy()
+    buildings = (lay_roof(ctx.config, outside, "deckhouse", *cabin),) if cabin is not None else ()
+    return grid, outside, buildings

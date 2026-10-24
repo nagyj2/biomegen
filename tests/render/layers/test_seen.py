@@ -6,6 +6,7 @@ from biomegen.render.layers import Seen, build_grid
 from biomegen.render.views import View
 from biomegen.sampling.detail import DetailSampler
 from biomegen.sampling.sampler import Sampler
+from biomegen.sites.kinds import roof_cell
 from biomegen.world.entities import POI
 from biomegen.world.tile import Biome, Cell
 from tests.render.conftest import make_world
@@ -34,7 +35,7 @@ def test_seen_lists_the_interior_cells_drawn_at_detail_scale(config) -> None:
     world.pois.append(POI(kind="tower", x=5, y=5, interior_seed=11, floor_count=2))
     seen = Seen()
     build_grid(world, config, INTERIORS, DetailSampler(world, config, 18, 9, 0, 0, 10, 10, "local"), seen=seen)
-    assert int(Cell.ROOF) in seen.cells and int(Cell.VOID) not in seen.cells
+    assert roof_cell(config, "tower") in seen.cells and int(Cell.VOID) not in seen.cells
 
 
 def test_seen_is_empty_of_cells_without_structures(config) -> None:

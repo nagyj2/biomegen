@@ -10,7 +10,7 @@ from biomegen.world.tile import Biome, Cell, WaterType
 from tests.sites.conftest import add_poi, flat_world
 
 VOID, FLOOR = int(Cell.VOID), int(Cell.FLOOR)
-BUILT = [int(c) for c in (Cell.WALL, Cell.DOOR, Cell.ROOF, Cell.STONE, Cell.TENT, Cell.CAMPFIRE, Cell.BED)]
+BUILT = [int(c) for c in (Cell.WALL, Cell.DOOR, Cell.STONE, Cell.CAMPFIRE, Cell.BED)]
 
 
 def _field(config: Config, world=None):

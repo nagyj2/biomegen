@@ -1,15 +1,16 @@
-"""Tests for the camp layout: clearing, tents, wagon, supplies and the track to a road gate."""
+"""Tests for the camp layout: clearing, tents (a roof outside, bedrolls inside), wagon, supplies and the road track."""
 
 from __future__ import annotations
 
 import numpy as np
 
 from biomegen.config.model import Config
-from biomegen.sites import read_patch, site_geometry, site_plan
+from biomegen.sites import read_patch, site_geometry, site_plan, site_roof_floor
+from biomegen.sites.kinds import roof_cell
 from biomegen.world.tile import Biome, Cell, WaterType
 from tests.sites.conftest import add_poi, flat_world
 
-VOID, TENT, FIRE = (int(c) for c in (Cell.VOID, Cell.TENT, Cell.CAMPFIRE))
+VOID, BED, FIRE = (int(c) for c in (Cell.VOID, Cell.BED, Cell.CAMPFIRE))
 
 
 def _camp(config: Config, world=None):
@@ -35,7 +36,7 @@ def test_the_campfire_is_near_the_middle_of_the_clearing(config: Config) -> None
 def test_a_camp_has_at_least_the_minimum_tents(config: Config) -> None:
     # Tents are separate blobs of TENT cells; overlapping pitches may merge, so count cells instead of blobs.
     _poi, _world, plan = _camp(config)
-    assert int((plan.cells == TENT).sum()) >= int(config.get("sites.camp.min_tents")) * 4
+    assert int((plan.outside == roof_cell(config, "tent")).sum()) >= int(config.get("sites.camp.min_tents")) * 4
 
 
 def test_the_clearing_is_bare_ground_outside_the_plan_edge(config: Config) -> None:
@@ -49,9 +50,32 @@ def test_a_camp_has_no_walls(config: Config) -> None:
     assert int(Cell.WALL) not in plan.cells
 
 
-def test_a_camp_is_open_air_so_both_views_agree(config: Config) -> None:
+def test_a_camp_is_open_air_but_for_its_tents(config: Config) -> None:
+    # The sky view differs from the inside only where a tent's roof covers it.
     _poi, _world, plan = _camp(config)
-    assert np.array_equal(plan.cells, plan.outside)
+    assert (plan.cells != plan.outside).any() and (
+        plan.outside[plan.cells != plan.outside] == roof_cell(config, "tent")
+    ).all()
+
+
+def test_under_a_tent_roof_are_bedrolls_and_a_doorway(config: Config) -> None:
+    # The view under a tent makes sense for a tent: no walls, bedrolls filling it and bare floor where it opens.
+    _poi, _world, plan = _camp(config)
+    under = plan.cells[plan.outside == roof_cell(config, "tent")]
+    assert (
+        (under == BED).any() and (under == int(Cell.FLOOR)).any() and not np.isin(under, [VOID, int(Cell.WALL)]).any()
+    )
+
+
+def test_a_camp_has_a_roof_level_that_shows_its_tents_as_roofs(config: Config) -> None:
+    poi, world, plan = _camp(config)
+    roof = site_plan(poi, site_roof_floor(poi, config), config, world)
+    assert roof is not None and np.array_equal(roof.cells, plan.outside) and (roof.cells == FIRE).any()
+
+
+def test_every_tent_of_a_camp_is_a_listed_building(config: Config) -> None:
+    _poi, _world, plan = _camp(config)
+    assert plan.buildings and {building.kind for building in plan.buildings} == {"tent"}
 
 
 def test_a_camp_keeps_off_water(config: Config) -> None:
@@ -69,7 +93,7 @@ def test_a_road_runs_through_the_camp_clear_of_the_tents(config: Config) -> None
     world.road[5, 7:14] = 1
     poi, _world, plan = _camp(config, world)
     patch = read_patch(poi, site_geometry(poi, config), world, config)
-    assert patch.gates and not (patch.road & (plan.cells == TENT)).any()
+    assert patch.gates and not (patch.road & (plan.outside == roof_cell(config, "tent"))).any()
 
 
 def test_a_camp_without_a_road_has_no_gate(config: Config) -> None:
@@ -109,7 +133,7 @@ def test_an_army_camp_pitches_more_tents_than_a_bandit_camp(config: Config) -> N
         poi = add_poi(world, "camp", 7, 5, purpose=purpose, interior_seed=9)
         plan = site_plan(poi, 0, config, world)
         assert plan is not None
-        counts[purpose] = int((plan.cells == TENT).sum())
+        counts[purpose] = int((plan.outside == roof_cell(config, "tent")).sum())
         world.poi_index[5, 7] = -1
         world.pois.pop()
     assert counts["army"] > counts["bandit"]
@@ -122,7 +146,7 @@ def test_a_founding_camp_keeps_fewer_tents_than_a_bandit_camp(config: Config) ->
         poi = add_poi(world, "camp", 7, 5, purpose=purpose, interior_seed=9)
         plan = site_plan(poi, 0, config, world)
         assert plan is not None
-        counts[purpose] = int((plan.cells == TENT).sum())
+        counts[purpose] = int((plan.outside == roof_cell(config, "tent")).sum())
         world.poi_index[5, 7] = -1
         world.pois.pop()
     assert counts["founding"] < counts["bandit"]

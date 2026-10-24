@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
+import numpy as np
+
 from ..config.model import Config
 from ..world.entities import POI
 from ..world.tile import KIND_ROOF_BASE, KIND_ROOF_SLOTS, Cell
 from .building import Spec
+from .carve import Rect
 from .dress import variant_of_cell
 from .layout import SiteBuilding, SiteContext
 
@@ -35,6 +38,21 @@ def _ranks(config: Config) -> dict[str, int]:
 def roof_cell(config: Config, kind: str) -> int:
     """Return the plan cell value of ``kind``'s roof: the block's base plus the kind's rank."""
     return KIND_ROOF_BASE + _ranks(config)[kind]
+
+
+def lay_roof(
+    config: Config, outside: np.ndarray, kind: str, rect: Rect, footprint: Optional[np.ndarray] = None
+) -> SiteBuilding:
+    """Lay ``kind``'s roof over ``footprint`` (default: all of ``rect``) of the sky view ``outside``.
+
+    The one way a layout roofs a building, so a roof is always a kind's own and the building is always listed in the
+    plan. ``rect`` is ``(x, y, width, height)`` in plan cells and ``footprint`` a ``[height, width]`` bool grid. Returns
+    the building the roof covers.
+    """
+    x, y, width, height = rect
+    covered = np.ones((height, width), dtype=bool) if footprint is None else footprint
+    outside[y : y + height, x : x + width][covered] = roof_cell(config, kind)
+    return SiteBuilding(kind, x, y, width, height, covered)
 
 
 def kind_of_cell(config: Config, cell: int) -> Optional[str]:

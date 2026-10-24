@@ -2,21 +2,26 @@
 # `[tables.buildings.chapel]` + `rows = [7, 9]` in a user config.
 #
 # A building kind is what a lot holds: how big it is, how it is furnished, how it looks from outside and, for the kinds a
-# settlement is chosen to have, what suits it. Three functions:
+# settlement is chosen to have, what suits it. Every roof a plan shows, in any site, is a kind's roof (`sites/kinds.py`
+# `lay_roof`), so a roof's look is always a row here. Four functions:
 #   housing     the plain house: supports extra population and holds stock (the numbers are data only until a simulation reads them)
 #   production  works a resource at the edge of what it needs: farmhouse, mill, mine, lodge, fishery (the `building` of a `poi_styles` row)
 #   civic       the centre building of a settlement tier (a `centre` or `reserve` of a tier row in tiers.toml)
+#   structure   a building a site layout draws itself (a tower, a gatehouse, a ruin, a tent, a deckhouse): it has a label, a rank
+#               and a roof and nothing else, because the layout decides its size and rooms
 #
 # Keys, every row:
 #   label       display name
 #   rank        unique, below `KIND_ROOF_SLOTS` (64): a kind's roof cell is `KIND_ROOF_BASE + rank` (world/tile.py). When a plan is drawn
-#               smaller the higher id wins a tie, so the civic kinds rank last
-#   function    housing, production or civic
+#               smaller the higher id wins a tie, so the civic kinds rank last of the lot kinds (a structure never shares a plan with lots)
+#   function    housing, production, civic or structure
+# Keys of every kind but a structure:
 #   rows        [min, max] outer height in plan rows, walls included
 #   width       [lo, hi] outer width as a multiple of `rows` times the cell aspect: the narrowest is `lo * rows[0]`, the widest `hi * rows[1]`
 #   shapes      footprints it may take: rect, L, T
 #   roles       room roles, best first: the largest room takes the first (a role with no weights in its furniture family stays bare)
 #   furniture   its furniture family (data/furniture.toml)
+# Keys, every row:
 #   roof        how it looks from outside: `glyph`, `ascii` (7-bit) and `color` (the cell's colour; the glyph is drawn lighter)
 # housing:
 #   capacity_pop  people it houses; storage  stock it holds (units of one resource; data only for now)
@@ -205,3 +210,40 @@ roles = ["altar"]
 furniture = "shrine"
 roof = { glyph = "▓", ascii = "^", color = [188, 150, 98] }
 apron = 1
+
+# Structures: the buildings of the other sites. Their roofs are what the sky view and the roof level show, over the inside.
+[buildings.tower]
+label = "Tower"
+rank = 12
+function = "structure"
+roof = { glyph = "▓", ascii = "T", color = [118, 112, 124] }
+
+[buildings.watchtower]
+label = "Watchtower"
+rank = 13
+function = "structure"
+roof = { glyph = "▒", ascii = "w", color = [140, 104, 70] }
+
+[buildings.gatehouse]
+label = "Gatehouse"
+rank = 14
+function = "structure"
+roof = { glyph = "▓", ascii = "%", color = [74, 70, 86] }
+
+[buildings.ruin]
+label = "Ruin"
+rank = 15
+function = "structure"
+roof = { glyph = "░", ascii = "r", color = [104, 98, 90] }
+
+[buildings.tent]
+label = "Tent"
+rank = 16
+function = "structure"
+roof = { glyph = "░", ascii = "^", color = [196, 184, 140] }
+
+[buildings.deckhouse]
+label = "Deckhouse"
+rank = 17
+function = "structure"
+roof = { glyph = "▒", ascii = "d", color = [150, 110, 72] }

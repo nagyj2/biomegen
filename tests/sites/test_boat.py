@@ -7,7 +7,8 @@ import copy
 import numpy as np
 
 from biomegen.config.model import Config
-from biomegen.sites import read_patch, site_geometry, site_plan
+from biomegen.sites import read_patch, site_geometry, site_plan, site_roof_floor
+from biomegen.sites.kinds import roof_cell
 from biomegen.world.tile import Biome, Cell, WaterType
 from tests.sites.conftest import add_poi, flat_world
 
@@ -50,14 +51,39 @@ def test_a_boat_is_longer_than_it_is_wide(config: Config) -> None:
     assert (xs.max() - xs.min()) > (ys.max() - ys.min())
 
 
-def test_a_big_boat_has_a_cabin_with_a_door(config: Config) -> None:
-    # The default boat is too narrow for a deckhouse, so widen it.
+def _big_boat(config: Config):
+    """A boat wide enough for a deckhouse (the default one is too narrow): its config, POI, world and ground plan."""
     big = copy.deepcopy(config)
     big.data["tables"]["sites"]["boat"]["extent_tiles"] = [1.0, 0.6]
     world = _sea()
     poi = add_poi(world, "boat", 7, 5)
     plan = site_plan(poi, 0, big, world)
-    assert plan is not None and WALL in plan.cells and DOOR in plan.cells
+    assert plan is not None
+    return big, poi, world, plan
+
+
+def test_a_big_boat_has_a_cabin_with_a_door(config: Config) -> None:
+    _big, _poi, _world, plan = _big_boat(config)
+    assert WALL in plan.cells and DOOR in plan.cells
+
+
+def test_the_deckhouse_is_a_roof_from_outside_over_the_cabin(config: Config) -> None:
+    # Seen from above the cabin's walls are hidden under the deckhouse roof; the deck and hull stay as they are.
+    big, _poi, _world, plan = _big_boat(config)
+    roof = plan.outside == roof_cell(big, "deckhouse")
+    assert roof.any() and (plan.cells[plan.outside != plan.cells] != VOID).all() and WALL not in plan.outside
+    assert (plan.cells[roof] != VOID).all() and HULL in plan.outside
+
+
+def test_a_boat_has_a_roof_level_that_roofs_its_deckhouse(config: Config) -> None:
+    big, poi, world, plan = _big_boat(config)
+    roof = site_plan(poi, site_roof_floor(poi, big), big, world)
+    assert roof is not None and np.array_equal(roof.cells, plan.outside)
+
+
+def test_the_deckhouse_is_a_listed_building(config: Config) -> None:
+    _big, _poi, _world, plan = _big_boat(config)
+    assert [building.kind for building in plan.buildings] == ["deckhouse"]
 
 
 def test_a_boat_carries_cargo(config: Config) -> None:
@@ -83,9 +109,9 @@ def test_a_boat_is_cut_by_the_shore(config: Config) -> None:
     assert plan is None or not ((plan.cells != VOID) & ~patch.water).any()
 
 
-def test_a_boat_is_open_air_so_both_views_agree(config: Config) -> None:
+def test_a_boat_with_no_deckhouse_is_open_air_so_both_views_agree(config: Config) -> None:
     _poi, _world, plan = _boat(config)
-    assert np.array_equal(plan.cells, plan.outside)
+    assert np.array_equal(plan.cells, plan.outside) and plan.buildings == ()
 
 
 def test_a_moored_boat_is_stamped_on_open_water() -> None:

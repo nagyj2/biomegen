@@ -28,7 +28,7 @@ def test_a_roof_cell_names_its_kind_back() -> None:
 
 
 def test_a_cell_outside_the_block_is_no_kind() -> None:
-    assert kind_of_cell(_CONFIG, int(Cell.ROOF)) is None
+    assert kind_of_cell(_CONFIG, int(Cell.TABLE)) is None
 
 
 def test_an_unused_block_cell_is_no_kind() -> None:
@@ -42,10 +42,10 @@ def test_the_legend_names_a_kind_by_its_label_and_an_enum_cell_by_its_name() -> 
     )
 
 
-def test_a_kind_roof_draws_over_a_street_and_ties_with_the_plain_roof() -> None:
-    # A roof of any kind beats a street when a plan is drawn smaller, as the plain roof does.
+def test_a_kind_roof_draws_over_a_street_and_ties_with_a_solid_wall() -> None:
+    # A roof of any kind beats a street when a plan is drawn smaller, as a solid wall does.
     house = OUTSIDE_PRIORITY[roof_cell(_CONFIG, "house")]
-    assert house == OUTSIDE_PRIORITY[int(Cell.ROOF)] > OUTSIDE_PRIORITY[int(Cell.PATH)]
+    assert house == OUTSIDE_PRIORITY[int(Cell.STONE)] > OUTSIDE_PRIORITY[int(Cell.PATH)]
 
 
 def _poi(kind: str, ruin_of: str = "") -> POI:

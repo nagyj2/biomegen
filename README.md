@@ -341,7 +341,7 @@ For full details on algorithms and design decisions, see **[ARCHITECTURE.md](doc
   - [x] **Dungeon** & **tower** — stacked solid buildings (descend / ascend), aligned stairs, furnishing
   - [x] **City / town / village** — multi-building settlements with streets and a plaza
   - [x] **Ruin** — eroded single-floor building (collapsed walls, rubble)
-  - [x] **Camp** & **boat** — bespoke open-air tents and a planked hull on water
+  - [x] **Camp** & **boat** — bespoke open-air tents (roofed, bedrolls underneath) and a planked hull on water with a roofed deckhouse
 - [x] Phase 6 — SVG/PNG export
   - [x] Curses-free RGB colour resolver (palette-faithful, no terminal needed)
   - [x] Deterministic colour-SVG exporter; optional PNG raster via Pillow (graceful without it)

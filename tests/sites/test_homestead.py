@@ -217,12 +217,13 @@ def test_a_homestead_on_a_shore_takes_the_smallest_house_when_the_big_one_does_n
 
 @pytest.mark.parametrize("style", STYLES)
 def test_a_homestead_draws_its_styles_kind_roof(config: Config, style: str) -> None:
-    from biomegen.sites.kinds import roof_cell
+    from biomegen.sites.kinds import kind_of_cell
 
     tags = {"mill": ("river",), "fishery": ("port",)}.get(style, ())
     _poi, _world, plan = _homestead(config, style, tags=tags)
     kind = config.get(f"tables.poi_styles.{style}.building")
-    assert roof_cell(config, kind) in plan.outside and int(Cell.ROOF) not in plan.outside
+    roofs = {kind_of_cell(config, int(cell)) for cell in np.unique(plan.outside)} - {None}
+    assert roofs == {kind}
 
 
 def test_a_plain_homestead_is_a_house(config: Config) -> None:

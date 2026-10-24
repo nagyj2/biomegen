@@ -39,7 +39,7 @@ OUTSIDE_PRIORITY[:_CELLS] = 1
 OUTSIDE_PRIORITY[VOID] = 0
 for _cell in (Cell.PATH, Cell.BRIDGE, Cell.BRIDGE_WALL, Cell.DOOR, Cell.WHEEL, Cell.AXLE_H, Cell.AXLE_V, Cell.BANNER):
     OUTSIDE_PRIORITY[int(_cell)] = 2
-for _cell in (Cell.ROOF, Cell.DUNGEON_ROOF, Cell.STONE, Cell.WALL, Cell.HULL, Cell.TENT):
+for _cell in (Cell.STONE, Cell.WALL, Cell.HULL):
     OUTSIDE_PRIORITY[int(_cell)] = 3
 OUTSIDE_PRIORITY[KIND_ROOF_BASE : KIND_ROOF_BASE + KIND_ROOF_SLOTS] = (
     3  # a building kind's roof is a roof; the higher id wins a tie
