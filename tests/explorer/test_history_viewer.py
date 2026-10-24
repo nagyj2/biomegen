@@ -771,3 +771,15 @@ def test_a_battle_lights_the_front_it_moved_and_not_the_realms(world: World, cfg
     change = next(c for c in world.territory if c.kind == "battle")
     cells, owners = event_focus(world, cfg, initial_state(world, cfg, change.key))
     assert set(change.cells.tolist()) <= set(cells.tolist()) and not owners
+
+
+def test_the_chronicle_opens_with_the_start_at_year_0(world: World, cfg: Config) -> None:
+    # The first chronicle line is the start, highlighted while the viewer is at it
+    state = initial_state(world, cfg)
+    assert state.at == START and _highlighted_text(world, cfg, state).endswith("the start")
+
+
+def test_the_chronicle_closes_with_the_present_in_the_last_year(world: World, cfg: Config) -> None:
+    # The present line carries the world's year and is highlighted at the present
+    shown = _highlighted_text(world, cfg, _at_present(world, cfg))
+    assert shown.endswith("the present") and str(world.year) in shown

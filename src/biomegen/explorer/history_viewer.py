@@ -25,7 +25,7 @@ from ..config.model import Config
 from ..render.chronicle import layout_events
 from ..render.colors import mix_colors
 from ..render.fit import FitSampler
-from ..render.grid import RGB, CellGrid, Document
+from ..render.grid import RGB, CellGrid, Document, Span
 from ..render.layers import build_grid
 from ..render.views import resolve_view
 from ..world.chronicle import ChronicleFilter, filter_events
@@ -123,9 +123,7 @@ class HistoryState:
     message: str = ""
     _synced: Optional[tuple] = field(default=None, repr=False)  # (width, current stop): when the scroll last followed
     _map: Optional[tuple[tuple, CellGrid]] = field(default=None, repr=False)  # the last map drawn, with its key
-    _events: Optional[tuple[tuple[int, bool], list[ChronicleEvent], Document, list[int]]] = field(
-        default=None, repr=False
-    )
+    _events: Optional[tuple[tuple[int, bool], Document, list[int], list[Stop]]] = field(default=None, repr=False)
 
 
 START: Stop = (0, 0, -1)  # before any event: year 0, month 0 (events are in months 1 and up)
@@ -633,13 +631,24 @@ def _select(world: World, state: HistoryState, step: int) -> None:
     state.selected = owners[max(0, min(len(owners) - 1, at + step))]
 
 
+def _marker_line(year: int, text: str, color: RGB) -> list[Span]:
+    """A dated line that is no event (``the start``, ``the present``), as the pager draws the present."""
+    return [Span(f"{year:>5}", color), Span("  "), Span(text, color)]
+
+
 def _events_layout(world: World, config: Config, state: HistoryState, width: int):
-    """Return ``(events, lines, starts)`` of the listed events (the major ones, and the minor too when shown) wrapped to
-    ``width`` (cached per width and listing)."""
+    """Return ``(lines, starts, stops)`` of the chronicle wrapped to ``width`` (cached per width and listing): a line
+    for the start (year 0), the listed events (the major ones, and the minor too when shown) and the present.
+    ``starts`` is the line each entry starts on and ``stops`` the stop each entry is, so the viewer can highlight and
+    scroll to it."""
     if state._events is None or state._events[0] != (width, state.minor):
         events = filter_events(world, ChronicleFilter(salience="all" if state.minor else "major"))
-        lines, starts, _ = layout_events(world, config, events, width)
-        state._events = ((width, state.minor), events, lines, starts)
+        body, body_starts, _ = layout_events(world, config, events, width)
+        dim = panel_color(config, "dim")
+        lines = [_marker_line(0, "the start", dim), *body, _marker_line(world.year, "the present", dim)]
+        starts = [0, *(start + 1 for start in body_starts), len(body) + 1]
+        stops = [START, *(_event_stop(e) for e in events), present_moment(world, config)]
+        state._events = ((width, state.minor), lines, starts, stops)
     return state._events[1:]
 
 
@@ -731,16 +740,15 @@ def _draw_events(screen: CellGrid, world: World, config: Config, state: HistoryS
     """Draw the chronicle in the right column: the event the viewer is at highlighted, later ones dimmed."""
     fg, bg, dim = panel_color(config, "fg"), panel_color(config, "bg"), panel_color(config, "dim")
     width = screen.cols - left - 1
-    events, lines, starts = _events_layout(world, config, state, width)
-    moments = [_event_stop(e) for e in events]
+    lines, starts, moments = _events_layout(world, config, state, width)
     key = (width, state.at, state.minor)
-    if state._synced != key and events:
-        first = min(bisect_left(moments, state.at), len(events) - 1)
+    if state._synced != key:
+        first = min(bisect_left(moments, state.at), len(moments) - 1)
         state.scroll = max(0, starts[first] - body // 3)
         state._synced = key
     state.scroll = max(0, min(state.scroll, len(lines) - body))
     owner_of_line = np.zeros(len(lines), dtype=np.int64)
-    for position in range(len(events)):
+    for position in range(len(moments)):
         end = starts[position + 1] if position + 1 < len(starts) else len(lines)
         owner_of_line[starts[position] : end] = position
     red, green, blue = config.get("history.viewer.current_bg")
@@ -749,7 +757,7 @@ def _draw_events(screen: CellGrid, world: World, config: Config, state: HistoryS
         number = state.scroll + offset
         moment = moments[int(owner_of_line[number])]
         row = _HEADER_ROWS + offset
-        is_current = moment == state.at  # the one event the viewer is at
+        is_current = moment == state.at  # the one event (or the start or the present) the viewer is at
         future = moment > state.at
         line_bg = highlight if is_current else bg
         if is_current:
@@ -766,8 +774,6 @@ def _draw_events(screen: CellGrid, world: World, config: Config, state: HistoryS
                 span.bold,
             )
             col += len(span.text)
-    if not lines:
-        _put(screen, _HEADER_ROWS, left, "(no events)", dim, bg)
 
 
 def _hint_line(config: Config, prompting: bool, tile: bool, focus: str = "time") -> str:
