@@ -69,3 +69,10 @@ def test_series_years_must_be_at_least_one() -> None:
     config["sim"]["series"]["every_years"] = 0
     with pytest.raises(ConfigError, match=r"sim\.series\.every_years"):
         validate(config)
+
+
+def test_the_series_may_run_no_years_but_not_a_negative_number() -> None:
+    config = get_defaults()
+    config["sim"]["series"]["years"] = -1
+    with pytest.raises(ConfigError, match=r"sim\.series\.years"):
+        validate(config)

@@ -25,6 +25,6 @@ VALUES: Dict[str, Any] = {
     # The explorer's clock (``explorer/ticks.py``): ticks per second at normal speed, and the longest span of real time
     # one poll may count (a pause or a slow frame never makes a burst of catch-up ticks).
     "playback": {"ticks_per_second": 10.0, "max_frame_seconds": 0.25},
-    # ``scripts/simulate.sh`` prints a row every this many years.
-    "series": {"every_years": 25},
+    # ``scripts/simulate.sh`` runs this many years and prints a row every ``every_years`` of them.
+    "series": {"years": 100, "every_years": 25},
 }

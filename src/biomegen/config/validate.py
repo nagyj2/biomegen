@@ -257,8 +257,10 @@ def _validate_sim(sim: Dict[str, Any], errors: List[str]) -> None:
                 if key in playback and not _positive(playback[key]):
                     errors.append(f"sim.playback.{key} must be a number above 0, got {playback[key]!r}")
     series = sim.get("series")
-    if isinstance(series, dict) and "every_years" in series and _whole(series["every_years"], 1) is None:
-        errors.append(f"sim.series.every_years must be a whole number of at least 1, got {series['every_years']!r}")
+    if isinstance(series, dict):
+        for key, least in (("years", 0), ("every_years", 1)):
+            if key in series and _whole(series[key], least) is None:
+                errors.append(f"sim.series.{key} must be a whole number of at least {least}, got {series[key]!r}")
 
 
 def validate(cfg: Dict[str, Any]) -> Dict[str, Any]:
