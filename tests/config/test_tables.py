@@ -52,6 +52,7 @@ def test_shipped_tables_load_and_validate() -> None:
         "reasons",
         "relation_weights",
         "relief",
+        "resources",
         "ruling_styles",
         "secession_forms",
         "secession_relations",
@@ -193,6 +194,7 @@ def test_loader_combines_the_shipped_files() -> None:
         "reasons",
         "relation_weights",
         "relief",
+        "resources",
         "ruling_styles",
         "secession_forms",
         "secession_relations",
@@ -943,4 +945,28 @@ def test_a_tier_row_no_longer_takes_a_reserve() -> None:
     cfg = get_defaults()
     cfg["tables"]["tiers"]["town"]["reserve"] = "cathedral"
     with pytest.raises(ConfigError, match="reserve"):
+        validate(cfg)
+
+
+def test_biome_naming_an_unknown_resource_is_rejected() -> None:
+    # A biome's resource must be a row of tables.resources.
+    cfg = get_defaults()
+    cfg["tables"]["biomes"]["grass"]["resource"] = "gold"
+    with pytest.raises(ConfigError, match=r"tables\.biomes\.grass\.resource"):
+        validate(cfg)
+
+
+def test_resource_no_land_yields_is_rejected() -> None:
+    # A land resource needs a producer, so dropping every row that yields wood is an error.
+    cfg = get_defaults()
+    cfg["tables"]["biomes"]["forest"]["resource"] = ""
+    with pytest.raises(ConfigError, match=r"tables\.resources\.wood"):
+        validate(cfg)
+
+
+def test_money_cannot_be_yielded_by_land() -> None:
+    # Money is a payment only: no biome or relief row may name it.
+    cfg = get_defaults()
+    cfg["tables"]["biomes"]["grass"]["resource"] = "money"
+    with pytest.raises(ConfigError, match="not a land or luxury resource"):
         validate(cfg)

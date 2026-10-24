@@ -8,8 +8,8 @@ from ``geography.toml``, ``sites`` from ``sites.toml``, ``pois``, ``poi_fates``,
 ``furniture`` from ``furniture.toml``, ``realm_kinds``, ``realm_forms``, ``relation_weights`` and ``realm_colors`` from
 ``polity.toml``, ``reasons`` and ``reason_tokens`` from ``reasons.toml``, ``ruling_styles`` from ``rulers.toml``,
 ``chronicle`` from ``chronicle.toml``, ``secession_terms``, ``secession_relations`` and ``secession_forms`` from
-``secession.toml``) as sub-sections, so a user config overrides one attribute of one row with the
-ordinary deep-merge, e.g. ``[tables.biomes.desert]`` +
+``secession.toml``, ``resources`` from ``resources.toml``) as sub-sections, so a user config overrides one attribute of
+one row with the ordinary deep-merge, e.g. ``[tables.biomes.desert]`` +
 ``goods = "glass"``. The schema is checked by
 :func:`biomegen.config.tables.validate_tables`.
 """
@@ -39,6 +39,7 @@ DATA_FILES: tuple[str, ...] = (
     "rulers.toml",
     "chronicle.toml",
     "secession.toml",
+    "resources.toml",
 )
 
 

@@ -14,6 +14,7 @@
 #   habitability  0..1 settlement suitability before relief
 #   move_cost     road / travel cost per cell on flat land, >= 1 (ignored for water)
 #   goods         trade good the biome is known for ("" for none)
+#   resource      the `resources.toml` row (food, wood, ...) the biome's land yields, "" for none; `goods` is its name
 #   priority      how salient the biome is when a fit-to-screen map shows one tile per block of tiles
 #                 (higher wins; POIs and roads have their own priorities in render.fit_priority)
 
@@ -28,6 +29,7 @@ sparse = false
 habitability = 0.0
 move_cost = 1.0
 goods = "pearls"
+resource = "luxury"
 priority = 5
 
 [biomes.shallow]
@@ -41,6 +43,7 @@ sparse = false
 habitability = 0.0
 move_cost = 1.0
 goods = "pearls"
+resource = "luxury"
 priority = 6
 
 [biomes.seaice]
@@ -54,6 +57,7 @@ sparse = false
 habitability = 0.0
 move_cost = 1.0
 goods = ""
+resource = ""
 priority = 7
 
 [biomes.lake]
@@ -67,6 +71,7 @@ sparse = false
 habitability = 0.0
 move_cost = 1.0
 goods = ""
+resource = ""
 priority = 75
 
 [biomes.beach]
@@ -80,6 +85,7 @@ sparse = true
 habitability = 0.6
 move_cost = 1.0
 goods = "salt fish"
+resource = "food"
 priority = 48
 
 [biomes.desert]
@@ -93,6 +99,7 @@ sparse = true
 habitability = 0.1
 move_cost = 2.0
 goods = "salt"
+resource = "luxury"
 priority = 28
 
 [biomes.savanna]
@@ -106,6 +113,7 @@ sparse = true
 habitability = 0.75
 move_cost = 1.0
 goods = "ivory"
+resource = "luxury"
 priority = 30
 
 [biomes.grass]
@@ -119,6 +127,7 @@ sparse = true
 habitability = 1.0
 move_cost = 1.0
 goods = "grain"
+resource = "food"
 priority = 30
 
 [biomes.forest]
@@ -132,6 +141,7 @@ sparse = false
 habitability = 0.7
 move_cost = 2.0
 goods = "timber"
+resource = "wood"
 priority = 40
 
 [biomes.jungle]
@@ -145,6 +155,7 @@ sparse = false
 habitability = 0.4
 move_cost = 3.0
 goods = "spices"
+resource = "luxury"
 priority = 42
 
 [biomes.swamp]
@@ -158,6 +169,7 @@ sparse = false
 habitability = 0.25
 move_cost = 4.0
 goods = "peat and eels"
+resource = "food"
 priority = 50
 
 [biomes.taiga]
@@ -171,6 +183,7 @@ sparse = false
 habitability = 0.35
 move_cost = 2.0
 goods = "furs"
+resource = "luxury"
 priority = 40
 
 [biomes.tundra]
@@ -184,6 +197,7 @@ sparse = true
 habitability = 0.12
 move_cost = 2.0
 goods = "walrus ivory"
+resource = "luxury"
 priority = 35
 
 [biomes.snow]
@@ -197,6 +211,7 @@ sparse = true
 habitability = 0.0
 move_cost = 4.0
 goods = "whale oil"
+resource = "luxury"
 priority = 60
 
 # Relief keys (one row per Relief enum member):
@@ -206,6 +221,7 @@ priority = 60
 #   habitability_mul  0..1 multiplier on the biome's habitability
 #   move_cost         extra cost per cell added to the biome's move_cost, >= 0
 #   goods             trade good of the high ground ("" uses the biome's)
+#   resource          the `resources.toml` row the high ground yields instead of the biome's, "" to keep the biome's
 #   priority          fit-to-screen salience of the high ground (a tile shows the larger of its biome's and its
 #                     relief's priority)
 #   min_elevation_m   optional: land at least this high gets this relief (the highest matching row
@@ -219,6 +235,7 @@ fg = [0, 0, 0]
 habitability_mul = 1.0
 move_cost = 0.0
 goods = ""
+resource = ""
 priority = 0
 
 [relief.hills]
@@ -228,7 +245,8 @@ ascii = "n"
 fg = [70, 60, 36]
 habitability_mul = 0.7
 move_cost = 2.0
-goods = "iron"
+goods = "building stone"
+resource = "stone"
 priority = 0
 min_elevation_m = 800.0
 
@@ -240,6 +258,7 @@ fg = [52, 44, 36]
 habitability_mul = 0.15
 move_cost = 8.0
 goods = "iron"
+resource = "metal"
 priority = 60
 min_elevation_m = 1700.0
 
@@ -251,6 +270,7 @@ fg = [255, 255, 255]
 habitability_mul = 0.0
 move_cost = 30.0
 goods = "iron"
+resource = "metal"
 priority = 65
 min_elevation_m = 3200.0
 
@@ -262,4 +282,5 @@ fg = [255, 90, 30]
 habitability_mul = 0.0
 move_cost = 40.0
 goods = "iron"
+resource = "metal"
 priority = 70

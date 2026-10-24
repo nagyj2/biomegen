@@ -19,8 +19,8 @@ from .validate import _coerce_color
 # each containing "{n}" exactly once; "ascii_char" / "ascii_char?" / "ascii_text" are "char" / "char?" /
 # "text" restricted to 7-bit characters; "factor" one of "none", "moisture", "elevation"; "span" [min, max]
 # numbers with 0 <= min <= max; "text_list" a non-empty list of strings; "number" any number; "source", "owner",
-# "temper" and "land" one of `POI_SOURCES` / `POI_OWNERS` / `TEMPERS` / `SITE_LANDS`; "floors" a storey count or a
-# [min, max] range of them.
+# "temper", "land" and "resource_kind" one of `POI_SOURCES` / `POI_OWNERS` / `TEMPERS` / `SITE_LANDS` /
+# `RESOURCE_KINDS`; "floors" a storey count or a [min, max] range of them.
 _BIOME_ROW = {
     "label": "text",
     "glyph": "char",
@@ -32,6 +32,7 @@ _BIOME_ROW = {
     "habitability": "unit",
     "move_cost": "cost",
     "goods": "text",
+    "resource": "text",
     "priority": "rank",
 }
 _RELIEF_ROW = {
@@ -42,8 +43,16 @@ _RELIEF_ROW = {
     "habitability_mul": "unit",
     "move_cost": "nonneg",
     "goods": "text",
+    "resource": "text",
     "priority": "rank",
     "min_elevation_m": "nonneg",
+}
+_RESOURCE_ROW = {
+    "label": "text",
+    "kind": "resource_kind",
+    "consumers": "text_list",
+    "perishable": "bool",
+    "base_value": "positive",
 }
 _DETAIL_ROW = {
     "floor": "char",
@@ -360,6 +369,7 @@ POI_SOURCES = ("location", "history", "both", "style")
 POI_OWNERS = ("realm", "wild")
 TEMPERS = ("aggressive", "passive")
 SITE_LANDS = ("realm", "any")
+RESOURCE_KINDS = ("land", "luxury", "currency")
 
 DETAIL_FACTORS = ("none", "moisture", "elevation")
 
@@ -483,6 +493,7 @@ SCHEMAS: Dict[str, tuple[Dict[str, str], frozenset[str]]] = {
     "reasons": (_REASON_ROW, frozenset()),
     "reason_tokens": (_REASON_TOKEN_ROW, frozenset()),
     "ruling_styles": (_RULING_STYLE_ROW, frozenset()),
+    "resources": (_RESOURCE_ROW, frozenset()),
     "chronicle": (_CHRONICLE_ROW, frozenset({"templates_near"})),
     "secession_terms": (_SECESSION_TERM_ROW, frozenset()),
     "secession_relations": (_SECESSION_RELATION_ROW, frozenset()),
@@ -652,6 +663,7 @@ def _check_value(row: Dict[str, Any], key: str, kind: str, where: str, errors: L
         "temper": lambda v: v in TEMPERS,
         "secession_tag": lambda v: v in SECESSION_TAGS,
         "land": lambda v: v in SITE_LANDS,
+        "resource_kind": lambda v: v in RESOURCE_KINDS,
         "number": _is_number,
         "floors": _is_floors,
         "bool": lambda v: isinstance(v, bool),
@@ -751,6 +763,27 @@ def _validate_member_tables(tables: Dict[str, Any], errors: List[str]) -> None:
         ranks = [row["rank"] for row in tiers.values() if isinstance(row, dict) and isinstance(row.get("rank"), int)]
         if len(ranks) != len(set(ranks)):
             errors.append("tables.tiers: every tier needs a unique rank")
+
+
+def _validate_resources(tables: Dict[str, Any], errors: List[str]) -> None:
+    """Check that a biome or relief row's resource is a land or luxury one (or none) and that each has a source."""
+    resources = tables.get("resources", {})
+    if not isinstance(resources, dict):
+        return
+    land = {name for name, row in resources.items() if isinstance(row, dict) and row.get("kind") != "currency"}
+    if sum(1 for row in resources.values() if isinstance(row, dict) and row.get("kind") == "currency") != 1:
+        errors.append("tables.resources: needs exactly one currency")
+    named: set[str] = set()
+    for table in ("biomes", "relief"):
+        rows = tables.get(table, {})
+        for name in sorted(rows) if isinstance(rows, dict) else []:
+            value = rows[name].get("resource") if isinstance(rows[name], dict) else None
+            if isinstance(value, str) and value:
+                named.add(value)
+                if value not in land:
+                    errors.append(f"tables.{table}.{name}.resource: {value!r} is not a land or luxury resource")
+    for name in sorted(land - named):
+        errors.append(f"tables.resources.{name}: no biome or relief row yields it")
 
 
 def _tokens(text: str) -> set[str] | None:
@@ -1177,6 +1210,7 @@ def validate_tables(cfg: Dict[str, Any], errors: List[str]) -> None:
     _validate_buildings(tables, errors)
     _validate_dress(tables, errors)
     _validate_secession(tables, errors)
+    _validate_resources(tables, errors)
 
     styles = tables.get("styles", {})
     style = cfg.get("terrain", {}).get("style")

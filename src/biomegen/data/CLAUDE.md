@@ -12,7 +12,7 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   `tables.geo_names` from `geography.toml`; `tables.sites` from `sites.toml`; `tables.buildings` from `buildings.toml`; `tables.dress` from `dress.toml`; `tables.pois`, `tables.poi_fates`, `tables.poi_sites` and `tables.poi_styles` from `pois.toml`; `tables.furniture` from `furniture.toml`; `tables.realm_kinds`, `tables.realm_forms`,
   `tables.relation_weights` and `tables.realm_colors` from `polity.toml`; `tables.reasons` and `tables.reason_tokens` from
   `reasons.toml`; `tables.ruling_styles` from `rulers.toml`; `tables.chronicle` from `chronicle.toml`; `tables.secession_terms`,
-  `tables.secession_relations` and `tables.secession_forms` from `secession.toml`; `tables.free_fates` from `pois.toml`).
+  `tables.secession_relations` and `tables.secession_forms` from `secession.toml`; `tables.free_fates` from `pois.toml`; `tables.resources` from `resources.toml`).
 - A user config overrides with the ordinary deep-merge: `[tables.biomes.desert]` + `goods = "glass"`
   changes one attribute and keeps the rest of the row.
 - `config/tables.py` validates every row against its table's schema (`SCHEMAS`): unknown keys, missing
@@ -109,6 +109,14 @@ geographic feature kind, site or furniture set. Numbers that apply to the whole 
   (`{town}`, `{river}`, `{range}`, `{sea}` for war and rivalry; `{goods_a}`, `{goods_b}`, `{short_a}`, `{short_b}` for trade).
   `reason_tokens` gives the words used when the world lacks the place.
 - Counts, budgets and distances (km) are in the `politics` config section.
+
+## Resources
+
+- `resources.toml`: `resources` has one row per resource (`food`, `wood`, `stone`, `metal`, `luxury`, `money`): `label`, `kind`
+  (`land`, `luxury` or `currency`; exactly one currency, which is never a swap good, only the payment of a purchase), `consumers`,
+  `perishable` and `base_value`. Land is tied to a resource by the `resource` column of the biome and relief rows (`goods` stays the
+  chronicle's word for it); every land or luxury resource needs a row that yields it and a row may name only those
+  (`validate_tables` checks). `world/resources.py` reads a realm's supply from them. The simulation adds `bulk` (cargo space per unit).
 
 ## Chronicle
 

@@ -1,0 +1,59 @@
+# Resources, loaded into the config tree as `tables.resources`; override one attribute of a row with e.g.
+# `[tables.resources.metal]` + `base_value = 4.0`. The land that yields a resource is named by the `resource` column of
+# the biome and relief rows (`biomes.toml`), so there is one place to say what a piece of land is good for; their free-text
+# `goods` names stay the chronicle's words for it ("grain", "iron").
+#
+# A land resource needs a producer (a biome or relief row naming it), a consumer (a need that spends it) and a store (a
+# settlement holds it). Trade pacts and purchases of the derived history pick their goods from here
+# (`world/resources.py`, `pipeline/story/episodes.py`); the simulation (docs/simulation_plan.md 3.2 and 3.6) reads the same rows
+# and adds the columns it needs (`bulk`: the cargo space a unit takes).
+#
+# resources, one row per resource:
+#   label        display name
+#   kind         "land" (yielded by land), "luxury" (land, but no production use) or "currency" (money: never a swap good,
+#                only the payment of a purchase)
+#   consumers    what spends it (people, army, building, ships, upkeep, standing): text for the reader, not read by a stage
+#   perishable   true when stock spoils over time (food)
+#   base_value   relative price of one unit; the midpoint a pact is priced from
+
+[resources.food]
+label = "Food"
+kind = "land"
+consumers = ["people", "army"]
+perishable = true
+base_value = 1.0
+
+[resources.wood]
+label = "Wood"
+kind = "land"
+consumers = ["building", "ships"]
+perishable = false
+base_value = 1.0
+
+[resources.stone]
+label = "Stone"
+kind = "land"
+consumers = ["building", "walls"]
+perishable = false
+base_value = 1.2
+
+[resources.metal]
+label = "Metal"
+kind = "land"
+consumers = ["army", "tools"]
+perishable = false
+base_value = 3.0
+
+[resources.luxury]
+label = "Luxury"
+kind = "luxury"
+consumers = ["standing", "wealth"]
+perishable = false
+base_value = 4.0
+
+[resources.money]
+label = "Money"
+kind = "currency"
+consumers = ["upkeep", "purchases"]
+perishable = false
+base_value = 1.0
